@@ -550,6 +550,97 @@ input[type="range"] { accent-color: var(--accent); width: 8rem; }
 }
 </style>
 
+<style>
+/* 動畫節奏控制(17 個模組共用)。
+   各頁的節拍是各自訂的(90ms 到 780ms 都有),與其逐頁猜數字,
+   統一在 setTimeout/setInterval 這一層乘上倍率。 */
+.tempo {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.16);
+  font-family: var(--mono);
+}
+.tempo > span {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0.15rem;
+}
+.tempo button {
+  padding: 0.26rem 0.5rem;
+  font-size: 0.7rem;
+  border-radius: 3px;
+}
+.tempo button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.tempo button[aria-pressed="true"]:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+@media (max-width: 40rem) {
+  .tempo { right: 0.5rem; bottom: 0.5rem; padding: 0.3rem 0.35rem; }
+  .tempo > span { display: none; }
+}
+</style>
+
+<div class="tempo" role="group" aria-label="動畫節奏">
+  <span>節奏</span>
+  <button type="button" data-tempo="1">原速</button>
+  <button type="button" data-tempo="2" aria-pressed="true">放慢</button>
+  <button type="button" data-tempo="4">逐格</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // 預設 2:這些頁面在教「一步一步發生了什麼」,原速讀不完。
+  // 必須在本頁自己的 script 之前安裝——所以這段插在 body 內容之前。
+  var tempo = 2;
+
+  var nativeTimeout = window.setTimeout;
+  var nativeInterval = window.setInterval;
+
+  function scale(native) {
+    return function (fn, delay) {
+      var extra = Array.prototype.slice.call(arguments, 2);
+      var d = (typeof delay === "number" ? delay : 0) * tempo;
+      return native.apply(window, [fn, d].concat(extra));
+    };
+  }
+
+  // 回傳的仍是原生 id,所以 clearTimeout / clearInterval 照常運作。
+  window.setTimeout = scale(nativeTimeout);
+  window.setInterval = scale(nativeInterval);
+
+  // 給用 requestAnimationFrame 自己補間的頁面(例如 dsu 的節點位移)查詢用。
+  window.__tempo = function () { return tempo; };
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest(".tempo button") : null;
+    if (!btn) return;
+    tempo = Number(btn.getAttribute("data-tempo")) || 1;
+    var all = document.querySelectorAll(".tempo button");
+    for (var i = 0; i < all.length; i++) {
+      all[i].setAttribute("aria-pressed", all[i] === btn ? "true" : "false");
+    }
+  });
+})();
+</script>
+
 <div class="wrap">
 
 <header>
