@@ -1,0 +1,17 @@
+[package]
+name = "reference"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+# library 本體 std-only(見 README「誠實聲明」)。
+# dev-dependencies 僅用於「驗證」:測試路徑可以用,library 程式碼不准 use。
+[dev-dependencies]
+# loom:窮舉並發 interleaving 的 model checker(不是 fuzz)。
+# 用於 spsc_ring / arena_lockfree / bounded_queue 的並發正確性證明。
+loom = "0.7"
+# proptest:property-based 測試,用於資料結構的不變量驗證。
+proptest = "1"
+
+[lints]
+workspace = true

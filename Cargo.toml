@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["reference", "drills", "challenges"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+publish = false
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = "deny"

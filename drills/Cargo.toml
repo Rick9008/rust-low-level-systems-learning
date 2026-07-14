@@ -1,0 +1,11 @@
+[package]
+name = "drills"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dev-dependencies]
+proptest = "1"
+
+[lints]
+workspace = true
