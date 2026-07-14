@@ -33,3 +33,6 @@ pub mod epoll_sys;
 pub mod event_loop;
 pub mod file_io_offload;
 pub mod tcp_echo;
+
+// stage 7:橋接軟硬體(binary protocol + framing + 雙 server)
+pub mod hw_bridge;
