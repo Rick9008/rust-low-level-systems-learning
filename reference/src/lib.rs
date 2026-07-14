@@ -19,3 +19,8 @@ pub mod lru;
 pub mod ring_buffer;
 pub mod tree;
 pub mod trie;
+
+// stage 4:atomic / lock-free(loom 驗證見 tests/loom_*.rs)
+pub mod arena_lockfree;
+pub mod spsc_ring;
+pub(crate) mod sync_shim;
