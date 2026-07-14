@@ -4,5 +4,11 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
+# 只作測試 harness 用(例:hw_bridge challenge 用 reference 的 server
+# 驗你的 framer;tcp_echo challenge 用 reference 的 event_loop 當底)。
+# challenge 本體不准抄 reference——寫完再 diff 對答案。
+[dependencies]
+reference = { path = "../reference" }
+
 [lints]
 workspace = true
