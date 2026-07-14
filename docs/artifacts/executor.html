@@ -1,0 +1,1221 @@
+<title>executor — poll、park,以及那個救了你的 token</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── executor 專屬:兩條執行緒 + 中間的共享狀態 ──────────────────── */
+.threads {
+  display: grid;
+  grid-template-columns: 1fr 11rem 1fr;
+  gap: 0.8rem;
+  align-items: stretch;
+}
+.thr {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.8rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.thr h3 {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.thr.main h3 { color: var(--consumer); }
+.thr.timer h3 { color: var(--producer); }
+.thr.doomed { border-color: var(--danger); background: var(--danger-bg); }
+.badge {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+  padding: 0.4rem 0.6rem;
+  text-align: center;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+.badge.b-idle { color: var(--muted); }
+.badge.b-run { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+.badge.b-poll { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+.badge.b-window { color: var(--producer); border-color: var(--producer); background: var(--producer-bg); }
+.badge.b-park { color: var(--consumer); border-color: var(--consumer); background: var(--consumer-bg); }
+.badge.b-dead { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+.badge.b-done { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+.thr .oper {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+  min-height: 3.3rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.shared {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+.shared .cap {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+.token {
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  background: var(--raised);
+  padding: 0.5rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.token .n {
+  font-family: var(--mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.token .lbl { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; color: var(--muted); }
+.token.has { border-style: solid; border-color: var(--ok); background: var(--ok-bg); }
+.token.has .n { color: var(--ok); }
+.token.gone { border-color: var(--danger); background: var(--danger-bg); }
+.token.gone .n, .token.gone .lbl { color: var(--danger); }
+.wkr {
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: var(--raised);
+  padding: 0.45rem 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-align: center;
+}
+.wkr b { color: var(--accent); font-weight: 600; }
+
+/* ── 原始碼:當前執行行 ──────────────────────────────────────────── */
+.codeblk {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  line-height: 1.7;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.6rem 0;
+  overflow-x: auto;
+}
+.ln {
+  white-space: pre;
+  padding: 0 0.9rem;
+  border-left: 3px solid transparent;
+  color: var(--ink-2);
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.ln .no { color: var(--muted); user-select: none; }
+.ln.hot { background: var(--accent-bg); border-left-color: var(--accent); color: var(--ink); font-weight: 600; }
+.ln.doom { background: var(--danger-bg); border-left-color: var(--danger); color: var(--danger); font-weight: 600; }
+
+.narr {
+  font-size: 0.98rem;
+  line-height: 1.7;
+  color: var(--ink-2);
+  border-left: 2px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 4px 4px 0;
+  padding: 0.7rem 0.9rem;
+  min-height: 4.6rem;
+}
+.narr.doom { border-left-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+
+.vt {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.7;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 0;
+  color: var(--ink-2);
+}
+.matrix td.cell { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+.matrix td.cell.good { color: var(--ok); }
+.matrix td.cell.bad { color: var(--danger); background: var(--danger-bg); }
+
+@media (max-width: 46rem) {
+  .threads { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 5 &nbsp;·&nbsp; async internals</p>
+  <h1>executor</h1>
+  <p class="lede">
+    <code>loop { poll; 沒事做就睡 }</code>——六行程式碼,是整個 tokio 的骨架。
+    難的不是這個形狀,是那個把「睡」變成安全操作的東西:
+    <strong>park 的 token 語意</strong>。沒有它,這個 loop 每天都會死鎖一次。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 一輪:poll → Pending → park → wake → poll → Ready</h2>
+  <p>
+    <code>poll</code> 回 <code>Pending</code> 是一個<strong>承諾</strong>:
+    「我已經把你給我的 waker 交給某個未來會叫它的人。」
+    executor 敢睡,唯一的理由就是這個契約。
+    但契約沒說「那個人一定會等你睡著才叫」——
+    下面兩個開關讓你自己排時序,看誰先誰後。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="wake 與 park 的先後">
+        <button id="ord-after" aria-pressed="true">wake 在 park 之後</button>
+        <button id="ord-before" aria-pressed="false">wake 在 park 之前</button>
+      </div>
+      <div class="switch" role="group" aria-label="park 語意">
+        <button id="tok-yes" aria-pressed="true">park 有 token(真實)</button>
+        <button id="tok-no" aria-pressed="false">park 無 token(假想)</button>
+      </div>
+      <button id="btn-step">下一步</button>
+      <button id="btn-auto">自動播放</button>
+      <button id="btn-reset">重設</button>
+    </div>
+
+    <div class="threads">
+      <div class="thr main" id="thr-main">
+        <h3>main thread &mdash; block_on</h3>
+        <div class="badge b-run" id="st-main">RUNNING</div>
+        <div class="oper" id="op-main">block_on(fut)</div>
+      </div>
+
+      <div class="shared">
+        <div class="cap">shared</div>
+        <div class="token" id="tokbox">
+          <span class="n" id="st-token">0</span>
+          <span class="lbl" id="st-token-lbl">park token</span>
+        </div>
+        <div class="wkr">
+          Arc&lt;ThreadWaker&gt;<br>strong = <b id="st-strong">0</b>
+        </div>
+        <div class="wkr">
+          slot<br><b id="st-slot">None</b>
+        </div>
+      </div>
+
+      <div class="thr timer" id="thr-timer">
+        <h3>timer thread</h3>
+        <div class="badge b-idle" id="st-timer">NOT SPAWNED</div>
+        <div class="oper" id="op-timer">&mdash;</div>
+      </div>
+    </div>
+
+    <div class="codeblk" id="code"></div>
+
+    <div class="narr" id="narr"></div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">frame</span><span class="v" id="st-frame">1 / 1</span></div>
+      <div class="stat"><span class="k">poll 次數</span><span class="v" id="st-polls">0</span></div>
+      <div class="stat"><span class="k">park 次數</span><span class="v" id="st-parks">0</span></div>
+      <div class="stat"><span class="k">last poll</span><span class="v" id="st-result">&mdash;</span></div>
+    </div>
+
+    <div class="verdict ok" id="verdict" data-state="running">
+      <b id="verdict-title">執行中</b>
+      <span id="verdict-text">按「下一步」開始。先用預設(wake 在 park 之後 + 真實 park)走一輪,再把開關翻過來。</span>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    「wake 在 park 之前」不是理論上的怪例。三種常見走法都會踩到:deadline 幾乎已到、
+    OS 在 <code>poll</code> 返回後立刻搶佔 main 讓 timer 先跑、
+    或者根本是 <code>YieldNow</code> 這種<strong>在回傳 Pending 之前就自己 <code>wake_by_ref()</code></strong> 的 future
+    ——那時 executor 連 <code>match</code> 都還沒走完。reference 的測試兩種都有。
+  </p>
+</section>
+
+<section>
+  <h2>2 · token:讓「訊號」帶上「狀態」</h2>
+  <p>
+    <code>unpark</code> 不是一聲喊叫,是<strong>放一張通行證</strong>。
+    <code>park</code> 先看有沒有證:有就撕掉、立刻返回;沒有才睡。
+    證是<strong>飽和</strong>的——連叫十次 <code>unpark</code> 也只留下一張。
+    這一個設計決定,把下面這個致命窗口整個抹平:
+  </p>
+
+  <pre class="vt">executor:  poll ── Pending ──┐                    ┌── park ──→ ?
+                             └── 這幾十 ns 的窗口 ──┘
+timer:                            └─ wake() → unpark() ─┘</pre>
+
+  <div class="tablewrap">
+    <table class="matrix">
+      <thead>
+        <tr><th>時序</th><th>真實 park(有 token)</th><th>假想 park(無 token)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>wake 在 park <strong>之後</strong></td>
+          <td class="cell good">✓ unpark 叫醒 sleeper → Ready</td>
+          <td class="cell good">✓ 也能動 &mdash; bug 藏住了</td>
+        </tr>
+        <tr>
+          <td>wake 在 park <strong>之前</strong></td>
+          <td class="cell good">✓ permit 已放,park 直接穿過 → Ready</td>
+          <td class="cell bad">✗ 訊號蒸發 &mdash; parked forever</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    四格裡只有一格是紅的——而且是<strong>時序決定</strong>的那一格。
+    這就是為什麼「跑一百萬次壓力測試都過」證明不了任何事:
+    你只是沒排到那個交錯。跟 <code>spsc_ring</code> 的 Relaxed bug 是同一種病。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>喚醒機制</th><th>訊號早到會怎樣</th><th>判決</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>park</code> / <code>unpark</code></td>
+          <td>permit 存著,下次 park 消耗掉</td>
+          <td class="ord acq">安全 &mdash; 訊號帶狀態</td>
+        </tr>
+        <tr>
+          <td>裸 <code>condvar.notify_one()</code> + <code>wait()</code></td>
+          <td>沒人在 wait → notify 當場丟棄</td>
+          <td class="ord" style="color:var(--danger)">lost wakeup &mdash; 永眠</td>
+        </tr>
+        <tr>
+          <td><code>condvar</code> + <code>while !pred { wait }</code></td>
+          <td>notify 丟了沒關係,醒來/進來都重查 predicate</td>
+          <td class="ord acq">安全 &mdash; 醒來重查條件</td>
+        </tr>
+        <tr>
+          <td><code>eventfd</code> / <code>self-pipe</code></td>
+          <td>計數器累加在 fd 裡,epoll 下次就看到</td>
+          <td class="ord acq">安全 &mdash; 同一招(見 event_loop)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    一句話收掉:<strong>喚醒訊號要嘛帶狀態(permit / counter),要嘛醒來重查條件(predicate)——
+    裸訊號不可靠。</strong>park 選前者,<code>bounded_queue</code> 選後者,兩者是同一課的兩面。
+    另外 park 允許<strong>虛假返回</strong>,所以 <code>loop</code> 裡醒來一律 re-poll:
+    「醒了」永遠不等於「好了」,只有 future 自己能回答。
+  </p>
+</section>
+
+<section>
+  <h2>3 · Waker 到底是什麼(這題一定會考)</h2>
+  <p>
+    <code>Waker</code> 是<strong>手寫的 trait object</strong>:一個資料指標 + 一張函式指標表。
+    它不能用 <code>Box&lt;dyn Fn&gt;</code>,因為它得是 <code>Clone + Send + Sync</code> 且
+    <code>wake</code> 要能<strong>吃掉自己</strong>(by value)——所以 <code>RawWakerVTable</code> 裡有四個槽,
+    <code>clone</code> / <code>wake</code> / <code>wake_by_ref</code> / <code>drop</code> 各一。
+  </p>
+
+  <pre class="vt">Waker
+ ├─ data:   *const ()  ←── Arc::into_raw(Arc&lt;ThreadWaker&gt;)      ThreadWaker { thread: Thread }
+ └─ vtable: &amp;'static RawWakerVTable
+             ├─ clone(p)        → Arc::increment_strong_count(p); RawWaker::new(p, VT)
+             ├─ wake(p)         → Arc::from_raw(p).wake()          // 吃掉一次 strong
+             ├─ wake_by_ref(p)  → (&amp;*p).wake_by_ref()              // 不吃 strong
+             └─ drop(p)         → drop(Arc::from_raw(p))           // strong -= 1
+
+impl Wake for ThreadWaker {                  // std 幫你把上面那張表生出來
+    fn wake(self: Arc&lt;Self&gt;)      { self.thread.unpark(); }
+    fn wake_by_ref(self: &amp;Arc&lt;Self&gt;) { self.thread.unpark(); }   // 省一次 Arc bump
+}
+let waker: Waker = Waker::from(Arc::new(ThreadWaker { thread: thread::current() }));</pre>
+
+  <p>
+    為什麼一定要 <code>Arc</code>?因為 waker 會被 clone 進<strong>任意執行緒</strong>
+    (timer、IO reactor、另一個 task),在<strong>未來任意時刻</strong>呼叫。
+    誰負責釋放?沒人知道——這正是共享所有權的定義。上面互動的 <code>strong</code> 計數走的就是這條路:
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>時刻</th><th>strong</th><th>發生什麼</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Waker::from(Arc::new(..))</code></td><td class="ord">0 → 1</td><td>Arc 建立,<code>into_raw</code> 存進 <code>RawWaker.data</code></td></tr>
+        <tr><td><code>cx.waker().clone()</code> 進 slot</td><td class="ord">1 → 2</td><td>vtable 的 <code>clone</code> fn:<code>increment_strong_count</code></td></tr>
+        <tr><td>timer <code>w.wake()</code></td><td class="ord">2 → 1</td><td><code>wake(self: Arc&lt;Self&gt;)</code> 按值吃掉,unpark 後 drop</td></tr>
+        <tr><td><code>block_on</code> 返回</td><td class="ord">1 → 0</td><td>區域 <code>waker</code> drop → vtable 的 <code>drop</code> fn → 釋放</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    差別題:<code>wake()</code> 吃掉 <code>Arc</code>(恰好叫一次的場景,如 timer <code>take()</code> 後),
+    <code>wake_by_ref()</code> 不吃(reactor 要留著 waker 給下一輪 IO)。
+    預設實作是 <code>clone + wake</code>,能跑但多一次 atomic bump——熱路徑上手動覆寫是有意義的。
+  </p>
+</section>
+
+<section>
+  <h2>4 · Pin:為什麼 future 一開始 poll 就不准搬家</h2>
+  <p>
+    <code>async fn</code> 編譯成一個 enum 狀態機。跨 <code>await</code> 存活的區域變數變成欄位,
+    而跨 <code>await</code> 的<strong>借用</strong>會變成指向自己欄位的指標——這個結構是
+    <strong>自引用</strong>的。<code>memmove</code> 一搬,內部指標就懸空。
+  </p>
+  <p>
+    <code>Pin</code> 就是那個承諾:「這個值直到 drop 為止不會再移動。」
+    <code>std::pin::pin!</code> 把 future 釘在<strong>當前 stack frame</strong>(零配置,block_on 用這個);
+    <code>Box::pin</code> 釘在 heap(要把 future 塞進集合、跨函式回傳時用)。
+    loop 裡每輪的 <code>fut.as_mut()</code> 只是對同一個 pinned future 重新借一次
+    <code>Pin&lt;&amp;mut F&gt;</code>——沒有搬家。
+  </p>
+  <p class="note">
+    <code>Delay</code> 沒有自引用欄位 ⇒ 自動 <code>Unpin</code> ⇒ <code>self.get_mut()</code> 安全。
+    「所有 future 都得小心 Pin」是誤解;真正需要 Pin 保護的是<strong>編譯器生成的</strong> async 狀態機。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 這個 executor 缺什麼</h2>
+  <p>
+    單 future、單執行緒、沒有任務佇列。往 production 的距離,全部是<strong>「誰被喚醒」的翻譯層</strong>,
+    骨架 <code>loop { poll; 沒事做就睡 }</code> 一行都不用改:
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>缺的東西</th><th>wake 變成什麼</th><th>睡變成什麼</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>spawn</code> / 多任務</td><td>把 task 推回 ready queue(不是 unpark)</td><td>queue 空了才 park</td></tr>
+        <tr><td>多執行緒</td><td>推進本地 queue + work-stealing</td><td>worker 各自 park / 條件變數</td></tr>
+        <tr><td>IO(見 <code>event_loop</code>)</td><td>reactor 把「fd ready」翻成 <code>waker.wake()</code></td><td><code>epoll_wait(timeout)</code> 取代 park</td></tr>
+        <tr><td>timer</td><td>timer wheel 到期 → wake</td><td>park 的 timeout = 最近 deadline</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    這裡 thread-per-Delay 是刻意的 stub(面試時要主動聲明):
+    production 是分層 timer wheel,一條 driver thread 管上百萬個 deadline,O(1) 插入。
+    <code>epoll_wait</code> 的 timeout 參數本身就是「park with deadline」——同一個形狀,換了個系統呼叫。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/executor.rs</code> · 設計取捨:<code>docs/executor.md</code></div>
+  <div>驗證:<code>cargo test -p reference executor</code>(含 <code>boundary_wake_before_park_via_yield</code>、<code>boundary_racing_wake_from_other_thread</code>)</div>
+  <div>前置:<code>bounded_queue</code>(predicate-wait,同一課的另一面)· 進階:<code>event_loop</code>(reactor:把 fd ready 翻成 wake)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── block_on 原始碼(行號對得上 reference/src/executor.rs 的結構)──
+  var SRC = [
+    "pub fn block_on<F: Future>(fut: F) -> F::Output {",
+    "    let mut fut = pin!(fut);                       // 釘在 stack frame",
+    "    let waker = Waker::from(Arc::new(ThreadWaker {",
+    "        thread: thread::current(),",
+    "    }));",
+    "    let mut cx = Context::from_waker(&waker);",
+    "    loop {",
+    "        match fut.as_mut().poll(&mut cx) {",
+    "            Poll::Ready(out) => return out,",
+    "            Poll::Pending => thread::park(),        // <-- 全部的重量在這",
+    "        }",
+    "    }",
+    "}"
+  ];
+
+  var codeEl = document.getElementById("code");
+  var lnEls = [];
+  (function renderCode() {
+    for (var i = 0; i < SRC.length; i++) {
+      var d = document.createElement("div");
+      d.className = "ln";
+      var no = document.createElement("span");
+      no.className = "no";
+      no.textContent = (i + 1 < 10 ? " " : "") + (i + 1) + "  ";
+      d.appendChild(no);
+      d.appendChild(document.createTextNode(SRC[i]));
+      codeEl.appendChild(d);
+      lnEls.push(d);
+    }
+  })();
+
+  // ── 狀態機:把整條時間軸預先算成 frames,step/prev 只是移動索引 ──
+  var MAIN_LABEL = {
+    run: "RUNNING", poll: "POLLING", window: "WINDOW - 未 park",
+    park: "PARKED", dead: "PARKED FOREVER", done: "DONE"
+  };
+  var MAIN_CLS = {
+    run: "b-run", poll: "b-poll", window: "b-window",
+    park: "b-park", dead: "b-dead", done: "b-done"
+  };
+  var TIMER_LABEL = {
+    idle: "NOT SPAWNED", sleep: "SLEEPING", wake: "WAKING", exit: "EXITED"
+  };
+  var TIMER_CLS = {
+    idle: "b-idle", sleep: "b-park", wake: "b-window", exit: "b-idle"
+  };
+
+  function buildFrames(wakeBefore, hasToken) {
+    var fr = [];
+    var s = {
+      main: "run", mainOp: "block_on(fut)",
+      timer: "idle", timerOp: "—",
+      token: 0, tokenLost: false, strong: 0, slot: "None",
+      polls: 0, parks: 0, result: "—", hot: [], doom: false
+    };
+    function snap(narr, log, logCls, verdict) {
+      fr.push({
+        s: {
+          main: s.main, mainOp: s.mainOp, timer: s.timer, timerOp: s.timerOp,
+          token: s.token, tokenLost: s.tokenLost, strong: s.strong, slot: s.slot,
+          polls: s.polls, parks: s.parks, result: s.result,
+          hot: s.hot.slice(), doom: s.doom
+        },
+        narr: narr, log: log, logCls: logCls || "m", verdict: verdict || null
+      });
+    }
+
+    // 1. pin
+    s.hot = [2];
+    s.mainOp = "pin!(fut)\nfuture 釘死在這個 stack frame";
+    snap("block_on 拿到 future。pin! 把它釘在自己的 stack frame 上——async 狀態機可能自引用,一旦開始 poll 就不准搬家。零 heap 配置。",
+      "block_on: fut pinned on stack (0 alloc)", "m");
+
+    // 2. waker
+    s.hot = [3, 4, 5];
+    s.strong = 1;
+    s.mainOp = "Waker::from(Arc::new(\n  ThreadWaker { thread: current() }))";
+    snap("建 Waker。ThreadWaker 只裝一個 Thread handle;「喚醒」對 block_on 而言就是 unpark 這條執行緒。Arc::into_raw 變成 RawWaker.data,四個函式指標組成 vtable。strong = 1。",
+      "Waker::from(Arc<ThreadWaker>)  strong=1  vtable=&VT", "c");
+
+    // 3. context
+    s.hot = [6];
+    s.mainOp = "Context::from_waker(&waker)";
+    snap("Context 只是 Waker 的借用包裝——poll 的唯一參數。future 從這裡拿到「之後怎麼叫我」。",
+      "cx = Context::from_waker(&waker)", "m");
+
+    // 4. poll #1
+    s.main = "poll"; s.polls = 1; s.hot = [8];
+    s.mainOp = "fut.poll(&mut cx)\nDelay::poll: now < deadline";
+    snap("第一次 poll。Delay 看時間還沒到,要走 Pending 路徑——但在回 Pending 之前,它必須先履行契約:把 waker 交給未來會叫它的人。",
+      "poll #1 -> Delay::poll  (now < deadline)", "c");
+
+    // 5. delay 內部:clone waker + spawn timer
+    s.strong = 2; s.slot = "Some(Waker)";
+    s.timer = "sleep";
+    s.timerOp = "thread::sleep(deadline - now)\n(production: timer wheel)";
+    s.mainOp = "slot = Some(cx.waker().clone())\nthread::spawn(timer)";
+    snap("Delay clone 一份 waker 放進 Mutex<Option<Waker>>(strong 1 → 2),然後才 lazy 地 spawn timer thread。future 不 poll 不做事——leaf future 的標準形狀。",
+      "Delay: slot = Some(waker.clone())  strong=2 ; spawn timer", "p");
+
+    // 6. Pending — 窗口
+    s.main = "window"; s.result = "Poll::Pending"; s.hot = [10];
+    s.mainOp = "poll 回 Poll::Pending\n即將執行 thread::park() — 但還沒";
+    snap("poll 回 Pending。注意 main 現在卡在一個窗口裡:已經決定要睡,但 park() 這一行還沒執行。這幾十奈秒,就是整個模組的考點。",
+      ">>> WINDOW <<<  Pending 已返回,park() 尚未執行", "x");
+
+    if (wakeBefore) {
+      // 7. timer 搶先 wake
+      s.timer = "wake"; s.strong = 1; s.slot = "None";
+      s.timerOp = "slot.take().unwrap().wake()\nArc<ThreadWaker>::wake(self: Arc<Self>)";
+      snap("timer 搶在 main 之前跑完。take() 出 waker,呼叫 wake()——wake 按值吃掉 Arc(strong 2 → 1),然後做它唯一的事:self.thread.unpark()。",
+        "timer: w.wake()  strong 2->1  -> thread.unpark()", "p");
+
+      // 8. unpark 落在窗口裡
+      s.timer = "exit";
+      if (hasToken) {
+        s.token = 1;
+        s.timerOp = "thread.unpark()\n目標尚未 park -> 存下 permit";
+        snap("unpark 發現目標還沒 park,於是把 permit 存起來(飽和:再叫十次也還是 1)。訊號帶了狀態,不會蒸發。timer thread 結束。",
+          "unpark: target not parked -> token 0->1 (saved)", "p");
+      } else {
+        s.tokenLost = true;
+        s.timerOp = "unpark()  [假想版]\n目標沒在睡 -> 什麼都不做";
+        snap("假想版的 unpark:目標沒在睡,那就什麼都不做。這個喚醒訊號當場人間蒸發。timer thread 結束——世界上再沒有人記得要叫 main。",
+          "unpark: target not sleeping -> SIGNAL DROPPED", "x");
+      }
+
+      // 9. main 終於走到 park
+      s.parks = 1; s.hot = [10];
+      if (hasToken) {
+        s.token = 0; s.main = "run";
+        s.mainOp = "thread::park()\n看到 permit -> 消耗 -> 立刻返回";
+        snap("park 先檢查 permit:有!消耗掉(1 → 0)並立即返回,一奈秒都沒睡。喚醒沒有丟。這一行就是整個 executor 的正確性支點。",
+          "park(): permit found, consumed (1->0), returns immediately", "c");
+      } else {
+        s.main = "dead"; s.doom = true; s.hot = [];
+        s.mainOp = "thread::park()\n無條件睡眠 -- 永遠不會返回";
+        snap("park 無條件睡下去。剛才那次 unpark 沒有留下任何痕跡,timer thread 已經結束,再也沒有人會呼叫 unpark。main 永遠停在第 10 行。strong 停在 1——waker 永遠不會被 drop。",
+          "park(): sleeping... FOREVER. wakeup was lost.", "x",
+          { cls: "bad", state: "deadlock", title: "DEADLOCK - parked forever,喚醒已丟失",
+            text: "這就是 token 存在的理由。沒有 permit,unpark 只是一聲喊在空房間裡的喊叫——" +
+                  "poll 與 park 之間那個窗口,把它整個吞掉。裸 condvar.notify() 沒有 predicate 時,得到的是一模一樣的 lost wakeup。" +
+                  "注意:把上面的時序開關切回「wake 在 park 之後」,同一份壞掉的 park 會正常返回——所以壓力測試永遠抓不到它。" });
+        return fr; // terminal
+      }
+    } else {
+      // 7. main 先 park
+      s.main = "park"; s.parks = 1; s.hot = [10];
+      s.mainOp = "thread::park()\ntoken == 0 -> 真的睡下去";
+      snap(hasToken
+        ? "main 先走到 park。沒有 permit(token = 0),於是真的睡下去——執行緒交還給 OS,不燒任何 CPU。"
+        : "main 先走到 park。假想版的 park 無條件睡——這條路徑上,行為跟真實 park 一模一樣。",
+        "park(): no permit -> sleep (thread yielded to OS)", "c");
+
+      // 8. timer 到期
+      s.timer = "wake"; s.strong = 1; s.slot = "None";
+      s.timerOp = "slot.take().unwrap().wake()\nArc<ThreadWaker>::wake(self: Arc<Self>)";
+      snap("timer 到期。take() 出 waker 並呼叫 wake()——按值吃掉 Arc(strong 2 → 1),然後 unpark。take 保證「恰好喚醒一次」。",
+        "timer: w.wake()  strong 2->1  -> thread.unpark()", "p");
+
+      // 9. unpark 送達
+      s.timer = "exit";
+      if (hasToken) {
+        s.token = 1;
+        s.timerOp = "thread.unpark()\npermit=1,並喚醒睡著的 main";
+        snap("unpark 把 permit 設為 1,並把睡著的 main 叫起來。timer thread 結束。",
+          "unpark: token 0->1, waking parked thread", "p");
+      } else {
+        s.timerOp = "unpark()  [假想版]\n目標正在睡 -> 叫醒它";
+        snap("假想版的 unpark 看到目標正在睡,就叫醒它。沒有 token 也剛好能動——這正是這個 bug 為什麼壓力測試抓不到:它只在另一種時序下現形。",
+          "unpark: target IS sleeping -> wake it (broken park got lucky)", "p");
+      }
+
+      // 10. park 返回
+      s.main = "run"; s.hot = [10];
+      if (hasToken) {
+        s.token = 0;
+        s.mainOp = "park() 返回\n消耗 permit (1 -> 0)";
+        snap("park 返回,消耗掉 permit(1 → 0)。醒來不代表完成:park 允許虛假返回,所以 loop 一律 re-poll,讓 future 自己說話。",
+          "park() returns, permit consumed (1->0) -> re-poll", "c");
+      } else {
+        s.mainOp = "park() 返回";
+        snap("park 返回。醒來一律 re-poll——「醒了」永遠不等於「好了」。",
+          "park() returns -> re-poll", "c");
+      }
+    }
+
+    // poll #2 -> Ready
+    s.main = "poll"; s.polls += 1; s.hot = [8];
+    s.result = "Poll::Ready(())";
+    s.mainOp = "fut.poll(&mut cx)\nDelay::poll: now >= deadline";
+    snap("第二次 poll。Instant::now() >= deadline → Poll::Ready(())。future 自己確認完成——executor 從頭到尾不知道 Delay 在等什麼。",
+      "poll #2 -> Poll::Ready(())", "c");
+
+    // return
+    s.main = "done"; s.hot = [9]; s.strong = 0;
+    s.mainOp = "return out\nwaker drop -> vtable.drop -> strong 1 -> 0";
+    snap("block_on 返回。區域變數 waker drop → 走 vtable 的 drop fn → Arc::from_raw 還原並丟棄,strong 1 → 0,ThreadWaker 釋放。沒有洩漏。",
+      "block_on returns. waker dropped, strong=0.", "c",
+      { cls: "ok", state: "ready",
+        title: "Poll::Ready — block_on 返回,喚醒沒有丟",
+        text: wakeBefore
+          ? "wake 搶在 park 之前發生,但 park 的 token 語意接住了它:permit 已經放著,park 直接穿過去。" +
+            "現在把右邊的開關切到「park 無 token」,同一組時序再走一次。"
+          : "park 先睡、unpark 後到——最直覺的順序,任何實作都能過。" +
+            "把左邊開關切到「wake 在 park 之前」,才是真正在測 token 語意。" });
+    return fr;
+  }
+
+  // ── 渲染 ──────────────────────────────────────────────────────────
+  var frames = [], idx = 0, wakeBefore = false, hasToken = true, timer = null;
+
+  var el = {
+    stMain: document.getElementById("st-main"),
+    opMain: document.getElementById("op-main"),
+    thrMain: document.getElementById("thr-main"),
+    stTimer: document.getElementById("st-timer"),
+    opTimer: document.getElementById("op-timer"),
+    tokbox: document.getElementById("tokbox"),
+    stToken: document.getElementById("st-token"),
+    stTokenLbl: document.getElementById("st-token-lbl"),
+    stStrong: document.getElementById("st-strong"),
+    stSlot: document.getElementById("st-slot"),
+    narr: document.getElementById("narr"),
+    stFrame: document.getElementById("st-frame"),
+    stPolls: document.getElementById("st-polls"),
+    stParks: document.getElementById("st-parks"),
+    stResult: document.getElementById("st-result"),
+    verdict: document.getElementById("verdict"),
+    vTitle: document.getElementById("verdict-title"),
+    vText: document.getElementById("verdict-text"),
+    log: document.getElementById("log"),
+    btnStep: document.getElementById("btn-step"),
+    btnAuto: document.getElementById("btn-auto")
+  };
+
+  function render() {
+    var f = frames[idx], s = f.s;
+
+    el.stMain.textContent = MAIN_LABEL[s.main];
+    el.stMain.className = "badge " + MAIN_CLS[s.main];
+    el.opMain.textContent = s.mainOp;
+    el.thrMain.className = "thr main" + (s.doom ? " doomed" : "");
+
+    el.stTimer.textContent = TIMER_LABEL[s.timer];
+    el.stTimer.className = "badge " + TIMER_CLS[s.timer];
+    el.opTimer.textContent = s.timerOp;
+
+    el.stToken.textContent = s.tokenLost ? "✗" : String(s.token);
+    el.stTokenLbl.textContent = s.tokenLost ? "訊號已蒸發" : (hasToken ? "park token" : "無 token");
+    el.tokbox.className = "token" + (s.tokenLost ? " gone" : (s.token > 0 ? " has" : ""));
+
+    el.stStrong.textContent = String(s.strong);
+    el.stSlot.textContent = s.slot;
+
+    for (var i = 0; i < lnEls.length; i++) {
+      var on = s.hot.indexOf(i + 1) >= 0;
+      lnEls[i].className = "ln" + (on ? (s.doom ? " doom" : " hot") : "");
+    }
+    if (s.doom) lnEls[9].className = "ln doom"; // park 那行永遠釘住
+
+    el.narr.textContent = f.narr;
+    el.narr.className = "narr" + (s.doom ? " doom" : "");
+
+    el.stFrame.textContent = (idx + 1) + " / " + frames.length;
+    el.stPolls.textContent = String(s.polls);
+    el.stParks.textContent = String(s.parks);
+    el.stResult.textContent = s.result;
+    el.stResult.className = "v" +
+      (s.result === "Poll::Ready(())" ? " good" : (s.doom ? " warn" : ""));
+
+    // verdict:找出目前為止最後一個帶 verdict 的 frame
+    var v = null;
+    for (var k = 0; k <= idx; k++) if (frames[k].verdict) v = frames[k].verdict;
+    if (v) {
+      el.verdict.className = "verdict " + v.cls;
+      el.verdict.setAttribute("data-state", v.state);
+      el.vTitle.textContent = v.title;
+      el.vText.textContent = v.text;
+    } else {
+      el.verdict.className = "verdict ok";
+      el.verdict.setAttribute("data-state", "running");
+      el.vTitle.textContent = "執行中";
+      el.vText.textContent = "時序:" + (wakeBefore ? "wake 在 park 之前" : "wake 在 park 之後") +
+        " · park:" + (hasToken ? "真實(有 token)" : "假想(無 token)") + "。按「下一步」推進。";
+    }
+
+    // log:從 frames 重建(這樣 reset / 切模式不會留下髒資料)
+    el.log.textContent = "";
+    for (var j = 0; j <= idx; j++) {
+      var d = document.createElement("div");
+      d.className = frames[j].logCls;
+      d.textContent = pad(j + 1) + "  " + frames[j].log;
+      el.log.prepend(d);
+    }
+
+    var atEnd = idx >= frames.length - 1;
+    el.btnStep.disabled = atEnd;
+    if (atEnd && timer) stopAuto();
+  }
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function step() {
+    if (idx < frames.length - 1) { idx += 1; render(); }
+  }
+
+  function rebuild() {
+    frames = buildFrames(wakeBefore, hasToken);
+    idx = 0;
+    stopAuto();
+    render();
+  }
+
+  function stopAuto() {
+    if (timer) { clearInterval(timer); timer = null; }
+    el.btnAuto.textContent = "自動播放";
+    el.btnAuto.setAttribute("aria-pressed", "false");
+  }
+
+  function toggleAuto() {
+    if (timer) { stopAuto(); return; }
+    if (idx >= frames.length - 1) { idx = 0; render(); }
+    el.btnAuto.textContent = "暫停";
+    el.btnAuto.setAttribute("aria-pressed", "true");
+    timer = setInterval(function () {
+      if (idx >= frames.length - 1) { stopAuto(); return; }
+      step();
+    }, 900);
+  }
+
+  var ordAfter = document.getElementById("ord-after");
+  var ordBefore = document.getElementById("ord-before");
+  var tokYes = document.getElementById("tok-yes");
+  var tokNo = document.getElementById("tok-no");
+
+  function setOrder(before) {
+    wakeBefore = before;
+    ordAfter.setAttribute("aria-pressed", String(!before));
+    ordBefore.setAttribute("aria-pressed", String(before));
+    rebuild();
+  }
+  function setToken(tok) {
+    hasToken = tok;
+    tokYes.setAttribute("aria-pressed", String(tok));
+    tokNo.setAttribute("aria-pressed", String(!tok));
+    rebuild();
+  }
+
+  ordAfter.addEventListener("click", function () { setOrder(false); });
+  ordBefore.addEventListener("click", function () { setOrder(true); });
+  tokYes.addEventListener("click", function () { setToken(true); });
+  tokNo.addEventListener("click", function () { setToken(false); });
+  el.btnStep.addEventListener("click", step);
+  el.btnAuto.addEventListener("click", toggleAuto);
+  document.getElementById("btn-reset").addEventListener("click", rebuild);
+
+  rebuild();
+})();
+</script>

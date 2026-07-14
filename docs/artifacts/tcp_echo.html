@@ -1,0 +1,1281 @@
+<title>tcp_echo — 讀很簡單,寫才是題目</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── tcp_echo:緩衝管線 ──────────────────────────────────────────── */
+.pipe { display: flex; flex-direction: column; gap: 0.5rem; }
+.pipe-row {
+  display: grid;
+  grid-template-columns: 12.5rem 1fr 8rem;
+  gap: 0.8rem;
+  align-items: center;
+}
+.pipe-k {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.pipe-k em { font-style: normal; display: block; color: var(--ink-2); font-weight: 600; letter-spacing: 0.02em; }
+.bar {
+  height: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.bar.full { border-color: var(--danger); }
+.bar-fill { height: 100%; width: 0; transition: width 260ms ease; }
+.bar-fill.f-recv { background: var(--consumer); }
+.bar-fill.f-out { background: var(--danger); }
+.bar-fill.f-snd { background: var(--producer); }
+.bar-fill.f-got { background: var(--ok); }
+.pipe-v {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  text-align: right;
+}
+.pipe-v.warn { color: var(--danger); }
+.pipe-v.good { color: var(--ok); }
+
+/* ── interest 晶片 ───────────────────────────────────────────────── */
+.iline { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.ilabel {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.chip {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0.22rem 0.55rem;
+  border-radius: 3px;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  background: var(--surface);
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+.chip.on { border-style: solid; }
+.chip.on.r { color: var(--consumer); border-color: var(--consumer); background: var(--consumer-bg); }
+.chip.on.w { color: var(--producer); border-color: var(--producer); background: var(--producer-bg); }
+.chip.on.w.stuck { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+.mask {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.18rem 0.45rem;
+}
+
+/* ── 其他連線(單執行緒的代價)───────────────────────────────────── */
+.conns { display: flex; flex-direction: column; gap: 0.35rem; }
+.crow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.4rem 0.65rem;
+  background: var(--surface);
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+.crow .cs { color: var(--muted); text-align: right; }
+.crow.starving { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.crow.starving .cs { color: var(--danger); font-weight: 600; }
+
+/* ── 凍結橫幅 ────────────────────────────────────────────────────── */
+.banner {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.6;
+  border: 1px solid var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-radius: 4px;
+  padding: 0.6rem 0.85rem;
+}
+.banner[hidden] { display: none; }
+.stage.frozen { border-color: var(--danger); }
+
+.verdict.warn { border-color: var(--producer); background: var(--producer-bg); color: var(--producer); }
+.verdict.neutral { border-color: var(--line); background: var(--surface); color: var(--ink-2); }
+.verdict.neutral b { color: var(--muted); }
+
+.switch.four { flex-wrap: wrap; }
+button.bug[aria-pressed="true"] { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+button.bug[aria-pressed="true"]:hover { background: var(--danger-bg); border-color: var(--danger); }
+.field { display: flex; align-items: center; gap: 0.45rem; }
+.field label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+input[type="range"] { accent-color: var(--accent); width: 8rem; }
+.log .k { color: var(--accent); }
+.log .g { color: var(--ok); }
+
+@media (max-width: 44rem) {
+  .pipe-row { grid-template-columns: 1fr; gap: 0.25rem; }
+  .pipe-v { text-align: left; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 6 &nbsp;·&nbsp; readiness model</p>
+  <h1>tcp_echo</h1>
+  <p class="lede">
+    收什麼吐什麼,零協定解析。難的不是 echo——
+    是當你 <code>write()</code> 回去,kernel 說<strong>「送緩衝滿了,我一個 byte 都不收」</strong>的那一刻。
+    你手上還握著沒送出去的資料,而整個 server 只有一條執行緒。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 一條 thread,三個客戶端</h2>
+  <p>
+    這個 server 只有<strong>一條執行緒</strong>。倉庫裡的 <code>multiple_clients_interleaved</code> 測試
+    同時開三條連線、亂序寫、亂序讀,全部通過——thread 數不會跟著連線數長。
+    這就是 readiness model 的全部意義:不是「一條 thread 等一條連線」,
+    而是「一條 thread 等<strong>任何一條</strong>連線有事」。
+  </p>
+  <p>
+    代價是一條鐵律:<strong>event loop 裡的每一個 fd 都必須 nonblocking</strong>。
+    listener、每一條 accept 出來的 stream,通通要 <code>set_nonblocking(true)</code>。
+    漏掉一個,那個 fd 上的一次阻塞 <code>accept</code> / <code>read</code> / <code>write</code>
+    就會把<strong>所有</strong>連線一起凍住——因為它們共用那條執行緒。
+  </p>
+  <p class="note">
+    epoll 只告訴你「現在可以做這件事而不會阻塞」。它<strong>不</strong>替你做 IO,
+    也<strong>不</strong>保證你要的量能一次做完。「可寫」的意思是「送緩衝現在有空位」,
+    不是「你的 8 KiB 一定塞得進去」——下一節整個都在處理這個差別。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 讀很簡單。寫才是題目。</h2>
+  <p>
+    快的客戶端灌 8 KiB 進來,server 讀出來、要 echo 回去。
+    但對端讀得很慢,kernel 送緩衝(這裡設成 4 KiB)一下就滿了——
+    <code>write()</code> 只吃下一部分,剩下的回 <code>EWOULDBLOCK</code>。
+    <strong>剩下那幾千個 bytes,現在是你的責任。</strong>選一個策略,然後一步一步走。
+  </p>
+
+  <div class="stage" id="stage">
+    <div class="controls">
+      <div class="switch four" role="group" aria-label="部分寫的處理策略">
+        <button id="strat-right" aria-pressed="true">緩衝 + EPOLLOUT</button>
+        <button id="strat-busy" aria-pressed="false">忙等重試 write()</button>
+        <button id="strat-drop" aria-pressed="false">丟掉剩餘</button>
+        <button id="strat-block" aria-pressed="false">阻塞等可寫</button>
+      </div>
+      <button id="bug-epollout" class="bug" aria-pressed="false">bug: 清空後不拆 EPOLLOUT</button>
+    </div>
+
+    <div class="controls">
+      <button class="act-producer" id="btn-send">client 送 8 KiB</button>
+      <button id="btn-poll">epoll_wait 一輪</button>
+      <button class="act-consumer" id="btn-drain">client 讀走 1024 B</button>
+      <button id="btn-fin">client 送 FIN</button>
+      <button id="btn-reset">reset</button>
+      <div class="field">
+        <label for="drain-rate">慢讀者</label>
+        <input type="range" id="drain-rate" min="512" max="4096" step="512" value="1024"
+               aria-label="client 每次讀走的位元組數">
+      </div>
+    </div>
+
+    <div class="banner" id="banner" hidden></div>
+
+    <div class="pipe">
+      <div class="pipe-row">
+        <span class="pipe-k">client → server<em>kernel 收緩衝</em></span>
+        <div class="bar"><div class="bar-fill f-recv" id="bar-recv"></div></div>
+        <span class="pipe-v" id="v-recv">0 B</span>
+      </div>
+      <div class="pipe-row">
+        <span class="pipe-k">conn.out(欠帳)<em>VecDeque&lt;u8&gt;</em></span>
+        <div class="bar"><div class="bar-fill f-out" id="bar-out"></div></div>
+        <span class="pipe-v" id="v-out">0 B</span>
+      </div>
+      <div class="pipe-row">
+        <span class="pipe-k">server → client<em>kernel 送緩衝 / 4096</em></span>
+        <div class="bar" id="bar-snd-box"><div class="bar-fill f-snd" id="bar-snd"></div></div>
+        <span class="pipe-v" id="v-snd">0 / 4096</span>
+      </div>
+      <div class="pipe-row">
+        <span class="pipe-k">client 收到的 echo<em>正確性的唯一標準</em></span>
+        <div class="bar"><div class="bar-fill f-got" id="bar-got"></div></div>
+        <span class="pipe-v" id="v-got">0 B</span>
+      </div>
+    </div>
+
+    <div class="iline">
+      <span class="ilabel">conn-1 interest</span>
+      <span class="chip r on" id="chip-r">READABLE</span>
+      <span class="chip w" id="chip-w">WRITABLE</span>
+      <span class="mask" id="st-mask">EPOLLIN|EPOLLRDHUP</span>
+      <span class="ilabel" id="st-interest">READABLE</span>
+    </div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">conn-1 state</span><span class="v" id="st-state">open</span></div>
+      <div class="stat"><span class="k">out 欠帳</span><span class="v" id="st-out">0</span></div>
+      <div class="stat"><span class="k">送緩衝</span><span class="v" id="st-snd">0/4096</span></div>
+      <div class="stat"><span class="k">已 echo</span><span class="v" id="st-echoed">0</span></div>
+      <div class="stat"><span class="k">丟失</span><span class="v" id="st-lost">0</span></div>
+      <div class="stat"><span class="k">空轉 syscall</span><span class="v" id="st-spin">0</span></div>
+      <div class="stat"><span class="k">cpu</span><span class="v" id="st-cpu">0%</span></div>
+      <div class="stat"><span class="k">執行緒</span><span class="v">1</span></div>
+    </div>
+
+    <div class="conns">
+      <div class="crow" id="conn2"><span>conn-2 (token 2)</span><span class="cs">idle · 每輪 poll 都輪得到</span></div>
+      <div class="crow" id="conn3"><span>conn-3 (token 3)</span><span class="cs">idle · 每輪 poll 都輪得到</span></div>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <div class="verdict neutral" id="verdict">
+      <b id="verdict-title">緩衝 + EPOLLOUT</b>
+      <span id="verdict-text">按「client 送 8 KiB」,再按「epoll_wait 一輪」——看第二次 write() 撞牆。</span>
+    </div>
+  </div>
+
+  <p class="note">
+    真實的 <code>SO_SNDBUF</code> 是幾十到幾百 KB,這裡縮成 4 KiB 只是為了讓你三次點擊就撞到牆。
+    倉庫裡逼出同一條路徑的方式是灌 1 MiB(<code>boundary_large_transfer_exercises_partial_writes</code>):
+    尺度不同,狀態機一模一樣。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 四個答案,只有一個是對的</h2>
+  <p>
+    面試時這題會被問成「write 回 EWOULDBLOCK,你怎麼辦?」。
+    三個錯的答案都<strong>能跑</strong>,這正是它們危險的地方——上面每一個都親手按過一遍。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>做法</th><th>會發生什麼</th><th>為什麼錯</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ord rlx">迴圈重試 <code>write()</code></td>
+          <td>CPU 100%,數百萬次 <code>EWOULDBLOCK</code></td>
+          <td><strong style="color:var(--danger)">餓死所有人</strong>——單執行緒。你在 <code>write()</code> 裡忙等的每一奈秒,
+              是 conn-2、conn-3、和還沒 accept 的新連線的每一奈秒。而且醒來時機由<strong>最慢的那個客戶端</strong>決定。</td>
+        </tr>
+        <tr>
+          <td class="ord rlx">丟掉剩餘</td>
+          <td>CPU 正常,event loop 順暢</td>
+          <td><strong style="color:var(--danger)">靜默資料遺失</strong>——最陰險的一個。
+              小訊息測試全過(<code>hello</code> 5 bytes 一次就寫完),直到你灌 1 MiB,
+              client 的 <code>read_exact</code> 永遠等不到最後那幾 KB。</td>
+        </tr>
+        <tr>
+          <td class="ord rlx">改回 blocking,等它可寫</td>
+          <td>CPU 0%,執行緒睡在 <code>write(2)</code> 裡</td>
+          <td><strong style="color:var(--danger)">凍住整個 event loop</strong>——比忙等更安靜,一樣致命。
+              連 listener 都不 accept 了。你把服務的可用性外包給了對端的 read 速度。</td>
+        </tr>
+        <tr>
+          <td class="ord rel">緩衝 + EPOLLOUT</td>
+          <td>寫多少算多少,剩的進 <code>conn.out</code>,interest 加上 WRITABLE</td>
+          <td><strong style="color:var(--ok)">唯一正確</strong>——執行緒立刻回到 <code>epoll_wait</code>。
+              可寫事件來了再 flush 欠帳;所有其他連線一輪都沒少。
+              這就是 tokio 的 <code>TcpStream</code> 在 <code>.await</code> 底下替你做的事。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    有一個第五種答案,production 一定要有、本實作誠實地沒做:<strong>欠帳緩衝設高水位</strong>。
+    <code>conn.out</code> 無上限 ⇒ 一個永遠不 read 的客戶端能把 server 記憶體吃爆。
+    正解是超過水位就<strong>暫停讀該連線</strong>(把 READABLE 拿掉)——
+    backpressure 就沿著 TCP 視窗一路傳回發送端。interest 狀態機的第三個維度。
+  </p>
+</section>
+
+<section>
+  <h2>4 · interest 是狀態機,不是設定</h2>
+  <p>
+    註冊什麼 interest,是連線<strong>當下狀態</strong>的函數,不是開一次就不動的組態。
+    整條規則只有兩行:<strong>還在讀就聽可讀;有欠帳才聽可寫。</strong>
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>read_eof</th><th>out.len()</th><th>interest</th><th>epoll 遮罩</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="ord rlx">false</td><td class="ord rlx">0</td><td class="ord acq">READABLE</td><td><code>EPOLLIN|EPOLLRDHUP</code></td></tr>
+        <tr><td class="ord rlx">false</td><td class="ord rlx">&gt; 0</td><td class="ord acq">READABLE | WRITABLE</td><td><code>EPOLLIN|EPOLLOUT|EPOLLRDHUP</code></td></tr>
+        <tr><td class="ord rlx">true</td><td class="ord rlx">&gt; 0</td><td class="ord rel">WRITABLE</td><td><code>EPOLLOUT|EPOLLRDHUP</code> — 對端不送了,但欠它的還沒還完</td></tr>
+        <tr><td class="ord rlx">true</td><td class="ord rlx">0</td><td class="ord rlx">deregister</td><td>沒有欠帳、也不再讀 → <code>epoll_ctl(DEL)</code> + close</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    第三列是最容易漏的:<strong>對端送了 EOF 不代表你可以立刻關</strong>。
+    它的最後一批資料可能還躺在你的 <code>out</code> 裡。先 flush 完欠帳,清空了才關——
+    上面按「client 送 FIN」在有欠帳時就會走這條路。
+  </p>
+  <p>
+    而第四列的鏡像是一個真 bug:<strong>flush 完不把 WRITABLE 拆掉</strong>。
+    LT 模式下 socket 幾乎永遠可寫 ⇒ 每一輪 <code>epoll_wait</code> 都立刻返回一個「可寫」事件 ⇒
+    你去 flush 一個空的 <code>out</code> ⇒ 什麼都沒做 ⇒ 再 <code>epoll_wait</code> ⇒ 又立刻返回。
+    100% CPU,沒有任何事情在發生。把上面那個「bug: 清空後不拆 EPOLLOUT」按下去,連按幾次 epoll_wait 就看得到。
+  </p>
+  <p class="note">
+    「忘了加 EPOLLOUT」讓你的資料永遠送不出去;「忘了拿掉 EPOLLOUT」讓你的 CPU 燒光。
+    這是同一顆硬幣的兩面,而它們都源自同一個誤解:把 interest 當成靜態組態。
+    程式碼裡 <code>conn.registered</code> 這個欄位存在的唯一理由,就是「算出來的 interest 跟現在掛著的不一樣才 <code>epoll_ctl(MOD)</code>」——
+    順便省掉每輪一次的 syscall。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 誠實的簡化</h2>
+  <p>
+    <strong>LT 而非 ET。</strong>LT 漏處理下次還報,好寫。ET 假醒少,但<strong>必須讀寫到 EAGAIN</strong>——
+    漏一次就是永久 stall。本實作的讀寫本來就到 <code>WouldBlock</code> 為止,改 ET 只差註冊旗標;
+    但 <code>accept</code> 沒收乾淨,在 ET 下是永久掛掉的連線,LT 下只是慢一輪。面試先講 LT。
+  </p>
+  <p>
+    <strong>單執行緒。</strong>多核擴展要 <code>SO_REUSEPORT</code> 開多個 loop,或 accept 後把 fd 派發給 worker。
+    但先讓一條 loop 正確——上面那四個答案裡選錯一個,加再多核也是白搭。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/tcp_echo.rs</code> · 設計取捨:<code>docs/tcp_echo.md</code></div>
+  <div>親眼看:<code>cargo run -p reference --example tcp_echo_server</code> 然後開三個 <code>nc</code> · 驗證:<code>cargo test -p reference tcp_echo</code></div>
+  <div>前置:<code>epoll_sys</code>(raw syscall)· <code>event_loop</code>(register / poll / dispatch)· 進階:<code>hw_bridge</code>(同一副骨架上疊 framing 協定)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 常數:縮小的真實世界 ────────────────────────────────────────
+  var SNDCAP = 4096;   // kernel 送緩衝容量(真實是幾十~幾百 KB)
+  var CHUNK = 4096;    // read_and_echo 的 stack buffer
+  var SEND = 8192;     // client 一次灌 8 KiB
+
+  var strat = "right";       // right | busy | drop | block
+  var stickyOut = false;     // bug:flush 完不拆 EPOLLOUT
+  var drainRate = 1024;
+
+  var s;   // 模擬狀態
+
+  function $(id) { return document.getElementById(id); }
+  var logEl = $("log");
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 90) logEl.removeChild(logEl.lastChild);
+  }
+
+  function reset() {
+    s = {
+      recv: 0,          // server 端 kernel 收緩衝裡待讀的 bytes
+      finSent: false,   // client 已送 FIN
+      snd: 0,           // server 端 kernel 送緩衝佔用
+      out: 0,           // conn.out —— 欠帳
+      readEof: false,
+      closed: false,
+      reg: { r: true, w: false },   // conn.registered
+      got: 0,           // client 實際收到的 echo bytes
+      sent: 0,          // client 總共送了多少
+      lost: 0,
+      spins: 0,
+      starve: 0,        // 其他連線被餓的 ms
+      idle: 0,          // 空轉輪次(可寫事件但沒事做)
+      frozen: null,     // null | "busy" | "block"
+      pending: 0,       // 凍結時卡在手上的 bytes
+      cpu: "0%",
+      cpuBad: false
+    };
+    logEl.textContent = "";
+    say("m", "conn-1 accept 完成。set_nonblocking(true) → epoll_ctl(ADD, EPOLLIN|EPOLLRDHUP)");
+    say("m", "conn-2 / conn-3 也在同一個 epoll 上。同一條執行緒。");
+    stratVerdict();
+    render();
+  }
+
+  // ── epoll 遮罩與 interest 的字串表示 ────────────────────────────
+  function maskStr(i) {
+    var parts = [];
+    if (i.r) parts.push("EPOLLIN");
+    if (i.w) parts.push("EPOLLOUT");
+    parts.push("EPOLLRDHUP");
+    return parts.join("|");
+  }
+  function interestStr(i) {
+    if (s.closed) return "deregistered";
+    if (i.r && i.w) return "READABLE|WRITABLE";
+    if (i.r) return "READABLE";
+    if (i.w) return "WRITABLE";
+    return "(none)";
+  }
+
+  // ── 渲染 ────────────────────────────────────────────────────────
+  function pct(v, max) { return Math.min(100, max > 0 ? (v / max) * 100 : 0); }
+
+  function render() {
+    var scale = Math.max(SEND, s.sent, 8192);
+
+    $("bar-recv").style.width = pct(s.recv, scale) + "%";
+    $("v-recv").textContent = s.recv + " B";
+
+    $("bar-out").style.width = pct(s.out, scale) + "%";
+    $("v-out").textContent = s.out + " B";
+    $("v-out").className = "pipe-v" + (s.out > 0 ? " warn" : "");
+
+    $("bar-snd").style.width = pct(s.snd, SNDCAP) + "%";
+    var full = s.snd >= SNDCAP;
+    $("bar-snd-box").className = "bar" + (full ? " full" : "");
+    $("v-snd").textContent = s.snd + " / " + SNDCAP + (full ? " FULL" : "");
+    $("v-snd").className = "pipe-v" + (full ? " warn" : "");
+
+    $("bar-got").style.width = pct(s.got, scale) + "%";
+    $("v-got").textContent = s.got + " B";
+    $("v-got").className = "pipe-v" + (s.got > 0 && s.got === s.sent ? " good" : "");
+
+    var chipR = $("chip-r"), chipW = $("chip-w");
+    chipR.className = "chip r" + (!s.closed && s.reg.r ? " on" : "");
+    chipW.className = "chip w" + (!s.closed && s.reg.w ? " on" : "") +
+      (!s.closed && s.reg.w && s.out === 0 ? " stuck" : "");
+    $("st-mask").textContent = s.closed ? "epoll_ctl(DEL)" : maskStr(s.reg);
+    $("st-interest").textContent = interestStr(s.reg);
+
+    $("st-state").textContent = s.closed ? "closed"
+      : (s.readEof ? "read_eof · flush 中" : "open");
+    $("st-state").className = "v" + (s.closed ? " good" : "");
+    $("st-out").textContent = String(s.out);
+    $("st-out").className = "v" + (s.out > 0 ? " warn" : "");
+    $("st-snd").textContent = s.snd + "/" + SNDCAP;
+    $("st-snd").className = "v" + (s.snd >= SNDCAP ? " warn" : "");
+    $("st-echoed").textContent = String(s.got);
+    $("st-lost").textContent = String(s.lost);
+    $("st-lost").className = "v" + (s.lost > 0 ? " warn" : "");
+    $("st-spin").textContent = s.spins.toLocaleString("en-US");
+    $("st-spin").className = "v" + (s.spins > 0 ? " warn" : "");
+    $("st-cpu").textContent = s.cpu;
+    $("st-cpu").className = "v" + (s.cpuBad ? " warn" : "");
+
+    var starving = s.frozen !== null;
+    var msg = starving
+      ? "餓死中 · 事件堆在 kernel 裡,沒有人在 epoll_wait" + (s.starve > 0 ? "(已經 " + s.starve + " ms)" : "")
+      : "idle · 每輪 poll 都輪得到";
+    ["conn2", "conn3"].forEach(function (id) {
+      var row = $(id);
+      row.className = "crow" + (starving ? " starving" : "");
+      row.lastChild.textContent = msg;
+    });
+
+    var banner = $("banner");
+    if (s.frozen === "busy") {
+      banner.hidden = false;
+      banner.textContent =
+        "執行緒卡在 write() 重試迴圈裡。它不在 event loop 裡——epoll_wait 根本沒被呼叫。\n" +
+        "手上還握著 " + s.pending + " bytes 寫不出去。唯一的出路:對端讀走一些。";
+    } else if (s.frozen === "block") {
+      banner.hidden = false;
+      banner.textContent =
+        "執行緒睡死在阻塞的 write(2) 裡。CPU 0%,但整個 server 停擺——listener 也不 accept 了。\n" +
+        "手上還握著 " + s.pending + " bytes。誰決定你何時醒?對端。";
+    } else {
+      banner.hidden = true;
+      banner.textContent = "";
+    }
+    $("stage").className = "stage" + (s.frozen ? " frozen" : "");
+  }
+
+  function verdict(kind, title, text) {
+    $("verdict").className = "verdict " + kind;
+    $("verdict-title").textContent = title;
+    $("verdict-text").textContent = text;
+  }
+
+  function stratVerdict() {
+    if (strat === "right") {
+      verdict("neutral", "緩衝 + EPOLLOUT",
+        "按「client 送 8 KiB」,再按「epoll_wait 一輪」——看第二次 write() 撞牆,以及 interest 怎麼變。");
+    } else if (strat === "busy") {
+      verdict("neutral", "忙等重試 write()",
+        "「寫不完就再寫」。直覺、簡單、能跑。按下去看看它對其他兩條連線做了什麼。");
+    } else if (strat === "drop") {
+      verdict("neutral", "丟掉剩餘",
+        "「反正 write 回報寫了多少,剩下的就算了」。server 不會壞,CPU 不會爆。問題在別的地方。");
+    } else {
+      verdict("neutral", "阻塞等可寫",
+        "「把 fd 設回 blocking,write 自己會等」。最像單機程式的寫法。看它把 event loop 變成什麼。");
+    }
+  }
+
+  // ── kernel 的 write():盡力寫,滿了就 EWOULDBLOCK ────────────────
+  function writeSome(n) {
+    var space = SNDCAP - s.snd;
+    var w = Math.min(n, space);
+    if (w > 0) {
+      s.snd += w;
+      say("p", "  write(" + n + ") -> " + w + " bytes        送緩衝 " + s.snd + "/" + SNDCAP +
+        (s.snd >= SNDCAP ? "  FULL" : ""));
+    }
+    if (w < n) {
+      say("x", "  write(" + (n - w) + ") -> EWOULDBLOCK      送緩衝滿了,一個 byte 都不收");
+    }
+    return w;
+  }
+
+  // ── 部分寫之後,剩下的 bytes 怎麼辦:四個答案 ───────────────────
+  function handleRemainder(rem) {
+    if (strat === "right") {
+      s.out += rem;
+      say("k", "  conn.out.extend(" + rem + ")       欠帳 = " + s.out + " bytes(掛帳,執行緒馬上回 epoll_wait)");
+      return false;
+    }
+    if (strat === "drop") {
+      s.lost += rem;
+      say("x", "  丟掉 " + rem + " bytes             client 永遠收不到這段。echo 語意已經壞了。");
+      verdict("bad", "靜默資料遺失",
+        "server 活得好好的:CPU 正常、event loop 順暢、其他連線一切正常。只是 client 少收了 " + s.lost +
+        " bytes,而且沒有任何一行 log 會告訴你。小訊息測試全過(hello 5 bytes 一次寫完)," +
+        "1 MiB 的測試才會炸——client 的 read_exact 永遠等不到最後那幾 KB。這是最陰險的錯誤答案。");
+      return false;
+    }
+    // busy / block:執行緒離開 event loop
+    s.frozen = strat;
+    s.pending = rem;
+    if (strat === "busy") {
+      s.cpu = "100%"; s.cpuBad = true;
+      say("x", "  while write(..) == EWOULDBLOCK { }   執行緒進入忙等迴圈,手上 " + rem + " bytes");
+      verdict("bad", "忙等 = 餓死所有人",
+        "執行緒現在在一個 while 迴圈裡狂打 write() syscall,每一次都回 EWOULDBLOCK。CPU 100%。" +
+        "它沒有回到 epoll_wait —— 所以 conn-2、conn-3 的資料就算早就到了 kernel、epoll 早就標成 readable," +
+        "也沒有任何人去處理。新連線也不會被 accept。按「client 讀走」讓對端喝一口,看它要付多少代價才脫身。");
+    } else {
+      s.cpu = "0%"; s.cpuBad = true;
+      say("x", "  write(" + rem + ") [blocking fd] ...    執行緒睡進 kernel,不再返回");
+      verdict("bad", "阻塞 = 凍結整個 event loop",
+        "CPU 0% —— 比忙等安靜多了,一樣致命。整條執行緒睡在 write(2) 裡:epoll_wait 沒被呼叫、" +
+        "conn-2/conn-3 沒人服務、listener 不 accept。而且更糟的是:醒來的時機不由你決定," +
+        "由對端的 read 速度決定。你把整個服務的可用性外包給了最慢的那個客戶端。");
+    }
+    return true;   // 中斷 event loop
+  }
+
+  // ── read 到 WouldBlock/EOF 為止,邊讀邊試著 echo 回去 ───────────
+  function readAndEcho() {
+    for (;;) {
+      if (s.recv === 0) {
+        if (s.finSent) {
+          s.readEof = true;
+          say("c", "  read() -> 0 bytes            EOF:對端不再送了(但欠帳還沒還完就不能關)");
+        } else {
+          say("c", "  read() -> EWOULDBLOCK        讀乾淨了,這一輪的讀路徑結束");
+        }
+        return;
+      }
+      var n = Math.min(CHUNK, s.recv);
+      s.recv -= n;
+      say("c", "  read() -> " + n + " bytes");
+
+      if (s.out === 0) {
+        // 快路徑:沒欠帳,直接寫,省一次 memcpy
+        var w = writeSome(n);
+        var rem = n - w;
+        if (rem > 0 && handleRemainder(rem)) return;
+      } else {
+        // 慢路徑:已有欠帳,一律排隊——順序保證比省一次 memcpy 重要
+        s.out += n;
+        say("k", "  conn.out.extend(" + n + ")       已有欠帳 → 排隊(順序不能亂)。out = " + s.out);
+      }
+    }
+  }
+
+  // ── flush 欠帳到 WouldBlock 為止 ────────────────────────────────
+  function flush() {
+    while (s.out > 0) {
+      var space = SNDCAP - s.snd;
+      if (space === 0) {
+        say("x", "  write() -> EWOULDBLOCK       又滿了。剩 " + s.out + " bytes,等下一次可寫事件。");
+        return;
+      }
+      var w = Math.min(s.out, space);
+      s.snd += w;
+      s.out -= w;
+      say("p", "  flush: write() -> " + w + " bytes    out.drain(.." + w + ") → 欠帳剩 " + s.out +
+        "   送緩衝 " + s.snd + "/" + SNDCAP);
+    }
+    say("g", "  欠帳清空。");
+  }
+
+  // ── interest 狀態機:還在讀就聽可讀,有欠帳才聽可寫 ─────────────
+  function updateInterest() {
+    var want = { r: !s.readEof, w: s.out > 0 };
+    if (stickyOut) want.w = true;   // ← bug 模式:永遠掛著 EPOLLOUT
+    if (want.r === s.reg.r && want.w === s.reg.w) return;
+    var before = interestStr(s.reg);
+    s.reg = want;
+    say("k", "  epoll_ctl(MOD, " + maskStr(want) + ")   interest: " + before + " → " + interestStr(want));
+  }
+
+  function closeConn() {
+    s.closed = true;
+    say("k", "  epoll_ctl(DEL, fd) + close(fd)   read_eof 且欠帳為 0 → 優雅關閉");
+    verdict("ok", "連線生命週期跑完了",
+      "accept → 讀到 WouldBlock → 回寫(部分寫 → 掛帳 → EPOLLOUT → flush)→ 對端 EOF → " +
+      "flush 完剩餘欠帳 → deregister + close。client 收到全部 " + s.got + " bytes,順序完整。" +
+      "整段期間執行緒沒有一刻不在 epoll_wait 上——conn-2、conn-3 一輪都沒少。");
+    render();
+  }
+
+  // ── event loop 的一輪 ───────────────────────────────────────────
+  function pollOnce() {
+    if (s.frozen) {
+      say("x", "(你按不動它。執行緒不在 event loop 裡——它卡在 write()。epoll_wait 沒有被呼叫。)");
+      return;
+    }
+    if (s.closed) {
+      say("m", "conn-1 已經關了。epoll_wait 只剩 conn-2 / conn-3 在聽。");
+      return;
+    }
+
+    // kernel 端的就緒狀態
+    var readyR = s.recv > 0;
+    var readyW = s.snd < SNDCAP;
+    var peerClosed = s.finSent && !s.readEof;   // EPOLLRDHUP 一直註冊著
+
+    var evR = s.reg.r && readyR;
+    var evW = s.reg.w && readyW;
+    var evH = peerClosed;
+
+    if (!evR && !evW && !evH) {
+      s.cpu = "0%"; s.cpuBad = false;
+      var why = "epoll_wait(-1) -> 0 events    執行緒睡著了。CPU 0%。";
+      if (s.out > 0) {
+        why += "\n              欠帳 " + s.out + " bytes 還掛著,但送緩衝滿 → 沒有可寫事件。" +
+               "沒有人在忙等,其他連線照常被服務。";
+      }
+      say("m", why);
+      render();
+      return;
+    }
+
+    var flags = [];
+    if (evR) flags.push("readable");
+    if (evW) flags.push("writable");
+    if (evH) flags.push("peer_closed");
+    say("m", "epoll_wait(-1) -> 1 event: conn-1 [" + flags.join(" ") + "]");
+
+    var didWork = false;
+
+    // 讀路徑:readable 或 peer_closed 都值得去讀
+    if ((evR || evH) && !s.readEof) {
+      readAndEcho();
+      didWork = true;
+      if (s.frozen) { render(); return; }
+    }
+
+    // 寫路徑:flush 欠帳
+    if (evW) {
+      if (s.out > 0) {
+        flush();
+        didWork = true;
+      } else {
+        // ← 這就是「不拆 EPOLLOUT」的下場
+        s.idle += 1;
+        s.spins += 1;
+        s.cpu = "100%"; s.cpuBad = true;
+        say("x", "  可寫事件 —— 但 out 是空的。沒事可做,這一輪什麼都沒發生。");
+        say("x", "  (LT 下 socket 幾乎永遠可寫 → 下一輪 epoll_wait 立刻又返回同一個事件。空轉 " +
+          s.idle + " 輪)");
+        verdict("bad", "忘了拿掉 EPOLLOUT:100% CPU,零進度",
+          "epoll_wait 每次都立刻返回,因為送緩衝永遠有空位、而你永遠掛著 EPOLLOUT。" +
+          "你去 flush 一個空的 out,什麼都沒做,再 epoll_wait,又立刻返回。已經空轉 " + s.idle + " 輪。" +
+          "真實速度是每秒數百萬輪。這是「忘了註冊 EPOLLOUT」的鏡像 bug:前者讓資料永遠送不出去," +
+          "後者讓 CPU 燒光。同一個誤解——把 interest 當靜態組態,而不是連線狀態的函數。");
+      }
+    }
+
+    // 生命週期:EOF 且無欠帳 → 優雅關閉
+    if (s.readEof && s.out === 0) {
+      closeConn();
+      return;
+    }
+
+    updateInterest();
+
+    if (didWork && !s.cpuBad) { s.cpu = "低"; }
+    if (didWork && strat === "right" && s.out > 0 && !stickyOut) {
+      verdict("warn", "部分寫:欠帳 " + s.out + " bytes 已掛帳",
+        "write() 只吞下 " + s.snd + " bytes 就滿了。剩下的沒有丟、沒有忙等、沒有阻塞——" +
+        "進了 conn.out,interest 加上 WRITABLE,執行緒立刻回到 epoll_wait。" +
+        "現在 kernel 欠你一個「可寫」通知。按「client 讀走」讓對端喝一口,再 poll 一輪看 flush。");
+    } else if (didWork && strat === "right" && s.out === 0 && !stickyOut && !s.closed && s.got > 0) {
+      verdict("ok", "欠帳清空 → WRITABLE 拆掉",
+        "out 歸零的那一刻,interest 立刻縮回 " + interestStr(s.reg) + "。" +
+        "如果不拆,LT 下這個 socket 幾乎永遠可寫 → 每輪 poll 都報一次「可寫」→ 空轉燒 CPU。" +
+        "interest 是狀態機,不是設定。");
+    }
+    render();
+  }
+
+  // ── 客戶端行為 ──────────────────────────────────────────────────
+  function clientSend() {
+    if (s.closed) { say("m", "連線已關,送不進去(client 會收到 RST)。"); return; }
+    if (s.finSent) { say("m", "FIN 已送出,client 不能再寫了。"); return; }
+    s.recv += SEND;
+    s.sent += SEND;
+    say("c", "client: write(8192) —— 資料進了 server 的 kernel 收緩衝(recv = " + s.recv + ")");
+    if (s.frozen) {
+      say("x", "  ...但沒有人會去讀它。執行緒還卡在 write() 裡。");
+    }
+    render();
+  }
+
+  function clientDrain() {
+    if (s.snd === 0 && !s.frozen) {
+      say("m", "送緩衝是空的,沒東西可讀。");
+      return;
+    }
+    var n = Math.min(drainRate, s.snd);
+    s.snd -= n;
+    s.got += n;
+    say("c", "client: read() -> " + n + " bytes   (慢讀者)送緩衝 " + s.snd + "/" + SNDCAP +
+      "  → 空出 " + (SNDCAP - s.snd) + " bytes");
+
+    if (s.frozen) {
+      // 卡住的執行緒立刻把空位填滿(它一直在盯著)
+      var space = SNDCAP - s.snd;
+      var w = Math.min(s.pending, space);
+      s.snd += w;
+      s.pending -= w;
+      s.starve += 40;
+      if (s.frozen === "busy") {
+        s.spins += 1200000;
+        say("x", "  忙等迴圈:+1,200,000 次 EWOULDBLOCK,終於擠進 " + w + " bytes(剩 " + s.pending + ")");
+      } else {
+        say("x", "  阻塞的 write() 醒了一下,寫進 " + w + " bytes(剩 " + s.pending + "),又睡回去");
+      }
+      if (s.pending === 0) unfreeze();
+    }
+    render();
+  }
+
+  function unfreeze() {
+    var kind = s.frozen;
+    var spins = s.spins, starve = s.starve;
+    s.frozen = null;
+    s.pending = 0;
+    s.cpu = "低"; s.cpuBad = false;
+    say("g", "  終於寫完了。執行緒回到 read 迴圈。");
+    if (kind === "busy") {
+      verdict("bad", "脫身了 —— 帳單在這裡",
+        spins.toLocaleString("en-US") + " 次無效的 write() syscall(全數 EWOULDBLOCK),CPU 燒滿 " +
+        starve + " ms。這段期間 conn-2 和 conn-3 的資料就躺在 kernel 收緩衝裡,epoll 早就標成 readable," +
+        "但沒有人去 epoll_wait。單執行緒:你在 write() 裡忙等的每一奈秒,是所有連線的每一奈秒。" +
+        "而你等多久,是由最慢的那個客戶端決定的。");
+    } else {
+      verdict("bad", "醒了 —— 但這 " + starve + " ms 是全 server 的",
+        "CPU 0%,一次 syscall 都沒浪費。代價是整個 server 停擺 " + starve + " ms:" +
+        "conn-2/conn-3 沒被服務、新連線沒被 accept。阻塞版比忙等版更安靜,但更難察覺——" +
+        "監控上 CPU 是平的,延遲卻炸了。");
+    }
+    readAndEcho();                     // 回到讀迴圈
+    if (s.readEof && s.out === 0 && !s.frozen) { closeConn(); return; }
+    if (!s.frozen) updateInterest();
+  }
+
+  function clientFin() {
+    if (s.closed || s.finSent) { say("m", "已經送過 FIN 了。"); return; }
+    s.finSent = true;
+    say("c", "client: shutdown(SHUT_WR) → FIN。server 端 epoll 報 EPOLLRDHUP。");
+    say("m", "  重點:對端不送了,不代表你可以關。欠帳 " + s.out + " bytes 還沒還完。");
+    render();
+  }
+
+  // ── 綁定 ────────────────────────────────────────────────────────
+  var stratBtns = {
+    right: $("strat-right"),
+    busy: $("strat-busy"),
+    drop: $("strat-drop"),
+    block: $("strat-block")
+  };
+  Object.keys(stratBtns).forEach(function (k) {
+    stratBtns[k].addEventListener("click", function () {
+      strat = k;
+      Object.keys(stratBtns).forEach(function (j) {
+        stratBtns[j].setAttribute("aria-pressed", String(j === k));
+      });
+      reset();
+    });
+  });
+
+  $("bug-epollout").addEventListener("click", function () {
+    stickyOut = !stickyOut;
+    this.setAttribute("aria-pressed", String(stickyOut));
+    reset();
+    say("m", stickyOut
+      ? "bug 已開啟:out 清空後仍然掛著 EPOLLOUT。走完一輪 flush,然後連按 epoll_wait。"
+      : "bug 已關閉:out 清空就 epoll_ctl(MOD) 拆掉 EPOLLOUT。");
+  });
+
+  $("drain-rate").addEventListener("input", function () {
+    drainRate = parseInt(this.value, 10);
+    $("btn-drain").textContent = "client 讀走 " + drainRate + " B";
+  });
+
+  $("btn-send").addEventListener("click", clientSend);
+  $("btn-poll").addEventListener("click", pollOnce);
+  $("btn-drain").addEventListener("click", clientDrain);
+  $("btn-fin").addEventListener("click", clientFin);
+  $("btn-reset").addEventListener("click", reset);
+
+  reset();
+})();
+</script>

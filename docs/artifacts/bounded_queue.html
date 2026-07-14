@@ -1,0 +1,1411 @@
+<title>bounded_queue — 一次喚醒只是提示,不是保證</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── bounded_queue:機器面板 ──────────────────────────────────────── */
+.machine {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  gap: 0.7rem;
+}
+.box {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 5.2rem;
+}
+.box .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.box .holder {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.box .holder.free { color: var(--muted); font-weight: 400; font-size: 0.9rem; }
+.box .holder.held { color: var(--accent); }
+.box.locked { border-color: var(--accent); background: var(--accent-bg); }
+.box .queue { display: flex; flex-wrap: wrap; gap: 0.3rem; min-height: 1.5rem; align-items: center; }
+.box .queue .empty { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+
+.chip {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  background: var(--raised);
+}
+.chip.p { color: var(--producer); border-color: var(--producer); background: var(--producer-bg); }
+.chip.c { color: var(--consumer); border-color: var(--consumer); background: var(--consumer-bg); }
+.chip.woken { box-shadow: 0 0 0 2px var(--ok-bg); border-color: var(--ok); }
+
+/* ── 執行緒卡 ────────────────────────────────────────────────────── */
+.threads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+.tcard {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.tcard.p { border-left-color: var(--producer); }
+.tcard.c { border-left-color: var(--consumer); }
+.tcard.hold { background: var(--accent-bg); border-color: var(--accent); }
+.tcard.bad { background: var(--danger-bg); border-color: var(--danger); border-left-color: var(--danger); }
+.tcard.stuck { background: var(--danger-bg); border-color: var(--danger); }
+.tcard.fin { opacity: 0.75; }
+.trow { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.tname { font-family: var(--mono); font-size: 0.9rem; font-weight: 600; }
+.tcard.p .tname { color: var(--producer); }
+.tcard.c .tname { color: var(--consumer); }
+.tstate {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tstate.hold { color: var(--accent); border-color: var(--accent); }
+.tstate.lockw { color: var(--ink-2); border-color: var(--line); }
+.tstate.cv { color: var(--danger); border-color: var(--danger); border-style: dashed; }
+.tstate.done { color: var(--ok); border-color: var(--ok); }
+.tstate.bad { color: var(--danger); border-color: var(--danger); }
+.tpc {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  min-height: 2.2rem;
+  word-break: break-word;
+}
+.tpc.warn { color: var(--danger); font-weight: 600; }
+.tpc.good { color: var(--ok); font-weight: 600; }
+.tcard button { width: 100%; padding: 0.35rem 0.5rem; font-size: 0.75rem; }
+
+/* ── 佇列槽位 ────────────────────────────────────────────────────── */
+.slot.over { background: var(--danger-bg); border-color: var(--danger); border-style: dashed; }
+.slot.over .val { color: var(--danger); }
+.qmeta {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+.qmeta b { color: var(--ink); font-weight: 600; }
+.qmeta b.warn { color: var(--danger); }
+
+.modeline {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  white-space: pre-wrap;
+}
+.modeline .wrong { color: var(--danger); font-weight: 600; }
+.modeline .right { color: var(--ok); font-weight: 600; }
+
+.grouplabel {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.1rem;
+}
+.controls .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 0.3rem; }
+
+.codepair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.codebox {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.8rem 0.9rem;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.codebox.bad { border-color: var(--danger); }
+.codebox.good { border-color: var(--ok); }
+.codebox h3 { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.codebox.bad h3 { color: var(--danger); }
+.codebox.good h3 { color: var(--ok); }
+.codebox pre {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  margin: 0;
+  overflow-x: auto;
+  color: var(--ink);
+}
+.codebox p { font-size: 0.86rem; color: var(--ink-2); }
+
+@media (max-width: 46rem) {
+  .machine { grid-template-columns: 1fr; }
+  .codepair { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 2 &nbsp;·&nbsp; mutex &amp; condvar</p>
+  <h1>bounded_queue</h1>
+  <p class="lede">
+    Mutex 保護狀態,Condvar 傳遞「狀態變了」的消息。難的不是這兩個物件——
+    是那句你以為只是風格問題的 <code>while</code>:
+    <strong>一次喚醒只是提示,不是保證</strong>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · Condvar 的兩條不可依賴</h2>
+  <p>
+    <code>wait()</code> 做三件事:<strong>原子地</strong>放開 Mutex、睡下、被喚醒後<strong>重新搶回</strong> Mutex。
+    放開與睡下必須原子,否則 notify 會插在中間,喚醒打在空氣上(lost wakeup)。
+    這部分作業系統幫你做對了。剩下兩件事它明說做不到:
+  </p>
+  <p>
+    <strong>一、spurious wakeup。</strong> <code>wait</code> 可能沒有任何人 notify 就自己返回——
+    POSIX 明文允許,futex 實作上真實存在。
+    <strong>二、喚醒與搶鎖之間有窗口。</strong> 被 notify 的執行緒只是「被放進搶鎖佇列」,
+    不是「鎖已經是你的」。Rust 的 <code>Mutex</code> 不保證公平:
+    在它重新拿到鎖之前,一個剛好路過的執行緒可以直接插隊搶走鎖,把條件消費掉。
+  </p>
+  <p class="note">
+    兩條合起來只推出一個結論:<strong>醒來必須重查條件</strong>。
+    所以形狀是 <code>while !pred { wait() }</code>,不是 <code>if !pred { wait() }</code>。
+    下面那台機器就是為了讓你親眼看到 <code>if</code> 版怎麼死。
+  </p>
+</section>
+
+<section>
+  <h2>2 · predicate wait 模擬器</h2>
+  <p>
+    容量 3 的佇列,兩個 producer、三個 consumer,一把 Mutex、兩個 Condvar。
+    每張卡片按一次走一步:<code>lock()</code> → 查條件 → <code>wait()</code> 或進 body。
+    <strong>只有一個執行緒能持有 Mutex</strong>——鎖是畫面上一個真的物件,誰拿著就寫誰的名字。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <span class="grouplabel">wait 形狀</span>
+      <div class="switch" role="group" aria-label="wait loop shape">
+        <button id="mode-while" aria-pressed="true">while !pred { wait() }</button>
+        <button id="mode-if" aria-pressed="false">if !pred { wait() }</button>
+      </div>
+    </div>
+
+    <div class="modeline" id="modeline"></div>
+
+    <div class="controls">
+      <span class="grouplabel">情境</span>
+      <button id="sc-steal">喚醒被偷走</button>
+      <button id="sc-blocked">三個 consumer 都在等</button>
+      <button id="sc-drain">close 後 drain</button>
+      <div class="sep"></div>
+      <span class="grouplabel">干擾</span>
+      <button id="btn-spurious">spurious wakeup</button>
+      <button id="btn-close-all">close() notify_all</button>
+      <button id="btn-close-one">close() 只 notify_one</button>
+      <div class="sep"></div>
+      <button id="btn-reset">reset</button>
+    </div>
+
+    <div class="machine">
+      <div class="box" id="box-mutex">
+        <span class="k">Mutex&lt;State&gt;</span>
+        <span class="holder free" id="mx-holder">free</span>
+        <div>
+          <span class="k">lock-wait(搶鎖中)</span>
+          <div class="queue" id="mx-queue"></div>
+        </div>
+      </div>
+      <div class="box">
+        <span class="k">Condvar not_empty</span>
+        <span class="k">等資料的 consumer</span>
+        <div class="queue" id="cv-ne"></div>
+      </div>
+      <div class="box">
+        <span class="k">Condvar not_full</span>
+        <span class="k">等空位的 producer</span>
+        <div class="queue" id="cv-nf"></div>
+      </div>
+    </div>
+
+    <div class="slots" id="q-slots"></div>
+    <div class="qmeta">
+      <span>len = <b id="q-len">0</b> / 3</span>
+      <span>closed = <b id="q-closed">false</b></span>
+      <span>state = <b id="q-state">empty</b></span>
+    </div>
+
+    <div class="threads" id="threads"></div>
+
+    <div class="verdict ok" id="bq-verdict">
+      <b id="bq-vtitle">狀態</b>
+      <span id="bq-vtext"></span>
+    </div>
+
+    <div class="log" id="bq-log"></div>
+  </div>
+
+  <p class="note">
+    「喚醒被偷走」是這台機器的核心:C1 空佇列 pop → 睡在 not_empty;P1 push(1) → notify_one 把 C1 放進搶鎖佇列;
+    <strong>但 C1 還沒拿到鎖</strong>,此時剛進門的 C2 直接搶走鎖、把那個元素拿走。
+    C1 終於拿到鎖時,佇列已經空了——它醒來的那個「理由」早就被消費掉了。
+    <code>while</code> 版重查條件、睡回去;<code>if</code> 版直接走進 body,在空佇列上 <code>pop_front()</code>。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 同一組交錯,兩種形狀</h2>
+  <p>
+    Rust 的 <code>Condvar::wait_while</code> 就是把 <code>while</code> 迴圈包起來——
+    它的存在本身就是在告訴你:這個迴圈不是選配。
+  </p>
+
+  <div class="codepair">
+    <div class="codebox bad">
+      <h3>if — 一票否決級的 bug</h3>
+<pre>let mut st = lock().unwrap();
+if st.buf.is_empty() &amp;&amp; !st.closed {
+    st = not_empty.wait(st).unwrap();
+}
+// 假設:醒來 ⇒ 有資料
+st.buf.pop_front().unwrap()   // 空佇列 → panic</pre>
+      <p>
+        醒來只證明「<strong>曾經</strong>有人 notify 過,或什麼都沒發生」。
+        它不證明條件<strong>現在</strong>成立。這行 <code>unwrap()</code> 是在一個過期的前提上做決策。
+      </p>
+    </div>
+    <div class="codebox good">
+      <h3>while / wait_while — 唯一正確形狀</h3>
+<pre>let mut st = lock().unwrap();
+st = not_empty
+    .wait_while(st, |s| s.buf.is_empty() &amp;&amp; !s.closed)
+    .unwrap();
+// 保證:非空,或已 closed
+let item = st.buf.pop_front();</pre>
+      <p>
+        每次醒來(含 spurious)都重查。條件不成立就再睡回去。
+        走出迴圈時,<strong>條件是在持鎖狀態下剛驗過的</strong>——沒有人能在中間插隊改掉它。
+      </p>
+    </div>
+  </div>
+
+  <p class="note">
+    這也解釋了為什麼「wait 之前必須先持鎖」不是形式主義:條件的檢查與睡下之間若鬆手,
+    那個檢查結果立刻過期。Mutex 把「查條件」和「決定睡」黏成一個不可分割的動作。
+  </p>
+</section>
+
+<section>
+  <h2>4 · close 語意的三個決策點</h2>
+  <p>
+    <code>close()</code> 不只是把旗標設起來。它是 shutdown 路徑上唯一能把所有阻塞執行緒撈回來的機會,
+    三個決策點各對應一種資料遺失或永久卡死。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>決策點</th><th>本模組的選擇</th><th>選錯的後果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>pop()</code> 遇到 closed</td>
+          <td><strong>先 drain,空了才回 <code>None</code></strong>。predicate 是 <code>is_empty() &amp;&amp; !closed</code>——
+              closed 只讓等待者<em>離開等待</em>,不讓它跳過既有資料。</td>
+          <td>closed 立刻回 <code>None</code> → 佇列裡的工作項直接蒸發。close 只該擋新資料進來,不該擋舊資料出去。</td>
+        </tr>
+        <tr>
+          <td><code>push()</code> 遇到 closed</td>
+          <td><strong><code>Err(PushError(item))</code> 把元素歸還</strong>。caller 保有所有權,可以記 log、走 fallback、或自己 drop。</td>
+          <td>回 <code>Err(())</code> 吞掉元素 → caller 連「我丟了什麼」都不知道。這是靜默資料遺失。</td>
+        </tr>
+        <tr>
+          <td><code>close()</code> 怎麼通知</td>
+          <td><strong>兩個 condvar 都 <code>notify_all</code></strong>。所有等待者都必須觀察到 closed 並離場。</td>
+          <td><code>notify_one</code> 只放行一個,其餘永遠留在 condvar 佇列上——沒有下一次 notify 會來了(push 被拒不 notify、空 pop 也不 notify)。<strong>永久 deadlock</strong>。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    上面模擬器的「三個 consumer 都在等」+「close() 只 notify_one」就是第三列:
+    一個被放行、兩個永遠停在 not_empty 上,程式再也不會結束。
+    這種 bug 不會在單元測試裡出現——它出現在 CI 的 timeout 裡。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 一個 condvar 還是兩個</h2>
+  <p>
+    <code>mod naive</code> 用單一 condvar,正確,但<strong>不能</strong>用 <code>notify_one</code>:
+    等資料的 consumer 和等空位的 producer 睡在同一個佇列上,
+    <code>notify_one</code> 可能叫醒一個 producer,它重查條件發現佇列還是滿的,睡回去——
+    真正該醒的 consumer 沒被叫到。那是 lost wakeup,而且是<em>你自己造成的</em>,不是 OS 的鍋。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>單 condvar(naive)</th><th>雙 condvar(主體)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>push 完成後</td><td class="ord rlx">notify_all(不知道誰在等什麼)</td><td class="ord acq">notify_one(not_empty)</td></tr>
+        <tr><td>每次操作喚醒</td><td class="ord rlx">O(waiters) — thundering herd</td><td class="ord acq">O(1)</td></tr>
+        <tr><td>正確性</td><td>相同</td><td>相同</td></tr>
+        <tr><td>代價</td><td>被誤醒的執行緒重查條件再睡回去,白付一次 context switch</td><td>多一個 Condvar 物件</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    把「等資料」與「等空位」拆成兩個 condvar 之後,notify 的目標明確了,<code>notify_one</code> 才安全。
+    這是把「誰在等什麼」這個資訊<strong>編碼進資料結構</strong>,而不是每次都廣播出去讓大家自己判斷。
+  </p>
+</section>
+
+<section>
+  <h2>6 · 先解鎖再 notify</h2>
+  <p>
+    <code>drop(st)</code> 之後才 <code>notify_one()</code>。若持鎖 notify,被喚醒的執行緒立刻嘗試搶鎖、
+    立刻失敗,再睡一次——多一趟 context switch,經典的 hurry-up-and-wait。
+  </p>
+  <p>
+    但要說清楚:<strong>順序反過來不影響正確性</strong>。被喚醒者拿到鎖後還是會重查條件
+    (只要你寫的是 <code>while</code>)。這純粹是效能取捨,不是 bug。
+    把效能取捨講成正確性問題,面試時會被追問到穿幫。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/bounded_queue.rs</code>(含 <code>mod naive</code> 對照)· 設計取捨:<code>docs/bounded_queue.md</code></div>
+  <div>驗證:<code>cargo test -p reference bounded_queue</code> · 練習:<code>drills/src/bounded_queue.rs</code> · 空白起點:<code>challenges/</code></div>
+  <div>同 idiom 的消費端:<code>thread_pool</code>(worker 醒來先查 stop)· 無鎖版對照:<code>spsc_ring</code></div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 模型:一台可以單步的 Mutex + Condvar 機器 ──────────────────────
+  // pc 是「下一步要執行的指令」,不是「已執行的指令」。
+  //   idle     尚未呼叫 push/pop
+  //   lockwait 在搶鎖佇列裡(Mutex 不公平:誰先被 step 到誰拿到)
+  //   check    持鎖,下一步查 predicate
+  //   body     持鎖,下一步動 buf(pop_front / push_back)
+  //   cvwait   睡在 condvar 上,自己醒不來
+  //   done     結束,result 是回傳值
+  var CAP = 3;
+
+  var mode = "while";          // "while" | "if"
+  var buf = [];
+  var closed = false;
+  var lockHolder = null;
+  var lockQ = [];
+  var cvq = { not_empty: [], not_full: [] };
+  var nextItem = 1;
+  var bugHit = false;
+  var verdict = null;          // { cls, title, text }
+  var running = false;         // 情境自動播放中
+  var token = 0;               // 用來取消播放
+
+  var SPEC = [
+    { id: "P1", role: "p" },
+    { id: "P2", role: "p" },
+    { id: "C1", role: "c" },
+    { id: "C2", role: "c" },
+    { id: "C3", role: "c" }
+  ];
+  var T = {};
+
+  var logEl = document.getElementById("bq-log");
+  var threadsEl = document.getElementById("threads");
+  var slotsEl = document.getElementById("q-slots");
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 80) logEl.removeChild(logEl.lastChild);
+  }
+
+  function cvOf(t) { return t.op === "pop" ? "not_empty" : "not_full"; }
+
+  function waitPred(t) {
+    return t.op === "pop"
+      ? (buf.length === 0 && !closed)
+      : (buf.length >= CAP && !closed);
+  }
+
+  function predText(t) {
+    var kw = mode === "while" ? "while" : "if";
+    return t.op === "pop"
+      ? kw + " buf.is_empty() && !closed"
+      : kw + " buf.len() == cap && !closed";
+  }
+
+  // ── 原語 ──────────────────────────────────────────────────────────
+  function notify(name, all) {
+    var q = cvq[name];
+    if (q.length === 0) {
+      say("m", "notify_" + (all ? "all" : "one") + "(" + name + ") — 沒有等待者,喚醒打在空氣上(這是合法的)");
+      return;
+    }
+    var n = all ? q.length : 1;
+    for (var i = 0; i < n; i++) {
+      var id = q.shift();
+      var t = T[id];
+      t.pc = "lockwait";
+      t.woken = true;
+      lockQ.push(id);
+      say(t.role, "notify_" + (all ? "all" : "one") + "(" + name + ") → " + id +
+        " 離開 condvar,進入搶鎖佇列(鎖還不是它的)");
+    }
+  }
+
+  function startOp(id) {
+    var t = T[id];
+    if (t.pc !== "idle") return;
+    if (t.role === "p") {
+      t.op = "push";
+      t.item = nextItem++;
+      say("p", id + ": push(" + t.item + ") — 呼叫 state.lock()");
+    } else {
+      t.op = "pop";
+      say("c", id + ": pop() — 呼叫 state.lock()");
+    }
+    t.pc = "lockwait";
+    lockQ.push(id);
+    render();
+  }
+
+  function step(id) {
+    var t = T[id];
+    if (t.pc === "lockwait") {
+      if (lockHolder !== null) return;
+      lockQ.splice(lockQ.indexOf(id), 1);
+      lockHolder = id;
+      if (t.woken) {
+        t.woken = false;
+        if (mode === "if") {
+          t.pc = "body";
+          t.skipped = true;
+          say("x", id + " 拿回 Mutex。if 版:不重查條件,直接進 body —— 前提是「我被叫醒了,所以條件成立」");
+        } else {
+          t.pc = "check";
+          t.recheck = true;   // 這次 check 是「醒來後的重查」——while 版的防線就在這一步
+          say(t.role, id + " 拿回 Mutex → 回到 while 迴圈頂端,重查條件");
+        }
+      } else {
+        t.pc = "check";
+        say(t.role, id + " 取得 Mutex");
+      }
+    } else if (t.pc === "check") {
+      if (waitPred(t)) {
+        lockHolder = null;
+        cvq[cvOf(t)].push(id);
+        t.pc = "cvwait";
+        say(t.role, id + ": 條件成立 → " + cvOf(t) + ".wait() — 原子地放開 Mutex 並睡下");
+        if (t.recheck) {
+          verdict = {
+            cls: "ok",
+            title: "while 擋下來了 — 重查、發現條件不成立、睡回去",
+            text: id + " 被叫醒了,但拿回鎖之後重查條件,發現它<b>現在</b>並不成立(元素被別人拿走了," +
+              "或根本沒有人 notify)。於是它再睡一次。那次喚醒白白浪費了 —— 而這完全沒關係:" +
+              "<b>喚醒是提示,不是保證</b>。while 迴圈的工作,就是把「提示」翻譯成「事實」,每次都親自驗一遍。"
+          };
+        }
+      } else {
+        t.pc = "body";
+        say(t.role, id + ": 條件不成立 → 走出迴圈,持鎖進入 body");
+      }
+      t.recheck = false;
+    } else if (t.pc === "body") {
+      body(t);
+    } else {
+      return;
+    }
+    render();
+  }
+
+  function body(t) {
+    var id = t.id;
+    if (t.op === "pop") {
+      if (buf.length === 0) {
+        lockHolder = null;
+        t.pc = "done";
+        if (closed) {
+          t.result = "None";
+          say("m", id + ": buf 空且 closed → pop() 回 None(drain 完畢,正常離場)");
+        } else {
+          t.result = "None ← BUG";
+          t.bad = true;
+          bugHit = true;
+          say("x", id + ": buf.pop_front() 打在空佇列上 —— 佇列沒有 close,pop() 卻回了 None");
+          verdict = {
+            cls: "bad",
+            title: "契約破了 — 在空佇列上 pop",
+            text: id + " 是被 notify(或 spurious)叫醒的,但等它拿到鎖時,元素已經被別人拿走了。" +
+              "if 版沒有重查,直接在一個過期的前提上動 buf。pop() 在佇列未 close 的情況下回傳 None —— " +
+              "契約明明是「阻塞到有資料或 close」。真實 code 裡這行常常是 .unwrap() 或 C++ 的 front():" +
+              "前者 panic,後者是 UB。一次喚醒只是提示,不是保證。"
+          };
+        }
+        return;
+      }
+      var v = buf.shift();
+      t.result = "Some(" + v + ")";
+      t.pc = "done";
+      lockHolder = null;                       // drop(st):先解鎖
+      say("c", id + ": buf.pop_front() → Some(" + v + "),drop(guard) 後 notify_one(not_full)");
+      notify("not_full", false);
+      return;
+    }
+
+    // push
+    if (closed) {
+      lockHolder = null;
+      t.pc = "done";
+      t.result = "Err(PushError(" + t.item + "))";
+      say("p", id + ": closed → push 失敗,元素 " + t.item + " 歸還 caller(所有權還你,不是吞掉)");
+      return;
+    }
+    if (buf.length >= CAP) {
+      buf.push(t.item);
+      t.result = "Ok ← BUG";
+      t.bad = true;
+      bugHit = true;
+      t.pc = "done";
+      lockHolder = null;
+      say("x", id + ": buf.push_back(" + t.item + ") 塞進已滿的佇列 —— 容量上限被打破,backpressure 消失");
+      verdict = {
+        cls: "bad",
+        title: "容量上限被打破 — 往滿佇列 push",
+        text: id + " 醒來時佇列還有空位,但等它拿到鎖,空位已經被另一個 producer 填掉。" +
+          "if 版不重查,直接 push_back —— VecDeque 不會攔你,它只會長大。" +
+          "bounded queue 的「bounded」就這樣沒了:backpressure 失效,記憶體無上限。"
+      };
+      notify("not_empty", false);
+      return;
+    }
+    buf.push(t.item);
+    t.result = "Ok(())";
+    t.pc = "done";
+    lockHolder = null;                         // drop(st):先解鎖
+    say("p", id + ": buf.push_back(" + t.item + "),drop(guard) 後 notify_one(not_empty)");
+    notify("not_empty", false);
+  }
+
+  function spurious() {
+    var name = cvq.not_empty.length ? "not_empty" : (cvq.not_full.length ? "not_full" : null);
+    if (!name) {
+      say("m", "spurious wakeup:現在沒有人在 wait,沒東西可以亂醒");
+      return;
+    }
+    var id = cvq[name].shift();
+    var t = T[id];
+    t.pc = "lockwait";
+    t.woken = true;
+    lockQ.push(id);
+    say("x", "spurious wakeup:" + id + " 沒有任何人 notify 就自己醒了(POSIX 明文允許,futex 上真實存在)");
+    verdict = {
+      cls: mode === "if" ? "bad" : "ok",
+      title: mode === "if" ? "spurious wakeup — if 版沒有防線" : "spurious wakeup — while 版會擋下來",
+      text: mode === "if"
+        ? "沒有任何 notify。條件<b>從頭到尾都沒成立過</b>。if 版醒來就當作條件成立 —— 現在 step " + id + ",看它撞牆。"
+        : "沒有任何 notify。while 版醒來重查條件,發現條件仍然成立(該等的還沒到),乖乖睡回去。" +
+          "spurious wakeup 從來不是「要處理的錯誤」,它只是 while 迴圈的日常。"
+    };
+    render();
+  }
+
+  function closeQ(all) {
+    if (lockHolder !== null) {
+      say("m", "close() 也要先拿 Mutex —— 現在鎖在 " + lockHolder + " 手上,close 會擋在 lock() 上。先讓它走完。");
+      return;
+    }
+    if (closed) { say("m", "已經 closed 了"); return; }
+    closed = true;
+    if (all) {
+      say("m", "close():closed = true,drop(guard),然後兩個 condvar 都 notify_all");
+      notify("not_empty", true);
+      notify("not_full", true);
+      verdict = {
+        cls: "ok",
+        title: "close() 廣播 — 所有等待者都離場",
+        text: "closed 只擋新資料進來,不擋舊資料出去:pop 先 drain 完剩餘元素,空了才回 None;" +
+          "push 立刻 Err 並把元素歸還 caller。每個等待者都拿到鎖、重查條件、看到 closed、走人。"
+      };
+    } else {
+      say("x", "close():只 notify_one —— 這是 bug 版本");
+      notify("not_empty", false);
+      notify("not_full", false);
+      verdict = {
+        cls: "bad",
+        title: "close() 只 notify_one — 其餘等待者永遠醒不來",
+        text: "被放行的那個會離場。其餘的還睡在 condvar 上,而且沒有下一次 notify 會來了:" +
+          "closed 之後 push 直接回 Err(不 notify),空佇列 pop 直接回 None(不 notify)。" +
+          "把剩下能跑的執行緒都 step 完,看下面的 deadlock 判定。"
+      };
+    }
+    render();
+  }
+
+  // ── deadlock 判定:系統靜止 + 還有人睡在 condvar 上 ────────────────
+  function deadlockCount() {
+    if (!closed || buf.length !== 0) return 0;
+    var waiting = 0, i, t;
+    for (i = 0; i < SPEC.length; i++) {
+      t = T[SPEC[i].id];
+      if (t.pc === "lockwait" || t.pc === "check" || t.pc === "body") return 0; // 還有人能跑
+      if (t.pc === "cvwait") waiting++;
+    }
+    return waiting;
+  }
+
+  // ── 畫面 ──────────────────────────────────────────────────────────
+  function stateLabel(t) {
+    if (t.pc === "idle") return ["IDLE", ""];
+    if (t.pc === "lockwait") return ["LOCK-WAIT", "lockw"];
+    if (t.pc === "check" || t.pc === "body") return ["HOLDS MUTEX", "hold"];
+    if (t.pc === "cvwait") return ["BLOCKED", "cv"];
+    return [t.bad ? "DONE (BUG)" : "DONE", t.bad ? "bad" : "done"];
+  }
+
+  function pcLabel(t) {
+    if (t.pc === "idle") return [t.role === "p" ? "尚未呼叫 push()" : "尚未呼叫 pop()", ""];
+    if (t.pc === "lockwait") {
+      return [t.woken ? "醒了,重搶 Mutex" + (lockHolder ? "(鎖在 " + lockHolder + " 手上)" : "(鎖是空的,可以搶)")
+                      : "state.lock()" + (lockHolder ? "(鎖在 " + lockHolder + " 手上)" : ""), ""];
+    }
+    if (t.pc === "check") return [predText(t), ""];
+    if (t.pc === "body") {
+      var b = t.op === "pop" ? "buf.pop_front()" : "buf.push_back(" + t.item + ")";
+      return t.skipped ? [b + " ← 未重查條件", "warn"] : [b, ""];
+    }
+    if (t.pc === "cvwait") return [cvOf(t) + ".wait() — 睡著,自己醒不來", ""];
+    return [t.result, t.bad ? "warn" : "good"];
+  }
+
+  function chip(id) {
+    var t = T[id];
+    var s = document.createElement("span");
+    s.className = "chip " + t.role + (t.woken ? " woken" : "");
+    s.textContent = id;
+    return s;
+  }
+
+  function fillQueue(el, ids, emptyText) {
+    el.textContent = "";
+    if (ids.length === 0) {
+      var e = document.createElement("span");
+      e.className = "empty";
+      e.textContent = emptyText;
+      el.appendChild(e);
+      return;
+    }
+    for (var i = 0; i < ids.length; i++) el.appendChild(chip(ids[i]));
+  }
+
+  function render() {
+    // Mutex
+    var h = document.getElementById("mx-holder");
+    var mbox = document.getElementById("box-mutex");
+    if (lockHolder === null) {
+      h.className = "holder free";
+      h.textContent = "free — 沒有人持有";
+      mbox.className = "box";
+    } else {
+      h.className = "holder held";
+      h.textContent = lockHolder + " 持有";
+      mbox.className = "box locked";
+    }
+    fillQueue(document.getElementById("mx-queue"), lockQ, "空");
+    fillQueue(document.getElementById("cv-ne"), cvq.not_empty, "沒有人在等");
+    fillQueue(document.getElementById("cv-nf"), cvq.not_full, "沒有人在等");
+
+    // 佇列槽位
+    slotsEl.textContent = "";
+    var n = Math.max(CAP, buf.length);
+    for (var i = 0; i < n; i++) {
+      var cell = document.createElement("div");
+      var over = i >= CAP;
+      cell.className = "slot" + (over ? " over" : (i < buf.length ? " live" : ""));
+      var idx = document.createElement("span");
+      idx.className = "idx";
+      idx.textContent = over ? "overflow" : "slot " + i;
+      var val = document.createElement("span");
+      if (i < buf.length) { val.className = "val"; val.textContent = String(buf[i]); }
+      else { val.className = "val uninit"; val.textContent = "empty"; }
+      var ptr = document.createElement("span");
+      ptr.className = "ptr";
+      if (i === 0 && buf.length > 0) { ptr.className = "ptr tag-h"; ptr.textContent = "front"; }
+      cell.append(idx, val, ptr);
+      slotsEl.appendChild(cell);
+    }
+    document.getElementById("q-len").textContent = String(buf.length);
+    var lenB = document.getElementById("q-len");
+    lenB.className = buf.length > CAP ? "warn" : "";
+    document.getElementById("q-closed").textContent = closed ? "true" : "false";
+    var st = document.getElementById("q-state");
+    st.textContent = buf.length > CAP ? "OVERFLOW" : (buf.length === 0 ? "empty" : (buf.length === CAP ? "FULL" : "partial"));
+    st.className = buf.length > CAP ? "warn" : "";
+
+    // 執行緒卡
+    var dead = deadlockCount();
+    threadsEl.textContent = "";
+    for (var k = 0; k < SPEC.length; k++) {
+      var t = T[SPEC[k].id];
+      var card = document.createElement("div");
+      var stuck = dead > 0 && t.pc === "cvwait";
+      card.className = "tcard " + t.role +
+        (t.pc === "check" || t.pc === "body" ? " hold" : "") +
+        (t.bad ? " bad" : "") +
+        (stuck ? " stuck" : "") +
+        (t.pc === "done" && !t.bad ? " fin" : "");
+      card.dataset.pc = t.pc;
+      card.dataset.bad = t.bad ? "1" : "0";
+      card.dataset.result = t.result || "";
+      card.id = "card-" + t.id;
+
+      var row = document.createElement("div");
+      row.className = "trow";
+      var nm = document.createElement("span");
+      nm.className = "tname";
+      nm.textContent = t.id + (t.op ? "  " + (t.op === "pop" ? "pop()" : "push(" + t.item + ")") : "");
+      var sl = stateLabel(t);
+      var sc = document.createElement("span");
+      sc.className = "tstate " + sl[1];
+      sc.textContent = stuck ? "STUCK" : sl[0];
+      row.append(nm, sc);
+
+      var pcv = pcLabel(t);
+      var pc = document.createElement("div");
+      pc.className = "tpc" + (pcv[1] ? " " + pcv[1] : "");
+      pc.textContent = stuck ? "永遠等不到 notify 了" : pcv[0];
+
+      var btn = document.createElement("button");
+      btn.id = "btn-" + t.id;
+      btn.className = t.role === "p" ? "act-producer" : "act-consumer";
+      if (t.pc === "idle") {
+        btn.textContent = t.role === "p" ? "push(" + nextItem + ")" : "pop()";
+        btn.disabled = running;
+      } else if (t.pc === "cvwait" || t.pc === "done") {
+        btn.textContent = t.pc === "done" ? "已結束" : "睡著了";
+        btn.disabled = true;
+      } else if (t.pc === "lockwait" && lockHolder !== null) {
+        btn.textContent = "搶不到鎖";
+        btn.disabled = true;
+      } else {
+        btn.textContent = "step";
+        btn.disabled = running;
+      }
+      (function (id) {
+        btn.addEventListener("click", function () {
+          if (T[id].pc === "idle") startOp(id); else step(id);
+        });
+      })(t.id);
+
+      card.append(row, pc, btn);
+      threadsEl.appendChild(card);
+    }
+
+    // verdict
+    var vd = verdict;
+    if (dead > 0 && !bugHit) {
+      vd = {
+        cls: "bad",
+        title: "DEADLOCK — " + dead + " 個執行緒永遠停在 condvar 上",
+        text: "系統靜止了:沒有任何執行緒能繼續跑,但還有 " + dead + " 個睡在 condvar 佇列裡。" +
+          "close() 用 notify_one 只放行了一個,其餘的等不到任何人來叫。" +
+          "這就是為什麼 close() 必須 notify_all —— 每一個等待者都得親自看到 closed 才走得掉。"
+      };
+    }
+    if (!vd) {
+      vd = mode === "while"
+        ? { cls: "ok", title: "while — 醒來一定重查", text: "現在是正確形狀。任何一次喚醒(notify 或 spurious)都會回到迴圈頂端重查條件;條件不成立就再睡回去。試試「喚醒被偷走」。" }
+        : { cls: "bad", title: "if — 醒來就當條件成立", text: "現在是 bug 形狀。被喚醒的執行緒會跳過重查,直接動 buf。跑「喚醒被偷走」或按 spurious wakeup,看它在哪一步撞牆。" };
+    }
+    var vEl = document.getElementById("bq-verdict");
+    vEl.className = "verdict " + vd.cls;
+    document.getElementById("bq-vtitle").textContent = vd.title;
+    document.getElementById("bq-vtext").innerHTML = vd.text;
+
+    // 模式說明列
+    var ml = document.getElementById("modeline");
+    ml.innerHTML = mode === "while"
+      ? '<span class="right">while</span> !pred { wait() }   ← wait_while 的形狀。醒來 → 重查條件 → 不成立就再睡。'
+      : '<span class="wrong">if</span> !pred { wait() }   ← 面試一票否決級的 bug。醒來 → 直接假設條件成立 → 動 buf。';
+
+    // 情境按鈕
+    var sb = ["sc-steal", "sc-blocked", "sc-drain", "btn-spurious", "btn-close-all", "btn-close-one", "btn-reset", "mode-while", "mode-if"];
+    for (var s = 0; s < sb.length; s++) document.getElementById(sb[s]).disabled = running && sb[s] !== "btn-reset";
+  }
+
+  function reset(quiet) {
+    token++;
+    running = false;
+    buf = [];
+    closed = false;
+    lockHolder = null;
+    lockQ = [];
+    cvq = { not_empty: [], not_full: [] };
+    nextItem = 1;
+    bugHit = false;
+    verdict = null;
+    for (var i = 0; i < SPEC.length; i++) {
+      T[SPEC[i].id] = {
+        id: SPEC[i].id, role: SPEC[i].role,
+        pc: "idle", op: null, item: null,
+        woken: false, recheck: false, skipped: false, result: null, bad: false
+      };
+    }
+    logEl.textContent = "";
+    if (!quiet) say("m", "reset — cap = 3,兩個 producer、三個 consumer,佇列空。");
+    render();
+  }
+
+  // ── 情境:把一組交錯排好 ──────────────────────────────────────────
+  function play(steps) {
+    reset(true);
+    running = true;
+    render();
+    var my = token;
+    var i = 0;
+    (function tick() {
+      if (my !== token) return;
+      if (i >= steps.length) {
+        running = false;
+        render();
+        return;
+      }
+      steps[i++]();
+      render();
+      setTimeout(tick, 620);
+    })();
+  }
+
+  function S(id) { return function () { step(id); }; }
+  function G(id) { return function () { startOp(id); }; }
+  function N(msg) { return function () { say("m", msg); }; }
+
+  function scenarioSteal() {
+    play([
+      N("情境:喚醒被偷走 —— 佇列是空的,C1 先來 pop"),
+      G("C1"), S("C1"), S("C1"),                     // lock → 空 → wait(not_empty)
+      N("C1 睡在 not_empty 上。P1 現在 push 一個元素"),
+      G("P1"), S("P1"), S("P1"), S("P1"),            // lock → 不滿 → push + notify_one
+      N("C1 被 notify 了,但它只是進了搶鎖佇列 —— 鎖還沒到手。此時 C2 剛好進門"),
+      G("C2"), S("C2"), S("C2"), S("C2"),            // C2 插隊搶到鎖,把元素拿走
+      N("C2 把元素偷走了。現在輪到 C1 拿到鎖 —— 它醒來的理由已經不存在"),
+      S("C1"), S("C1")
+      // 結局的 verdict:if 版在 body() 裡寫、while 版在 check 的重查分支裡寫
+    ]);
+  }
+
+  function scenarioBlocked() {
+    play([
+      N("情境:空佇列,三個 consumer 全部睡在 not_empty 上"),
+      G("C1"), S("C1"), S("C1"),
+      G("C2"), S("C2"), S("C2"),
+      G("C3"), S("C3"), S("C3"),
+      N("三個都 BLOCKED。現在按 close() notify_all 或 close() 只 notify_one,比較兩者")
+    ]);
+  }
+
+  function scenarioDrain() {
+    play([
+      N("情境:佇列裡還有資料時 close() —— pop 必須先 drain,空了才回 None"),
+      G("P1"), S("P1"), S("P1"), S("P1"),
+      G("P2"), S("P2"), S("P2"), S("P2"),
+      N("buf = [1, 2]。現在 close()"),
+      function () { closeQ(true); },
+      N("closed = true,但資料還在。三個 consumer 依序 pop"),
+      G("C1"), S("C1"), S("C1"), S("C1"),
+      G("C2"), S("C2"), S("C2"), S("C2"),
+      G("C3"), S("C3"), S("C3"), S("C3"),
+      function () {
+        verdict = {
+          cls: "ok",
+          title: "close 後 drain — Some(1), Some(2), None",
+          text: "predicate 是 <code>is_empty() &amp;&amp; !closed</code>:closed 讓等待者<b>離開等待</b>," +
+            "但 pop 的 body 仍然先 pop_front()。有資料就拿資料,空了才回 None。" +
+            "若 close 一設就讓 pop 直接回 None,佇列裡的工作項會直接蒸發 —— 那是靜默資料遺失。"
+        };
+      }
+    ]);
+  }
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById("mode-while").setAttribute("aria-pressed", String(m === "while"));
+    document.getElementById("mode-if").setAttribute("aria-pressed", String(m === "if"));
+    reset(true);
+    say("m", m === "while"
+      ? "wait 形狀 = while !pred { wait() }(= Condvar::wait_while)。正確版。"
+      : "wait 形狀 = if !pred { wait() }。bug 版:醒來不重查條件。");
+    render();
+  }
+
+  document.getElementById("mode-while").addEventListener("click", function () { setMode("while"); });
+  document.getElementById("mode-if").addEventListener("click", function () { setMode("if"); });
+  document.getElementById("sc-steal").addEventListener("click", scenarioSteal);
+  document.getElementById("sc-blocked").addEventListener("click", scenarioBlocked);
+  document.getElementById("sc-drain").addEventListener("click", scenarioDrain);
+  document.getElementById("btn-spurious").addEventListener("click", function () { spurious(); });
+  document.getElementById("btn-close-all").addEventListener("click", function () { closeQ(true); });
+  document.getElementById("btn-close-one").addEventListener("click", function () { closeQ(false); });
+  document.getElementById("btn-reset").addEventListener("click", function () { reset(false); });
+
+  reset(false);
+})();
+</script>

@@ -40,3 +40,10 @@ Shard 數的取捨:太少競爭仍高;太多浪費記憶體(每 shard 一個 Has
 - dashmap:分片 + RwLock,API 模仿 HashMap,guard 型別讓借用可以安全逸出。
 - papaya / flurry:epoch-based reclamation,讀路徑無鎖。
 - 讀多寫極少:`RwLock<HashMap>` 或 arc-swap 快照整張表。
+
+## 互動教材
+
+[artifacts/sharded_map.html](artifacts/sharded_map.html) —— 鎖競爭模擬器:
+單一 `Mutex<HashMap>` 與 `[Mutex<HashMap>; N]` 並排跑同一批 op,即時比對 blocked / 排空輪數 / 吞吐。
+可切 workload(uniform / skewed / hot key)與 shard 數,看 hash 選 shard 的實際過程,
+也看 hot key 下分片一次都沒省到的那個誠實失敗。

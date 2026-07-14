@@ -40,3 +40,13 @@
 能並排講清楚,比只會寫其中一版強一個檔次。
 
 相關:[lru](lru.md)(index-based 鏈表實戰)、[arena_lockfree](arena_lockfree.md)(arena 槽位回收 + 世代)。
+
+## 互動教材
+
+[artifacts/tree.html](artifacts/tree.html) —— arena 版與 `Rc<RefCell>` 版並排,同一組 insert /
+inorder / drop 同時打在兩邊:左邊寫 `usize` 進 `Vec`,右邊每一步都在動 refcount
+(n 個節點的 inorder = 2n 次讀改寫 + n 次 `T::clone`,計數器實時顯示)。
+把 parent link 從 `Weak` 切成 `Rc` 再 `drop(tree)`:root 的 strong 從 3 掉到 2 就停住,
+`Drop` 一次都沒跑,整棵樹洩漏——切回 `Weak` 才一路歸零,arena 版兩種情況都是一次 `free`。
+第三個實驗:持著 `Ref` 再 `borrow_mut()` → 執行期 `already borrowed: BorrowMutError`,
+而 arena 版的同一個錯誤是 `error[E0502]`,程式根本不會被產出。

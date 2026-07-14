@@ -16,12 +16,15 @@
 //! (指標式深 trie drop 時遞迴析構可能爆 stack)。
 //!
 //! ## [Trade-offs]
-//! - children 用 `[Option<usize>; 26]`(208 bytes/node):child 查找 O(1) 零 hash;
+//! - children 用 `[Option<usize>; 26]`(**424 bytes/node**,不是直覺的 208——
+//!   `usize` 沒有 niche,所以 `size_of::<Option<usize>>() == 16` 而非 8;
+//!   換 `Option<NonZeroUsize>` 是 216B,換 `u32` + sentinel 是 108B。
+//!   見 docs/trie.md):child 查找 O(1) 零 hash;
 //!   代價是稀疏節點浪費——字母表大(Unicode)或極稀疏時換 `HashMap<char, usize>`
 //!   (O(1) 期望 + heap 開銷)或排序 `Vec<(char, usize)>`(O(log deg) 二分)。
 //! - arena 只長不縮:刪除詞只清 `is_end`,不回收節點(懶刪除)。
 //!   回收要 free list + 世代標記——那是 [`crate::arena_lockfree`] 的主題。
-//! - insert/contains/starts_with 都是 O(L) 時間,L = key 長;空間 O(Σ L × 208B) 最壞。
+//! - insert/contains/starts_with 都是 O(L) 時間,L = key 長;空間 O(Σ L × 424B) 最壞。
 //!
 //! ## [Dry-Run]
 //! 見測試:重疊前綴逐步 trace、空字串、單字 vs 前綴之辨、刪除保前綴詞。
@@ -121,6 +124,24 @@ impl Trie {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 把 doc 裡的 424B 釘死在測試裡。
+    ///
+    /// 這個數字曾經寫錯成 208B——直覺是 26 × 8 + 1,但 `usize` 沒有 niche,
+    /// 所以 `Option<usize>` 要多一個 word 放 discriminant(16B,不是 8B)。
+    /// 26 × 16 + is_end + padding = 424B。
+    ///
+    /// 一併釘住 `Option<usize>` 的大小:哪天它變了(或有人把 children 換成
+    /// `NonZeroUsize`),這裡會紅,doc 就不會繼續說謊。
+    #[test]
+    fn node_size_matches_the_documented_number() {
+        assert_eq!(
+            size_of::<Option<usize>>(),
+            16,
+            "usize 無 niche,Option 必須另配 discriminant word"
+        );
+        assert_eq!(size_of::<Node>(), 424, "docs/trie.md 宣稱的每節點空間");
+    }
 
     /// [Dry-Run] 重疊前綴 trace:
     ///   insert("app"): root→a(1)→p(2)→p(3),is_end[3]=true;node_count=4

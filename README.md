@@ -62,6 +62,28 @@ commit 歷史按難度遞增分階段,`git log --oneline --reverse` 就是建議
 
 每個主題在 `docs/` 有一份設計取捨文件(非 code 重複),各模組 doc 有交叉連結。
 
+## 互動教材
+
+`docs/artifacts/` 有 17 份互動教材,每個模組一份——瀏覽器直接開,無需 build:
+
+```sh
+xdg-open docs/artifacts/index.html
+```
+
+它們不是圖,是**可以操作的機制**。刻意把每個模組最容易錯的那一步做成按鈕:
+把 `Acquire` 降成 `Relaxed`、把 `while` 換成 `if`、ET 模式下只讀一半就停手、
+拔掉 generation tag——然後看它當場壞給你看。
+
+| 模組 | 那個按鈕會讓你看到 |
+|---|---|
+| `spsc_ring` | happens-before 邊消失,consumer 讀到未初始化記憶體 |
+| `bounded_queue` | 被喚醒的 consumer 從空佇列取值(wakeup 是提示,不是保證) |
+| `event_loop` | ET 下只讀一半 → epoll_wait 再也不通知,連線永遠卡死 |
+| `arena_lockfree` | 沒有 generation tag,CAS「成功」指向一個已經死掉的節點 |
+| `executor` | park 沒有 token 的話,wake 先於 park 就永遠醒不來 |
+| `tree` | `Rc` 成環 → strong count 歸不了零,`Drop` 不執行 |
+| `hw_bridge` | 逐 byte 餵進 FrameReader,`Ok(None)` 一直等到最後一 byte |
+
 ## 跑起來看
 
 測試證明程式碼是對的,但建立不了直覺。`reference/examples/` 讓你**親手打進去**——

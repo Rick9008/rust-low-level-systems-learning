@@ -1,0 +1,1365 @@
+<title>file_io_offload — epoll 管不了的那個 fd</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+/* ── 模組:機器面板 ──────────────────────────────────────────────── */
+.machine { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+.card {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+.card > h3 {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.card.loop { border-color: var(--consumer); }
+.card.loop.frozen { border-color: var(--danger); background: var(--danger-bg); }
+.card.pool.busy { border-color: var(--producer); }
+.line {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.line.hot { color: var(--consumer); font-weight: 600; }
+.line.frozen { color: var(--danger); font-weight: 600; }
+.line.work { color: var(--producer); font-weight: 600; }
+.line.done { color: var(--ok); font-weight: 600; }
+.bar { height: 0.35rem; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 90ms linear; }
+.bar.stall > i { background: var(--danger); }
+.bar.pool > i { background: var(--producer); }
+
+/* ── fd 表 ───────────────────────────────────────────────────────── */
+.fds { display: flex; flex-direction: column; }
+.fdrow {
+  display: grid;
+  grid-template-columns: 11rem 9rem 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  padding: 0.32rem 0.1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.fdrow:last-child { border-bottom: none; }
+.fdrow .why { color: var(--muted); font-size: 0.72rem; }
+.fdrow.file .why { color: var(--danger); }
+.badge {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.12rem 0.4rem;
+  text-align: center;
+  color: var(--muted);
+  background: var(--raised);
+  white-space: nowrap;
+}
+.badge.rdy { color: var(--consumer); border-color: var(--consumer); background: var(--consumer-bg); }
+.badge.always { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+.badge.wake { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+
+/* ── 連線延遲計數器 ──────────────────────────────────────────────── */
+.conns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.55rem; }
+.conn {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.conn .who { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em; color: var(--muted); }
+.conn .lat {
+  font-family: var(--mono);
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.conn .sub { font-family: var(--mono); font-size: 0.64rem; color: var(--muted); }
+.conn.waiting { border-color: var(--accent); background: var(--accent-bg); }
+.conn.starved { border-color: var(--danger); background: var(--danger-bg); }
+.conn.starved .lat { color: var(--danger); }
+
+/* ── rendezvous:兩條 thread 的交棒 ──────────────────────────────── */
+.rv { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.9rem; align-items: start; }
+.rv h3 { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; padding-bottom: 0.2rem; }
+.rv h3.w { grid-column: 1; color: var(--consumer); }
+.rv h3.k { grid-column: 2; color: var(--producer); }
+.rv .op.left { grid-column: 1; }
+.rv .op.right { grid-column: 2; }
+.rv .op.dim { opacity: 0.35; }
+.log .g { color: var(--ok); font-weight: 600; }
+@media (max-width: 46rem) {
+  .machine { grid-template-columns: 1fr; }
+  .conns { grid-template-columns: repeat(2, 1fr); }
+  .fdrow { grid-template-columns: 8rem 8rem; }
+  .fdrow .why { grid-column: 1 / -1; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 6 &nbsp;·&nbsp; event loop 綜合</p>
+  <h1>file_io_offload</h1>
+  <p class="lede">
+    epoll 只回答一個問題:<strong>「這個 fd 現在做 IO 不會擋住你」</strong>。
+    對 socket,這個問題有意義。對 regular file,它<strong>沒有答案</strong>——
+    所以 kernel 連問都不讓你問。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 把檔案 fd 丟進 epoll 會發生什麼</h2>
+  <p>
+    下面是一條 event loop 執行緒,服務四條連線。每個 tick 一次 <code>epoll_wait</code>,
+    回報哪些 fd 就緒,你自己去 <code>read()</code>。穩態延遲 1 ms。
+  </p>
+  <p>
+    現在 conn#3 送來 <code>GET /data.bin</code>——你需要讀一個檔案。
+    保持在 <strong>naive</strong> 模式(<code>read()</code> 直接寫在 handler 裡),按下注入鍵,盯著 loop 執行緒。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="file io 策略">
+        <button id="m-naive" aria-pressed="true">naive: read() 在 loop 裡</button>
+        <button id="m-offload" aria-pressed="false">offload: 丟給 thread pool</button>
+      </div>
+      <button id="btn-inject" class="act-producer">conn#3: GET /data.bin</button>
+      <button id="btn-run">pause</button>
+      <button id="btn-step">step</button>
+      <button id="btn-reset">reset</button>
+    </div>
+
+    <div class="machine">
+      <div class="card loop" id="loopcard">
+        <h3>event loop thread</h3>
+        <div class="line" id="loop-line">epoll_wait(...)</div>
+        <div class="bar" id="loop-bar"><i></i></div>
+        <div class="line" id="loop-sub">-</div>
+      </div>
+      <div class="card pool" id="poolcard">
+        <h3>thread pool (2 workers)</h3>
+        <div class="line" id="w0">pool-worker-0  idle</div>
+        <div class="bar pool" id="w0-bar"><i></i></div>
+        <div class="line" id="w1">pool-worker-1  idle</div>
+        <div class="line" id="cq">completion queue: 0 &nbsp;·&nbsp; eventfd counter: 0</div>
+      </div>
+    </div>
+
+    <div class="fds" id="fds"></div>
+
+    <div class="conns" id="conns"></div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">t (ms)</span><span class="v" id="st-t">0</span></div>
+      <div class="stat"><span class="k">loop 凍結</span><span class="v" id="st-frozen">0 ms</span></div>
+      <div class="stat"><span class="k">最差 socket 延遲</span><span class="v" id="st-worst">0 ms</span></div>
+      <div class="stat"><span class="k">已服務請求</span><span class="v" id="st-served">0</span></div>
+      <div class="stat"><span class="k">檔案</span><span class="v" id="st-file">-</span></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    naive 模式你會看到三件事。一、<code>epoll_ctl(ADD)</code> 對 regular file 回 <strong>EPERM</strong>
+    ——模擬器假裝 kernel 收下了,才看得到它為什麼拒絕。
+    二、這個 fd <strong>永遠 readable</strong>:不是「有資料時 readable」,是無條件、每一輪、直到你把它拿掉。
+    三、你照 readiness 的規矩去 <code>read()</code>——然後<strong>整條 loop 停在那裡 8 ms</strong>,
+    page cache miss,<code>O_NONBLOCK</code> 一點用都沒有。其他三條連線的延遲計數器就在你眼前爬。
+  </p>
+  <p class="note">
+    切到 <strong>offload</strong> 再按一次。同一個檔案、同樣的磁碟時間、幾乎同樣的檔案總耗時——
+    差別是<strong>阻塞發生在一條沒人在乎的 thread 上</strong>。loop 一個 tick 都沒停,
+    socket 延遲全程 1 ms。這就是 <code>spawn_blocking</code> 買到的東西:它不讓 read 變快,
+    它讓 read 不再是所有人的問題。
+  </p>
+</section>
+
+<section>
+  <h2>2 · regular file 沒有「還沒好」這個狀態</h2>
+  <p>
+    readiness 的定義是「現在做這個 IO 不會把你擋住」。
+    socket 有「對端還沒送」這個狀態,所以「還沒 ready」是有意義的話。
+    regular file 沒有——資料就在磁碟上,kernel 不會跟你說「這個檔案還沒準備好」,
+    它會直接把你的執行緒丟進 D state 去等磁碟。
+    於是「ready」對它是一句<strong>恆真式</strong>:永遠成立,問了等於沒問。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>fd 種類</th><th>有「還沒有資料」的狀態?</th><th>O_NONBLOCK</th><th>epoll_ctl(ADD)</th><th>read() 會不會擋住你</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>socket</code> / <code>pipe</code> / <code>tty</code></td>
+          <td>有:對端還沒送</td>
+          <td class="mono">有效 &rarr; EAGAIN</td>
+          <td class="mono" style="color:var(--ok)">OK</td>
+          <td>就緒時不會</td>
+        </tr>
+        <tr>
+          <td><code>eventfd</code> / <code>timerfd</code> / <code>signalfd</code></td>
+          <td>有:計數器為 0</td>
+          <td class="mono">有效 &rarr; EAGAIN</td>
+          <td class="mono" style="color:var(--ok)">OK</td>
+          <td>就緒時不會</td>
+        </tr>
+        <tr>
+          <td><strong><code>regular file</code></strong></td>
+          <td><strong>沒有</strong>:資料就在磁碟上</td>
+          <td class="mono" style="color:var(--danger)">對它無效</td>
+          <td class="mono" style="color:var(--danger)">EPERM</td>
+          <td><strong>會</strong>:page cache miss 就等磁碟</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    Linux 的 <code>epoll_ctl(EPOLL_CTL_ADD)</code> 對 regular file 直接回 <code>EPERM</code>。
+    這不是「還沒支援」,是<strong>這個問題對它沒有答案</strong>——kernel 拒絕假裝有。
+    (kqueue 選了另一條路:<code>EVFILT_READ</code> 收下檔案 fd,然後永遠報就緒。
+    同一個真相,兩種說法。)
+  </p>
+</section>
+
+<section>
+  <h2>3 · readiness 與 completion</h2>
+  <p>
+    「ready」對檔案沒有意義,但「done」有。這一句就是整個模組。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>readiness — epoll / kqueue</th><th>completion — io_uring / IOCP</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>kernel 說什麼</td>
+          <td>「現在做這個 IO 不會擋住你」</td>
+          <td>「你要的那個 IO 做完了,結果在這」</td>
+        </tr>
+        <tr>
+          <td>誰真的做 IO</td>
+          <td>你,在你自己的執行緒上</td>
+          <td>kernel(可能在它的 worker 或 SQPOLL 執行緒上)</td>
+        </tr>
+        <tr>
+          <td>buffer 什麼時候要在</td>
+          <td><code>read()</code> 當下</td>
+          <td><strong>提交當下</strong>——生命週期是硬約束,Rust 包裝它並不好玩</td>
+        </tr>
+        <tr>
+          <td>對 socket</td>
+          <td>天生契合:有「還沒好」可講</td>
+          <td>也行</td>
+        </tr>
+        <tr>
+          <td>對 regular file</td>
+          <td><strong>無意義</strong>:ready 恆真</td>
+          <td><strong>天生契合</strong>:done 有定義</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    所以檔案 IO 在 async 世界只有兩條路:<strong>offload</strong>(在 readiness loop 上手工模仿 completion),
+    或 <strong>io_uring</strong>(直接用真的 completion model)。本模組走第一條,
+    因為第一條是 tokio、libuv、Node 今天實際在跑的東西。
+  </p>
+</section>
+
+<section>
+  <h2>4 · offload:在 readiness loop 上假裝 completion</h2>
+  <p>
+    <code>spawn_blocking(pool, f) -&gt; JoinFuture&lt;T&gt;</code>。worker 阻塞是<strong>被允許的</strong>——
+    它是 pool 的執行緒,不是 loop 的執行緒;它的整個存在意義就是替別人挨這一下。
+    完成通知走 <strong>waker 而不是 callback</strong>,才跟 async 生態同形;
+    而跨執行緒把睡在 <code>epoll_wait</code> 裡的 loop 叫醒,唯一的辦法是
+    <strong>寫一個它有在聽的 fd</strong>——那就是 <code>eventfd</code>。
+  </p>
+  <p>
+    交棒點是 <code>Mutex&lt;(Option&lt;Result&lt;T&gt;&gt;, Option&lt;Waker&gt;)&gt;</code>:
+    一格放結果,一格放「誰在等」。兩個時序都會發生,兩個都必須對。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="交棒時序">
+        <button id="rv-a" aria-pressed="true">等待者先 poll</button>
+        <button id="rv-b" aria-pressed="false">worker 先完成</button>
+        <button id="rv-c" aria-pressed="false">查結果與登記 waker 分兩次拿鎖</button>
+      </div>
+      <button id="rv-run">執行這組交錯</button>
+    </div>
+
+    <div class="rv" id="rv">
+      <h3 class="w">waiter — executor thread</h3>
+      <h3 class="k">worker — pool thread</h3>
+    </div>
+
+    <div class="verdict ok" id="rv-verdict">
+      <b>結果</b>
+      <span id="rv-text">按「執行這組交錯」。</span>
+    </div>
+  </div>
+
+  <p class="note">
+    第三個時序是這個模組唯一真正的陷阱:<strong>「檢查結果」與「登記 waker」必須在同一次持鎖裡</strong>。
+    分成兩段,worker 就能在中間的縫隙裡完成——它看到 waker 是 <code>None</code>,不叫任何人;
+    等待者接著登記了一個永遠不會被叫的 waker,然後 park。
+    這是 <strong>lost wakeup</strong>:沒有 panic、沒有錯誤碼,程式只是安靜地停在那裡。
+    executor 的 park permit 是同一課——<strong>交棒的訊號要帶狀態</strong>。
+  </p>
+  <p class="note">
+    另一個無聲失敗:worker <code>panic</code>。結果永遠不會放進去,等待者永遠 hang。
+    所以 job 內自己 <code>catch_unwind</code>,把 panic payload <strong>當成一種結果</strong>送回,
+    <code>JoinFuture::poll</code> 在等待端 <code>resume_unwind</code> 重拋——
+    panic 跟著在乎它的人走(tokio <code>JoinError</code> 的簡化版)。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 代價,以及真正的答案</h2>
+  <p>
+    上面的模擬有一個誠實的地方值得再說一次:<strong>offload 沒有讓 read 變快</strong>。
+    兩種模式下檔案的總耗時幾乎一樣,磁碟該轉多久就轉多久。
+    offload 買到的是「阻塞發生在哪條執行緒上」——僅此而已,而這已經是一切。
+  </p>
+  <p>
+    一次 offload 的 overhead:job 入隊(一次鎖)+ worker 喚醒 + 結果回傳(一次鎖)
+    + <code>eventfd</code> write + <code>epoll_wait</code> 返回,合計微秒級。
+    對 ms 級的磁碟 IO 是零頭;對 page cache 命中的讀(幾百奈秒)則是<strong>純虧</strong>——
+    你付了微秒去避免奈秒的阻塞。這正是 io_uring 在「小 IO、高併發」下贏很大的地方。
+  </p>
+  <p>
+    pool 大小也跟 CPU-bound 不同:磁碟 IO 是<strong>等待</strong>為主,執行緒可以開得比核數多
+    (tokio 的 blocking pool 預設上限 512);CPU-bound 才該鎖在核數。
+  </p>
+  <p>
+    <strong>io_uring 才是真正的答案。</strong>提交一個 read 請求,kernel 完成後給你一個 CQE:
+    沒有 offload 執行緒、沒有兩次鎖、沒有 eventfd 往返,還能 batch 提交、
+    SQPOLL 連 syscall 都省掉、registered buffer 省掉 pin 的成本。
+    libuv 到今天仍然是 thread pool offload(就是本模組),tokio 的 <code>fs</code> 全家也是
+    <code>spawn_blocking</code>;走另一條路的是 tokio-uring 與 glommio。
+    offload 是<strong>在 readiness 世界裡能做到最好的事</strong>——但它終究是模仿。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/file_io_offload.rs</code> · 設計取捨:<code>docs/file_io_offload.md</code></div>
+  <div>驗證:<code>cargo test -p reference file_io_offload</code></div>
+  <div>前置:<code>thread_pool</code>(worker 迴圈與 shutdown)· <code>executor</code>(waker 與 park permit)· <code>event_loop</code>(epoll 與 eventfd self-wake)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 模型常數 ────────────────────────────────────────────────────
+  var NCONN = 4;
+  var T_DISK = 8;      // 一個 chunk 的磁碟時間(page cache miss),ms
+  var CHUNKS = 3;      // /data.bin = 3 個 64K chunk
+  var CHUNK_B = 65536;
+  var NWORKER = 2;
+  var TICK_MS = 90;    // 一個模擬 ms 的真實時間
+  var STARVE = 3;      // 延遲超過這個值,連線標紅
+
+  var logEl = document.getElementById("log");
+  var fdsEl = document.getElementById("fds");
+  var connsEl = document.getElementById("conns");
+  var S = null;
+  var timer = null;
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 70) logEl.removeChild(logEl.lastChild);
+  }
+
+  // ── 狀態 ────────────────────────────────────────────────────────
+  function fresh(mode) {
+    var conns = [];
+    // token 3 留給檔案 fd:它會夾在 conn#1 與 conn#2 中間被 dispatch,
+    // 於是「排在它後面的事件也一起卡住」看得見。
+    var tokens = [1, 2, 4, 5];
+    for (var i = 0; i < NCONN; i++) {
+      conns.push({
+        id: i, fd: 4 + i, token: tokens[i],
+        pending: false, arrivedAt: 0, wait: 0, last: 0, worst: 0, served: 0
+      });
+    }
+    var workers = [];
+    for (var w = 0; w < NWORKER; w++) workers.push({ id: w, busy: false, left: 0, total: 0 });
+    return {
+      mode: mode,
+      t: 0,
+      conns: conns,
+      workers: workers,
+      registered: false,   // 檔案 fd 是否在 epoll 裡(只有 naive 會)
+      fileState: "none",   // none | want | eof | gone
+      chunk: 0,
+      queued: false,       // job 已入 pool 佇列,還沒被撿走
+      inflight: false,     // pool 正在做這個 job
+      blockUntil: -1,      // loop 卡在 read() 裡,到這個 tick 才回來
+      blockTotal: 0,
+      eofSpins: 0,
+      eventfd: 0,
+      complQ: 0,
+      fileStart: -1,
+      fileDone: -1,
+      completedAt: -1,     // loop 真正 dispatch 到完成通知的時間(offload)
+      served: 0,
+      worst: 0,
+      note: "-"
+    };
+  }
+
+  // 每 4 個 tick 一輪、四條連線錯開 → 平均一個 tick 一個請求。
+  function arrive(t) {
+    for (var i = 0; i < NCONN; i++) {
+      var c = S.conns[i];
+      if (!c.pending && ((t - i) % 4 === 0)) {
+        c.pending = true;
+        c.arrivedAt = t;
+        c.wait = 0;
+      }
+    }
+  }
+
+  function serve(c, t) {
+    var lat = t - c.arrivedAt;
+    c.pending = false;
+    c.wait = 0;
+    c.last = lat;
+    c.served++;
+    if (lat > c.worst) c.worst = lat;
+    if (lat > S.worst) S.worst = lat;
+    S.served++;
+    return lat;
+  }
+
+  // 一輪 epoll_wait + dispatch。回傳這一輪的摘要字串。
+  function dispatch(t) {
+    var s = S;
+    var ready = [];
+    var i, c;
+
+    if (s.eventfd > 0) ready.push({ kind: "wake", token: -1 });
+    for (i = 0; i < NCONN; i++) {
+      c = s.conns[i];
+      if (c.pending) ready.push({ kind: "conn", c: c, token: c.token });
+    }
+    if (s.registered && (s.fileState === "want" || s.fileState === "eof")) {
+      ready.push({ kind: "file", token: 3 });
+    }
+    ready.sort(function (a, b) { return a.token - b.token; });
+
+    if (ready.length === 0) {
+      s.note = "epoll_wait(...) 沒事可做,睡著";
+      return;
+    }
+
+    var names = [];
+    for (i = 0; i < ready.length; i++) {
+      if (ready[i].kind === "conn") names.push("conn#" + ready[i].c.id);
+      else if (ready[i].kind === "file") names.push("file(fd=8)");
+      else names.push("WAKE");
+    }
+    say("m", "t=" + pad(t) + "  epoll_wait -> " + ready.length + " events  [" + names.join(" ") + "]");
+    s.note = "dispatch " + ready.length + " events";
+
+    for (i = 0; i < ready.length; i++) {
+      var e = ready[i];
+
+      if (e.kind === "wake") {
+        s.eventfd = 0;                       // LT:不 drain 下一輪還報
+        var n = s.complQ;
+        s.complQ = 0;
+        if (n > 0) {
+          s.completedAt = t;
+          s.fileDone = t - s.fileStart;
+          say("g", "  eventfd drain -> completion queue " + n + " 筆 -> JoinFuture wake -> poll -> Ready(" +
+            (CHUNKS * CHUNK_B) + " bytes)");
+          say("g", "  conn#3 的 GET /data.bin 回應送出,檔案總耗時 " + s.fileDone +
+            " ms —— loop 全程一個 tick 都沒停");
+        }
+        continue;
+      }
+
+      if (e.kind === "conn") {
+        var lat = serve(e.c, t);
+        if (lat >= STARVE) {
+          say("x", "  conn#" + e.c.id + " 終於被服務  延遲 " + lat + " ms");
+        }
+        continue;
+      }
+
+      // kind === "file":naive 模式,readiness 的規矩叫你自己 read()
+      if (s.fileState === "eof") {
+        s.eofSpins++;
+        say("x", "  read(fd=8) -> 0 (EOF) —— 但 epoll 下一輪還是報它 readable");
+        if (s.eofSpins >= 2) {
+          s.registered = false;
+          s.fileState = "gone";
+          say("m", "  epoll_ctl(DEL, fd=8) —— 檔案沒有「不 ready」這個狀態," +
+            "你不自己拿掉,loop 就永遠空轉在這個 fd 上");
+        }
+        continue;   // EOF 的 read 不碰磁碟,不阻塞
+      }
+
+      s.blockUntil = t + T_DISK;
+      say("x", "  read(fd=8, 64K) —— page cache miss。整條 event loop 停在這裡 " + T_DISK +
+        " ms(O_NONBLOCK 對 regular file 無效)");
+      s.note = "BLOCKED in read()";
+      return;       // 排在它後面的事件,全部卡在這個 read 後面
+    }
+  }
+
+  function stepWorkers(t) {
+    var s = S, i, w;
+    if (s.queued) {
+      for (i = 0; i < NWORKER; i++) {
+        w = s.workers[i];
+        if (!w.busy) {
+          w.busy = true;
+          w.total = CHUNKS * T_DISK;
+          w.left = w.total;
+          s.queued = false;
+          s.inflight = true;
+          say("p", "  pool-worker-" + w.id + " 撿到 job:fs::read(\"/data.bin\") —— " +
+            "這條 thread 接下來會阻塞 " + w.total + " ms。沒關係,它就是幹這個的");
+          break;
+        }
+      }
+    }
+    for (i = 0; i < NWORKER; i++) {
+      w = s.workers[i];
+      if (!w.busy) continue;
+      w.left--;
+      if (w.left <= 0) {
+        w.busy = false;
+        s.inflight = false;
+        s.complQ++;
+        s.eventfd++;
+        say("p", "  pool-worker-" + w.id + " 完成 -> 放結果 + waker.wake() -> eventfd write(1)");
+      }
+    }
+  }
+
+  function tick() {
+    var s = S, i, c;
+    s.t++;
+    var t = s.t;
+
+    if (s.blockUntil > t) {
+      s.blockTotal++;                     // 還卡在 read() 裡:什麼都做不了
+      s.note = "BLOCKED in read()";
+    } else if (s.blockUntil === t) {
+      s.blockTotal++;
+      s.blockUntil = -1;
+      s.chunk++;
+      say("x", "  read(fd=8) -> " + CHUNK_B + " bytes  (擋了 " + T_DISK + " ms)  chunk " +
+        s.chunk + "/" + CHUNKS);
+      if (s.chunk >= CHUNKS) {
+        s.fileState = "eof";
+        s.fileDone = t - s.fileStart;
+        say("x", "  /data.bin 讀完:" + (CHUNKS * CHUNK_B) + " bytes,共 " + s.fileDone +
+          " ms —— 這 " + s.blockTotal + " ms 裡沒有任何一條連線被服務");
+      }
+      s.note = "read() 回來了";
+    } else {
+      dispatch(t);
+    }
+
+    stepWorkers(t);
+    arrive(t);
+
+    for (i = 0; i < NCONN; i++) {
+      c = s.conns[i];
+      if (c.pending) {
+        c.wait = t - c.arrivedAt;
+        if (c.wait > c.worst) c.worst = c.wait;
+        if (c.wait > s.worst) s.worst = c.wait;
+      }
+    }
+    render();
+  }
+
+  function pad(n) { return (n < 10 ? " " : "") + n; }
+
+  // ── 注入檔案請求 ────────────────────────────────────────────────
+  function inject() {
+    var s = S;
+    if (s.fileState !== "none" || s.inflight || s.queued || s.fileStart >= 0) return;
+    s.fileStart = s.t;
+    say("c", "conn#3: GET /data.bin —— handler 需要一個 " + (CHUNKS * CHUNK_B) + " bytes 的檔案");
+    if (s.mode === "naive") {
+      say("x", "epoll_ctl(EPOLL_CTL_ADD, fd=8, EPOLLIN) = -1 EPERM (Operation not permitted)");
+      say("m", "[模擬器] 假裝 kernel 收下了 —— 不然看不到它為什麼拒絕");
+      s.registered = true;
+      s.fileState = "want";
+    } else {
+      say("p", "spawn_blocking(pool, || fs::read(\"/data.bin\")) -> JoinFuture (Pending)");
+      say("m", "loop 這一輪照常回去 epoll_wait —— 它從頭到尾沒碰過那個檔案 fd");
+      s.queued = true;
+      s.fileState = "gone";      // 檔案 fd 根本不在 epoll 裡
+    }
+    render();
+  }
+
+  // ── 繪製 ────────────────────────────────────────────────────────
+  function render() {
+    var s = S, i, c, w;
+
+    var blocked = s.blockUntil > 0;
+    var loopCard = document.getElementById("loopcard");
+    var loopLine = document.getElementById("loop-line");
+    var loopSub = document.getElementById("loop-sub");
+    var loopBar = document.getElementById("loop-bar");
+
+    loopCard.className = "card loop" + (blocked ? " frozen" : "");
+    if (blocked) {
+      var doneMs = T_DISK - (s.blockUntil - s.t);
+      loopLine.className = "line frozen";
+      loopLine.textContent = "read(fd=8, 64K)  BLOCKED  " + doneMs + "/" + T_DISK + " ms";
+      loopBar.className = "bar stall";
+      loopBar.firstChild.style.width = (100 * doneMs / T_DISK) + "%";
+      loopSub.className = "line frozen";
+      loopSub.textContent = "epoll_wait 沒被呼叫。所有連線都在等這一個 read()";
+    } else {
+      loopLine.className = "line hot";
+      loopLine.textContent = "epoll_wait(epfd, events, 64, -1)";
+      loopBar.className = "bar";
+      loopBar.firstChild.style.width = "0%";
+      loopSub.className = "line";
+      loopSub.textContent = s.note;
+    }
+
+    var poolCard = document.getElementById("poolcard");
+    var anyBusy = false;
+    for (i = 0; i < NWORKER; i++) {
+      w = s.workers[i];
+      var el = document.getElementById("w" + i);
+      if (w.busy) {
+        anyBusy = true;
+        var did = w.total - w.left;
+        el.className = "line work";
+        el.textContent = "pool-worker-" + i + "  fs::read  BLOCKED  " + did + "/" + w.total + " ms";
+        if (i === 0) document.getElementById("w0-bar").firstChild.style.width =
+          (100 * did / w.total) + "%";
+      } else {
+        el.className = "line";
+        el.textContent = "pool-worker-" + i + "  idle (在 Condvar 上睡)";
+        if (i === 0) document.getElementById("w0-bar").firstChild.style.width = "0%";
+      }
+    }
+    poolCard.className = "card pool" + (anyBusy ? " busy" : "");
+    var cq = document.getElementById("cq");
+    cq.className = "line" + (s.complQ > 0 ? " done" : "");
+    cq.textContent = "completion queue: " + s.complQ + "  ·  eventfd counter: " + s.eventfd +
+      (s.queued ? "  ·  pool queue: 1 job 待撿" : "");
+
+    // fd 表
+    fdsEl.textContent = "";
+    for (i = 0; i < NCONN; i++) {
+      c = s.conns[i];
+      fdsEl.appendChild(fdRow(
+        "fd=" + c.fd + "  token=" + c.token + "  conn#" + c.id,
+        c.pending ? "readable" : "-",
+        c.pending ? "badge rdy" : "badge",
+        c.pending ? "rx buffer 有 " + (16 * (c.wait + 1)) + " bytes 在等" : "對端還沒送 —— 這才叫「還沒 ready」",
+        "fdrow"
+      ));
+    }
+    if (s.registered) {
+      fdsEl.appendChild(fdRow(
+        "fd=8  token=3  /data.bin",
+        "readable",
+        "badge always",
+        "永遠 readable · 無條件 · 每一輪 —— readiness 對它是恆真式",
+        "fdrow file"
+      ));
+    }
+    fdsEl.appendChild(fdRow(
+      "fd=3  token=MAX  eventfd",
+      s.eventfd > 0 ? "readable" : "-",
+      s.eventfd > 0 ? "badge wake" : "badge",
+      s.eventfd > 0 ? "pool worker 寫了它 —— 這是把 loop 從 epoll_wait 叫醒的唯一辦法"
+        : "self-wake:計數器為 0 時它老老實實地「不 ready」",
+      "fdrow"
+    ));
+
+    // 連線延遲
+    connsEl.textContent = "";
+    for (i = 0; i < NCONN; i++) {
+      c = s.conns[i];
+      var card = document.createElement("div");
+      card.className = "conn" +
+        (c.pending ? (c.wait >= STARVE ? " starved" : " waiting") : "");
+      var who = document.createElement("span");
+      who.className = "who";
+      who.textContent = "conn#" + c.id;
+      var lat = document.createElement("span");
+      lat.className = "lat";
+      lat.textContent = c.pending ? (c.wait + " ms") : "idle";
+      var sub = document.createElement("span");
+      sub.className = "sub";
+      sub.textContent = "served " + c.served + " · worst " + c.worst + " ms";
+      card.append(who, lat, sub);
+      connsEl.appendChild(card);
+    }
+
+    document.getElementById("st-t").textContent = String(s.t);
+    var fz = document.getElementById("st-frozen");
+    fz.textContent = s.blockTotal + " ms";
+    fz.className = "v" + (s.blockTotal > 0 ? " warn" : " good");
+    var wo = document.getElementById("st-worst");
+    wo.textContent = s.worst + " ms";
+    wo.className = "v" + (s.worst >= STARVE ? " warn" : " good");
+    document.getElementById("st-served").textContent = String(s.served);
+    var fl = document.getElementById("st-file");
+    if (s.fileStart < 0) { fl.textContent = "-"; fl.className = "v"; }
+    else if (s.fileDone >= 0) { fl.textContent = "done " + s.fileDone + " ms"; fl.className = "v good"; }
+    else if (s.mode === "naive") { fl.textContent = "chunk " + s.chunk + "/" + CHUNKS; fl.className = "v warn"; }
+    else { fl.textContent = "in flight"; fl.className = "v"; }
+
+    document.getElementById("btn-inject").disabled = (s.fileStart >= 0);
+  }
+
+  function fdRow(name, badgeText, badgeCls, why, rowCls) {
+    var row = document.createElement("div");
+    row.className = rowCls;
+    var n = document.createElement("span");
+    n.textContent = name;
+    var b = document.createElement("span");
+    b.className = badgeCls;
+    b.textContent = badgeText;
+    var w = document.createElement("span");
+    w.className = "why";
+    w.textContent = why;
+    row.append(n, b, w);
+    return row;
+  }
+
+  // ── 控制 ────────────────────────────────────────────────────────
+  function running() { return timer !== null; }
+  function stop() {
+    if (timer !== null) { clearInterval(timer); timer = null; }
+    document.getElementById("btn-run").textContent = "run";
+  }
+  function start() {
+    if (timer === null) timer = setInterval(tick, TICK_MS);
+    document.getElementById("btn-run").textContent = "pause";
+  }
+  function reset(mode) {
+    stop();
+    S = fresh(mode || S.mode);
+    logEl.textContent = "";
+    say("m", S.mode === "naive"
+      ? "naive:檔案 fd 進 epoll,read() 就寫在 handler 裡。按「conn#3: GET /data.bin」"
+      : "offload:檔案 IO 交給 thread pool,完成後用 eventfd 把 loop 叫醒。按「conn#3: GET /data.bin」");
+    setMode(S.mode);
+    render();
+  }
+  function setMode(mode) {
+    document.getElementById("m-naive").setAttribute("aria-pressed", String(mode === "naive"));
+    document.getElementById("m-offload").setAttribute("aria-pressed", String(mode === "offload"));
+  }
+
+  document.getElementById("btn-run").addEventListener("click", function () {
+    if (running()) stop(); else start();
+  });
+  document.getElementById("btn-step").addEventListener("click", function () { stop(); tick(); });
+  document.getElementById("btn-reset").addEventListener("click", function () { reset(S.mode); start(); });
+  document.getElementById("btn-inject").addEventListener("click", inject);
+  document.getElementById("m-naive").addEventListener("click", function () { reset("naive"); start(); });
+  document.getElementById("m-offload").addEventListener("click", function () { reset("offload"); start(); });
+
+  S = fresh("naive");
+  reset("naive");
+  start();
+
+  // 給 headless 探針用:無計時器、可決定性地跑完一整個情境。
+  window.__fio = {
+    drive: function (mode, ticks) {
+      reset(mode);
+      inject();
+      for (var i = 0; i < ticks; i++) tick();
+      return this.snap();
+    },
+    snap: function () {
+      var out = {
+        mode: S.mode, t: S.t, loopFrozenMs: S.blockTotal, worstSocketLatency: S.worst,
+        served: S.served, fileDoneMs: S.fileDone, eofSpins: S.eofSpins,
+        completionDispatchedAt: S.completedAt, conns: []
+      };
+      for (var i = 0; i < NCONN; i++) {
+        out.conns.push({ id: i, served: S.conns[i].served, worst: S.conns[i].worst });
+      }
+      return out;
+    }
+  };
+
+  // ── 交棒時序(Mutex<(result, waker)>)────────────────────────────
+  var RV = {
+    a: {
+      ok: true,
+      steps: [
+        { lane: "left", text: "poll(): lock()  ->  result == None" },
+        { lane: "left", text: "  waker = Some(cx.waker().clone())" },
+        { lane: "left", text: "unlock -> Poll::Pending -> park()" },
+        { lane: "right", text: "fs::read() 回來了" },
+        { lane: "right", text: "lock(): result = Some(Ok(bytes))" },
+        { lane: "right", text: "  waker.take().wake()  -> unpark" },
+        { lane: "left", text: "re-poll(): result.take() -> Ready" }
+      ],
+      good: 6,
+      text: "等待者先到:poll 看到 result 是 None,把 waker 留在鎖裡就 park。" +
+        "worker 完成時在同一把鎖底下放結果、拿走 waker、wake。executor 醒來 re-poll -> Ready。"
+    },
+    b: {
+      ok: true,
+      steps: [
+        { lane: "right", text: "fs::read() 回來了" },
+        { lane: "right", text: "lock(): result = Some(Ok(bytes))" },
+        { lane: "right", text: "  waker is None -> 沒人在等,不叫任何人" },
+        { lane: "left", text: "poll(): lock() -> result.take() = Some(..)" },
+        { lane: "left", text: "Poll::Ready(bytes)  — waker 全程沒用上" }
+      ],
+      good: 4,
+      text: "worker 先到:結果就放在那裡。等待者第一次 poll 直接 Ready,waker 從頭到尾沒被建立過。" +
+        "這條路徑很容易在測試裡漏掉 —— 加一個「先 sleep 再 await」的測試就能逼出它。"
+    },
+    c: {
+      ok: false,
+      steps: [
+        { lane: "left", text: "poll(): lock() -> result == None -> unlock" },
+        { lane: "right", text: "lock(): result = Some(Ok(bytes))" },
+        { lane: "right", text: "  waker is None -> 沒人在等,不叫任何人 -> unlock" },
+        { lane: "left", text: "lock(): waker = Some(..) -> unlock" },
+        { lane: "left", text: "Poll::Pending -> park()   永遠沒人會來叫" }
+      ],
+      good: -1,
+      bad: 4,
+      text: "lost wakeup。「查結果」與「登記 waker」之間放開了鎖,worker 剛好擠進那個縫隙:" +
+        "它放了結果,但那時 waker 還是 None,所以它不叫任何人。等待者接著登記了一個永遠不會被叫的 waker,然後 park。" +
+        "沒有 panic、沒有錯誤碼 —— 程式只是安靜地停住。"
+    }
+  };
+  var rvMode = "a";
+  var rvEl = document.getElementById("rv");
+  var rvVerdict = document.getElementById("rv-verdict");
+  var rvText = document.getElementById("rv-text");
+  var rvOps = [];
+  var rvTimers = [];
+
+  function rvBuild() {
+    for (var k = 0; k < rvTimers.length; k++) clearTimeout(rvTimers[k]);
+    rvTimers = [];
+    rvEl.textContent = "";
+    var hw = document.createElement("h3");
+    hw.className = "w";
+    hw.textContent = "waiter — executor thread";
+    var hk = document.createElement("h3");
+    hk.className = "k";
+    hk.textContent = "worker — pool thread";
+    rvEl.append(hw, hk);
+
+    rvOps = [];
+    var steps = RV[rvMode].steps;
+    for (var i = 0; i < steps.length; i++) {
+      var op = document.createElement("div");
+      op.className = "op " + steps[i].lane + " dim";
+      op.textContent = steps[i].text;
+      rvEl.appendChild(op);
+      rvOps.push(op);
+    }
+    rvVerdict.className = "verdict " + (RV[rvMode].ok ? "ok" : "bad");
+    rvText.textContent = "按「執行這組交錯」。";
+    document.getElementById("rv-run").disabled = false;
+  }
+
+  function rvSetMode(m) {
+    rvMode = m;
+    document.getElementById("rv-a").setAttribute("aria-pressed", String(m === "a"));
+    document.getElementById("rv-b").setAttribute("aria-pressed", String(m === "b"));
+    document.getElementById("rv-c").setAttribute("aria-pressed", String(m === "c"));
+    rvBuild();
+  }
+
+  function rvRun() {
+    rvBuild();
+    var conf = RV[rvMode];
+    document.getElementById("rv-run").disabled = true;
+    var steps = conf.steps;
+    for (var i = 0; i < steps.length; i++) {
+      (function (idx) {
+        rvTimers.push(setTimeout(function () {
+          var cls = "op " + steps[idx].lane;
+          if (idx === conf.good) cls += " good";
+          else if (idx === conf.bad) cls += " bad";
+          else cls += " hot";
+          rvOps[idx].className = cls;
+          if (idx === steps.length - 1) {
+            rvVerdict.className = "verdict " + (conf.ok ? "ok" : "bad");
+            rvText.textContent = conf.text;
+            rvTimers.push(setTimeout(function () {
+              document.getElementById("rv-run").disabled = false;
+            }, 500));
+          }
+        }, 460 * (idx + 1)));
+      })(i);
+    }
+  }
+
+  document.getElementById("rv-a").addEventListener("click", function () { rvSetMode("a"); });
+  document.getElementById("rv-b").addEventListener("click", function () { rvSetMode("b"); });
+  document.getElementById("rv-c").addEventListener("click", function () { rvSetMode("c"); });
+  document.getElementById("rv-run").addEventListener("click", rvRun);
+  rvSetMode("a");
+})();
+</script>

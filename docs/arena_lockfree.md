@@ -61,3 +61,12 @@ CAS 失敗就重試:單一執行緒可能餓(每次都輸),但每次失敗 ⇔ �
 
 crossbeam-epoch(epoch-based reclamation,不限容量、無 gen 迴繞問題)、
 hazard pointers。bounded 池:crossbeam::queue::ArrayQueue。
+
+## 互動教材
+
+[artifacts/arena_lockfree.html](artifacts/arena_lockfree.html) —— **ABA 重現機**:
+同一組兩執行緒交錯逐格排兩次。關掉 generation tag,T1 的 CAS 會「成功」——
+head 指向一個已經在 free 鏈上的槽位,不變量(一個槽位只能在一條鏈上)當場破掉,
+而且當下什麼都不會爆。打開 generation tag,同一步的 CAS 因為高 32 位對不上而失敗、
+重讀、重試,結構完好。頁面把 `head` 這個 `AtomicU64` 的 hex 與 64 bit 逐位攤開,
+`(gen, idx)` 的低位相同、高位不同,一眼看得到 CAS 到底在比什麼。

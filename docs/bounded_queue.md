@@ -48,3 +48,11 @@ Condvar 有兩個不可依賴的行為:
 - `std::sync::mpsc`:std 內建,但 MPSC 且 API 形狀不同。
 - `crossbeam-channel`:lock-free MPMC + select,production 首選。
 - tokio `mpsc`:async 版,滿時 `await` 而非阻塞 thread。
+
+## 互動教材
+
+[artifacts/bounded_queue.html](artifacts/bounded_queue.html) —— 可單步的 Mutex + Condvar 模擬器:
+多 producer / 多 consumer 搶同一把鎖,`if` 與 `while` 兩種 wait 形狀可切換。
+親眼看被 notify 的 consumer 在搶到鎖之前被另一個 consumer 插隊偷走元素,
+`if` 版在空佇列上 `pop_front()`;還有 spurious wakeup 按鈕,以及 `close()` 用
+`notify_all` 與只 `notify_one` 的對照(後者留下永遠醒不來的等待者)。

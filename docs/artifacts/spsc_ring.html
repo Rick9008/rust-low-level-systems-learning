@@ -1,0 +1,831 @@
+<title>spsc_ring — 兩個計數器,一條 cache line 的距離</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 4 &nbsp;·&nbsp; atomic &amp; lock-free</p>
+  <h1>spsc_ring</h1>
+  <p class="lede">
+    一個 producer、一個 consumer、兩個只增不減的計數器。沒有 CAS,沒有鎖。
+    整個模組的難度不在資料結構——在<strong>兩個計數器之間那條看不見的 happens-before 邊</strong>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 環是怎麼轉的</h2>
+  <p>
+    head 與 tail 是<strong>自由跑計數器</strong>:只增,永不 wrap 回 0。
+    <code>tail − head</code> 直接就是元素數,所以滿/空判定不必浪費一格。
+    實體槽位是 <code>counter &amp; mask</code>——這是容量必須為 2 的冪的原因,
+    等一下用「溢位」按鈕就看得到為什麼。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <button class="act-producer" id="btn-push">producer: push()</button>
+      <button class="act-consumer" id="btn-pop">consumer: pop()</button>
+      <button id="btn-reset">reset</button>
+      <button id="btn-overflow">跳到 usize 溢位點</button>
+    </div>
+
+    <div class="slots" id="slots"></div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">head</span><span class="v" id="st-head">0</span></div>
+      <div class="stat"><span class="k">tail</span><span class="v" id="st-tail">0</span></div>
+      <div class="stat"><span class="k">tail − head</span><span class="v" id="st-len">0</span></div>
+      <div class="stat"><span class="k">cap</span><span class="v">4</span></div>
+      <div class="stat"><span class="k">mask</span><span class="v">0b11</span></div>
+      <div class="stat"><span class="k">state</span><span class="v" id="st-state">empty</span></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    按到滿:<code>tail − head == cap</code>,push 回 <code>Err(item)</code> 把值<strong>歸還</strong>給呼叫端
+    ——backpressure 是 caller 的事,不是 ring 的事(spin、park、丟棄,ring 不替你決定)。
+    按「跳到溢位點」再連按 push:計數器從 <code>usize::MAX</code> wrap 到 0,
+    但 <code>&amp; mask</code> 的槽位序列<strong>依然連續</strong>。cap=3 的話這裡會跳格——
+    那是正確性 bug,不是效能問題。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 那條看不見的邊</h2>
+  <p>
+    上面的動畫有個謊言:它假設 producer 寫進槽位的值,consumer 一定看得到。
+    在 C11 記憶體模型裡,<strong>這件事需要被證明</strong>,而證明它的東西叫 release/acquire。
+    把開關切到 Relaxed,看同一組操作會發生什麼。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="memory ordering">
+        <button id="ord-rel" aria-pressed="true">Release / Acquire</button>
+        <button id="ord-rlx" aria-pressed="false">全部 Relaxed</button>
+      </div>
+      <button id="btn-run">執行這組交錯</button>
+    </div>
+
+    <div class="lanes">
+      <div class="lane p">
+        <h3>producer</h3>
+        <div class="op" id="p1">slot[0].write(42)</div>
+        <div class="op" id="p2"><span id="p2-ord">tail.store(1, Release)</span></div>
+      </div>
+      <div class="gutter"><div class="hb" id="hb">happens<br>before</div></div>
+      <div class="lane c">
+        <h3>consumer</h3>
+        <div class="op" id="c1"><span id="c1-ord">tail.load(Acquire)</span> → 1</div>
+        <div class="op" id="c2">slot[0].read()</div>
+      </div>
+    </div>
+
+    <div class="verdict ok" id="verdict">
+      <b>結果</b>
+      <span id="verdict-text">consumer 讀到 42。producer 對槽位的寫入 happens-before tail 的 Release store;
+      consumer 的 Acquire load 讀到那個 tail,就繼承了整條因果鏈。值必然完整可見。</span>
+    </div>
+  </div>
+
+  <p class="note">
+    Relaxed 版在 <strong>x86 上跑一億次也不會錯</strong>——x86 是 TSO,硬體不重排 store-store、load-load,
+    <code>Relaxed</code> 編出來跟 <code>Release</code> 是同一條 <code>mov</code>。
+    bug 在原始碼裡,不在你的 CPU 上。這正是為什麼這個模組必須用 loom 驗,不能用壓力測試驗。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 每一個 ordering 都有名字</h2>
+  <p>
+    六個記憶體操作,沒有一個是「保險起見設強一點」。每個 Relaxed 都因為
+    <strong>單一寫者</strong>而合法,每個 Acquire 都對應一個具體的 Release。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>操作</th><th>ordering</th><th>配對與理由</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>producer 讀自己的 tail</code></td><td class="ord rlx">Relaxed</td><td>單一寫者讀自己寫的值,無需同步</td></tr>
+        <tr><td><code>producer 讀 head</code></td><td class="ord acq">Acquire</td><td>配 consumer 的 head Release:確認槽位已被讀完,才敢覆寫</td></tr>
+        <tr><td><code>producer 寫槽位 → store tail</code></td><td class="ord rel">Release</td><td>槽位寫入 happens-before tail 發布;讀到新 tail 的人必看到完整元素</td></tr>
+        <tr><td><code>consumer 讀自己的 head</code></td><td class="ord rlx">Relaxed</td><td>同上,單一寫者</td></tr>
+        <tr><td><code>consumer 讀 tail</code></td><td class="ord acq">Acquire</td><td>配 producer 的 tail Release</td></tr>
+        <tr><td><code>consumer 讀槽位 → store head</code></td><td class="ord rel">Release</td><td>讀取 happens-before head 發布;producer 才能安全覆寫</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>4 · loom 抓得到,壓力測試抓不到</h2>
+  <p>
+    把上表任何一個 Release/Acquire 降級成 Relaxed,然後用兩種方式驗證。
+    這是 <code>cargo run -p reference --example loom_vs_stress</code> 在真實機器上跑出來的數字:
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>驗證方式</th><th>規模</th><th>結果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>真 OS thread 壓力測試</td>
+          <td class="mono">2,000,000 次 push/pop</td>
+          <td><strong style="color:var(--danger)">通過</strong> — 0 個異常(486ms)。debug 與 release 皆然</td>
+        </tr>
+        <tr>
+          <td>loom(同一份原始碼)</td>
+          <td class="mono">2 thread / cap 1 / 2 元素</td>
+          <td><strong style="color:var(--ok)">Causality violation</strong> — 379<span class="mono">µs</span></td>
+        </tr>
+        <tr>
+          <td>loom(正確版)</td>
+          <td class="mono">同上</td>
+          <td>通過(6.6ms)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    壓力測試「通過」是紅字,loom「失敗」是綠字——因為前者代表 bug 溜掉了,後者代表 bug 被抓住了。
+    loom 不是跑很多次,是在 C11 模型上<strong>窮舉</strong>:它的 atomic 存的是一整段寫入歷史 + 因果圖,
+    <code>Relaxed</code> load 時會依規則<strong>真的把過期的值回給你</strong>。
+  </p>
+</section>
+
+<section>
+  <h2>5 · false sharing:兩個無關的變數在硬體層互踢</h2>
+  <p>
+    head 只有 consumer 寫,tail 只有 producer 寫——邏輯上毫無關係。
+    但若它們落在同一條 64 位元組 cache line,producer 每次 store tail,
+    MESI 就把 consumer 核心上那條 line 打成 <code>Invalid</code>;consumer 讀 head 就 miss。
+    兩核互相把對方的 cache 打掉,吞吐掉一個數量級。
+  </p>
+  <p>
+    <code>#[repr(align(64))]</code> 讓兩個計數器各佔一條 line。
+    代價約 112 位元組——用空間換掉 cache coherence 流量。這是這個模組唯一「為了硬體」而做的設計,
+    其餘全部是為了記憶體模型。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/spsc_ring/core_impl.rs</code> · 設計取捨:<code>docs/spsc_ring.md</code></div>
+  <div>驗證:<code>cargo test -p reference --test loom_spsc</code> · 實驗:<code>cargo run -p reference --example loom_vs_stress</code></div>
+  <div>前置:<code>ring_buffer</code>(單執行緒的 index 算術)· 進階:<code>arena_lockfree</code>(ABA 與 generation tag)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 環的狀態(cap 固定 4:夠看到 wrap,又不會擠爆版面)──────────
+  var CAP = 4, MASK = 3;
+  var MAXU = 18446744073709551615n; // usize::MAX,用 BigInt 才能誠實地演溢位
+  var head = 0n, tail = 0n;
+  var slots = [null, null, null, null];
+  var nextVal = 1;
+
+  var slotsEl = document.getElementById("slots");
+  var logEl = document.getElementById("log");
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 60) logEl.removeChild(logEl.lastChild);
+  }
+
+  function live(i) {
+    // 槽位 i 是否落在 [head, tail) 的可見區間內
+    for (var c = head; c !== tail; c = (c + 1n) & MAXU) {
+      if (Number(c & 3n) === i) return true;
+    }
+    return false;
+  }
+
+  function render(flash, flashCls) {
+    slotsEl.textContent = "";
+    for (var i = 0; i < CAP; i++) {
+      var cell = document.createElement("div");
+      cell.className = "slot" + (live(i) ? " live" : "");
+      if (flash === i) cell.className += " " + flashCls;
+
+      var idx = document.createElement("span");
+      idx.className = "idx";
+      idx.textContent = "slot " + i;
+
+      var val = document.createElement("span");
+      if (slots[i] === null) {
+        val.className = "val uninit";
+        val.textContent = "uninit";
+      } else {
+        val.className = "val";
+        val.textContent = String(slots[i]);
+      }
+
+      var ptr = document.createElement("span");
+      ptr.className = "ptr";
+      if (Number(tail & 3n) === i) {
+        var t = document.createElement("span");
+        t.className = "tag-t";
+        t.textContent = "tail";
+        ptr.appendChild(t);
+      }
+      if (Number(head & 3n) === i) {
+        var h = document.createElement("span");
+        h.className = "tag-h";
+        h.textContent = "head";
+        ptr.appendChild(h);
+      }
+
+      cell.append(idx, val, ptr);
+      slotsEl.appendChild(cell);
+    }
+
+    var len = (tail - head) & MAXU;
+    document.getElementById("st-head").textContent = shortN(head);
+    document.getElementById("st-tail").textContent = shortN(tail);
+    document.getElementById("st-len").textContent = String(len);
+
+    var st = document.getElementById("st-state");
+    if (len === 0n) { st.textContent = "empty"; st.className = "v"; }
+    else if (len === BigInt(CAP)) { st.textContent = "FULL"; st.className = "v warn"; }
+    else { st.textContent = String(len) + " / " + CAP; st.className = "v good"; }
+
+    // 刻意不 disable:滿時按 push 才看得到 Err(item) 歸還、空時按 pop 才看得到 None。
+    // 那兩條路徑正是 backpressure 的教學重點,擋掉就沒了。
+  }
+
+  function push() {
+    var len = (tail - head) & MAXU;
+    if (len === BigInt(CAP)) {
+      say("x", "push(" + nextVal + ") -> Err(" + nextVal + ")   滿了,值歸還給 caller");
+      return;
+    }
+    var i = Number(tail & 3n);
+    var v = nextVal++;
+    slots[i] = v;
+    var oldTail = tail;
+    tail = (tail + 1n) & MAXU;
+    say("p", "push(" + v + ")  slot[" + i + "].write  then  tail.store(Release) " +
+        shortN(oldTail) + " -> " + shortN(tail));
+    render(i, "flash-w");
+    setTimeout(function () { render(); }, 420);
+  }
+
+  function pop() {
+    if (head === tail) {
+      say("m", "pop() -> None   空的");
+      return;
+    }
+    var i = Number(head & 3n);
+    var v = slots[i];
+    slots[i] = null;
+    var oldHead = head;
+    head = (head + 1n) & MAXU;
+    say("c", "pop() -> Some(" + v + ")  slot[" + i + "].read  then  head.store(Release) " +
+        shortN(oldHead) + " -> " + shortN(head));
+    render(i, "flash-r");
+    setTimeout(function () { render(); }, 420);
+  }
+
+  function shortN(n) {
+    var s = String(n);
+    return s.length > 6 ? "…" + s.slice(-4) : s;
+  }
+
+  function reset() {
+    head = 0n; tail = 0n;
+    slots = [null, null, null, null];
+    nextVal = 1;
+    logEl.textContent = "";
+    say("m", "reset — head = tail = 0");
+    render();
+  }
+
+  function overflow() {
+    head = MAXU - 1n;
+    tail = MAXU - 1n;
+    slots = [null, null, null, null];
+    logEl.textContent = "";
+    say("m", "head = tail = usize::MAX - 1   接下來三次 push 會踩過 wrap 點");
+    say("m", "看槽位序列:MAX-1 & 3 = 2, MAX & 3 = 3, 0 & 3 = 0 — 連續,沒跳格");
+    render();
+  }
+
+  document.getElementById("btn-push").addEventListener("click", push);
+  document.getElementById("btn-pop").addEventListener("click", pop);
+  document.getElementById("btn-reset").addEventListener("click", reset);
+  document.getElementById("btn-overflow").addEventListener("click", overflow);
+
+  say("m", "cap = 4, mask = 0b11. 按 push 開始。");
+  render();
+
+  // ── 記憶體序實驗 ────────────────────────────────────────────────
+  var relaxed = false;
+  var relBtn = document.getElementById("ord-rel");
+  var rlxBtn = document.getElementById("ord-rlx");
+  var hb = document.getElementById("hb");
+  var verdict = document.getElementById("verdict");
+  var vtext = document.getElementById("verdict-text");
+  var ops = ["p1", "p2", "c1", "c2"].map(function (id) { return document.getElementById(id); });
+
+  function setMode(isRelaxed) {
+    relaxed = isRelaxed;
+    relBtn.setAttribute("aria-pressed", String(!isRelaxed));
+    rlxBtn.setAttribute("aria-pressed", String(isRelaxed));
+    document.getElementById("p2-ord").textContent =
+      isRelaxed ? "tail.store(1, Relaxed)" : "tail.store(1, Release)";
+    document.getElementById("c1-ord").textContent =
+      isRelaxed ? "tail.load(Relaxed)" : "tail.load(Acquire)";
+    resetLanes();
+  }
+
+  var C2_TEXT = "slot[0].read()";
+
+  function resetLanes() {
+    ops.forEach(function (o) { o.className = "op"; });
+    ops[3].textContent = C2_TEXT; // run() 會改寫它,重跑前必須復原
+    hb.className = "hb";
+    verdict.className = "verdict " + (relaxed ? "bad" : "ok");
+    vtext.textContent = relaxed
+      ? "按「執行這組交錯」——Relaxed 沒有建立任何因果關係,consumer 讀到的東西沒有保證。"
+      : "按「執行這組交錯」——Release 與 Acquire 配對,會長出一條 happens-before 邊。";
+    document.getElementById("btn-run").disabled = false;
+  }
+
+  function run() {
+    document.getElementById("btn-run").disabled = true;
+    resetLanes();
+    verdict.className = "verdict " + (relaxed ? "bad" : "ok");
+
+    var steps = [
+      function () { ops[0].className = "op hot"; },
+      function () { ops[1].className = "op hot"; },
+      function () {
+        ops[2].className = "op hot";
+        if (!relaxed) hb.className = "hb on";
+      },
+      function () {
+        if (relaxed) {
+          ops[3].className = "op bad";
+          ops[3].textContent = "slot[0].read() → ??? 未定義";
+          verdict.className = "verdict bad";
+          vtext.textContent =
+            "consumer 看到 tail == 1,卻沒有任何規則保證它看得到 slot[0] 的那次寫入。" +
+            "C11 下這是 data race — 讀到的是未初始化記憶體,行為未定義。" +
+            "loom 會在窮舉時排出這條路徑,並報 Causality violation。";
+          // 槽位在環那邊也標紅,把兩個互動連起來
+          var first = slotsEl.querySelector(".slot");
+          if (first) {
+            first.classList.add("torn");
+            setTimeout(function () { first.classList.remove("torn"); }, 1600);
+          }
+        } else {
+          ops[3].className = "op good";
+          ops[3].textContent = "slot[0].read() → 42 ✓";
+          verdict.className = "verdict ok";
+          vtext.textContent =
+            "consumer 讀到 42。producer 對槽位的寫入 happens-before tail 的 Release store;" +
+            "consumer 的 Acquire load 讀到那個 tail,就繼承了整條因果鏈 —— 值必然完整可見。";
+        }
+        setTimeout(function () { document.getElementById("btn-run").disabled = false; }, 600);
+      }
+    ];
+
+    steps.forEach(function (fn, i) { setTimeout(fn, 420 * (i + 1)); });
+  }
+
+  relBtn.addEventListener("click", function () { setMode(false); });
+  rlxBtn.addEventListener("click", function () { setMode(true); });
+  document.getElementById("btn-run").addEventListener("click", run);
+  setMode(false);
+})();
+</script>

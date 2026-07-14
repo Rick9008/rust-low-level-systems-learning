@@ -1,0 +1,1442 @@
+<title>thread_pool — 難的不是跑,是停</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── thread_pool:模組專用 ───────────────────────────────────────── */
+button.act-danger { border-color: var(--danger); color: var(--danger); }
+button.act-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); }
+
+.knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.75rem; }
+.knob { display: flex; flex-direction: column; gap: 0.3rem; }
+.knob > .k {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.knob .switch button { flex: 1 1 0; font-size: 0.69rem; padding: 0.42rem 0.35rem; letter-spacing: 0; }
+
+.shared {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.75rem 0.9rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.shared h3 { font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.lockline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.lk { border: 1px solid var(--line); border-radius: 3px; padding: 0.1rem 0.45rem; font-weight: 600; }
+.lk.free { color: var(--muted); }
+.lk.held { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.lk.on { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.qrow { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; min-height: 1.85rem; }
+.chip {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.14rem 0.4rem;
+  background: var(--raised);
+  white-space: nowrap;
+}
+.chip.job { border-color: var(--producer); background: var(--producer-bg); color: var(--producer); }
+.chip.boom { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.chip.park { border-color: var(--consumer); background: var(--consumer-bg); color: var(--consumer); }
+.chip.none { border-style: dashed; background: transparent; color: var(--muted); font-weight: 400; }
+
+.workers { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.55rem; }
+.wk {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.5rem 0.6rem 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.wk .nm {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+.wk .pill { font-family: var(--mono); font-size: 0.78rem; font-weight: 600; color: var(--ink-2); }
+.wk .sub { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); min-height: 1rem; }
+.bar { height: 3px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--consumer); transition: width 140ms linear; }
+.wk[data-s="running"] { border-color: var(--consumer); background: var(--consumer-bg); }
+.wk[data-s="running"] .pill { color: var(--consumer); }
+.wk[data-s="locked"] { border-color: var(--accent); background: var(--accent-bg); }
+.wk[data-s="locked"] .pill { color: var(--accent); }
+.wk[data-s="exited"] { opacity: 0.5; }
+.wk[data-s="exited"] .pill { color: var(--ok); }
+.wk[data-s="wedged"] { border-color: var(--danger); background: var(--danger-bg); }
+.wk[data-s="wedged"] .pill { color: var(--danger); }
+.wk[data-s="dead"] { border-color: var(--danger); border-style: dashed; opacity: 0.8; }
+.wk[data-s="dead"] .pill { color: var(--danger); }
+
+.src {
+  font-family: var(--mono);
+  font-size: 0.79rem;
+  line-height: 1.7;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 0.75rem 0.95rem;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+  color: var(--ink-2);
+}
+.src .cm { color: var(--muted); }
+.src .no { color: var(--danger); font-weight: 600; }
+.src .yes { color: var(--ok); font-weight: 600; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; align-items: start; }
+@media (max-width: 46rem) { .pair { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 2 &nbsp;·&nbsp; mutex &amp; condvar</p>
+  <h1>thread_pool</h1>
+  <p class="lede">
+    把 closure 丟給四條常駐 worker 執行——這部分十分鐘就寫得出來。
+    真正的難點在<strong>停</strong>:stop 旗標要在哪裡被看見、誰負責叫醒睡著的 worker、
+    <code>Drop</code> 回傳的那一刻到底保證了什麼。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · shutdown 模擬器</h2>
+  <p>
+    四條 worker 圍著同一個 <code>Mutex&lt;State&gt;</code>——裡面只有兩個欄位:<code>jobs: VecDeque</code>
+    與 <code>stop: bool</code>。丟幾個 job 進去,看 worker 搶鎖、拿 job、在<strong>鎖外</strong>執行;
+    然後按 <code>drop(pool)</code>,盯著每一條 worker 怎麼收尾。
+    右邊四個開關各自埋著一種真實的 bug——切過去再跑一次,壞掉的地方會自己現形。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <button class="act-producer" id="b-sub">execute(job)</button>
+      <button class="act-producer" id="b-sub5">execute × 5</button>
+      <button class="act-danger" id="b-boom">execute(會 panic 的 job)</button>
+      <button class="act-consumer" id="b-drop">drop(pool) &nbsp;// shutdown</button>
+      <button id="b-reset">reset</button>
+      <button id="b-pause">暫停</button>
+    </div>
+
+    <div class="knobs">
+      <div class="knob">
+        <span class="k">worker 等待條件 / close 通知</span>
+        <div class="switch" role="group" aria-label="wait predicate">
+          <button id="w-ok" aria-pressed="true">空 &amp;&amp; !stop + notify_all</button>
+          <button id="w-nostop">predicate 漏了 stop</button>
+          <button id="w-one">close 用 notify_one</button>
+        </div>
+      </div>
+      <div class="knob">
+        <span class="k">shutdown 策略</span>
+        <div class="switch" role="group" aria-label="shutdown policy">
+          <button id="d-drain" aria-pressed="true">drain(本實作)</button>
+          <button id="d-abandon">abandon:丟棄 pending</button>
+        </div>
+      </div>
+      <div class="knob">
+        <span class="k">job panic</span>
+        <div class="switch" role="group" aria-label="panic policy">
+          <button id="p-catch" aria-pressed="true">catch_unwind</button>
+          <button id="p-raw">不接住</button>
+        </div>
+      </div>
+      <div class="knob">
+        <span class="k">Drop 的最後一步</span>
+        <div class="switch" role="group" aria-label="drop policy">
+          <button id="j-join" aria-pressed="true">join 每一條</button>
+          <button id="j-detach">不 join(detach)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="shared">
+      <h3>Arc&lt;Shared&gt; &nbsp;// Mutex&lt;State { jobs, stop }&gt; + Condvar</h3>
+      <div class="lockline">
+        <span>state.lock()</span>
+        <span class="lk free" id="lk">free</span>
+        <span>&nbsp;stop =</span>
+        <span class="lk free" id="stopflag">false</span>
+        <span id="lockq" class="mono"></span>
+      </div>
+      <div class="lockline"><span>jobs (VecDeque, unbounded)</span></div>
+      <div class="qrow" id="q"></div>
+      <div class="lockline"><span>cv 的 wait set(睡著、沒有拿鎖)</span></div>
+      <div class="qrow" id="ws"></div>
+    </div>
+
+    <div class="workers" id="wks"></div>
+
+    <div class="shared">
+      <h3>main thread &nbsp;// impl Drop for ThreadPool</h3>
+      <div class="lockline">
+        <span>目前狀態</span>
+        <span class="lk" id="mainstate">執行中(可 execute)</span>
+      </div>
+      <div class="op" id="s1">1. state.lock().stop = true</div>
+      <div class="op" id="s2">2. cv.notify_all()</div>
+      <div class="op" id="s3">3. for w in workers.drain(..) { w.join() }</div>
+      <div class="op" id="s4">4. Drop 回傳 &nbsp;// 保證:已提交的 job 全部跑完</div>
+    </div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">submitted</span><span class="v" id="st-sub">0</span></div>
+      <div class="stat"><span class="k">done</span><span class="v" id="st-done">0</span></div>
+      <div class="stat"><span class="k">queued</span><span class="v" id="st-q">0</span></div>
+      <div class="stat"><span class="k">dropped</span><span class="v" id="st-drop">0</span></div>
+      <div class="stat"><span class="k">panicked</span><span class="v" id="st-panic">0</span></div>
+      <div class="stat"><span class="k">live workers</span><span class="v" id="st-alive">4</span></div>
+      <div class="stat"><span class="k">joined</span><span class="v" id="st-join">0 / 4</span></div>
+    </div>
+
+    <div class="verdict ok" id="vd">
+      <b>狀態</b>
+      <span id="vd-t">四條 worker 已 spawn,佇列空,全部停在 <code>cv.wait_while</code> 裡睡覺——這是 pool 的靜止態。按 execute 丟工作進來。</span>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    先玩正確版:丟 8 個 job,趁 worker 還在跑的時候按 <code>drop(pool)</code>。
+    你會看到手上有 job 的 worker <strong>先把它做完</strong>(job 在鎖外執行,stop 打不斷它),
+    回到迴圈頂端重拿鎖、看見 <code>stop</code>、退出;main 則卡在 <code>join(W0)</code> 等它。
+    Drop 回傳的那一行,<code>done == submitted</code>——這正是
+    <code>executes_all_jobs_before_drop_returns</code> 這個測試在斷言的東西。
+  </p>
+  <p class="note">
+    時間尺度的誠實聲明:模擬器把一次 burst 的多個 <code>execute()</code> 畫在同一格。
+    每個 <code>execute()</code> 仍然各自 lock / <code>push_back</code> / unlock / <code>notify_one</code>——
+    只是它持鎖的時間是幾十奈秒,而一個 job 要跑幾毫秒。<strong>job 遠比鎖貴</strong>,
+    這就是為什麼佇列會積壓、也是為什麼 job 絕對不能在鎖裡跑。
+  </p>
+</section>
+
+<section>
+  <h2>2 · predicate 是唯一的真相</h2>
+  <p>
+    condvar 的 <code>wait()</code> 沒有記憶。它不會告訴你「你是被 notify 叫醒的,還是 spurious 醒的」,
+    更不會告訴你「醒來的時候世界變成什麼樣」。唯一能回答這件事的東西是<strong>你自己重查的那個條件</strong>。
+    所以 <code>wait_while</code> 展開之後長這樣:
+  </p>
+
+  <div class="pair">
+    <pre class="src"><span class="cm">// 錯的:stop 對這條 worker 不存在</span>
+while jobs.is_empty() {
+    guard = cv.wait(guard);
+}
+<span class="cm">// Drop 置 stop + notify_all 之後,</span>
+<span class="cm">// worker 醒來 -&gt; 佇列還是空 -&gt;</span>
+<span class="no">// 條件仍成立 -&gt; 睡回去 -&gt; join 永久卡死</span></pre>
+    <pre class="src"><span class="cm">// 對的:等待條件 = 沒事做 且 未停</span>
+while jobs.is_empty() &amp;&amp; !stop {
+    guard = cv.wait(guard);
+}
+<span class="cm">// 醒來重查時 stop 已為 true -&gt;</span>
+<span class="yes">// 條件不成立 -&gt; 離開等待 -&gt; pop_front()</span>
+<span class="cm">// 回 None -&gt; return,worker 乾淨退出</span></pre>
+  </div>
+
+  <p>
+    「醒來先查 stop」不是一句口號,它的具體落點就是 predicate 的第二個合取項。
+    把開關切到 <strong>predicate 漏了 stop</strong> 再跑一次:worker 會照樣 drain 完佇列,
+    然後在空佇列上睡死——<code>join</code> 永遠不回來。這是 thread pool 面試題的第一大坑,
+    而且它<strong>不是機率性的</strong>:佇列空的時候 100% 卡死,所以 <code>boundary_drop_with_zero_jobs_does_not_hang</code>
+    這個「看起來很無聊」的測試才是最有價值的那一個。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>條件</th><th>誰負責</th><th>少了會怎樣</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>wait_while</code>(而非 <code>if</code> + <code>wait</code>)</td>
+          <td class="ord acq">worker</td>
+          <td>spurious wakeup 直接把 worker 送進 <code>pop_front()</code>,拿到 <code>None</code> 就誤以為要退出</td>
+        </tr>
+        <tr>
+          <td>predicate 含 <code>!stop</code></td>
+          <td class="ord acq">worker</td>
+          <td>醒來看到空佇列就睡回去,<strong>永久 park</strong>(模擬器裡的紅色 WEDGED)</td>
+        </tr>
+        <tr>
+          <td>close 用 <code>notify_all</code></td>
+          <td class="ord rel">Drop</td>
+          <td><code>notify_one</code> 只放行一條,其餘 N−1 條沒人叫得醒——一樣是 WEDGED</td>
+        </tr>
+        <tr>
+          <td>先 <code>drop(guard)</code> 再 notify</td>
+          <td class="ord rel">execute</td>
+          <td>不是正確性 bug,是效能 bug:被喚醒的 worker 立刻撞上還沒放開的鎖,再睡一次</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    為什麼 <code>notify_one</code> 在 <code>execute()</code> 裡是對的、在 <code>Drop</code> 裡卻是錯的?
+    因為兩者發布的東西不同。<code>execute</code> 發布的是<strong>一個</strong> job:只需要一條 worker 醒來消化它,
+    叫醒四條只是讓另外三條白搶一次鎖(thundering herd)。<code>Drop</code> 發布的是 <code>stop</code>——
+    那是一個<strong>所有 worker 都必須觀察到</strong>的狀態轉換,它不會被誰「消耗掉」。
+    廣播與單播的分界線,就在「這個事件會不會被一個 waiter 吃掉」。
+  </p>
+</section>
+
+<section>
+  <h2>3 · drain 還是 abandon</h2>
+  <p>
+    shutdown 時佇列裡還躺著 job,你有兩個選擇,而且必須明講你選了哪一個——
+    <strong>沉默地丟掉工作是 bug,不是 feature</strong>。<code>execute()</code> 的簽章回傳 <code>()</code>,
+    呼叫端據此認定「工作已被接受」;若 pool 偷偷把它扔了,這個承諾就是假的。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>策略</th><th>worker 看到 stop 時</th><th>Drop 回傳時保證</th><th>適用</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong style="color:var(--ok)">drain(本實作)</strong></td>
+          <td>佇列非空就繼續拿 job,直到空了才退</td>
+          <td>所有已提交的 job 都執行完</td>
+          <td>job 不可丟:寫檔、回應請求、記帳</td>
+        </tr>
+        <tr>
+          <td>abandon</td>
+          <td>立刻退出,pending job 直接 drop</td>
+          <td>只保證 worker 都死了,工作量未知</td>
+          <td>job 可重建:cache 預熱、推測性工作</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    drain 版最漂亮的地方在於它<strong>不需要任何額外程式碼</strong>:predicate 是
+    <code>jobs.is_empty() &amp;&amp; !stop</code>,佇列非空時它本來就不成立,worker 自然放行去拿 job;
+    只有「空 <em>且</em> stop」才走到 <code>pop_front() -&gt; None -&gt; return</code>。
+    <strong>drain 是 predicate 的自然結果,abandon 才是要特地寫的例外。</strong>
+    切到 abandon 開關跑一次,看 dropped 那個計數器變紅——那些 job 的呼叫端,永遠不會知道。
+  </p>
+</section>
+
+<section>
+  <h2>4 · 一個 panic 不能吃掉一條 worker</h2>
+  <p>
+    job 是別人寫的閉包,它會 panic。沒有 <code>catch_unwind</code> 的話:panic 從 job 一路 unwind 出
+    <code>worker_loop</code>,worker 的 thread 就此結束——<strong>池容量悄悄從 4 變成 3</strong>,
+    沒有任何錯誤訊息,沒有 log,吞吐量掉 25%。四個 job 各 panic 一次,池就變成一個只會收 job、
+    永遠不執行的黑洞。把開關切到「不接住」,連按四次紅色按鈕,看 live workers 歸零。
+  </p>
+  <pre class="src"><span class="cm">// job 在鎖外執行(鎖已在上一個 scope 結束時釋放)</span>
+let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(job));</pre>
+  <p>
+    <code>AssertUnwindSafe</code> 為什麼成立:<code>job</code> 是 <code>FnOnce</code>,
+    panic 之後它不會再被呼叫,不存在「有人觀察到一個被 unwind 撕成一半的閉包狀態」的機會。
+    這不是「編譯器囉唆所以我加個 Assert」,是一個可以在面試現場講清楚的證明。
+  </p>
+  <p class="note">
+    延伸一步:如果 job 是<strong>持著鎖</strong>執行的呢?那 panic 會讓 <code>Mutex</code> 中毒,
+    其他 worker 的 <code>lock().unwrap()</code> 全部跟著 panic——一個 job 的 bug 連鎖處決整個池。
+    這就是為什麼 <code>worker_loop</code> 必須在拿到 job 之後、執行之前<strong>先讓 guard 出 scope</strong>:
+    既是為了並行度(否則池退化成序列執行),也是為了故障隔離。
+    production 還會再往上加一層:panic 計數器上報、或直接重啟一條新的 worker 補位。
+  </p>
+</section>
+
+<section>
+  <h2>5 · Drop 的三個步驟,一個都不能少</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>步驟</th><th>沒有它會怎樣</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ord rel"><code>stop = true</code>(持鎖寫)</td>
+          <td>worker 永遠等不到終止訊號,<code>join</code> 等到宇宙熱寂</td>
+        </tr>
+        <tr>
+          <td class="ord rel"><code>cv.notify_all()</code></td>
+          <td>睡著的 worker 沒人叫醒。stop 寫了也沒用——它們根本沒機會重查 predicate</td>
+        </tr>
+        <tr>
+          <td class="ord acq"><code>w.join()</code> 每一條</td>
+          <td><strong>Drop 立刻回傳,worker 還活著</strong>。見下</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Rust 裡 <code>JoinHandle</code> 被 drop 的語意是 <strong>detach,不是 join</strong>——
+    這一點跟 C++ 的 <code>std::thread</code>(未 join 直接 <code>terminate</code>)完全相反,
+    也是最容易被誤記的一條。把開關切到「不 join(detach)」:<code>Drop</code> 會在毫秒內回傳,
+    而 worker 還在跑你剛丟進去的 job。後果有三層:
+  </p>
+  <ul>
+    <li><strong>斷言變成擲骰子</strong>:<code>drop(pool); assert_eq!(counter, 100);</code> 讀到的是一個
+      還在被別的 thread 遞增的中間值——時好時壞,CI 上偶爾紅一次的那種 bug。</li>
+    <li><strong>process 退出時工作蒸發</strong>:<code>main</code> 回傳 = 整個 process 結束,
+      沒跑完的 job 連同 worker 一起被作業系統回收,沒有任何人被通知。</li>
+    <li><strong>真正的 use-after-free</strong>:這裡靠 <code>Arc&lt;Shared&gt;</code> 撐著,記憶體還沒被釋放;
+      但只要 pool 改成借用外部狀態(<code>&amp;'a mut</code> / scoped thread 的形狀),
+      detach 就是 worker 拿著懸空指標繼續寫。<code>std::thread::scope</code> 存在的唯一理由,
+      就是把這個 bug 變成編譯錯誤。</li>
+  </ul>
+  <p class="note">
+    順帶一個 API 設計的漂亮之處:<code>ThreadPool</code> 沒有 <code>Clone</code>,shutdown 只發生在
+    <code>Drop(&amp;mut self)</code>。借用檢查器保證那一刻不可能還有 <code>&amp;self</code> 能呼叫
+    <code>execute()</code>——「shutdown 後又提交 job」這整類競態,被<strong>型別的形狀</strong>消滅了,
+    不需要任何 runtime 檢查。這比「在 execute 裡查 stop 然後回 Err」高明一個層次。
+  </p>
+</section>
+
+<section>
+  <h2>6 · 為什麼一開始要有池</h2>
+  <p>
+    <code>thread::spawn</code> 一次約 10<span class="mono">µs</span> 級,外加預設 8MB 的 stack 位址空間保留。
+    對一個做 200<span class="mono">µs</span> 的 job 來說,建執行緒的成本比工作本身還高;
+    對十萬個 job 來說,你會先撞到 <code>ulimit -u</code>。
+    池把 spawn 攤平成一次性成本,代價是所有 worker 搶同一把鎖——
+    模擬器裡那個「只有一條 worker 能是 HOLDS-LOCK」的畫面,worker 數上去之後就是實測的瓶頸。
+  </p>
+  <p>
+    往上一層的解法是 <strong>per-worker deque + work-stealing</strong>(rayon):
+    每條 worker 有自己的佇列,空了才去偷別人的,把中央鎖的競爭壓到偷竊發生時。
+    tokio 的 <code>spawn_blocking</code> 背後就是本模組這個形狀,再加上動態擴縮與 idle timeout。
+    知道自己這版的瓶頸在哪、下一步往哪走,比把 work-stealing 硬塞進四十行的面試答案裡有用得多。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/thread_pool.rs</code> · 設計取捨:<code>docs/thread_pool.md</code></div>
+  <div>驗證:<code>cargo test -p reference thread_pool</code>(關鍵測試:<code>boundary_drop_with_zero_jobs_does_not_hang</code>、<code>panicking_job_does_not_kill_worker</code>)</div>
+  <div>前置:<code>bounded_queue</code>(predicate wait 與 close 語意)· 應用:<code>file_io_offload</code>(用池把阻塞 IO 移出 event loop)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var NW = 4;          // worker 數
+  var JOB_TICKS = 3;   // 一個 job 佔幾個 tick
+  var TICK = 150;
+
+  // 四個開關:wait / drain / panic / drop
+  var mode = { wait: "ok", drain: "drain", panic: "catch", join: "join" };
+
+  var S = null;        // 模擬狀態
+  var timer = null;
+  var paused = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var logEl = $("log");
+
+  function log(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = "t" + pad(S ? S.t : 0) + "  " + msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 80) logEl.removeChild(logEl.lastChild);
+  }
+  function pad(n) { return (n < 10 ? "00" : n < 100 ? "0" : "") + n; }
+
+  // ── 狀態 ──────────────────────────────────────────────────────────
+  function fresh() {
+    var w = [], i;
+    for (i = 0; i < NW; i++) {
+      w.push({ i: i, s: "lockwait", job: null, left: 0, joined: false });
+    }
+    return {
+      t: 0,
+      jobs: [],          // 佇列:{ id, boom }
+      nextId: 1,
+      submitted: 0, done: 0, dropped: 0, panicked: 0,
+      lock: null,        // null | {k:"w",i} | {k:"m"}
+      lockQ: [],
+      waitSet: [],       // 停在 condvar 上的 worker index
+      stop: false,
+      workers: w,
+      main: { s: "run", op: null, pending: [], want: false, ji: 0, jt: 0 },
+      phase: "run",      // run | done | deadlock | detached
+      snap: null,        // detach 時 Drop 回傳當下的快照
+      wokeOnClose: 0
+    };
+  }
+
+  function reset() {
+    S = fresh();
+    logEl.textContent = "";
+    var i;
+    for (i = 0; i < NW; i++) S.lockQ.push({ k: "w", i: i });
+    log("m", "ThreadPool::new(4) — spawn 4 條 worker,各自進 worker_loop 搶鎖");
+    setVerdict("ok", "四條 worker 已 spawn,佇列空,全部會停在 cv.wait_while 裡睡覺。按 execute 丟工作進來。");
+    $("b-sub").disabled = false;
+    $("b-sub5").disabled = false;
+    $("b-boom").disabled = false;
+    $("b-drop").disabled = false;
+    render();
+  }
+
+  // ── 鎖 ────────────────────────────────────────────────────────────
+  function release() { S.lock = null; }
+
+  function grant() {
+    if (S.lock !== null || S.lockQ.length === 0) return;
+    var o = S.lockQ.shift();
+    S.lock = o;
+    if (o.k === "w") S.workers[o.i].s = "locked";
+    else S.main.s = "crit";
+  }
+
+  // condvar:notify_one 只搬一個,notify_all 全搬。被搬出來的 worker
+  // 不是「馬上跑」,而是回到搶鎖佇列——這是 condvar 真實的語意。
+  function notify(all) {
+    var n = all ? S.waitSet.length : Math.min(1, S.waitSet.length), k, i;
+    for (k = 0; k < n; k++) {
+      i = S.waitSet.shift();
+      S.workers[i].s = "lockwait";
+      S.lockQ.push({ k: "w", i: i });
+    }
+    return n;
+  }
+
+  // ── worker 的臨界區(它現在持有鎖)────────────────────────────────
+  function crit(w) {
+    var empty = S.jobs.length === 0;
+    // 這一行就是整個模組的重點:predicate 裡有沒有 stop。
+    var pred = (mode.wait === "nostop") ? empty : (empty && !S.stop);
+
+    if (pred) {
+      release();
+      w.s = "waiting";
+      S.waitSet.push(w.i);
+      log("m", "W" + w.i + "  cv.wait_while(...) -> park(放開鎖)");
+      return;
+    }
+    if (S.stop && mode.drain === "abandon" && S.jobs.length > 0) {
+      var n = S.jobs.length;
+      S.dropped += n;
+      S.jobs = [];
+      release();
+      w.s = "exited";
+      log("x", "W" + w.i + "  abandon: 丟棄 " + n + " 個 pending job,直接 return");
+      return;
+    }
+    if (S.jobs.length > 0) {
+      var job = S.jobs.shift();
+      release();
+      w.s = "running"; w.job = job; w.left = JOB_TICKS;
+      log("c", "W" + w.i + "  pop_front() -> job#" + job.id + "  鎖已放開,job 在鎖外執行");
+      return;
+    }
+    // 空 且 stop:drain 完畢
+    release();
+    w.s = "exited";
+    log("m", "W" + w.i + "  佇列空 且 stop ⇒ pop_front() -> None ⇒ return");
+  }
+
+  function finishJob(w) {
+    var job = w.job;
+    w.job = null;
+    if (job.boom) {
+      S.panicked++;
+      if (mode.panic === "catch") {
+        log("x", "W" + w.i + "  job#" + job.id + " panic! catch_unwind 接住 — worker 存活,繼續下一個");
+        w.s = "lockwait";
+        S.lockQ.push({ k: "w", i: w.i });
+      } else {
+        log("x", "W" + w.i + "  job#" + job.id + " panic! 沒有 catch_unwind — worker unwind 死亡,池容量 -1");
+        w.s = "dead";
+      }
+      return;
+    }
+    S.done++;
+    log("c", "W" + w.i + "  job#" + job.id + " 完成");
+    w.s = "lockwait";
+    S.lockQ.push({ k: "w", i: w.i });
+  }
+
+  // ── main thread ──────────────────────────────────────────────────
+  function mainTick() {
+    var m = S.main, n, all, w;
+
+    if (m.s === "crit") {
+      if (m.op === "submit") {
+        // 一次 burst 的多個 execute() 壓在同一格:每個 execute 各自 lock/push_back/
+        // unlock/notify_one,但它持鎖只有幾十奈秒——在 job 的時間尺度下是瞬時的。
+        var burst = m.pending.splice(0, m.pending.length), k;
+        for (k = 0; k < burst.length; k++) { S.jobs.push(burst[k]); S.submitted++; }
+        release();                       // 先解鎖
+        for (k = 0; k < burst.length; k++) {
+          n = notify(false);             // 再 notify_one:一個 job 只需叫醒一條 worker
+          log("p", "execute(job#" + burst[k].id + ")  push_back;解鎖後 notify_one() -> 喚醒 " + n + " 條");
+        }
+        m.s = "run";
+      } else if (m.op === "shutdown") {
+        S.stop = true;
+        release();
+        all = (mode.wait !== "one");
+        n = notify(all);
+        S.wokeOnClose = n;
+        log("x", "Drop: stop = true;解鎖後 " + (all ? "notify_all()" : "notify_one()") +
+                 " -> 喚醒 " + n + " 條(wait set 裡有 " + (n + S.waitSet.length) + " 條)");
+        m.s = "join"; m.ji = 0; m.jt = 0;
+      }
+      return;
+    }
+
+    if (m.s === "run") {
+      if (m.pending.length > 0) { m.op = "submit"; m.s = "lockwait"; S.lockQ.push({ k: "m" }); }
+      else if (m.want) { m.op = "shutdown"; m.s = "lockwait"; S.lockQ.push({ k: "m" }); }
+      return;
+    }
+
+    if (m.s === "join") {
+      if (mode.join === "detach") {
+        // JoinHandle 被 drop = detach。Drop 立刻回傳,worker 還在跑。
+        S.snap = { done: S.done, submitted: S.submitted, t: S.t, settled: false };
+        m.s = "detached";
+        S.phase = "detached";
+        log("x", "Drop: workers 被 drop 但沒 join — JoinHandle drop = detach。Drop 立刻回傳。");
+        verdictNow();
+        return;
+      }
+      if (m.ji >= NW) { m.s = "done"; S.phase = "done"; verdictNow(); return; }
+      w = S.workers[m.ji];
+      if (w.s === "exited") {
+        w.joined = true;
+        log("m", "join(W" + m.ji + ") -> Ok(())");
+        m.ji++; m.jt = 0;
+      } else if (w.s === "dead") {
+        w.joined = true;
+        log("x", "join(W" + m.ji + ") -> Err(panic payload) — thread 已死,join 不 hang,但它的工作沒了");
+        m.ji++; m.jt = 0;
+      } else {
+        m.jt++;   // 阻塞中
+      }
+      return;
+    }
+  }
+
+  // 活性檢查:stop 已置位、沒有任何 worker 可推進、也不會再有 notify,
+  // 那麼還睡在 wait set 裡的 worker 就是永遠醒不來了。
+  function detectWedge() {
+    if (!S.stop || S.phase !== "run") return;
+    var i, w, active = false, sleeping = false;
+    for (i = 0; i < NW; i++) {
+      w = S.workers[i];
+      if (w.s === "locked" || w.s === "lockwait" || w.s === "running") active = true;
+      if (w.s === "waiting") sleeping = true;
+    }
+    if (S.main.s === "lockwait" || S.main.s === "crit") active = true;
+    if (active || !sleeping) return;
+
+    for (i = 0; i < NW; i++) if (S.workers[i].s === "waiting") S.workers[i].s = "wedged";
+    S.phase = "deadlock";
+    log("x", "沒有 worker 可推進,也不會再有任何 notify —— wait set 裡的 worker 永遠不會醒。");
+    verdictNow();
+  }
+
+  // detach 模式下 worker 仍在跑;跑完之後就沒事做了
+  function detachSettled() {
+    if (S.phase !== "detached") return false;
+    var i, w;
+    for (i = 0; i < NW; i++) {
+      w = S.workers[i];
+      if (w.s !== "exited" && w.s !== "dead" && w.s !== "wedged") return false;
+    }
+    return true;
+  }
+
+  // ── tick ─────────────────────────────────────────────────────────
+  function tick() {
+    if (S.phase === "done" || S.phase === "deadlock") {
+      // 死結之後唯一還會動的東西:main 在 join 上阻塞的 tick 數,一路往上加。
+      if (S.phase === "deadlock" && S.main.s === "join") {
+        S.main.jt++; S.t++; verdictNow(); render();
+      }
+      return;
+    }
+    S.t++;
+    grant();          // 上一 tick 放開的鎖,這一 tick 交給下一個排隊者
+    mainTick();
+    var i, w;
+    for (i = 0; i < NW; i++) {
+      w = S.workers[i];
+      if (w.s === "locked") crit(w);
+      else if (w.s === "running") { w.left--; if (w.left <= 0) finishJob(w); }
+    }
+    detectWedge();
+    if (S.phase === "detached" && S.snap && !S.snap.settled && detachSettled()) {
+      S.snap.settled = true;
+      S.snap.finalDone = S.done;
+      S.snap.lag = S.t - S.snap.t;
+      verdictNow();
+    }
+    render();
+  }
+
+  // ── 判決 ─────────────────────────────────────────────────────────
+  function setVerdict(cls, text) {
+    $("vd").className = "verdict " + cls;
+    $("vd-t").textContent = text;
+  }
+
+  function deadCount() {
+    var i, n = 0;
+    for (i = 0; i < NW; i++) if (S.workers[i].s === "dead") n++;
+    return n;
+  }
+
+  function verdictNow() {
+    var lost, dead = deadCount();
+
+    if (S.phase === "deadlock") {
+      var why = (mode.wait === "nostop")
+        ? "worker 的 predicate 只查 jobs.is_empty():它被 notify_all 叫醒了,重查條件時佇列還是空的,於是又睡回去。stop 對它從來不存在。"
+        : (mode.wait === "one")
+          ? "Drop 只發了 notify_one:一條 worker 醒來、看到 stop、乾淨退出;其餘的還睡在 wait set 裡,而 stop 這個事件已經被那一條「吃掉」了,不會再有人叫醒它們。"
+          : "還有 worker 睡在 condvar 上,而沒有任何事件會再叫醒它。";
+      setVerdict("bad",
+        "DEADLOCK — Drop 永遠不會回傳。main 卡在 join(W" + S.main.ji + ") 上(已阻塞 " + S.main.jt +
+        " tick,而且會一直下去)。" + why +
+        " 在真實程式裡這就是「程式結束時 hang 住,Ctrl-C 才能殺掉」的那種 bug。");
+      return;
+    }
+
+    if (S.phase === "detached") {
+      setVerdict("bad",
+        "Drop 已經回傳了 —— 但 done = " + S.snap.done + " / submitted = " + S.snap.submitted +
+        "。worker 還在跑,還在寫 pool 的 state。呼叫端此刻做 assert_eq!(counter, " + S.snap.submitted +
+        ") 會 fail(而且是時好時壞的那種 fail)。" +
+        (S.snap.settled
+          ? "又過了 " + S.snap.lag + " tick,worker 才真的把 " + S.snap.finalDone +
+            " 個 job 做完 —— 那整段時間裡,pool 物件已經不存在了。"
+          : "") +
+        "JoinHandle 被 drop 的語意是 detach,不是 join;如果這個池借的是外部狀態而不是 Arc," +
+        "這裡就是貨真價實的 use-after-free。");
+      return;
+    }
+
+    // phase === "done"
+    lost = S.jobs.length;
+    if (S.dropped > 0) {
+      setVerdict("bad",
+        "Drop 回傳了,但 " + S.dropped + " 個已提交的 job 被丟棄。execute() 當初回傳的是 () —— " +
+        "呼叫端有一切理由相信工作被接受了。abandon 策略本身不是錯的,錯的是沒有把它寫進 API 契約。");
+      return;
+    }
+    if (lost > 0) {
+      setVerdict("bad",
+        "Drop 回傳了,但佇列裡還躺著 " + lost + " 個 job,而且永遠不會有人執行它們 —— " +
+        "四條 worker 全部因為 job panic 而死光了。join 沒有 hang(thread 早就沒了)," +
+        "所以這個 bug 連個症狀都沒有:池只是安靜地變成一個黑洞。");
+      return;
+    }
+    if (dead === NW) {
+      setVerdict("bad",
+        "四條 worker 全部被 job 的 panic unwind 掉了。join 每一條都立刻回傳(thread 早就死了)," +
+        "Drop 看起來完全正常 —— 但這個池從最後一個 panic 之後就是個黑洞:" +
+        "再 execute 進來的 job 會靜靜躺在佇列裡,永遠不會有人執行。沒有 log,沒有錯誤,沒有症狀。");
+      return;
+    }
+    if (dead > 0) {
+      setVerdict("bad",
+        "全部 job 都跑完了,但池從 4 條 worker 縮成 " + (NW - dead) + " 條 —— " + dead +
+        " 條被 job 的 panic unwind 掉了。這一次沒出事,只因為還有 worker 活著;" +
+        "沒有 catch_unwind,池的容量會隨著 panic 單調遞減,而且沒有任何訊號。");
+      return;
+    }
+    setVerdict("ok",
+      "Drop 乾淨回傳:submitted = " + S.submitted + ",done = " + S.done +
+      ",四條 worker 全部 join 成功。" +
+      (S.panicked > 0 ? "其中 " + S.panicked + " 個 job panic 了,被 catch_unwind 吞掉,worker 毫髮無傷。" : "") +
+      " Drop 回傳這一行之後,「所有已提交的 job 都執行完了」是一個可以斷言的事實 —— " +
+      "這就是 drain 語意的價值。");
+  }
+
+  // ── 畫面 ─────────────────────────────────────────────────────────
+  var LBL = {
+    lockwait: "LOCK-WAIT",
+    locked:   "HOLDS-LOCK",
+    waiting:  "WAITING",
+    running:  "RUNNING",
+    exited:   "EXITED",
+    wedged:   "WEDGED",
+    dead:     "DEAD"
+  };
+  var SUB = {
+    lockwait: "state.lock() 排隊中",
+    locked:   "查 predicate",
+    waiting:  "cv.wait — 鎖已放開",
+    exited:   "worker_loop return",
+    wedged:   "沒人會再叫醒它",
+    dead:     "panic unwind 出 loop"
+  };
+
+  function chip(cls, text) {
+    var c = document.createElement("span");
+    c.className = "chip " + cls;
+    c.textContent = text;
+    return c;
+  }
+
+  function render() {
+    var i, w, el;
+
+    // 鎖
+    el = $("lk");
+    if (S.lock === null) { el.className = "lk free"; el.textContent = "free"; }
+    else {
+      el.className = "lk held";
+      el.textContent = S.lock.k === "m" ? "held by main" : "held by W" + S.lock.i;
+    }
+    el = $("stopflag");
+    el.className = "lk " + (S.stop ? "on" : "free");
+    el.textContent = S.stop ? "true" : "false";
+    $("lockq").textContent = S.lockQ.length
+      ? "  ·  等鎖: " + S.lockQ.map(function (o) { return o.k === "m" ? "main" : "W" + o.i; }).join(" ")
+      : "";
+
+    // 佇列
+    el = $("q");
+    el.textContent = "";
+    if (S.jobs.length === 0) el.appendChild(chip("none", "(empty)"));
+    else {
+      for (i = 0; i < S.jobs.length && i < 12; i++) {
+        el.appendChild(chip(S.jobs[i].boom ? "boom" : "job",
+          "job#" + S.jobs[i].id + (S.jobs[i].boom ? " panic!" : "")));
+      }
+      if (S.jobs.length > 12) el.appendChild(chip("none", "+" + (S.jobs.length - 12)));
+    }
+
+    // wait set
+    el = $("ws");
+    el.textContent = "";
+    if (S.waitSet.length === 0) el.appendChild(chip("none", "(空)"));
+    else for (i = 0; i < S.waitSet.length; i++) el.appendChild(chip("park", "W" + S.waitSet[i]));
+
+    // workers
+    el = $("wks");
+    el.textContent = "";
+    for (i = 0; i < NW; i++) {
+      w = S.workers[i];
+      var card = document.createElement("div");
+      card.className = "wk";
+      card.setAttribute("data-s", w.s);
+      card.setAttribute("data-w", String(i));
+
+      var nm = document.createElement("div");
+      nm.className = "nm";
+      var n1 = document.createElement("span");
+      n1.textContent = "pool-worker-" + i;
+      var n2 = document.createElement("span");
+      n2.textContent = w.joined ? "joined" : "";
+      nm.append(n1, n2);
+
+      var pill = document.createElement("div");
+      pill.className = "pill";
+      pill.textContent = w.s === "running" ? "RUNNING job#" + w.job.id : LBL[w.s];
+
+      var sub = document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = w.s === "running"
+        ? (w.job.boom ? "這個 job 會 panic" : "catch_unwind(job)")
+        : (SUB[w.s] || "");
+
+      var bar = document.createElement("div");
+      bar.className = "bar";
+      var fill = document.createElement("i");
+      fill.style.width = w.s === "running"
+        ? String(Math.round(100 * (JOB_TICKS - w.left) / JOB_TICKS)) + "%" : "0";
+      bar.appendChild(fill);
+
+      card.append(nm, pill, sub, bar);
+      el.appendChild(card);
+    }
+
+    // main / Drop 步驟
+    var m = S.main, ms = $("mainstate");
+    var mtxt = "執行中(可 execute)";
+    if (m.s === "lockwait") mtxt = (m.op === "shutdown" ? "Drop:等 state.lock()" : "execute():等 state.lock()");
+    else if (m.s === "crit") mtxt = (m.op === "shutdown" ? "Drop:持鎖,寫 stop" : "execute():持鎖,push_back");
+    else if (m.s === "join") mtxt = (S.phase === "deadlock")
+      ? "阻塞在 join(W" + m.ji + ") — 已 " + m.jt + " tick,永遠不會回來"
+      : "join(W" + m.ji + ") 阻塞中(" + m.jt + " tick)";
+    else if (m.s === "detached") mtxt = "Drop 已回傳 — 但 worker 還在跑";
+    else if (m.s === "done") mtxt = "Drop 已回傳 — 全部 join 完畢";
+    ms.textContent = mtxt;
+    ms.className = "lk " + ((S.phase === "deadlock" || S.phase === "detached") ? "on"
+      : (m.s === "crit" || m.s === "join") ? "held" : "free");
+
+    $("s1").className = "op" + (S.stop ? " good" : "");
+    $("s2").className = "op" + (S.stop ? (mode.wait === "one" ? " bad" : " good") : "");
+    $("s2").textContent = "2. cv." + (mode.wait === "one" ? "notify_one()  // 只放行一條" : "notify_all()") +
+      (S.stop ? "   -> 喚醒 " + S.wokeOnClose + " 條" : "");
+    $("s3").className = "op" + (m.s === "join" ? (S.phase === "deadlock" ? " bad" : " hot")
+      : (S.phase === "done" ? " good" : (S.phase === "detached" ? " bad" : "")));
+    $("s3").textContent = mode.join === "detach"
+      ? "3. (略過 join)  workers.drain(..) 直接 drop  // = detach"
+      : "3. for w in workers.drain(..) { w.join() }" + (m.s === "join" || S.phase === "done"
+          ? "   -> " + m.ji + " / " + NW : "");
+    $("s4").className = "op" + (S.phase === "done" ? " good" : (S.phase === "detached" ? " bad" : ""));
+    $("s4").textContent = S.phase === "detached"
+      ? "4. Drop 回傳 — 但 done = " + S.snap.done + " / " + S.snap.submitted + ",worker 仍在跑"
+      : "4. Drop 回傳  // 保證:已提交的 job 全部跑完";
+
+    // 讀數
+    $("st-sub").textContent = String(S.submitted);
+    $("st-done").textContent = String(S.done);
+    $("st-q").textContent = String(S.jobs.length);
+    var dv = $("st-drop"); dv.textContent = String(S.dropped);
+    dv.className = "v" + (S.dropped > 0 ? " warn" : "");
+    var pv = $("st-panic"); pv.textContent = String(S.panicked);
+    pv.className = "v" + (S.panicked > 0 ? " warn" : "");
+    var alive = NW - deadCount();
+    var av = $("st-alive"); av.textContent = String(alive);
+    av.className = "v" + (alive < NW ? " warn" : "");
+    var jn = 0;
+    for (i = 0; i < NW; i++) if (S.workers[i].joined) jn++;
+    var jv = $("st-join"); jv.textContent = jn + " / " + NW;
+    jv.className = "v" + (jn === NW ? " good" : "");
+  }
+
+  // ── 控制 ─────────────────────────────────────────────────────────
+  function submit(boom) {
+    if (S.main.want) return;
+    S.main.pending.push({ id: S.nextId++, boom: !!boom });
+  }
+  function shutdown() {
+    if (S.main.want) return;
+    S.main.want = true;
+    $("b-sub").disabled = true;
+    $("b-sub5").disabled = true;
+    $("b-boom").disabled = true;
+    $("b-drop").disabled = true;
+    log("x", "drop(pool) — 進入 Drop::drop");
+    setVerdict("ok", "Drop 開始:先拿鎖寫 stop,再 notify,最後 join。盯著每一條 worker 的狀態。");
+    render();
+  }
+
+  var SW = {
+    wait:  [["w-ok", "ok"], ["w-nostop", "nostop"], ["w-one", "one"]],
+    drain: [["d-drain", "drain"], ["d-abandon", "abandon"]],
+    panic: [["p-catch", "catch"], ["p-raw", "raw"]],
+    join:  [["j-join", "join"], ["j-detach", "detach"]]
+  };
+
+  function paintSwitches() {
+    var k, i, g;
+    for (k in SW) {
+      if (!Object.prototype.hasOwnProperty.call(SW, k)) continue;
+      g = SW[k];
+      for (i = 0; i < g.length; i++) {
+        $(g[i][0]).setAttribute("aria-pressed", String(mode[k] === g[i][1]));
+      }
+    }
+  }
+
+  function setMode(k, v) {
+    if (mode[k] === v) return;
+    mode[k] = v;
+    paintSwitches();
+    reset();
+    log("m", "模式切換:" + k + " = " + v + " — 已重置");
+  }
+
+  function wire() {
+    var k, i, g;
+    for (k in SW) {
+      if (!Object.prototype.hasOwnProperty.call(SW, k)) continue;
+      g = SW[k];
+      for (i = 0; i < g.length; i++) {
+        (function (kk, vv, id) {
+          $(id).addEventListener("click", function () { setMode(kk, vv); });
+        })(k, g[i][1], g[i][0]);
+      }
+    }
+    $("b-sub").addEventListener("click", function () { submit(false); });
+    $("b-sub5").addEventListener("click", function () {
+      var i; for (i = 0; i < 5; i++) submit(false);
+    });
+    $("b-boom").addEventListener("click", function () { submit(true); });
+    $("b-drop").addEventListener("click", shutdown);
+    $("b-reset").addEventListener("click", function () { reset(); });
+    $("b-pause").addEventListener("click", function () {
+      paused = !paused;
+      $("b-pause").textContent = paused ? "繼續" : "暫停";
+    });
+  }
+
+  paintSwitches();
+  wire();
+  reset();
+  timer = setInterval(function () { if (!paused) tick(); }, TICK);
+
+  // 給 headless 驗證用:同步驅動,不依賴時鐘。
+  window.__tp = {
+    reset: reset,
+    setMode: function (k, v) { setMode(k, v); },
+    submit: submit,
+    shutdown: shutdown,
+    step: function (n) { var i; for (i = 0; i < n; i++) tick(); },
+    pauseClock: function () { clearInterval(timer); timer = null; },
+    snapshot: function () {
+      return {
+        t: S.t, phase: S.phase, stop: S.stop,
+        submitted: S.submitted, done: S.done, dropped: S.dropped,
+        panicked: S.panicked, queued: S.jobs.length,
+        joined: S.workers.filter(function (w) { return w.joined; }).length,
+        mainState: S.main.s, joinIdx: S.main.ji, joinBlockedTicks: S.main.jt,
+        workers: S.workers.map(function (w) { return w.s; }),
+        verdict: $("vd-t").textContent
+      };
+    }
+  };
+})();
+</script>

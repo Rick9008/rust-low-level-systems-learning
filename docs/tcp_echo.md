@@ -55,3 +55,10 @@ echo 幾乎為 0 ⇒ 瓶頸在 syscall 與記憶體頻寬。
 
 tokio 的 `TcpStream`(readiness 藏進 async/await,欠帳緩衝 = 你的 write
 future 卡住)、mio 官方範例、nginx(事件模型同構,C 實作)。
+
+## 互動教材
+
+[artifacts/tcp_echo.html](artifacts/tcp_echo.html) —— 可點的寫入 backpressure 狀態機:
+灌 8 KiB 進去看 `write()` 撞上滿的送緩衝,親手比較四種處理方式(忙等 / 丟掉 /
+阻塞 / 緩衝 + EPOLLOUT),看 interest 在 `READABLE` 與 `READABLE|WRITABLE` 之間
+隨欠帳生滅,並把「清空後不拆 EPOLLOUT」的 100% CPU 空轉 bug 按出來。

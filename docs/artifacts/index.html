@@ -1,0 +1,686 @@
+<title>rust-low-level-systems-learning — 互動教材</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style><style>
+/* index 專屬:模組卡片格 */
+.stage-block { display: flex; flex-direction: column; gap: 0.9rem; }
+.stage-head { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
+.stage-num {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.12rem 0.42rem;
+  white-space: nowrap;
+}
+.stage-title { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; }
+.stage-sub { font-size: 0.92rem; color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.7rem; }
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 140ms ease, background 140ms ease, transform 80ms ease;
+}
+.card:hover { border-color: var(--accent); background: var(--raised); transform: translateY(-1px); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card .name {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.card .hook { font-size: 0.88rem; line-height: 1.5; color: var(--ink-2); }
+.card .hits {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-top: 0.1rem;
+}
+.legend { display: flex; flex-wrap: wrap; gap: 1.1rem; font-size: 0.86rem; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.swatch { width: 0.75rem; height: 0.75rem; border-radius: 2px; display: inline-block; }
+.sw-p { background: var(--producer); }
+.sw-c { background: var(--consumer); }
+.sw-d { background: var(--danger); }
+.sw-o { background: var(--ok); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">rust-low-level-systems-learning</p>
+  <h1>互動教材</h1>
+  <p class="lede">
+    17 個模組,每個一頁。測試證明程式碼是對的,但建立不了直覺——
+    這些頁面讓你<strong>親手把它弄壞</strong>,再看它為什麼壞。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>怎麼用</h2>
+  <p>
+    每一頁的主體是一個可以操作的機制,不是一張圖。刻意把每個模組最容易錯的那一步做成按鈕:
+    把 <code>Acquire</code> 降成 <code>Relaxed</code>、把 <code>while</code> 換成 <code>if</code>、
+    ET 模式下只讀一半就停手、拔掉 generation tag——然後看它當場壞給你看。
+  </p>
+  <p>
+    順序建議跟著 stage 走(<code>git log --oneline --reverse</code> 就是這個順序),
+    但每頁都能獨立讀。程式碼在 <code>reference/src/</code>,設計取捨在 <code>docs/*.md</code>。
+  </p>
+  <div class="legend">
+    <span><i class="swatch sw-p"></i>producer / writer / thread A</span>
+    <span><i class="swatch sw-c"></i>consumer / reader / thread B</span>
+    <span><i class="swatch sw-d"></i>錯誤路徑、UB、資料遺失</span>
+    <span><i class="swatch sw-o"></i>正確路徑、已驗證</span>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num">stage 2</span>
+    <span class="stage-title">mutex / condvar 基礎</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="bounded_queue.html">
+      <span class="name">bounded_queue</span>
+      <span class="hook">Condvar 的 predicate-wait。把 <code>while</code> 換成 <code>if</code>,看被喚醒的 consumer 從空佇列取值。</span>
+      <span class="hits">wakeup 是提示,不是保證 · close 語意</span>
+    </a>
+    <a class="card" href="thread_pool.html">
+      <span class="name">thread_pool</span>
+      <span class="hook">shutdown 才是難的部分。worker 先阻塞再查 stop 旗標,就永遠醒不來。</span>
+      <span class="hits">檢查順序 · notify_all · Drop 時 join</span>
+    </a>
+    <a class="card" href="sharded_map.html">
+      <span class="name">sharded_map</span>
+      <span class="hook">per-shard Mutex 不是消除競爭,是<strong>切分</strong>競爭。hot key 下它一點忙也幫不上。</span>
+      <span class="hits">hash → shard · 全域操作不再原子</span>
+    </a>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num">stage 3</span>
+    <span class="stage-title">單執行緒資料結構</span>
+    <span class="stage-sub">index-based 優先——「用 index 當窮人的指標」</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="ring_buffer.html">
+      <span class="name">ring_buffer</span>
+      <span class="hook">head + len 的 wrap 算術。也解釋為什麼 len 一進入並發就活不下去。</span>
+      <span class="hits">滿/空邊界 · 不浪費一格</span>
+    </a>
+    <a class="card" href="lru.html">
+      <span class="name">lru</span>
+      <span class="hook">HashMap 與 arena 雙結構同步。O(1) 的關鍵是 index-based 侵入式雙向鏈表。</span>
+      <span class="hits">move-to-front · 淘汰 tail · 槽位回收</span>
+    </a>
+    <a class="card" href="dsu.html">
+      <span class="name">dsu</span>
+      <span class="hook">路徑壓縮把整條路上的節點直接指向根。關掉 union by rank 就退化成鏈表。</span>
+      <span class="hits">α(n) ≤ 4 · 樹其實只是 parent[]</span>
+    </a>
+    <a class="card" href="graph.html">
+      <span class="name">graph</span>
+      <span class="hook">四個演算法一個 stepper。BFS 與 DFS 的差別只是換了容器。</span>
+      <span class="hits">Kahn 偵測環 · BinaryHeap&lt;Reverse&gt; 惰性刪除</span>
+    </a>
+    <a class="card" href="trie.html">
+      <span class="name">trie</span>
+      <span class="hook">children 放 arena。<code>search("app")</code> 與 <code>starts_with("app")</code> 的差別就是 <code>is_end</code>。</span>
+      <span class="hits">O(L),與字典大小無關</span>
+    </a>
+    <a class="card" href="tree.html">
+      <span class="name">tree</span>
+      <span class="hook">arena 版 vs <code>Rc&lt;RefCell&gt;</code> 版並列。Rc 成環會洩漏,RefCell 會在執行期 panic。</span>
+      <span class="hits">Weak 破環 · 編譯期 vs 執行期檢查</span>
+    </a>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num">stage 4</span>
+    <span class="stage-title">atomic / lock-free</span>
+    <span class="stage-sub">loom 窮舉驗證</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="spsc_ring.html">
+      <span class="name">spsc_ring</span>
+      <span class="hook">兩個自由跑計數器,無 CAS。把 Release/Acquire 降成 Relaxed,看那條 happens-before 邊消失。</span>
+      <span class="hits">壓 2,000,000 次抓不到 · loom 379µs 抓到</span>
+    </a>
+    <a class="card" href="arena_lockfree.html">
+      <span class="name">arena_lockfree</span>
+      <span class="hook">ABA 重現器。拔掉 generation tag,T1 的 CAS 會「成功」——成功指向一個已經死掉的節點。</span>
+      <span class="hits">index-ABA · generation 打包進 usize</span>
+    </a>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num">stage 5</span>
+    <span class="stage-title">async internals from scratch</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="executor.html">
+      <span class="name">executor</span>
+      <span class="hook">poll → Pending → park → wake → unpark → Ready。park 的 <strong>token</strong> 語意:wake 先於 park 也不會丟。</span>
+      <span class="hits">Waker = Arc&lt;Wake&gt; · 沒有 token 就死鎖</span>
+    </a>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num">stage 6</span>
+    <span class="stage-title">event loop / IO</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="epoll_sys.html">
+      <span class="name">epoll_sys</span>
+      <span class="hook">自寫 <code>unsafe extern "C"</code>,不靠 libc crate。位元遮罩實驗室 + <code>repr(C, packed)</code> 的陷阱。</span>
+      <span class="hits">EPOLLIN|EPOLLET = 0x80000001 · EINTR 要重試</span>
+    </a>
+    <a class="card" href="event_loop.html">
+      <span class="name">event_loop</span>
+      <span class="hook">LT 與 ET 並排模擬。ET 下只讀一半就停手 → epoll_wait 再也不通知你,連線永遠卡死。</span>
+      <span class="hits">ET 必須讀到 EWOULDBLOCK · eventfd 自我喚醒</span>
+    </a>
+    <a class="card" href="tcp_echo.html">
+      <span class="name">tcp_echo</span>
+      <span class="hook">read 容易,write 才難。寫不完的 bytes 要緩存 + 掛 EPOLLOUT,寫完要<strong>拿掉</strong>它。</span>
+      <span class="hits">backpressure · 忘了拿掉 EPOLLOUT = 100% CPU</span>
+    </a>
+    <a class="card" href="file_io_offload.html">
+      <span class="name">file_io_offload</span>
+      <span class="hook">regular file 在 epoll 眼中<strong>永遠可讀</strong>,但 read 照樣阻塞。整個 event loop 凍住。</span>
+      <span class="hits">readiness vs completion · io_uring 才是答案</span>
+    </a>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num">stage 7</span>
+    <span class="stage-title">橋接軟硬體</span>
+    <span class="stage-sub">binary protocol + framing;JD 直擊題</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="hw_bridge.html">
+      <span class="name">hw_bridge</span>
+      <span class="hook">逐 byte 餵進 FrameReader,親眼看 <code>Ok(None)</code> 在等。TCP 是 byte stream,沒有 message 邊界。</span>
+      <span class="hits">黏包切分 · framing 錯斷線 vs 語意錯續命</span>
+    </a>
+  </div>
+</section>
+
+<section>
+  <h2>也可以直接跑</h2>
+  <p>
+    這些頁面是模擬器。真的要看它跑,repo 裡有四支可執行的 example——不加任何 dependency:
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>指令</th><th>看什麼</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>cargo run -p reference --example loom_vs_stress</code></td>
+          <td>同一個 bug:壓力測試 2,000,000 次抓不到,loom 379µs 抓到</td>
+        </tr>
+        <tr>
+          <td><code>cargo run -p reference --example hw_bridge_server -- --evented</code></td>
+          <td>起一台 server,另開 terminal 用 client 打進去</td>
+        </tr>
+        <tr>
+          <td><code>cargo run -p reference --example hw_bridge_client -- drip 200</code></td>
+          <td>一次送一 byte,server 安靜等 800ms 才反應</td>
+        </tr>
+        <tr>
+          <td><code>cargo run -p reference --example tcp_echo_server</code></td>
+          <td>單執行緒 epoll,開幾個 <code>nc</code> 同時連,thread 數不會長</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div>程式碼:<code>reference/</code>(完整解答)· <code>drills/</code>(挖空)· <code>challenges/</code>(空白起點)</div>
+  <div>設計取捨文件:<code>docs/*.md</code> · 本頁:<code>docs/artifacts/index.html</code></div>
+</footer>
+
+</div>

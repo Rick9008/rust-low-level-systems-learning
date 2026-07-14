@@ -49,3 +49,15 @@ job 是 `FnOnce`,panic 後不會再被呼叫,無人能觀察到被撕一半的�
 - rayon:work-stealing、scope、parallel iterator。
 - threadpool crate:與本實作幾乎同構。
 - tokio 的 blocking pool:`spawn_blocking` 背後就是這個模式 + 動態擴縮。
+
+## 互動教材
+
+[artifacts/thread_pool.html](artifacts/thread_pool.html) —— worker pool shutdown 模擬器:
+丟 job 進共享佇列、看四條 worker 搶鎖/在鎖外執行,然後按 `drop(pool)` 觀察收尾。
+四個開關各自埋一種真實 bug,壞掉的地方會自己現形:
+
+- **predicate 漏了 stop** → worker 被 notify_all 叫醒、重查條件、睡回去 → 四條全部 WEDGED,`join` 永不回傳。
+- **close 用 notify_one** → 只有一條 worker 醒來退出,其餘三條卡死。
+- **abandon 策略** → shutdown 時佇列裡的 job 直接丟棄(dropped 計數器變紅)。
+- **不接住 panic** → worker unwind 死亡,池容量單調遞減到零,變成靜默黑洞。
+- **Drop 不 join(detach)** → Drop 立刻回傳,worker 還在跑、還在寫 pool 的 state。

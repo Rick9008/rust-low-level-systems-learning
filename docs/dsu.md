@@ -37,3 +37,10 @@ find 過的路徑上,每個節點 parent 直指根(距根 ≤ 1 步)。
 
 Kruskal MST、網路連通性/partition 偵測、等價類合併、
 percolation、accounts merge(LeetCode 721)。
+
+## 互動教材
+
+[artifacts/dsu.html](artifacts/dsu.html) —— 森林與 `parent[]` 並排,同步變化。
+可以親手 `union` / `find`,看 `find` 爬到根之後第二趟把沿路節點逐格改寫成根;
+union by rank 與 path compression 各自可開關,關掉 rank 就能建出退化鏈
+(樹高 9、`find` 走 9 步),再按 `find` 看整條鏈被壓平成 1 步。

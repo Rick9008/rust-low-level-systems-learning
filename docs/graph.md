@@ -35,3 +35,11 @@ DFS 後序反轉也能 topo,但 cycle 偵測要三色標記,面試容易寫錯�
 
 petgraph(泛型圖 + 演算法庫)。實務大圖常用 CSR(壓縮稀疏行)取代
 `Vec<Vec<_>>` 消除二層指標跳躍——原理同 arena:把散落 heap 的東西攤平成連續陣列。
+
+## 互動教材
+
+[artifacts/graph.html](artifacts/graph.html) —— 一張 8 節點有向加權圖、四個演算法、一個 stepper。
+重點是**永遠把前緣容器擺在圖旁邊**:BFS 的 queue、DFS 的 stack、Kahn 的 in-degree 陣列、
+Dijkstra 的 `BinaryHeap<Reverse<_>>`。可以按鈕加一條 back-edge 製造環,
+看 Kahn 的輸出從 8 個掉到 3 個(這就是 cycle detection),而 BFS/DFS/Dijkstra 的答案完全不受影響。
+Dijkstra 跑到底會看到三次 stale pop 被跳過 —— 懶刪除的關鍵路徑。

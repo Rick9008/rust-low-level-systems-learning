@@ -49,3 +49,14 @@ LT 寬容(漏了下次再報),代價是高負載下重複喚醒。
 ## Production 對照
 
 libc(綁定)、nix(safe wrapper)、mio(跨平台 readiness)、io-uring crate。
+
+## 互動教材
+
+[artifacts/epoll_sys.html](artifacts/epoll_sys.html) —— 兩個互動:
+(1) `epoll_event` 的位元遮罩實驗室:點旗標,看那個 u32 的 hex / 二進位即時變化,
+並把「你要求的」「kernel 白送的 ERR/HUP」「只在註冊時有意義的 ET/ONESHOT」三類分開;
+旁邊是 packed(12 bytes)與自然對齊(16 bytes)的位元組佈局對照,以及忘了 packed 時
+陣列 stride 錯位真正讀到的垃圾值。
+(2) syscall 序列 stepper:`epoll_create1` → `epoll_ctl(ADD/MOD/DEL)` → `epoll_wait`,
+kernel 端的 interest list 隨之變動,並演示 `-1` + errno(EEXIST / ENOENT / EINTR)
+與 EINTR 的重試迴圈。

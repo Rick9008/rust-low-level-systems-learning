@@ -37,3 +37,11 @@ spsc_ring(那裡因為要跨執行緒共享,不得不用 UnsafeCell/MaybeUninit)
 
 `VecDeque`(std,可增長的 ring)、`heapless::spsc`(嵌入式固定容量)、
 `ringbuf` crate。
+
+## 互動教材
+
+[artifacts/ring_buffer.html](artifacts/ring_buffer.html) —— 可操作的環:
+push/pop 逐步看 `head`、`len` 與寫入索引 `wrap(head + len)` 的演變(wrap 跨過接縫時會標出來)、
+滿時 `push_back` 拒絕 vs `push_overwrite` 覆蓋兩種策略對照、
+「只有 head/tail 時 `head == tail` 是空還是滿」的歧義實驗(以及犧牲一格的代價)、
+以及 `len` 在兩條執行緒下的 lost update ——為什麼 [spsc_ring](artifacts/spsc_ring.html) 必須把 `len` 丟掉。

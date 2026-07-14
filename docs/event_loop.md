@@ -49,3 +49,11 @@ timer(需要 timerfd 或 wait timeout + 時間堆)、
 ## Production 對照
 
 mio(本模組的工業版:抽象 epoll/kqueue/IOCP)、tokio reactor、libuv。
+
+## 互動教材
+
+[artifacts/event_loop.html](artifacts/event_loop.html) —— LT / ET 並排模擬器:
+同一個「讀 32 bytes 就 return」的 handler,LT 靠重複通知續命,ET 則在下一次
+`epoll_wait` 回 0 事件、68 bytes 永遠擱淺在 kernel 收信緩衝裡;另含 token → conn 的
+O(1) dispatch、`EPOLLIN|EPOLLOUT|EPOLLET` 位元遮罩解碼器,以及沒有 eventfd 時
+`shutdown()` 叫不醒睡在 `epoll_wait` 裡的執行緒。

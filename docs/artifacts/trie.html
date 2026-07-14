@@ -1,0 +1,1363 @@
+<title>trie — 樹在你腦中,Vec 在記憶體裡</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── trie:樹 / arena 併排 ────────────────────────────────────────── */
+.split {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.pane {
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.8rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.pane h3 {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cap {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: none;
+}
+.cap code { font-size: 0.9em; }
+
+/* ── 樹(SVG)─────────────────────────────────────────────────────── */
+svg.tree { display: block; width: 100%; height: auto; }
+.edge { stroke: var(--line); stroke-width: 1.4; }
+.edge.on { stroke: var(--accent); stroke-width: 2.4; }
+.n-circle { fill: var(--raised); stroke: var(--line); stroke-width: 1.4; }
+.n-circle.on { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 2; }
+.n-circle.new { fill: var(--producer-bg); stroke: var(--producer); stroke-width: 2; }
+.n-ring { fill: none; stroke: var(--ok); stroke-width: 1.6; }
+.n-label {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.n-idx {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  fill: var(--muted);
+  text-anchor: middle;
+}
+
+/* ── arena(Vec<Node> 的每一格)───────────────────────────────────── */
+.arena {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 30rem;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+.row {
+  display: grid;
+  grid-template-columns: 2.3rem 3rem 3.4rem minmax(0, 1fr);
+  gap: 0.35rem;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--raised);
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.row .ri { color: var(--muted); }
+.row .rc { font-weight: 600; color: var(--ink); }
+.row .re { color: var(--muted); }
+.row .rk { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.rowhead {
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-bottom: 0;
+}
+.row.rowhead span { color: var(--muted); font-weight: 400; }
+.row.endnode .re { color: var(--ok); font-weight: 600; }
+.row.on { border-color: var(--accent); background: var(--accent-bg); }
+.row.new { border-color: var(--producer); background: var(--producer-bg); }
+.row.tip { border-color: var(--ok); background: var(--ok-bg); }
+.row.miss { border-color: var(--danger); background: var(--danger-bg); }
+
+/* ── 查詢結果 ────────────────────────────────────────────────────── */
+.qwalk {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  padding: 0.45rem 0.7rem;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.qgrid.stack { grid-template-columns: 1fr; }
+.qcard {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.qcard .qn {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.qcard .qv {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.qcard .why { font-size: 0.85rem; line-height: 1.5; color: var(--ink-2); }
+.qcard.pending { opacity: 0.5; }
+.qcard.t { border-color: var(--ok); background: var(--ok-bg); }
+.qcard.t .qv { color: var(--ok); }
+.qcard.f { border-color: var(--danger); background: var(--danger-bg); }
+.qcard.f .qv { color: var(--danger); }
+
+/* ── 輸入 ────────────────────────────────────────────────────────── */
+input[type="text"] {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  width: 7rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--ink);
+}
+input[type="text"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type="text"].bad { border-color: var(--danger); color: var(--danger); }
+
+/* ── 程式碼區塊 ──────────────────────────────────────────────────── */
+pre.code {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  overflow-x: auto;
+  color: var(--ink-2);
+}
+pre.code b { color: var(--ink); font-weight: 600; }
+pre.code i { color: var(--muted); font-style: normal; }
+
+@media (max-width: 52rem) {
+  .split { grid-template-columns: 1fr; }
+  .qgrid { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 3 &nbsp;·&nbsp; index-based 資料結構</p>
+  <h1>trie</h1>
+  <p class="lede">
+    左邊是你在白板上畫的那棵樹,右邊是它在記憶體裡真正的樣子:<strong>一個 <code>Vec&lt;Node&gt;</code></strong>。
+    這個模組要教的不是「什麼是 trie」——是為什麼子節點存的是 <code>usize</code> 索引,而不是 <code>Box</code>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 一棵樹,兩種看法</h2>
+  <p>
+    insert 就是沿著字元往下走;走不到的地方就 <code>nodes.push(Node::new())</code>,
+    而<strong>新節點的索引就是 push 之前的 <code>len()</code></strong>——arena 手法的全部魔法就這一行。
+    盯著右邊那個 Vec:節點只會往尾巴長,沒有任何一次「為單一節點」的 heap 配置。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <button class="act-producer" data-w="app">insert("app")</button>
+      <button class="act-producer" data-w="apple">insert("apple")</button>
+      <button class="act-producer" data-w="apt">insert("apt")</button>
+      <button class="act-producer" data-w="bat">insert("bat")</button>
+      <button class="act-producer" data-w="ball">insert("ball")</button>
+      <button id="btn-reset">reset</button>
+    </div>
+
+    <div class="controls">
+      <input id="word" type="text" value="app" maxlength="10" spellcheck="false" autocomplete="off" aria-label="word (a-z)">
+      <button class="act-producer" id="btn-insert">insert()</button>
+      <button class="act-consumer" id="btn-contains">contains()</button>
+      <button class="act-consumer" id="btn-starts">starts_with()</button>
+    </div>
+
+    <div class="split">
+      <div class="pane">
+        <h3>樹 &nbsp;/&nbsp; 你腦中的模型</h3>
+        <div><svg class="tree" id="tree" role="img" aria-label="trie tree"></svg></div>
+        <p class="cap">
+          雙圈 = <code>is_end == true</code>(有詞在這裡結束)。單圈 = 只是路過的前綴。
+          圈下的 <code>#n</code> 是這個節點在 arena 裡的索引。
+        </p>
+      </div>
+      <div class="pane">
+        <h3>arena &nbsp;/&nbsp; 記憶體裡的模型</h3>
+        <div class="arena" id="arena"></div>
+        <p class="cap">
+          <code>nodes: Vec&lt;Node&gt;</code>,<code>nodes[0]</code> 是 root(空字串的位置)。
+          children 欄只印出 <code>[Option&lt;usize&gt;; 26]</code> 裡非 <code>None</code> 的槽。
+        </p>
+      </div>
+    </div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">nodes.len()</span><span class="v" id="st-count">1</span></div>
+      <div class="stat"><span class="k">words</span><span class="v" id="st-words">0</span></div>
+      <div class="stat"><span class="k">sum of len</span><span class="v" id="st-sum">0</span></div>
+      <div class="stat"><span class="k">前綴共享省下</span><span class="v good" id="st-saved">0</span></div>
+      <div class="stat"><span class="k">arena bytes</span><span class="v" id="st-bytes">424</span></div>
+    </div>
+
+    <div class="qwalk mono" id="q-walk">walk() 還沒跑過</div>
+
+    <div class="qgrid">
+      <div class="qcard pending" id="q-c">
+        <span class="qn" id="q-c-n">contains(..)</span>
+        <span class="qv" id="q-c-v">?</span>
+        <span class="why" id="q-c-w">路徑走得完,而且末端 is_end == true</span>
+      </div>
+      <div class="qcard pending" id="q-s">
+        <span class="qn" id="q-s-n">starts_with(..)</span>
+        <span class="qv" id="q-s-v">?</span>
+        <span class="why" id="q-s-w">路徑走得完就夠了,不看 is_end</span>
+      </div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    先按 <code>insert("app")</code> 再按 <code>insert("apple")</code>:arena 從 4 格長到 6 格,
+    <strong>只多了 2 格</strong>——<code>a p p</code> 三個節點被兩個詞共用,這是 trie 省空間的來源。
+    接著注意一件常被忽略的事:<code>Vec</code> 長大時會 <code>realloc</code>,把所有 <code>Node</code>
+    搬到新的位址。如果 children 存的是<strong>指標</strong>,這一搬全部變懸空指標;
+    存<strong>索引</strong>則完全不痛不癢——索引是相對於 Vec 起點的,搬家不影響。
+    這是 arena 最被低估的性質。
+  </p>
+</section>
+
+<section>
+  <h2>2 · contains("app") 與 starts_with("app") 差在最後一行</h2>
+  <p>
+    兩個查詢共用同一個 <code>walk()</code>,差別只在拿到節點索引之後看不看 <code>is_end</code>。
+    面試第一坑就在這:只 insert 過 <code>"apple"</code> 的 trie 裡,<code>"app"</code> 的
+    <strong>路徑是存在的</strong>——但沒有詞在那裡結束。答 true 就掛了。
+  </p>
+
+  <pre class="code">fn walk(&amp;self, s: &amp;str) -&gt; Option&lt;usize&gt; { <i>/* 逐字元跳索引,斷了就 None */</i> }
+
+pub fn contains(&amp;self, word: &amp;str) -&gt; bool {
+    self.walk(word)<b>.is_some_and(|n| self.nodes[n].is_end)</b>  <i>// 路徑存在,且是詞尾</i>
+}
+pub fn starts_with(&amp;self, prefix: &amp;str) -&gt; bool {
+    self.walk(prefix)<b>.is_some()</b>                            <i>// 路徑存在就夠</i>
+}</pre>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="scenario">
+        <button id="sc-a" aria-pressed="true">只 insert("apple")</button>
+        <button id="sc-b" aria-pressed="false">insert("apple") + insert("app")</button>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="pane">
+        <h3>arena &nbsp;/&nbsp; 兩種情況的節點完全一樣</h3>
+        <div class="arena" id="mini"></div>
+        <p class="cap" id="mini-cap"></p>
+      </div>
+      <div class="pane">
+        <h3>查詢 "app"</h3>
+        <div class="qwalk mono" id="mini-walk"></div>
+        <div class="qgrid stack">
+          <div class="qcard" id="m-c">
+            <span class="qn">contains("app")</span>
+            <span class="qv" id="m-c-v">?</span>
+            <span class="why" id="m-c-w"></span>
+          </div>
+          <div class="qcard" id="m-s">
+            <span class="qn">starts_with("app")</span>
+            <span class="qv" id="m-s-v">?</span>
+            <span class="why" id="m-s-w"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    切換兩個情境:<strong>arena 的 6 個節點一格都沒變</strong>,連 children 欄都一樣——
+    唯一的差別是 <code>nodes[3].is_end</code> 那一個 bool。
+    <code>starts_with("app")</code> 兩邊都是 true;<code>contains("app")</code> 卻從 false 翻成 true。
+    這個 bool 就是「路過」與「抵達」的全部區別,也是 <code>remove()</code>
+    只要清掉它、不必動任何節點的原因(懶刪除:節點留在 arena,前綴詞不受影響)。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 為什麼 child 是 usize,不是 Box&lt;Node&gt;</h2>
+  <p>
+    「節點指向子節點」在 Rust 裡是出了名的痛。<code>Box</code> 給你單一所有權;
+    <code>Rc&lt;RefCell&lt;Node&gt;&gt;</code> 給你共享,代價是執行期 borrow 檢查、環狀洩漏、
+    每個節點一次配置。arena 的做法是<strong>直接繞開整個問題</strong>:節點全部歸那個 <code>Vec</code> 所有,
+    節點之間只用 <code>usize</code> 互相參照——<strong>索引不是借用,借用檢查器不會看它一眼</strong>。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>做法</th><th>配置</th><th>Drop</th><th>借用檢查</th><th>走訪局部性</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>[Option&lt;Box&lt;Node&gt;&gt;; 26]</code></td>
+          <td>每個節點一次 <code>malloc</code></td>
+          <td><strong style="color:var(--danger)">遞迴析構</strong>,深 trie 可能爆 stack</td>
+          <td>單一所有權;要回頭指 parent 就卡死</td>
+          <td>節點散落 heap,每跳一層一次 cache miss</td>
+        </tr>
+        <tr>
+          <td><code>Rc&lt;RefCell&lt;Node&gt;&gt;</code></td>
+          <td>每節點一次配置 + 兩個 refcount</td>
+          <td>有環就洩漏,parent 得改用 <code>Weak</code></td>
+          <td><strong style="color:var(--danger)">推到執行期</strong>:<code>borrow_mut()</code> 會 panic</td>
+          <td>最差:多一層間接</td>
+        </tr>
+        <tr>
+          <td><strong><code>Vec&lt;Node&gt;</code> + <code>usize</code></strong>(本實作)</td>
+          <td>攤平成 <code>Vec</code> 的 O(log n) 次成長</td>
+          <td><strong style="color:var(--ok)">drop 一個 Vec</strong>,一次 free</td>
+          <td><strong style="color:var(--ok)">不存在</strong>:索引不是引用</td>
+          <td>節點連續,walk 幾乎是線性掃</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    這就是「<strong>索引是窮人的指標</strong>」——它是這個 repo 的骨幹手法,不是 trie 專屬的小聰明:
+    <code>lru</code> 的雙向鏈表(prev/next 是 <code>usize</code>,躲掉 <code>Rc&lt;RefCell&gt;</code> + <code>Weak</code>)、
+    <code>tree</code> 的 parent/child(同一組對照寫得最完整)、
+    <code>arena_lockfree</code> 的 free list(索引再加上 generation tag 去打 ABA)。
+    先在 trie 這個最單純的場景把它看熟,後面那三個模組是同一招的變奏。
+  </p>
+
+  <p class="note">
+    代價要說清楚:索引<strong>沒有型別安全</strong>。編譯器不會阻止你拿 A 樹的索引去查 B 樹,
+    也不會阻止你用一個已經被回收的槽位索引(在會回收的 arena 裡,那就是 use-after-free 的邏輯版)。
+    Rust 只把它降級成「錯的答案」而非 UB——真要修就得上 generation tag,
+    那正是 <code>arena_lockfree</code> 在做的事。本實作靠「arena 只長不縮」把這個問題定義掉了。
+  </p>
+</section>
+
+<section>
+  <h2>4 · children 怎麼存:26 格陣列 vs HashMap</h2>
+  <p>
+    本實作選 <strong><code>[Option&lt;usize&gt;; 26]</code></strong>:字母表約束死在 <code>a-z</code>
+    (其他字元在 <code>Trie::idx</code> 這個唯一入口直接 <code>assert!</code> panic),
+    查 child 就是一次陣列索引——零 hash、零分支預測失敗。
+    代價是稀疏節點的浪費:只有一個 child 的節點,照樣扛著 26 個槽。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>存法</th><th>child 查找</th><th>每節點空間</th><th>適用</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong><code>[Option&lt;usize&gt;; 26]</code></strong>(本實作)</td>
+          <td class="ord acq">O(1) 陣列索引</td>
+          <td class="mono">424 B 固定</td>
+          <td>字母表小且密(a-z):autocomplete、字典</td>
+        </tr>
+        <tr>
+          <td><code>HashMap&lt;char, usize&gt;</code></td>
+          <td class="ord rlx">O(1) 期望 + hash 成本</td>
+          <td class="mono">按需 + HashMap 開銷</td>
+          <td>字母表大(Unicode)、極稀疏</td>
+        </tr>
+        <tr>
+          <td>排序 <code>Vec&lt;(char, usize)&gt;</code></td>
+          <td class="ord rlx">O(log deg) 二分</td>
+          <td class="mono">最省</td>
+          <td>記憶體敏感、degree 小</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    順帶一個實測到的坑:<code>size_of::&lt;Node&gt;()</code> 是 <strong>424 B</strong>,
+    不是直覺的 26 &times; 8 = 208 B。因為 <code>usize</code> 沒有 niche(0 是合法值),
+    <code>Option&lt;usize&gt;</code> 得額外帶一個 tag word,整整 <strong>16 B</strong>。
+    把型別換成 <code>Option&lt;NonZeroUsize&gt;</code>(root 固定是 0,子節點索引本來就 &gt;= 1)
+    就吃得到 niche optimization,一路降回 216 B;改用 <code>u32</code> + 哨兵值再降到 108 B。
+    「字母表多大」只是空間帳的一半,另一半是<strong>你有沒有給編譯器一個 niche</strong>。
+  </p>
+</section>
+
+<section>
+  <h2>5 · O(L),而且與詞庫大小無關</h2>
+  <p>
+    insert / contains / starts_with / remove 全是 <strong>O(L)</strong>,L = key 長度。
+    存 10 個詞跟存 1000 萬個詞,查一個 5 字母的詞都是走 5 步、跳 5 次索引。
+    但這不是「比 HashSet 快」——<code>HashSet</code> 光是把字串 hash 過一遍也是 O(L)——
+    真正的賣點是 trie 能做 HashSet <strong>根本做不到</strong>的事。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>操作</th><th><code>HashSet&lt;String&gt;</code></th><th>trie</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>精確查詢 <code>contains(w)</code></td><td>O(L) hash + O(L) 比對</td><td>O(L) 跳索引</td></tr>
+        <tr>
+          <td>前綴查詢 <code>starts_with(p)</code></td>
+          <td><strong style="color:var(--danger)">做不到</strong>:只能掃全表 O(N &middot; L)</td>
+          <td><strong style="color:var(--ok)">O(L)</strong>,而且走完就站在子樹的根上</td>
+        </tr>
+        <tr><td>列出所有以 p 開頭的詞</td><td>O(N &middot; L)</td><td>O(L) + 輸出量</td></tr>
+        <tr><td>空間</td><td>每個詞完整存一份</td><td>共享前綴,但每節點 424 B</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    autocomplete、IP 路由表的 longest prefix match、<code>fst</code> crate 的靜態詞典——
+    它們要的都是<strong>「走到前綴末端那個節點」這件事本身</strong>,
+    因為那個節點就是「所有以 p 開頭的詞」的子樹根。HashSet 手上沒有這個東西。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/trie.rs</code> &middot; 設計取捨:<code>docs/trie.md</code></div>
+  <div>驗證:<code>cargo test -p reference trie</code> &middot; 觀察前綴共享:<code>node_count()</code></div>
+  <div>同一招(索引當指標):<code>lru</code>(雙向鏈表)&middot; <code>tree</code>(parent/child)&middot; <code>arena_lockfree</code>(free list + generation tag)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 模型:一份 JS 版的 reference/src/trie.rs ─────────────────────
+  // nodes 就是 arena;kids 是 [Option<usize>; 26] 的稀疏投影,語意等價。
+  function makeTrie() {
+    var nodes = [mk("", -1, 0)];
+
+    function mk(ch, parent, depth) {
+      return { ch: ch, parent: parent, depth: depth, kids: {}, isEnd: false };
+    }
+
+    // insert 的一步:缺節點就 push,新索引 = push 之前的 len()
+    function step(cur, c) {
+      var nx = nodes[cur].kids[c];
+      if (nx === undefined) {
+        nx = nodes.length;
+        nodes.push(mk(c, cur, nodes[cur].depth + 1));
+        nodes[cur].kids[c] = nx;
+        return { node: nx, created: true };
+      }
+      return { node: nx, created: false };
+    }
+
+    function insert(w) {
+      var cur = 0;
+      for (var i = 0; i < w.length; i++) cur = step(cur, w.charAt(i)).node;
+      nodes[cur].isEnd = true;
+      return cur;
+    }
+
+    // walk:走到底回索引;任一步斷掉回 ok:false(對應 Rust 的 Option<usize>)
+    function walk(s) {
+      var cur = 0, trail = [0];
+      for (var i = 0; i < s.length; i++) {
+        var nx = nodes[cur].kids[s.charAt(i)];
+        if (nx === undefined) return { ok: false, trail: trail, at: i };
+        cur = nx;
+        trail.push(cur);
+      }
+      return { ok: true, node: cur, trail: trail };
+    }
+
+    return {
+      nodes: nodes,
+      step: step,
+      insert: insert,
+      walk: walk,
+      markEnd: function (i) { nodes[i].isEnd = true; },
+      contains: function (w) { var r = walk(w); return r.ok && nodes[r.node].isEnd; },
+      startsWith: function (p) { return walk(p).ok; }
+    };
+  }
+
+  var NODE_BYTES = 424; // 實測 size_of::<Node>():[Option<usize>; 26] = 416 + bool + padding
+
+  // ── arena 的畫法 ────────────────────────────────────────────────
+  function cell(cls, txt) {
+    var s = document.createElement("span");
+    s.className = cls;
+    s.textContent = txt;
+    return s;
+  }
+
+  function kidsOf(t, i) {
+    var ks = [], k;
+    for (k in t.nodes[i].kids) ks.push(k);
+    ks.sort();
+    return ks;
+  }
+
+  function kidsText(t, i) {
+    var ks = kidsOf(t, i);
+    if (!ks.length) return "-";
+    return ks.map(function (k) { return k + "→" + t.nodes[i].kids[k]; }).join("  ");
+  }
+
+  function renderArena(t, el, marks) {
+    marks = marks || {};
+    var path = marks.path || {};
+    el.textContent = "";
+
+    var head = document.createElement("div");
+    head.className = "row rowhead";
+    head.append(cell("ri", "idx"), cell("rc", "char"), cell("re", "is_end"), cell("rk", "children"));
+    el.appendChild(head);
+
+    for (var i = 0; i < t.nodes.length; i++) {
+      var n = t.nodes[i];
+      var r = document.createElement("div");
+      var cls = "row";
+      if (n.isEnd) cls += " endnode";
+      if (path[i]) cls += " on";
+      if (i === marks.fresh) cls += " new";
+      if (i === marks.tip) cls += " tip";
+      if (i === marks.miss) cls += " miss";
+      r.className = cls;
+      r.append(
+        cell("ri", "[" + i + "]"),
+        cell("rc", i === 0 ? "root" : "'" + n.ch + "'"),
+        cell("re", n.isEnd ? "true" : "false"),
+        cell("rk", kidsText(t, i))
+      );
+      el.appendChild(r);
+    }
+
+    // 詞多了 arena 會超出視窗高度:把「正在走的那一格」捲進視野,
+    // 否則新 push 的節點會長在看不見的地方——那正是最該被看到的一幕。
+    if (typeof marks.cur === "number" && marks.cur >= 0) {
+      var row = el.children[marks.cur + 1]; // +1:第 0 個是表頭
+      if (row) {
+        var rel = row.offsetTop - el.children[0].offsetTop;
+        var h = el.clientHeight, rh = row.offsetHeight;
+        if (rel < el.scrollTop) el.scrollTop = rel - 4;
+        else if (rel + rh > el.scrollTop + h) el.scrollTop = rel + rh - h + 4;
+      }
+    }
+  }
+
+  // ── 樹的畫法(葉子排成一列,內部節點取子樹的中點)──────────────
+  var NS = "http://www.w3.org/2000/svg";
+
+  function svgEl(name, attrs) {
+    var e = document.createElementNS(NS, name), k;
+    for (k in attrs) e.setAttribute(k, String(attrs[k]));
+    return e;
+  }
+
+  function renderTree(t, el, marks) {
+    marks = marks || {};
+    var path = marks.path || {};
+    var nodes = t.nodes;
+    var XS = 50, YS = 62, PAD = 30;
+    var xs = new Array(nodes.length);
+    var leaf = 0, maxD = 0;
+
+    (function assign(i) {
+      if (nodes[i].depth > maxD) maxD = nodes[i].depth;
+      var ks = kidsOf(t, i);
+      if (!ks.length) { xs[i] = leaf++; return; }
+      var first = -1, last = -1;
+      for (var j = 0; j < ks.length; j++) {
+        var c = nodes[i].kids[ks[j]];
+        assign(c);
+        if (first < 0) first = c;
+        last = c;
+      }
+      xs[i] = (xs[first] + xs[last]) / 2;
+    })(0);
+
+    var span = Math.max(leaf - 1, 0) * XS;
+    var W = Math.max(PAD * 2 + span, 300);
+    var H = PAD * 2 + maxD * YS + 14;
+    el.textContent = "";
+    el.setAttribute("viewBox", "0 0 " + W + " " + H);
+    el.setAttribute("preserveAspectRatio", "xMidYMin meet");
+
+    var offx = (W - span) / 2;
+    function px(i) { return offx + xs[i] * XS; }
+    function py(i) { return PAD + nodes[i].depth * YS; }
+
+    var i, p, on;
+    for (i = 1; i < nodes.length; i++) {
+      p = nodes[i].parent;
+      on = path[i] && path[p];
+      el.appendChild(svgEl("line", {
+        x1: px(p), y1: py(p) + 13, x2: px(i), y2: py(i) - 13,
+        "class": "edge" + (on ? " on" : "")
+      }));
+    }
+
+    for (i = 0; i < nodes.length; i++) {
+      var x = px(i), y = py(i);
+      if (nodes[i].isEnd) el.appendChild(svgEl("circle", { cx: x, cy: y, r: 16, "class": "n-ring" }));
+      var cls = "n-circle";
+      if (i === marks.fresh) cls += " new";
+      else if (path[i]) cls += " on";
+      el.appendChild(svgEl("circle", { cx: x, cy: y, r: 12.5, "class": cls }));
+      var lab = svgEl("text", { x: x, y: y, "class": "n-label" });
+      lab.textContent = i === 0 ? "·" : nodes[i].ch;
+      el.appendChild(lab);
+      var idx = svgEl("text", { x: x, y: y + 27, "class": "n-idx" });
+      idx.textContent = "#" + i;
+      el.appendChild(idx);
+    }
+  }
+
+  // ── 主互動 ──────────────────────────────────────────────────────
+  var trie = makeTrie();
+  var wordSet = {};
+  var busy = false;
+  var STEP = 380;
+
+  function $(id) { return document.getElementById(id); }
+
+  var treeEl = $("tree");
+  var arenaEl = $("arena");
+  var logEl = $("log");
+  var input = $("word");
+  var qwalk = $("q-walk");
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 60) logEl.removeChild(logEl.lastChild);
+  }
+
+  function toSet(arr) {
+    var o = {}, i;
+    for (i = 0; i < arr.length; i++) o[arr[i]] = true;
+    return o;
+  }
+
+  function render(marks) {
+    renderTree(trie, treeEl, marks);
+    renderArena(trie, arenaEl, marks);
+  }
+
+  function stats() {
+    var n = trie.nodes.length;
+    var ws = Object.keys(wordSet);
+    var sum = 0;
+    ws.forEach(function (w) { sum += w.length; });
+    $("st-count").textContent = String(n);
+    $("st-words").textContent = String(ws.length);
+    $("st-sum").textContent = String(sum);
+    $("st-saved").textContent = String(1 + sum - n);
+    $("st-bytes").textContent = String(n * NODE_BYTES);
+  }
+
+  function setBusy(b) {
+    busy = b;
+    var all = document.querySelectorAll(".stage button");
+    for (var i = 0; i < all.length; i++) all[i].disabled = b;
+    input.disabled = b;
+  }
+
+  function seq(steps) {
+    setBusy(true);
+    var i = 0;
+    (function tick() {
+      if (i >= steps.length) { setBusy(false); return; }
+      steps[i++]();
+      setTimeout(tick, STEP);
+    })();
+  }
+
+  function readWord() {
+    var w = input.value.trim().toLowerCase();
+    if (!/^[a-z]{0,10}$/.test(w)) {
+      input.classList.add("bad");
+      say("x", "只支援 a-z:Trie::idx 是唯一入口,其他字元直接 assert! panic(字母表約束前置聲明)");
+      setTimeout(function () { input.classList.remove("bad"); }, 900);
+      return null;
+    }
+    return w;
+  }
+
+  function clearCards() {
+    $("q-c").className = "qcard pending";
+    $("q-s").className = "qcard pending";
+    $("q-c-v").textContent = "?";
+    $("q-s-v").textContent = "?";
+  }
+
+  function setCard(id, ok, why) {
+    $(id).className = "qcard " + (ok ? "t" : "f");
+    $(id + "-v").textContent = ok ? "true" : "false";
+    $(id + "-w").textContent = why;
+  }
+
+  function doInsert(w) {
+    if (busy) return;
+    var steps = [];
+    var path = [0];
+    var cur = 0;
+
+    clearCards();
+    qwalk.textContent = 'insert("' + w + '") 進行中';
+
+    steps.push(function () {
+      render({ path: toSet(path), cur: 0 });
+      say("m", 'insert("' + w + '")  cur = 0  (root)');
+    });
+
+    for (var i = 0; i < w.length; i++) {
+      (function (i) {
+        steps.push(function () {
+          var c = w.charAt(i);
+          var r = trie.step(cur, c);
+          cur = r.node;
+          path.push(cur);
+          render({ path: toSet(path), fresh: r.created ? cur : -1, cur: cur });
+          if (r.created) {
+            say("p", "  '" + c + "'  children[" + (c.charCodeAt(0) - 97) + "] == None" +
+                     "  → nodes.push(Node::new()) → #" + cur + "   (索引 = push 前的 len)");
+          } else {
+            say("c", "  '" + c + "'  children[" + (c.charCodeAt(0) - 97) + "] == Some(#" + cur + ")" +
+                     "   → 共享前綴,零配置");
+          }
+          stats();
+        });
+      })(i);
+    }
+
+    steps.push(function () {
+      trie.markEnd(cur);
+      wordSet[w] = 1;
+      render({ path: toSet(path), tip: cur, cur: cur });
+      say("p", "  nodes[" + cur + "].is_end = true   ← 有一個詞在這裡結束");
+      qwalk.textContent = 'insert("' + w + '") 完成 → nodes.len() = ' + trie.nodes.length;
+      stats();
+    });
+
+    steps.push(function () { render({}); });
+    seq(steps);
+  }
+
+  function doQuery(w, which) {
+    if (busy) return;
+    var steps = [];
+    var path = [0];
+    var cur = 0;
+    var dead = false;
+
+    clearCards();
+    $("q-c-n").textContent = 'contains("' + w + '")';
+    $("q-s-n").textContent = 'starts_with("' + w + '")';
+    qwalk.textContent = 'walk("' + w + '") 進行中';
+
+    steps.push(function () {
+      render({ path: toSet(path), cur: 0 });
+      say("c", which + '("' + w + '")  → 兩者共用的 walk("' + w + '") 從 nodes[0] 出發');
+    });
+
+    for (var i = 0; i < w.length; i++) {
+      (function (i) {
+        steps.push(function () {
+          if (dead) return;
+          var c = w.charAt(i);
+          var nx = trie.nodes[cur].kids[c];
+          if (nx === undefined) {
+            dead = true;
+            render({ path: toSet(path), miss: cur, cur: cur });
+            say("x", "  '" + c + "'  children[" + (c.charCodeAt(0) - 97) + "] == None" +
+                     "   → walk 斷在 #" + cur + ",回傳 None");
+            return;
+          }
+          cur = nx;
+          path.push(cur);
+          render({ path: toSet(path), cur: cur });
+          say("c", "  '" + c + "'  children[" + (c.charCodeAt(0) - 97) + "] == Some(#" + cur + ")" +
+                   "   → cur = " + cur);
+        });
+      })(i);
+    }
+
+    steps.push(function () { verdict(w, dead ? -1 : cur, path); });
+    seq(steps);
+  }
+
+  function verdict(w, node, path) {
+    var cOK, sOK;
+    if (node < 0) {
+      cOK = false;
+      sOK = false;
+      qwalk.textContent = 'walk("' + w + '") → None';
+      setCard("q-c", false, "路徑就斷了,連前綴都算不上。");
+      setCard("q-s", false, "路徑斷了,沒有任何詞以它開頭。");
+      render({ path: toSet(path), cur: path[path.length - 1] });
+    } else {
+      var e = trie.nodes[node].isEnd;
+      cOK = e;
+      sOK = true;
+      qwalk.textContent = 'walk("' + w + '") → Some(' + node + ')   nodes[' + node + '].is_end == ' + e;
+      setCard("q-c", e, e
+        ? "路徑走得完,且 nodes[" + node + "].is_end == true → 這是一個完整的詞。"
+        : "路徑走得完,但 nodes[" + node + "].is_end == false → 只是別人的前綴,不是詞。");
+      setCard("q-s", true,
+        "路徑走得完就夠了,不看 is_end。#" + node + " 就是「所有以它開頭的詞」的子樹根。");
+      render({ path: toSet(path), tip: e ? node : -1, cur: node });
+    }
+    say(cOK ? "c" : "x", "  contains = " + cOK + "    starts_with = " + sOK);
+  }
+
+  function reset() {
+    if (busy) return;
+    trie = makeTrie();
+    wordSet = {};
+    logEl.textContent = "";
+    clearCards();
+    qwalk.textContent = "walk() 還沒跑過";
+    $("q-c-n").textContent = "contains(..)";
+    $("q-s-n").textContent = "starts_with(..)";
+    say("m", "reset — arena 只剩 nodes[0](root)");
+    render({});
+    stats();
+  }
+
+  var wbtns = document.querySelectorAll("button[data-w]");
+  for (var wi = 0; wi < wbtns.length; wi++) {
+    (function (b) {
+      b.addEventListener("click", function () { doInsert(b.getAttribute("data-w")); });
+    })(wbtns[wi]);
+  }
+
+  $("btn-insert").addEventListener("click", function () {
+    var w = readWord();
+    if (w !== null) doInsert(w);
+  });
+  $("btn-contains").addEventListener("click", function () {
+    var w = readWord();
+    if (w !== null) doQuery(w, "contains");
+  });
+  $("btn-starts").addEventListener("click", function () {
+    var w = readWord();
+    if (w !== null) doQuery(w, "starts_with");
+  });
+  $("btn-reset").addEventListener("click", reset);
+
+  say("m", "arena 只有 nodes[0](root)。按上排任一個 insert 開始。");
+  render({});
+  stats();
+
+  // ── 第 2 節:一模一樣的 6 個節點,只差一個 bool ──────────────────
+  var miniEl = $("mini");
+  var miniCap = $("mini-cap");
+  var miniWalk = $("mini-walk");
+
+  function miniCard(id, ok, why) {
+    $(id).className = "qcard " + (ok ? "t" : "f");
+    $(id + "-v").textContent = ok ? "true" : "false";
+    $(id + "-w").textContent = why;
+  }
+
+  function scenario(b) {
+    $("sc-a").setAttribute("aria-pressed", String(!b));
+    $("sc-b").setAttribute("aria-pressed", String(b));
+
+    var t = makeTrie();
+    t.insert("apple");
+    if (b) t.insert("app");
+
+    var r = t.walk("app");
+    var node = r.node;
+    var e = t.nodes[node].isEnd;
+
+    renderArena(t, miniEl, { path: toSet(r.trail), tip: e ? node : -1 });
+    miniWalk.textContent = 'walk("app") → Some(' + node + ')   nodes[' + node + '].is_end == ' + e;
+
+    miniCard("m-c", e, e
+      ? 'nodes[3].is_end == true:有詞在 #3 結束,"app" 自己就是一個詞。'
+      : 'nodes[3] 存在,但 is_end == false:只有 "apple" 路過這裡,沒有詞在這裡結束。');
+    miniCard("m-s", true,
+      'walk 走得完 → true。#3 底下掛著 "apple",所以 "app" 確實是某個詞的前綴。');
+
+    miniCap.textContent = b
+      ? 'nodes.len() == 6:insert("app") 一個新節點都沒配置,它只翻了 nodes[3].is_end 這個 bool。'
+      : 'nodes.len() == 6:#1 #2 #3 就是 a-p-p,但唯一的詞尾在 #5(e)。';
+  }
+
+  $("sc-a").addEventListener("click", function () { scenario(false); });
+  $("sc-b").addEventListener("click", function () { scenario(true); });
+  scenario(false);
+
+  // 掛上 window:方便在 console 直接玩同一份模型,也讓自動化驗證能驅動它。
+  window.__trie = { create: makeTrie, main: function () { return trie; } };
+})();
+</script>

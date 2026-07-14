@@ -1,0 +1,1448 @@
+<title>event_loop — LT 寬容,ET 不寬容</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ══ 以下為 event_loop 模組專用,沿用上面的 token ══════════════════ */
+
+/* ── LT / ET 並排模擬器 ──────────────────────────────────────────── */
+.sim { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.simlane {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.simlane.starved { border-color: var(--danger); background: var(--danger-bg); }
+.simlane .hd { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.simlane .hd h3 { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.simlane.lt .hd h3 { color: var(--consumer); }
+.simlane.et .hd h3 { color: var(--producer); }
+.simlane .hd .mask { font-family: var(--mono); font-size: 0.66rem; color: var(--muted); }
+.caption {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* kernel recv buffer:切成 32-byte 的 read() 區塊 */
+.kbuf {
+  display: flex;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 2.2rem;
+  padding: 0.35rem;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+}
+.chunk {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--producer);
+  background: var(--producer-bg);
+  color: var(--producer);
+  border-radius: 3px;
+  padding: 0.3rem 0.3rem;
+  min-width: 2.5rem;
+  text-align: center;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+.chunk.stranded { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.kbuf .empty { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); padding: 0.3rem; }
+
+/* epoll_wait 的回傳值 */
+.ret {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.55;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--raised);
+  padding: 0.5rem 0.6rem;
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.ret.fire { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+.ret.calm { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.ret.dead { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.log.sm { height: 8rem; font-size: 0.72rem; }
+.log .e { color: var(--accent); font-weight: 600; }
+.readout.tight { grid-template-columns: repeat(auto-fit, minmax(4.6rem, 1fr)); gap: 0.45rem; }
+.readout.tight .stat { padding: 0.35rem 0.5rem; background: var(--raised); }
+.readout.tight .stat .v { font-size: 0.92rem; }
+.verdict.neutral { border-color: var(--line); background: var(--surface); color: var(--ink-2); }
+.verdict.neutral b { color: var(--muted); }
+
+/* ── token dispatch ──────────────────────────────────────────────── */
+.dispatch { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.evlist { display: flex; flex-direction: column; gap: 0.4rem; }
+.rawev {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-align: left;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  color: var(--ink-2);
+}
+.rawev[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+.rawev[aria-pressed="true"]:hover { background: var(--accent-bg); }
+tr.hit td { background: var(--accent-bg); }
+tr.hit td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.codeout {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.7;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--ink-2);
+}
+.codeout .k { color: var(--accent); font-weight: 600; }
+.codeout .t { color: var(--ok); font-weight: 600; }
+.codeout .f { color: var(--muted); }
+.codeout .d { color: var(--danger); font-weight: 600; }
+
+/* ── bitmask 解碼器 ──────────────────────────────────────────────── */
+.bits { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.bit { font-size: 0.72rem; padding: 0.4rem 0.6rem; }
+.bit[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.bit[aria-pressed="true"]:hover { background: var(--accent); }
+.bit .hx { opacity: 0.65; font-weight: 400; margin-left: 0.35rem; }
+.bitmap { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.byte { display: flex; gap: 0.14rem; }
+.b {
+  width: 1.05rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--muted);
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.b.on { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+.hexout { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; color: var(--ink); }
+
+/* ── eventfd self-wake ───────────────────────────────────────────── */
+.thr { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.thread {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.thread h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.thread.loop-t h3 { color: var(--consumer); }
+.thread.other-t h3 { color: var(--producer); }
+.thread.asleep { border-color: var(--muted); }
+.thread.stuck { border-color: var(--danger); background: var(--danger-bg); }
+.thread.exited { border-color: var(--ok); background: var(--ok-bg); }
+.state {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.5rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--line-soft);
+  background: var(--raised);
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+}
+.state.sleep { color: var(--muted); }
+.state.stuck { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+.state.exited { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+.state.run { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+
+@media (max-width: 46rem) {
+  .sim, .dispatch, .thr { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 6 &nbsp;·&nbsp; epoll &amp; readiness model</p>
+  <h1>event_loop</h1>
+  <p class="lede">
+    epoll 不給你資料,只給你一句話:「fd 7 現在可讀了。」IO 還是你自己做。
+    整個模組的難度不在 <code>epoll_wait</code> 怎麼呼叫——
+    在<strong>「可讀了」這句話,kernel 到底打算跟你講幾次</strong>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · LT 寬容,ET 不寬容</h2>
+  <p>
+    同一個 fd、同一批資料、同一個 handler,只差註冊時多了一個 <code>EPOLLET</code>。
+    左邊 level-triggered:<strong>只要緩衝裡還有資料,每次 <code>epoll_wait</code> 都報</strong>。
+    右邊 edge-triggered:<strong>只在「有新資料抵達」那個瞬間報一次</strong>,報完就當作講過了。
+  </p>
+  <p>
+    handler 預設是壞的——它讀 32 bytes 就 <code>return</code>,沒讀到 <code>EWOULDBLOCK</code>。
+    照著按:<span class="mono">資料抵達</span> → <span class="mono">epoll_wait</span> → <span class="mono">dispatch</span> →
+    <span class="mono">epoll_wait</span>。看第二次 <code>epoll_wait</code> 兩邊回什麼。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <button class="act-producer" id="btn-arrive">client 送來 100 bytes</button>
+      <button id="btn-wait">epoll_wait(-1)</button>
+      <button class="act-consumer" id="btn-dispatch">dispatch &rarr; handler</button>
+      <button id="btn-sim-reset">reset</button>
+    </div>
+    <div class="controls">
+      <span class="caption">handler 怎麼讀</span>
+      <div class="switch" role="group" aria-label="read strategy">
+        <button id="rd-partial" aria-pressed="true">read 32 bytes 就 return(bug)</button>
+        <button id="rd-drain" aria-pressed="false">drain 到 EWOULDBLOCK</button>
+      </div>
+    </div>
+
+    <div class="sim">
+      <div class="simlane lt" id="lane-lt">
+        <div class="hd">
+          <h3>level-triggered</h3>
+          <span class="mask">EPOLLIN | EPOLLRDHUP</span>
+        </div>
+        <span class="caption">kernel recv buffer &mdash; 每格是一次 read(fd, buf, 32)</span>
+        <div class="kbuf" id="kbuf-lt"></div>
+        <div class="ret" id="ret-lt">尚未呼叫 epoll_wait</div>
+        <div class="readout tight">
+          <div class="stat"><span class="k">kernel</span><span class="v" id="kb-lt">0 B</span></div>
+          <div class="stat"><span class="k">到 app</span><span class="v" id="ap-lt">0 B</span></div>
+          <div class="stat"><span class="k">wait 次數</span><span class="v" id="wt-lt">0</span></div>
+          <div class="stat"><span class="k">收到事件</span><span class="v" id="ev-lt">0</span></div>
+        </div>
+        <div class="log sm" id="log-lt"></div>
+      </div>
+
+      <div class="simlane et" id="lane-et">
+        <div class="hd">
+          <h3>edge-triggered</h3>
+          <span class="mask">EPOLLIN | EPOLLRDHUP | EPOLLET</span>
+        </div>
+        <span class="caption">kernel recv buffer &mdash; 每格是一次 read(fd, buf, 32)</span>
+        <div class="kbuf" id="kbuf-et"></div>
+        <div class="ret" id="ret-et">尚未呼叫 epoll_wait</div>
+        <div class="readout tight">
+          <div class="stat"><span class="k">kernel</span><span class="v" id="kb-et">0 B</span></div>
+          <div class="stat"><span class="k">到 app</span><span class="v" id="ap-et">0 B</span></div>
+          <div class="stat"><span class="k">wait 次數</span><span class="v" id="wt-et">0</span></div>
+          <div class="stat"><span class="k">收到事件</span><span class="v" id="ev-et">0</span></div>
+        </div>
+        <div class="log sm" id="log-et"></div>
+      </div>
+    </div>
+
+    <div class="verdict neutral" id="sim-verdict">
+      <b>目前狀態</b>
+      <span id="sim-verdict-text">緩衝是空的。按「client 送來 100 bytes」開始。</span>
+    </div>
+  </div>
+
+  <p class="note">
+    ET 那條連線死掉的方式很安靜:<code>epoll_wait</code> 沒報錯、<code>read</code> 沒報錯、
+    process 沒 crash,只是那 68 bytes 永遠停在 kernel 收信緩衝裡,而 client 在等一個永遠不會來的回應。
+    <strong>只要你的 event loop 還服務著別的連線,主迴圈根本不會卡</strong>——
+    卡住的只有這一條。所以它在 dev 機上看不出來,在 production 變成「偶發 timeout」。
+  </p>
+  <p class="note">
+    再按一次「client 送來 100 bytes」:新資料 = 新的 edge,那條被餓死的連線會<strong>復活</strong>。
+    這就是為什麼這個 bug 這麼難抓——只要對端還在噴資料,它就被掩蓋。
+    它只在 request/response 協定下現形:client 送完就閉嘴等你回應,沒有下一個 edge 來救你。
+    <br>結論只有一條:<strong>ET 模式下,你欠 kernel 一個 <code>EWOULDBLOCK</code>。</strong>
+    read 要讀到 EAGAIN、write 要寫到 EAGAIN、<code>accept</code> 也要 accept 到 EAGAIN
+    (只 accept 一個,積在 backlog 裡的其他連線同樣不會有第二次通知)。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 事件回來之後:token 就是你的 O(1) 索引</h2>
+  <p>
+    <code>epoll_wait</code> 回來的是一批 <code>epoll_event</code>,裡面只有兩個欄位:
+    一個 <code>u32</code> 遮罩、一個 <code>u64</code> 使用者資料。
+    kernel <strong>原樣</strong>把當初註冊時給它的那 8 bytes 還你——它不知道那是什麼,也不在乎。
+    連線狀態一直在你手上,事件只是一把鑰匙。
+  </p>
+  <p>
+    這就是為什麼 <code>poll()</code> 不回傳 <code>&amp;[Event]</code>:那會借走 <code>&amp;self</code>,
+    你在 dispatch 迴圈裡就不能 <code>el.register(...)</code> 了。
+    事件緩衝 <code>Events</code> 由 caller 持有,兩個借用天然分離(mio 同款解法)。
+  </p>
+
+  <div class="stage">
+    <div class="dispatch">
+      <div class="evlist">
+        <span class="caption">epoll_wait 寫回 events 緩衝(點一個)</span>
+        <button class="rawev" id="rev-0" aria-pressed="false"></button>
+        <button class="rawev" id="rev-1" aria-pressed="false"></button>
+        <button class="rawev" id="rev-2" aria-pressed="false"></button>
+        <button class="rawev" id="rev-3" aria-pressed="false"></button>
+        <span class="caption">HashMap&lt;Token, Conn&gt; &mdash; 狀態在 caller 手上</span>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>token</th><th>conn</th></tr></thead>
+            <tbody>
+              <tr id="cn-7"><td class="mono">7</td><td class="mono">Conn { fd: 12, state: ReadHeader }</td></tr>
+              <tr id="cn-42"><td class="mono">42</td><td class="mono">Conn { fd: 15, state: Flushing }</td></tr>
+              <tr id="cn-1337"><td class="mono">1337</td><td class="mono">Conn { fd: 21, state: Idle }</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="evlist">
+        <span class="caption">poll() 的翻譯層 + caller 的 dispatch</span>
+        <pre class="codeout" id="disp-out">點左邊任一個原始事件。</pre>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    <code>Token(u64::MAX)</code> 是保留值:那是 event loop 自己的 wake fd。
+    它在翻譯層就被吃掉(drain eventfd、設 <code>woken</code> 旗標),不會進事件列表,
+    caller 的 <code>HashMap</code> 裡也不該有它——<code>register()</code> 的
+    <code>assert!(token.0 != WAKE_TOKEN)</code> 就是在守這件事。下一節就是它。
+  </p>
+</section>
+
+<section>
+  <h2>3 · EPOLLIN | EPOLLOUT | EPOLLET 是什麼數字</h2>
+  <p>
+    <code>Interest</code> 與 <code>Trigger</code> 最後都會塌成一個 <code>u32</code>。
+    值得記住的是那兩個高位:<code>EPOLLET</code> 是 <code>1 &lt;&lt; 31</code>——
+    整個 LT/ET 的分水嶺,就是第 31 個位元。
+  </p>
+
+  <div class="stage">
+    <div class="bits" id="bit-chips"></div>
+    <div class="controls">
+      <button id="preset-r">Interest::READABLE + Level</button>
+      <button id="preset-both">Interest::BOTH + Edge</button>
+      <button id="preset-clear">clear</button>
+    </div>
+    <div class="bitmap">
+      <span class="hexout" id="hexout">0x00000000</span>
+      <div class="byte" id="bmap-3"></div>
+      <div class="byte" id="bmap-2"></div>
+      <div class="byte" id="bmap-1"></div>
+      <div class="byte" id="bmap-0"></div>
+    </div>
+    <span class="caption">bit 31 &rarr; bit 0</span>
+    <pre class="codeout" id="mask-out"></pre>
+  </div>
+
+  <p class="note">
+    <code>EPOLLERR</code> 與 <code>EPOLLHUP</code> 你不必註冊,kernel <strong>一律會報</strong>——
+    所以翻譯層必須無條件檢查它們。
+    <code>EPOLLRDHUP</code> 則是本實作在 <code>Interest::to_epoll</code> 裡永遠掛上的:
+    半關閉(對端 <code>shutdown(SHUT_WR)</code>)比 <code>read() == 0</code> 早一步在事件層看得到,而且免費。
+  </p>
+</section>
+
+<section>
+  <h2>4 · 睡在 epoll_wait 裡的執行緒,只聽得見 fd</h2>
+  <p>
+    <code>epoll_wait(epfd, ev, n, -1)</code> 沒有 timeout,執行緒真的睡死在 kernel 裡。
+    現在另一條執行緒要它停機——它把 <code>running = false</code> 設好了,然後呢?
+    <strong>沒有然後。</strong>那個 flag 要等迴圈醒來才會被讀到,而迴圈只有 fd 就緒才會醒。
+  </p>
+  <p>
+    解法只有一個形狀:<strong>給它一個「它有在聽」的 fd</strong>。
+    <code>eventfd</code> 就是為此而生——一個 fd、8 bytes 的計數器、多次 notify 自動合併。
+    切換下面的開關,看同一個 <code>shutdown()</code> 在兩個世界裡的下場。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="wake mechanism">
+        <button id="wk-none" aria-pressed="true">沒有 wake fd</button>
+        <button id="wk-efd" aria-pressed="false">有 eventfd(Arc&lt;EventFd&gt;)</button>
+      </div>
+      <button id="wk-step">loop: 跑一輪</button>
+      <button class="act-producer" id="wk-task">other thread: submit_task() + wake()</button>
+      <button class="act-producer" id="wk-shut">other thread: shutdown()</button>
+      <button id="wk-reset">reset</button>
+    </div>
+
+    <div class="thr">
+      <div class="thread loop-t" id="th-loop">
+        <h3>event loop thread</h3>
+        <div class="state run" id="wk-state">while running { poll(&amp;mut events, None) }</div>
+        <div class="readout tight">
+          <div class="stat"><span class="k">running</span><span class="v" id="wk-running">true</span></div>
+          <div class="stat"><span class="k">eventfd</span><span class="v" id="wk-count">0</span></div>
+          <div class="stat"><span class="k">task queue</span><span class="v" id="wk-tasks">0</span></div>
+        </div>
+      </div>
+      <div class="thread other-t">
+        <h3>trace</h3>
+        <div class="log sm" id="wk-log"></div>
+      </div>
+    </div>
+
+    <div class="verdict neutral" id="wk-verdict">
+      <b>目前狀態</b>
+      <span id="wk-verdict-text">按「loop: 跑一輪」讓迴圈進入 epoll_wait,再從另一條執行緒叫它。</span>
+    </div>
+  </div>
+
+  <p class="note">
+    順序反過來也不能丟訊號:先 <code>wake()</code> 再 <code>poll()</code>——
+    eventfd 計數器已經 <code>+1</code>,下一次 <code>epoll_wait</code> <strong>立刻</strong>返回。
+    這和 executor 的 park permit、condvar 的 predicate 是同一課的三種面貌:
+    <strong>喚醒訊號必須帶狀態</strong>,對著已經醒著的人喊話,那句話必然丟。
+    (試試看:reset,切到 eventfd,先按 shutdown、再按 loop 跑一輪。)
+  </p>
+  <p class="note">
+    wake fd 自己一定用 <strong>LT</strong> 註冊:翻譯層每次都會 <code>drain()</code>,
+    不需要 ET 的紀律,卻能在「漏 drain」時靠 LT 的重複通知自救。
+    在你自己的基礎設施上,寬容比省一次假醒值錢。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 兩種模式的完整帳單</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>Level-Triggered(預設)</th><th>Edge-Triggered(EPOLLET)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>何時通知</td>
+          <td class="ord acq">狀態成立就報</td>
+          <td class="ord rel">狀態「發生變化」才報</td>
+        </tr>
+        <tr>
+          <td>沒讀乾淨</td>
+          <td>下一輪再報一次(慢,但活著)</td>
+          <td><strong style="color:var(--danger)">永遠不再報</strong> — 這條連線 stall</td>
+        </tr>
+        <tr>
+          <td>非阻塞 fd</td>
+          <td>建議(不然一次 read 就卡死全部連線)</td>
+          <td><strong>強制</strong>(要 drain 到 EAGAIN,阻塞 fd 直接死在最後一次 read)</td>
+        </tr>
+        <tr>
+          <td>常掛 EPOLLOUT</td>
+          <td>緩衝有空位就一直報 &rarr; busy loop。要在寫完後 <code>reregister</code> 拿掉</td>
+          <td>可以一直掛著(只在 不可寫 &rarr; 可寫 的那一刻報)</td>
+        </tr>
+        <tr>
+          <td>accept 迴圈</td>
+          <td>一次 accept 一個沒關係</td>
+          <td>必須 accept 到 EAGAIN,否則 backlog 裡的連線沒人理</td>
+        </tr>
+        <tr>
+          <td>假醒 / syscall 數</td>
+          <td>多(高負載下重複喚醒)</td>
+          <td>少</td>
+        </tr>
+        <tr>
+          <td>逃生門</td>
+          <td>不需要</td>
+          <td><code>EPOLL_CTL_MOD</code> 會重新武裝邊沿——但用它來補漏讀是在治標</td>
+        </tr>
+        <tr>
+          <td>本 repo 的用法</td>
+          <td>內部 wake fd、<code>tcp_echo</code> 預設</td>
+          <td><code>Trigger::Edge</code> 支援;測試把行為差釘死</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    <code>boundary_lt_rereports_et_does_not</code> 這個測試用兩行 assert 就把整節內容鎖住:
+    寫一個 byte、不讀走、連 poll 兩次——LT 第二輪 <code>len() == 1</code>,ET 第二輪 <code>len() == 0</code>。
+    ET 的性能優勢是真的,但它把「正確性」外包給了你的 handler。
+    <strong>先用 LT 讓它跑對,量到 syscall 真的是瓶頸,再換 ET。</strong>
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/event_loop.rs</code> · <code>reference/src/epoll_sys.rs</code> · 設計取捨:<code>docs/event_loop.md</code>、<code>docs/epoll_sys.md</code></div>
+  <div>驗證:<code>cargo test -p reference event_loop</code> · <code>cargo test -p reference epoll_sys</code>(<code>boundary_level_reports_again_edge_reports_once</code> 是本頁第 1 節的可執行版本)</div>
+  <div>前置:<code>epoll_sys</code>(syscall 綁定與 packed ABI)· 下游:<code>tcp_echo</code>(interest 狀態機)、<code>hw_bridge</code>(binary protocol server)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ═══ 1 · LT vs ET 模擬器 ═══════════════════════════════════════ */
+
+  var CHUNK = 32;    // handler 每次 read() 的 buffer 大小
+  var ARRIVE = 100;  // 一次「資料抵達」的位元組數
+  var IDS = ["lt", "et"];
+
+  var readMode = "partial"; // 預設就是那個 bug
+  var st;
+
+  function fresh() {
+    return {
+      lt: { kbuf: 0, pending: false, edge: false, waits: 0, evs: 0, app: 0,
+            ret: { cls: "", text: "尚未呼叫 epoll_wait" } },
+      et: { kbuf: 0, pending: false, edge: false, waits: 0, evs: 0, app: 0,
+            ret: { cls: "", text: "尚未呼叫 epoll_wait" } }
+    };
+  }
+
+  function say(id, cls, msg) {
+    var box = document.getElementById("log-" + id);
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    box.prepend(d);
+    while (box.childNodes.length > 60) box.removeChild(box.lastChild);
+  }
+
+  // ET 專屬的死法:緩衝裡還有資料,但沒有 pending 的邊沿,也沒有待 dispatch 的事件。
+  // kernel 不會再說第二次 —— 這條連線從此聽不到任何消息。
+  function starved(id) {
+    var L = st[id];
+    return id === "et" && L.kbuf > 0 && !L.edge && !L.pending;
+  }
+
+  function chunksOf(n) {
+    var out = [], r = n;
+    while (r > 0) { var c = Math.min(CHUNK, r); out.push(c); r -= c; }
+    return out;
+  }
+
+  function renderLane(id) {
+    var L = st[id];
+    var dead = starved(id);
+
+    document.getElementById("lane-" + id).className = "simlane " + id + (dead ? " starved" : "");
+
+    var kb = document.getElementById("kbuf-" + id);
+    kb.textContent = "";
+    var cs = chunksOf(L.kbuf);
+    if (cs.length === 0) {
+      var e = document.createElement("span");
+      e.className = "empty";
+      e.textContent = "empty — read() 會回 EWOULDBLOCK";
+      kb.appendChild(e);
+    } else {
+      for (var i = 0; i < cs.length; i++) {
+        var c = document.createElement("span");
+        c.className = "chunk" + (dead ? " stranded" : "");
+        c.textContent = cs[i] + " B";
+        kb.appendChild(c);
+      }
+    }
+
+    var ret = document.getElementById("ret-" + id);
+    ret.className = "ret" + (L.ret.cls ? " " + L.ret.cls : "");
+    ret.textContent = L.ret.text;
+
+    document.getElementById("kb-" + id).textContent = L.kbuf + " B";
+    document.getElementById("kb-" + id).className = "v" + (dead ? " warn" : (L.kbuf ? "" : " good"));
+    document.getElementById("ap-" + id).textContent = L.app + " B";
+    document.getElementById("wt-" + id).textContent = String(L.waits);
+    document.getElementById("ev-" + id).textContent = String(L.evs);
+  }
+
+  function renderSim() {
+    IDS.forEach(renderLane);
+
+    var v = document.getElementById("sim-verdict");
+    var t = document.getElementById("sim-verdict-text");
+    if (starved("et")) {
+      v.className = "verdict bad";
+      t.textContent =
+        "ET 這條連線餓死了 — " + st.et.kbuf + " bytes 擱淺在 kernel recv buffer," +
+        "epoll_wait 不會再報 fd 7,handler 永遠不會被再叫一次。" +
+        "LT 那邊同一個 bug 還在跛著走:它每輪都被重新通知,靠 kernel 的寬容續命(" +
+        st.lt.kbuf + " B 還在,但下一輪就會拿到)。";
+    } else if (st.lt.kbuf === 0 && st.et.kbuf === 0 && st.lt.app > 0) {
+      v.className = "verdict ok";
+      t.textContent =
+        "兩邊都乾淨:handler 讀到了 EWOULDBLOCK。LT 沒有狀態可報,ET 也不欠一個 edge — " +
+        "資料全數交給 app(" + st.lt.app + " B)。這就是 ET 唯一能活的寫法。";
+    } else {
+      v.className = "verdict neutral";
+      t.textContent = st.lt.kbuf === 0 && st.et.kbuf === 0
+        ? "緩衝是空的。按「client 送來 100 bytes」開始。"
+        : "kernel 緩衝裡還有資料。繼續按 epoll_wait,看兩邊回什麼。";
+    }
+  }
+
+  function doArrive() {
+    IDS.forEach(function (id) {
+      var L = st[id];
+      var wasDead = starved(id);
+      L.kbuf += ARRIVE;
+      if (id === "et") {
+        L.edge = true;
+        say(id, "p", "kernel: +" + ARRIVE + " B 進 recv buffer   [edge 觸發:重新武裝]");
+        if (wasDead) {
+          // 死透的連線被新資料救回來了。ret 還停在上一次的紅字上,要換掉——
+          // 這個「復活」正是這個 bug 在 production 裡難抓的原因。
+          L.ret = { cls: "", text: "edge 重新武裝 — 下一次 epoll_wait 會再報一次(bug 被掩蓋了)" };
+          say(id, "m", "新 edge 把餓死的連線救活了 — bug 被掩蓋。實務上 client 正在等你的回應,不會再送。");
+        }
+      } else {
+        say(id, "p", "kernel: +" + ARRIVE + " B 進 recv buffer");
+      }
+    });
+    renderSim();
+  }
+
+  function doWait() {
+    IDS.forEach(function (id) {
+      var L = st[id];
+      L.waits++;
+      var fire = (id === "lt") ? (L.kbuf > 0) : L.edge;
+      if (id === "et") L.edge = false; // 邊沿被這次 wait 消費掉
+
+      if (fire) {
+        L.pending = true;
+        L.evs++;
+        L.ret = { cls: "fire", text: "epoll_wait() -> 1   Event { token: Token(7), readable: true }" };
+        say(id, "e", "epoll_wait() -> 1 event   events=EPOLLIN data=7");
+      } else if (starved(id)) {
+        L.ret = { cls: "dead", text: "epoll_wait() -> 0   fd 7 沒有新的 edge,永遠不會再被報告" };
+        say(id, "x", "epoll_wait() -> 0 events   " + L.kbuf + " B 還在 kernel,但沒有 edge 會來了");
+      } else if (L.pending) {
+        L.ret = { cls: "", text: "epoll_wait() -> 0   edge 已被上一次 wait 消費(handler 還沒 dispatch)" };
+        say(id, "m", "epoll_wait() -> 0 events   邊沿只報一次,你已經拿走了");
+      } else {
+        L.ret = { cls: "calm", text: "epoll_wait() -> 0   無就緒 fd(執行緒會在這裡睡)" };
+        say(id, "m", "epoll_wait() -> 0 events   緩衝空,沒事做");
+      }
+    });
+    renderSim();
+  }
+
+  function doDispatch() {
+    IDS.forEach(function (id) {
+      var L = st[id];
+      if (!L.pending) {
+        say(id, "m", "上一輪沒有事件 -> handler 根本不會被呼叫");
+        return;
+      }
+      L.pending = false;
+      say(id, "c", "conns.get_mut(&Token(7)) -> conn.on_readable()");
+
+      if (readMode === "drain") {
+        for (;;) {
+          var n = Math.min(CHUNK, L.kbuf);
+          if (n === 0) {
+            say(id, "c", "read(fd, buf, 32) -> -1 EWOULDBLOCK   讀乾淨了,收工");
+            break;
+          }
+          L.kbuf -= n;
+          L.app += n;
+          say(id, "c", "read(fd, buf, 32) -> " + n);
+        }
+      } else {
+        var m = Math.min(CHUNK, L.kbuf);
+        L.kbuf -= m;
+        L.app += m;
+        say(id, "c", "read(fd, buf, 32) -> " + m);
+        say(id, "x", "return;   <- bug:沒讀到 EWOULDBLOCK 就走了");
+      }
+    });
+    renderSim();
+  }
+
+  function simReset() {
+    st = fresh();
+    document.getElementById("log-lt").textContent = "";
+    document.getElementById("log-et").textContent = "";
+    say("lt", "m", "register(fd 7, Token(7), READABLE, Trigger::Level)");
+    say("et", "m", "register(fd 7, Token(7), READABLE, Trigger::Edge)");
+    renderSim();
+  }
+
+  function setReadMode(mode) {
+    readMode = mode;
+    document.getElementById("rd-partial").setAttribute("aria-pressed", String(mode === "partial"));
+    document.getElementById("rd-drain").setAttribute("aria-pressed", String(mode === "drain"));
+    simReset();
+    say("lt", "m", mode === "drain" ? "handler: loop { read() } until EWOULDBLOCK" : "handler: read() 一次就 return");
+    say("et", "m", mode === "drain" ? "handler: loop { read() } until EWOULDBLOCK" : "handler: read() 一次就 return");
+  }
+
+  document.getElementById("btn-arrive").addEventListener("click", doArrive);
+  document.getElementById("btn-wait").addEventListener("click", doWait);
+  document.getElementById("btn-dispatch").addEventListener("click", doDispatch);
+  document.getElementById("btn-sim-reset").addEventListener("click", function () { setReadMode(readMode); });
+  document.getElementById("rd-partial").addEventListener("click", function () { setReadMode("partial"); });
+  document.getElementById("rd-drain").addEventListener("click", function () { setReadMode("drain"); });
+
+  setReadMode("partial");
+
+  /* ═══ 2 · token dispatch ═══════════════════════════════════════ */
+
+  var RAW = [
+    { mask: 0x0001, hex: "0x00000001", data: "7",    dataHex: "0x0000000000000007",
+      names: "EPOLLIN", token: "7" },
+    { mask: 0x0004, hex: "0x00000004", data: "42",   dataHex: "0x000000000000002a",
+      names: "EPOLLOUT", token: "42" },
+    { mask: 0x2001, hex: "0x00002001", data: "1337", dataHex: "0x0000000000000539",
+      names: "EPOLLIN|EPOLLRDHUP", token: "1337" },
+    { mask: 0x0001, hex: "0x00000001", data: "u64::MAX", dataHex: "0xffffffffffffffff",
+      names: "EPOLLIN (wake fd)", token: null }
+  ];
+
+  var dispOut = document.getElementById("disp-out");
+  var revBtns = [0, 1, 2, 3].map(function (i) { return document.getElementById("rev-" + i); });
+  var connRows = { "7": document.getElementById("cn-7"),
+                   "42": document.getElementById("cn-42"),
+                   "1337": document.getElementById("cn-1337") };
+
+  revBtns.forEach(function (b, i) {
+    var r = RAW[i];
+    b.textContent = "events[" + i + "] = EpollEvent { events: " + r.hex + ", data: " + r.dataHex + " }";
+    b.addEventListener("click", function () { pickRaw(i); });
+  });
+
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function pickRaw(i) {
+    var r = RAW[i];
+    revBtns.forEach(function (b, j) { b.setAttribute("aria-pressed", String(i === j)); });
+    Object.keys(connRows).forEach(function (k) { connRows[k].className = ""; });
+
+    if (r.token === null) {
+      dispOut.innerHTML =
+        '<span class="d">raw.data == WAKE_TOKEN (u64::MAX)</span>\n' +
+        "self.wake.drain()?;      // 清空 eventfd 計數器(LT:不 drain 下輪還報)\n" +
+        "events.woken = true;     // 給 caller 的訊號:去看你的 task queue\n" +
+        "continue;                // 不進事件列表,也不查 HashMap\n\n" +
+        '<span class="f">// 這個 token 是保留值。register() 的 assert 不准 caller 用它。</span>';
+      return;
+    }
+
+    var readable = (r.mask & 0x0003) !== 0;
+    var writable = (r.mask & 0x0004) !== 0;
+    var closed = (r.mask & 0x2010) !== 0;
+    function bo(v) { return v ? '<span class="t">true</span>' : '<span class="f">false</span>'; }
+
+    connRows[r.token].className = "hit";
+    dispOut.innerHTML =
+      "Event {\n" +
+      '  token:       <span class="k">Token(' + r.token + ")</span>,\n" +
+      "  readable:    " + bo(readable) + ",     // events &amp; (EPOLLIN|EPOLLPRI)\n" +
+      "  writable:    " + bo(writable) + ",     // events &amp; EPOLLOUT\n" +
+      "  peer_closed: " + bo(closed) + ",     // events &amp; (EPOLLRDHUP|EPOLLHUP)\n" +
+      '  error:       <span class="f">false</span>,     // events &amp; EPOLLERR\n' +
+      "}\n\n" +
+      "match conns.get_mut(&amp;ev.token) {   " + '<span class="f">// HashMap:O(1),不掃 fd 陣列</span>\n' +
+      "    Some(conn) =&gt; conn." + (readable ? "on_readable" : "on_writable") + "(),\n" +
+      "    None =&gt; { /* 已關掉的連線,忽略 */ }\n" +
+      "}\n" +
+      '<span class="f">// ' + esc(r.names) + " -> conn(fd " + ({ "7": 12, "42": 15, "1337": 21 })[r.token] + ")</span>";
+  }
+
+  /* ═══ 3 · bitmask 解碼器 ═══════════════════════════════════════ */
+
+  // 值抄自 epoll_sys.rs。用加法而非位元運算:JS 的 | 會把 1<<31 變成負數。
+  var FLAGS = [
+    { name: "EPOLLIN",       val: 0x0001,     bit: 0 },
+    { name: "EPOLLPRI",      val: 0x0002,     bit: 1 },
+    { name: "EPOLLOUT",      val: 0x0004,     bit: 2 },
+    { name: "EPOLLERR",      val: 0x0008,     bit: 3 },
+    { name: "EPOLLHUP",      val: 0x0010,     bit: 4 },
+    { name: "EPOLLRDHUP",    val: 0x2000,     bit: 13 },
+    { name: "EPOLLONESHOT",  val: 1073741824, bit: 30 },
+    { name: "EPOLLET",       val: 2147483648, bit: 31 }
+  ];
+  var on = {};
+
+  var chipBox = document.getElementById("bit-chips");
+  FLAGS.forEach(function (f) {
+    on[f.name] = false;
+    var b = document.createElement("button");
+    b.className = "bit";
+    b.id = "chip-" + f.name;
+    b.setAttribute("aria-pressed", "false");
+    b.innerHTML = f.name + '<span class="hx">' + hex8(f.val) + "</span>";
+    b.addEventListener("click", function () {
+      on[f.name] = !on[f.name];
+      renderMask();
+    });
+    chipBox.appendChild(b);
+  });
+
+  function hex8(n) {
+    var s = n.toString(16);
+    while (s.length < 8) s = "0" + s;
+    return "0x" + s;
+  }
+
+  function maskVal() {
+    var m = 0;
+    FLAGS.forEach(function (f) { if (on[f.name]) m += f.val; });
+    return m;
+  }
+
+  function bitAt(m, i) {
+    return Math.floor(m / Math.pow(2, i)) % 2;
+  }
+
+  function renderMask() {
+    var m = maskVal();
+    FLAGS.forEach(function (f) {
+      document.getElementById("chip-" + f.name).setAttribute("aria-pressed", String(on[f.name]));
+    });
+    document.getElementById("hexout").textContent = hex8(m);
+
+    for (var g = 3; g >= 0; g--) {
+      var box = document.getElementById("bmap-" + g);
+      box.textContent = "";
+      for (var k = 7; k >= 0; k--) {
+        var i = g * 8 + k;
+        var cell = document.createElement("span");
+        var v = bitAt(m, i);
+        cell.className = "b" + (v ? " on" : "");
+        cell.textContent = String(v);
+        cell.title = "bit " + i;
+        box.appendChild(cell);
+      }
+    }
+
+    var readable = on.EPOLLIN || on.EPOLLPRI;
+    var writable = on.EPOLLOUT;
+    var closed = on.EPOLLRDHUP || on.EPOLLHUP;
+    var err = on.EPOLLERR;
+    function bo(v) { return v ? '<span class="t">true </span>' : '<span class="f">false</span>'; }
+
+    var lines =
+      '<span class="f">// event_loop::poll() 的翻譯層</span>\n' +
+      "readable    = " + bo(readable) + "   events &amp; (EPOLLIN | EPOLLPRI) != 0\n" +
+      "writable    = " + bo(writable) + "   events &amp; EPOLLOUT != 0\n" +
+      "peer_closed = " + bo(closed) + "   events &amp; (EPOLLRDHUP | EPOLLHUP) != 0\n" +
+      "error       = " + bo(err) + "   events &amp; EPOLLERR != 0\n\n";
+
+    if (on.EPOLLET) {
+      lines += '<span class="d">bit 31 = EPOLLET</span>  -> 這個 fd 只在狀態變化時報。' +
+               "handler 必須 loop 到 EWOULDBLOCK,漏一次就永久 stall。";
+    } else {
+      lines += '<span class="k">bit 31 = 0</span>  -> level-triggered:只要狀態成立,每輪 epoll_wait 都會再報一次。';
+    }
+    if (on.EPOLLONESHOT) {
+      lines += '\n<span class="k">bit 30 = EPOLLONESHOT</span>  -> 報一次就自動 disable;' +
+               "要 EPOLL_CTL_MOD 重新武裝。多執行緒 loop 共用一個 epfd 時,用它避免兩條 thread 同時處理同一個 fd。";
+    }
+    document.getElementById("mask-out").innerHTML = lines;
+  }
+
+  function setMask(names) {
+    FLAGS.forEach(function (f) { on[f.name] = names.indexOf(f.name) >= 0; });
+    renderMask();
+  }
+  document.getElementById("preset-r").addEventListener("click", function () {
+    setMask(["EPOLLIN", "EPOLLRDHUP"]);
+  });
+  document.getElementById("preset-both").addEventListener("click", function () {
+    setMask(["EPOLLIN", "EPOLLOUT", "EPOLLRDHUP", "EPOLLET"]);
+  });
+  document.getElementById("preset-clear").addEventListener("click", function () { setMask([]); });
+
+  setMask(["EPOLLIN", "EPOLLRDHUP"]);
+
+  /* ═══ 4 · eventfd self-wake ════════════════════════════════════ */
+
+  var wk;
+  function wkFresh() {
+    return { hasEfd: false, sleeping: false, running: true, tasks: 0, count: 0, done: false, stuck: false };
+  }
+
+  function wsay(cls, msg) {
+    var box = document.getElementById("wk-log");
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    box.prepend(d);
+    while (box.childNodes.length > 60) box.removeChild(box.lastChild);
+  }
+
+  function renderWake() {
+    var th = document.getElementById("th-loop");
+    var stEl = document.getElementById("wk-state");
+    var v = document.getElementById("wk-verdict");
+    var vt = document.getElementById("wk-verdict-text");
+
+    document.getElementById("wk-running").textContent = String(wk.running);
+    document.getElementById("wk-running").className = "v" + (wk.running ? "" : " warn");
+    document.getElementById("wk-count").textContent = wk.hasEfd ? String(wk.count) : "n/a";
+    document.getElementById("wk-tasks").textContent = String(wk.tasks);
+
+    document.getElementById("wk-step").disabled = wk.sleeping || wk.done;
+
+    if (wk.done) {
+      th.className = "thread loop-t exited";
+      stEl.className = "state exited";
+      stEl.textContent = "loop 退出 — fd 全數 close,thread join 得回來";
+      v.className = "verdict ok";
+      vt.textContent = "shutdown 生效了。eventfd 把睡在 epoll_wait 的執行緒撈了出來," +
+        "它回到迴圈頂端,讀到 running == false,乾淨收工。";
+    } else if (wk.stuck) {
+      th.className = "thread loop-t stuck";
+      stEl.className = "state stuck";
+      stEl.textContent = "epoll_wait(-1) — 睡死。沒有任何 fd 會就緒";
+      v.className = "verdict bad";
+      vt.textContent = "running 已經是 false,但迴圈永遠讀不到它:它睡在 epoll_wait 裡," +
+        "而 epoll_wait 只醒在「有 fd 就緒」。shutdown() 回傳了,thread join 卻回不來 — 程序卡死在退出路徑上。" +
+        "沒有一個「它有在聽的 fd」,你就沒有辦法叫醒它。";
+    } else if (wk.sleeping) {
+      th.className = "thread loop-t asleep";
+      stEl.className = "state sleep";
+      stEl.textContent = "epoll_wait(-1) — 阻塞中(等 fd 就緒)";
+      v.className = "verdict neutral";
+      vt.textContent = "迴圈睡著了。現在從另一條執行緒按 shutdown() 或 submit_task()。";
+    } else {
+      th.className = "thread loop-t";
+      stEl.className = "state run";
+      stEl.textContent = "while running { poll(&mut events, None) }";
+      v.className = "verdict neutral";
+      vt.textContent = wk.hasEfd
+        ? "eventfd 已註冊進 epoll(token = u64::MAX,LT)。按「loop: 跑一輪」讓它進 epoll_wait。"
+        : "epoll 裡只有連線的 fd,沒有 wake fd。按「loop: 跑一輪」讓它進 epoll_wait。";
+    }
+  }
+
+  function wkStep() {
+    if (wk.done || wk.sleeping) return;
+
+    if (!wk.running) {
+      wk.done = true;
+      wsay("c", "while running -> false   break;");
+      wsay("c", "loop 退出");
+      renderWake();
+      return;
+    }
+    if (wk.hasEfd && wk.count > 0) {
+      wsay("e", "epoll_wait(-1) -> 1 event   data=u64::MAX (wake fd)");
+      wsay("e", "wake.drain() -> " + wk.count + "   events.woken = true");
+      wk.count = 0;
+      drainTasks();
+    } else {
+      wk.sleeping = true;
+      wsay("m", "epoll_wait(-1) — 無就緒 fd,執行緒進入 kernel 睡眠");
+    }
+    renderWake();
+  }
+
+  function drainTasks() {
+    if (wk.tasks > 0) {
+      wsay("c", "task queue: 處理 " + wk.tasks + " 個 task");
+      wk.tasks = 0;
+    }
+  }
+
+  // 另一條執行緒踩下 wake:計數 +1;若迴圈正睡著,epoll_wait 立刻返回。
+  function ringBell(why) {
+    if (!wk.hasEfd) {
+      wsay("x", "沒有 wake fd — " + why + " 這件事,迴圈聽不見");
+      if (wk.sleeping) wk.stuck = true;
+      return;
+    }
+    wk.count += 1;
+    wsay("p", "wake(): write(efd, 1)   計數 -> " + wk.count + (wk.sleeping ? "" : "   (迴圈還沒睡:訊號帶狀態,不會丟)"));
+    if (wk.sleeping) {
+      wk.sleeping = false;
+      wsay("e", "epoll_wait(-1) 返回   1 event: wake fd 可讀");
+      wsay("e", "wake.drain() -> " + wk.count + "   events.woken = true");
+      wk.count = 0;
+      drainTasks();
+    }
+  }
+
+  function wkShutdown() {
+    if (wk.done) { wsay("m", "loop 已經結束了"); return; }
+    wk.running = false;
+    wsay("p", "other thread: running.store(false)");
+    ringBell("shutdown()");
+    renderWake();
+  }
+
+  function wkSubmit() {
+    if (wk.done) { wsay("m", "loop 已經結束了"); return; }
+    wk.tasks += 1;
+    wsay("p", "other thread: queue.push(task)   (queue len = " + wk.tasks + ")");
+    ringBell("submit_task()");
+    renderWake();
+  }
+
+  function wkReset() {
+    var mode = wk ? wk.hasEfd : false;
+    wk = wkFresh();
+    wk.hasEfd = mode;
+    document.getElementById("wk-log").textContent = "";
+    wsay("m", mode
+      ? "EventLoop::new() -> epoll.add(eventfd, EPOLLIN, WAKE_TOKEN)"
+      : "EventLoop::new() -> epoll 裡只有連線的 fd");
+    renderWake();
+  }
+
+  function wkSetMode(hasEfd) {
+    document.getElementById("wk-none").setAttribute("aria-pressed", String(!hasEfd));
+    document.getElementById("wk-efd").setAttribute("aria-pressed", String(hasEfd));
+    wk = wkFresh();
+    wk.hasEfd = hasEfd;
+    wkReset();
+  }
+
+  document.getElementById("wk-step").addEventListener("click", wkStep);
+  document.getElementById("wk-shut").addEventListener("click", wkShutdown);
+  document.getElementById("wk-task").addEventListener("click", wkSubmit);
+  document.getElementById("wk-reset").addEventListener("click", wkReset);
+  document.getElementById("wk-none").addEventListener("click", function () { wkSetMode(false); });
+  document.getElementById("wk-efd").addEventListener("click", function () { wkSetMode(true); });
+
+  wkSetMode(false);
+})();
+</script>

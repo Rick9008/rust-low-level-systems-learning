@@ -1,0 +1,1305 @@
+<title>lru — 一個 O(1),兩個資料結構</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── lru:兩個結構並排 ───────────────────────────────────────────── */
+.duo {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.ds {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.ds h3 {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ds-map h3 { color: var(--consumer); }
+.ds-arena h3 { color: var(--producer); }
+.dsnote {
+  font-family: var(--serif);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: none;
+}
+
+/* HashMap 的列 */
+.maprow {
+  display: grid;
+  grid-template-columns: 1fr 1rem 2.4rem;
+  gap: 0.35rem;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--raised);
+  padding: 0.3rem 0.5rem;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.maprow .mk { font-weight: 600; }
+.maprow .marr { color: var(--muted); }
+.maprow .mi { text-align: right; color: var(--producer); font-weight: 600; }
+.maprow.hit { background: var(--consumer-bg); border-color: var(--consumer); }
+.maprow.new { background: var(--ok-bg); border-color: var(--ok); }
+.maprow.evict { background: var(--danger-bg); border-color: var(--danger); }
+.maprow.evict .mk { text-decoration: line-through; }
+.maprow.empty { color: var(--muted); border-style: dashed; background: transparent; }
+.lookup {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.lookup.hit { color: var(--consumer); border-color: var(--consumer); border-style: solid; }
+.lookup.miss { color: var(--danger); border-color: var(--danger); border-style: solid; }
+
+/* arena:Vec<Node> */
+.arenawrap { overflow-x: auto; }
+.arena { min-width: 26rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.arow {
+  display: grid;
+  grid-template-columns: 2.2rem 3.4rem 3.4rem 4.6rem 4.6rem 1fr;
+  gap: 0.3rem;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--raised);
+  padding: 0.32rem 0.45rem;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.arow.hdr {
+  border: none;
+  background: transparent;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.arow .ai { color: var(--muted); }
+.arow .ak { font-weight: 600; }
+.arow .av { color: var(--ink-2); }
+.arow.spare { border-style: dashed; color: var(--muted); }
+.arow.spare .ak, .arow.spare .av { color: var(--muted); font-weight: 400; }
+.arow.hit { background: var(--consumer-bg); border-color: var(--consumer); }
+.arow.new { background: var(--ok-bg); border-color: var(--ok); }
+.arow.evict { background: var(--danger-bg); border-color: var(--danger); }
+.arow.recycle { background: var(--producer-bg); border-color: var(--producer); }
+.fv {
+  display: inline-block;
+  min-width: 2.4rem;
+  padding: 0 0.2rem;
+  border-radius: 3px;
+  color: var(--ink-2);
+}
+.fv.nil { color: var(--muted); }
+.fv.rw {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.tags { display: flex; gap: 0.3rem; justify-content: flex-end; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.06em; }
+.tag-head { color: var(--ok); }
+.tag-tail { color: var(--danger); }
+.tag-flash { outline: 1px solid currentColor; border-radius: 3px; padding: 0 0.2rem; }
+
+/* head -> tail 走訪帶 */
+.walk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+.walk .wlbl { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.walk .wnode {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.1rem 0.45rem;
+}
+.walk .wnode.mru { border-color: var(--ok); color: var(--ok); }
+.walk .wnode.lru { border-color: var(--danger); color: var(--danger); }
+.walk .warr { color: var(--muted); }
+.walk .wok { color: var(--ok); font-weight: 600; }
+.walk .wbad { color: var(--danger); font-weight: 600; }
+
+/* 輸入 */
+input[type="text"] {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  width: 3.6rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--ink);
+}
+input[type="text"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inl {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+button.chip {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+button.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.log .g { color: var(--ok); font-weight: 600; }
+.sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 0.3rem; }
+
+@media (max-width: 52rem) {
+  .duo { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 2 &nbsp;·&nbsp; 資料結構與所有權</p>
+  <h1>lru</h1>
+  <p class="lede">
+    LRU 的難點不是「淘汰最久沒用的那個」——是<strong>兩個 O(1) 必須同時成立</strong>:
+    用 key 找值要 O(1),把值挪到最新端也要 O(1)。
+    單一資料結構做不到,所以答案是兩個結構<strong>互相持有對方的座標</strong>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 兩個結構,一個真相</h2>
+  <p>
+    左邊的 <code>HashMap&lt;K, usize&gt;</code> 只回答一個問題:<strong>這個 key 在 arena 的哪一格</strong>。
+    它對「多久沒用」一無所知。右邊的 <code>Vec&lt;Node&gt;</code> 是 arena,
+    每個 node 用 <code>prev</code> / <code>next</code> 兩個<strong>索引</strong>(不是指標)
+    織成一條雙向鏈表,鏈表的順序就是 recency:<code>head</code> 是最新,<code>tail</code> 是下一個要死的。
+  </p>
+  <p>
+    兩邊靠 map 的 value(也就是 arena 索引)黏在一起。跑幾次 <code>get</code> / <code>put</code>,
+    盯著 <code>prev</code> / <code>next</code> 欄位:<strong>每次操作被改寫的欄位永遠是個小常數</strong>,
+    跟 cache 裡有幾個元素完全無關。這就是 O(1) 的全部內容。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <span class="inl">key</span>
+      <input type="text" id="in-key" value="a" maxlength="3" aria-label="key">
+      <span class="inl">value</span>
+      <input type="text" id="in-val" value="1" maxlength="4" aria-label="value">
+      <button class="act-consumer" id="btn-get">get(k)</button>
+      <button class="act-producer" id="btn-put">put(k, v)</button>
+      <span class="sep"></span>
+      <button id="btn-demo">跑劇本:填滿 → get 中段 → 淘汰</button>
+      <button id="btn-reset">reset</button>
+    </div>
+    <div class="controls" id="chips"></div>
+
+    <div class="duo">
+      <div class="ds ds-map">
+        <h3>HashMap&lt;K, usize&gt;</h3>
+        <div id="maprows"></div>
+        <div class="lookup" id="lookup">map.get(k) — 尚未查詢</div>
+        <p class="dsnote">key 到 arena 索引。這裡沒有任何順序資訊——recency 全在右邊。</p>
+      </div>
+
+      <div class="ds ds-arena">
+        <h3>nodes: Vec&lt;Node&lt;K, V&gt;&gt;  ·  arena</h3>
+        <div class="arenawrap">
+          <div class="arena" id="arena"></div>
+        </div>
+        <div class="walk" id="walk"></div>
+        <p class="dsnote">
+          一整塊連續記憶體。<code>Vec::with_capacity(cap)</code> 一次配好,活躍期零 realloc、零 free。
+          <code>NIL = usize::MAX</code> 當哨兵,代替 <code>Option&lt;usize&gt;</code>。
+        </p>
+      </div>
+    </div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">操作數</span><span class="v" id="st-ops">0</span></div>
+      <div class="stat"><span class="k">指標改寫(本次)</span><span class="v good" id="st-last">0</span></div>
+      <div class="stat"><span class="k">指標改寫(累計)</span><span class="v" id="st-writes">0</span></div>
+      <div class="stat"><span class="k">len / cap</span><span class="v" id="st-len">0 / 4</span></div>
+      <div class="stat"><span class="k">head (MRU)</span><span class="v" id="st-head">NIL</span></div>
+      <div class="stat"><span class="k">tail (LRU)</span><span class="v" id="st-tail">NIL</span></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    盯住「指標改寫(本次)」這一格。cache 裡有 1 個還是 400 萬個元素,它都不會超過 <code>7</code>:
+    <code>unlink</code> 最多 2 次、<code>push_front</code> 最多 5 次。
+    如果你看到某次 <code>get</code> 是 <code>0</code>——那是節點已經在 head,promote 被短路掉了。
+  </p>
+</section>
+
+<section>
+  <h2>2 · promote = unlink + push_front</h2>
+  <p>
+    <code>get</code> 命中之後要把節點搬到 MRU 端。搬動一個節點在雙向鏈表裡永遠只碰
+    <strong>它的兩個鄰居</strong>,加上可能的 <code>head</code> / <code>tail</code>。
+    節點自己在 arena 的位置<strong>一格都不動</strong>——動的只有索引欄位。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>步驟</th><th>賦值</th><th>次數</th><th>為什麼</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>unlink(i)</code></td>
+          <td class="mono">prev == NIL ? head = next : nodes[prev].next = next</td>
+          <td class="mono">1</td>
+          <td>把 i 的前驅接到 i 的後繼;i 是頭就改 head</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td class="mono">next == NIL ? tail = prev : nodes[next].prev = prev</td>
+          <td class="mono">1</td>
+          <td>對稱的另一邊;i 是尾就改 tail</td>
+        </tr>
+        <tr>
+          <td><code>push_front(i)</code></td>
+          <td class="mono">nodes[i].prev = NIL<br>nodes[i].next = head</td>
+          <td class="mono">2</td>
+          <td>i 自己的兩根線重新指向。注意 <code>unlink</code> <strong>沒有</strong>清掉 i 的舊 prev/next——反正這裡會蓋掉,少寫兩次</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td class="mono">if head != NIL: nodes[head].prev = i</td>
+          <td class="mono">0 或 1</td>
+          <td>舊頭要回指新頭。空表時沒有舊頭</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td class="mono">head = i<br>if tail == NIL: tail = i</td>
+          <td class="mono">1 或 2</td>
+          <td>空表插入時,唯一節點同時是頭也是尾</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    <code>if self.head != i</code> 這個短路值得寫:節點已經是 MRU 時,
+    <code>unlink + push_front</code> 的結果跟不做完全一樣(兩步都是冪等形狀),
+    但會白白付 5 次寫。連續讀同一個 hot key 是 cache 最常見的流量模式——這行是免費的。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 滿了:淘汰 tail,原地回收槽位</h2>
+  <p>
+    <code>put</code> 有三條路。同 key:改值 + promote,沒人被淘汰。有空位:
+    <code>nodes.push()</code>,新索引 = 目前長度。<strong>滿了</strong>:
+    受害者一定是 <code>tail</code>——這是唯一不用搜尋就知道的答案,而這正是鏈表存在的理由。
+  </p>
+  <p>
+    淘汰時<strong>不從 <code>Vec</code> 刪掉那個 node</strong>。
+    <code>Vec::remove(i)</code> 會把後面所有元素往前搬(O(n) memmove),
+    而且會讓所有 &gt; i 的索引失效——map 裡存的全是索引,整張表當場報廢。
+    改成 <code>mem::replace(&amp;mut nodes[i], new_node)</code>:同一塊記憶體換人住,
+    舊的 <code>(K, V)</code> 完整取出來還給 caller。<strong>零 alloc、零 free、零 memmove</strong>。
+  </p>
+  <p class="note">
+    這也是為什麼 <code>Node</code> 裡要存一份 <code>key</code>:淘汰時手上只有 arena 索引,
+    但你必須把 <code>map</code> 裡那條 <code>key -&gt; i</code> 也刪掉,否則 map 會指向一個已經換人的槽位。
+    代價是 <code>K: Clone</code>,key 存兩份。省掉這份 clone 的路(<code>Rc&lt;K&gt;</code>、raw entry)
+    都更複雜——面試時把這個取捨講出來,然後往前走。
+  </p>
+</section>
+
+<section>
+  <h2>4 · 為什麼不是 Vec::remove?為什麼不是 Rc&lt;RefCell&gt;?</h2>
+  <p>
+    面試官問「你為什麼這樣存鏈表」時,他要的不是「因為 Rust 借用檢查很麻煩」,
+    而是這張表。每一列都是一個真的有人寫過的方案,每一列都在某一欄破功。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>方案</th>
+          <th>定位 key</th>
+          <th>promote</th>
+          <th>淘汰 LRU</th>
+          <th>每次操作的 alloc</th>
+          <th>locality</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>只有 <code>HashMap</code></td>
+          <td class="ord acq">O(1)</td>
+          <td class="ord rlx">不需要</td>
+          <td class="ord rel">O(n) 掃全表找最舊</td>
+          <td class="mono">0</td>
+          <td>好</td>
+        </tr>
+        <tr>
+          <td>只有雙向鏈表</td>
+          <td class="ord rel">O(n) 走訪</td>
+          <td class="ord acq">O(1)</td>
+          <td class="ord acq">O(1)</td>
+          <td class="mono">0</td>
+          <td>差</td>
+        </tr>
+        <tr>
+          <td><code>HashMap</code> + <code>Vec</code>(按 recency 排序)</td>
+          <td class="ord acq">O(1)</td>
+          <td class="ord rel">O(n) <code>remove(i)</code> memmove<br>而且所有索引失效</td>
+          <td class="ord acq">O(1) <code>pop()</code></td>
+          <td class="mono">0</td>
+          <td>好</td>
+        </tr>
+        <tr>
+          <td><code>HashMap</code> + <code>VecDeque</code> + 時間戳</td>
+          <td class="ord acq">O(1)</td>
+          <td class="ord rel">O(n) 從中間拔</td>
+          <td class="ord acq">O(1)</td>
+          <td class="mono">0</td>
+          <td>好</td>
+        </tr>
+        <tr>
+          <td><code>HashMap</code> + <code>Rc&lt;RefCell&lt;Node&gt;&gt;</code> 鏈表</td>
+          <td class="ord acq">O(1)</td>
+          <td class="ord acq">O(1)</td>
+          <td class="ord acq">O(1)</td>
+          <td class="mono">每節點一次 heap alloc<br>+ 每步 refcount 增減<br>+ <code>borrow_mut()</code> 執行期檢查</td>
+          <td>差:節點散在 heap 各處</td>
+        </tr>
+        <tr>
+          <td><strong>HashMap + index 鏈表(本實作)</strong></td>
+          <td class="ord acq">O(1)</td>
+          <td class="ord acq">O(1)<span class="mono">,&lt;= 7 次寫</span></td>
+          <td class="ord acq">O(1),槽位原地回收</td>
+          <td class="mono">0</td>
+          <td>好:整條鏈表在一塊 <code>Vec</code> 裡</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    <code>Rc&lt;RefCell&lt;Node&gt;&gt;</code> 版還有一個 Rust 專屬的坑:雙向鏈表是環,
+    <code>prev</code> 必須用 <code>Weak</code>,否則 refcount 永遠歸不了零——<strong>整個 cache 洩漏</strong>。
+    index 版連這個問題都不存在:<code>usize</code> 沒有 ownership,借用檢查器根本不參與。
+    節點的生命週期由 <code>Vec</code> 統一管,這才是「把 unsafe 的形狀寫成 safe 的」的標準做法。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 沒做的 remove():free list 的伏筆</h2>
+  <p>
+    這版只有 <code>get</code> / <code>put</code> / <code>peek</code>,沒有 <code>remove(&amp;K)</code>。
+    因為 remove 會在 arena 中間留下一個洞——而洞不能靠 <code>Vec::remove</code> 填(索引會全爛),
+    只能記進一條<strong>空閒槽位鏈</strong>(free list),下次 insert 優先從那裡取。
+  </p>
+  <p>
+    這條 free list 用什麼串?<strong>還是索引,存在那個空槽的 <code>next</code> 欄位裡</strong>——
+    空節點的 prev/next 反正沒人用,拿來當 free list 的指標,零額外空間。
+    這正是 <code>arena_lockfree</code> 的主題;加上多執行緒之後,同一個索引被兩個 thread 同時 pop
+    就會撞出 ABA,於是需要 generation tag。這一課的 <code>usize</code> 索引,就是那一課的地基。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/lru.rs</code> · 設計取捨:<code>docs/lru.md</code></div>
+  <div>驗證:<code>cargo test -p reference lru</code>(含 proptest 對照 O(n) 天真模型)</div>
+  <div>前置:<code>tree</code>(index-based 與 <code>Rc&lt;RefCell&gt;</code> 兩版並列)· 進階:<code>arena_lockfree</code>(free list 與 ABA)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 模型:cap 4 剛好夠看到「填滿 → promote 中段 → 淘汰 tail」的完整故事 ──
+  var CAP = 4;
+  var NIL = -1;              // 演示用哨兵;對應 Rust 的 usize::MAX
+  var KEYS = ["a", "b", "c", "d", "e", "f"];
+  var STEP = 780;            // 每個動畫階段的停留時間
+
+  var map, nodes, head, tail, ops, writes, lastWrites, lastEvicted;
+  var hlFields, hlSlots, hlRows, hlPtr, lookup;
+
+  var mapEl = document.getElementById("maprows");
+  var arenaEl = document.getElementById("arena");
+  var walkEl = document.getElementById("walk");
+  var lookupEl = document.getElementById("lookup");
+  var logEl = document.getElementById("log");
+  var keyIn = document.getElementById("in-key");
+  var valIn = document.getElementById("in-val");
+  var btns = ["btn-get", "btn-put", "btn-demo", "btn-reset"].map(function (id) {
+    return document.getElementById(id);
+  });
+
+  function clearHl() {
+    hlFields = {};
+    hlSlots = {};
+    hlRows = {};
+    hlPtr = {};
+  }
+
+  function reset() {
+    map = Object.create(null);
+    nodes = [];
+    head = NIL;
+    tail = NIL;
+    ops = 0;
+    writes = 0;
+    lastWrites = 0;
+    lastEvicted = null;
+    lookup = { text: "map.get(k) — 尚未查詢", cls: "" };
+    clearHl();
+    logEl.textContent = "";
+    say("m", "cap = 4, NIL = usize::MAX. map 與 nodes 都是空的。");
+    render();
+  }
+
+  function count() { return Object.keys(map).length; }
+  function fmt(i) { return i === NIL ? "NIL" : String(i); }
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 80) logEl.removeChild(logEl.lastChild);
+  }
+
+  // ── 四個「寫」的原語:每一次呼叫就是一次真的指標改寫,計數器只認這裡 ──
+  function setPrev(i, v) { nodes[i].prev = v; hlFields[i + "|prev"] = 1; writes++; lastWrites++; }
+  function setNext(i, v) { nodes[i].next = v; hlFields[i + "|next"] = 1; writes++; lastWrites++; }
+  function setHead(v) { head = v; hlPtr.head = 1; writes++; lastWrites++; }
+  function setTail(v) { tail = v; hlPtr.tail = 1; writes++; lastWrites++; }
+
+  function unlink(i) {
+    var p = nodes[i].prev, n = nodes[i].next, m = [];
+    if (p === NIL) { setHead(n); m.push("head = " + fmt(n)); }
+    else { setNext(p, n); m.push("nodes[" + p + "].next = " + fmt(n)); }
+    if (n === NIL) { setTail(p); m.push("tail = " + fmt(p)); }
+    else { setPrev(n, p); m.push("nodes[" + n + "].prev = " + fmt(p)); }
+    return m.join("   ");
+  }
+
+  function pushFront(i) {
+    var m = [];
+    setPrev(i, NIL); m.push("nodes[" + i + "].prev = NIL");
+    setNext(i, head); m.push("nodes[" + i + "].next = " + fmt(head));
+    if (head !== NIL) { setPrev(head, i); m.push("nodes[" + head + "].prev = " + i); }
+    setHead(i); m.push("head = " + i);
+    if (tail === NIL) { setTail(i); m.push("tail = " + i); }
+    return m.join("   ");
+  }
+
+  // ── 渲染 ──────────────────────────────────────────────────────────
+  function cell(cls, text) {
+    var s = document.createElement("span");
+    s.className = cls;
+    s.textContent = text;
+    return s;
+  }
+
+  function renderMap() {
+    mapEl.textContent = "";
+    var keys = Object.keys(map).sort();
+    for (var r = 0; r < CAP; r++) {
+      var row = document.createElement("div");
+      if (r >= keys.length) {
+        row.className = "maprow empty";
+        row.append(cell("mk", "—"), cell("marr", ""), cell("mi", "—"));
+      } else {
+        var k = keys[r];
+        row.className = "maprow" + (hlRows[k] ? " " + hlRows[k] : "");
+        row.append(cell("mk", "\"" + k + "\""), cell("marr", "→"), cell("mi", String(map[k])));
+      }
+      mapEl.appendChild(row);
+    }
+    lookupEl.className = "lookup" + (lookup.cls ? " " + lookup.cls : "");
+    lookupEl.textContent = lookup.text;
+  }
+
+  function renderArena() {
+    arenaEl.textContent = "";
+    var hdr = document.createElement("div");
+    hdr.className = "arow hdr";
+    hdr.append(cell("ai", "i"), cell("ak", "key"), cell("av", "value"),
+               cell("ap", "prev"), cell("an", "next"), cell("tags", ""));
+    arenaEl.appendChild(hdr);
+
+    for (var i = 0; i < CAP; i++) {
+      var row = document.createElement("div");
+      if (i >= nodes.length) {
+        row.className = "arow spare";
+        row.append(cell("ai", String(i)), cell("ak", "—"), cell("av", "—"),
+                   cell("ap", "—"), cell("an", "—"), cell("tags", "spare cap"));
+        arenaEl.appendChild(row);
+        continue;
+      }
+      var n = nodes[i];
+      row.className = "arow" + (hlSlots[i] ? " " + hlSlots[i] : "");
+
+      var pv = document.createElement("span");
+      pv.className = "fv" + (n.prev === NIL ? " nil" : "") + (hlFields[i + "|prev"] ? " rw" : "");
+      pv.textContent = fmt(n.prev);
+      var pWrap = document.createElement("span");
+      pWrap.appendChild(pv);
+
+      var nx = document.createElement("span");
+      nx.className = "fv" + (n.next === NIL ? " nil" : "") + (hlFields[i + "|next"] ? " rw" : "");
+      nx.textContent = fmt(n.next);
+      var nWrap = document.createElement("span");
+      nWrap.appendChild(nx);
+
+      var tags = document.createElement("span");
+      tags.className = "tags";
+      if (head === i) {
+        var th = cell("tag-head" + (hlPtr.head ? " tag-flash" : ""), "head");
+        tags.appendChild(th);
+      }
+      if (tail === i) {
+        var tt = cell("tag-tail" + (hlPtr.tail ? " tag-flash" : ""), "tail");
+        tags.appendChild(tt);
+      }
+
+      var vcell = cell("av" + (hlFields[i + "|value"] ? " rw" : ""), String(n.value));
+      row.append(cell("ai", String(i)), cell("ak", "\"" + n.key + "\""), vcell, pWrap, nWrap, tags);
+      arenaEl.appendChild(row);
+    }
+  }
+
+  // head 沿 next 走一遍,再從 tail 沿 prev 走回來對照——鏈表一致性的現場證明
+  function walkForward() {
+    var out = [], i = head, guard = 0;
+    while (i !== NIL && guard++ <= CAP) { out.push(i); i = nodes[i].next; }
+    return out;
+  }
+  function walkBackward() {
+    var out = [], i = tail, guard = 0;
+    while (i !== NIL && guard++ <= CAP) { out.push(i); i = nodes[i].prev; }
+    return out;
+  }
+
+  function renderWalk() {
+    walkEl.textContent = "";
+    var f = walkForward();
+    var b = walkBackward().reverse();
+    walkEl.appendChild(cell("wlbl", "list"));
+    if (!f.length) {
+      walkEl.appendChild(cell("warr", "(空)"));
+      return;
+    }
+    walkEl.appendChild(cell("warr", "head →"));
+    for (var j = 0; j < f.length; j++) {
+      var i = f[j];
+      var klass = "wnode" + (j === 0 ? " mru" : "") + (j === f.length - 1 ? " lru" : "");
+      walkEl.appendChild(cell(klass, i + ":\"" + nodes[i].key + "\""));
+      if (j < f.length - 1) walkEl.appendChild(cell("warr", "→"));
+    }
+    walkEl.appendChild(cell("warr", "→ tail"));
+    var ok = f.length === b.length && f.length === count() && f.join(",") === b.join(",");
+    walkEl.appendChild(cell(ok ? "wok" : "wbad",
+      ok ? "✓ 反向沿 prev 走回來一致" : "✗ 鏈表不一致"));
+  }
+
+  function render() {
+    renderMap();
+    renderArena();
+    renderWalk();
+    document.getElementById("st-ops").textContent = String(ops);
+    var last = document.getElementById("st-last");
+    last.textContent = String(lastWrites);
+    last.className = "v " + (lastWrites === 0 ? "good" : lastWrites > 7 ? "warn" : "");
+    document.getElementById("st-writes").textContent = String(writes);
+    document.getElementById("st-len").textContent = count() + " / " + CAP;
+    document.getElementById("st-head").textContent = fmt(head);
+    document.getElementById("st-tail").textContent = fmt(tail);
+  }
+
+  // ── 操作:每個 op 是一串 phase,phase 在執行當下才讀模型 ──────────
+  function opGet(k) {
+    var ctx = {};
+    return [
+      function () {
+        ops++; clearHl(); lastWrites = 0;
+        if (!(k in map)) {
+          ctx.miss = true;
+          lookup = { text: "map.get(\"" + k + "\") → None", cls: "miss" };
+          say("x", "get(\"" + k + "\") -> None   map 查無此 key,鏈表一個 byte 都沒動");
+          render();
+          return;
+        }
+        ctx.i = map[k];
+        lookup = { text: "map.get(\"" + k + "\") → Some(" + ctx.i + ")", cls: "hit" };
+        hlRows[k] = "hit";
+        hlSlots[ctx.i] = "hit";
+        say("c", "get(\"" + k + "\")   map 命中 -> arena 索引 " + ctx.i + "   一次 hash,O(1)");
+        render();
+      },
+      function () {
+        if (ctx.miss) return "skip";
+        if (head === ctx.i) {
+          ctx.done = true;
+          say("m", "head == " + ctx.i + " — 已經是 MRU,promote 短路:0 次指標改寫");
+          render();
+          return;
+        }
+        clearHl();
+        hlSlots[ctx.i] = "hit";
+        say("p", "unlink(" + ctx.i + ")   " + unlink(ctx.i));
+        render();
+      },
+      function () {
+        if (ctx.miss || ctx.done) return "skip";
+        clearHl();
+        hlSlots[ctx.i] = "hit";
+        say("p", "push_front(" + ctx.i + ")   " + pushFront(ctx.i));
+        render();
+      },
+      function () {
+        if (ctx.miss) return "skip";
+        say("g", "get -> Some(" + nodes[ctx.i].value + ")   本次指標改寫 " + lastWrites +
+                 " 次;節點在 arena 的位置沒動過");
+        render();
+      }
+    ];
+  }
+
+  function opPut(k, v) {
+    var ctx = {};
+    return [
+      function () {
+        ops++; clearHl(); lastWrites = 0; lastEvicted = null;
+        if (k in map) {
+          ctx.mode = "update";
+          ctx.i = map[k];
+          nodes[ctx.i].value = v;
+          lookup = { text: "map.get(\"" + k + "\") → Some(" + ctx.i + ")", cls: "hit" };
+          hlRows[k] = "hit"; hlSlots[ctx.i] = "hit"; hlFields[ctx.i + "|value"] = 1;
+          say("p", "put(\"" + k + "\", " + v + ")   同 key:nodes[" + ctx.i + "].value = " + v +
+                   ",不淘汰任何人");
+          render();
+          return;
+        }
+        if (count() < CAP) {
+          ctx.mode = "insert";
+          ctx.i = nodes.length;
+          nodes.push({ key: k, value: v, prev: NIL, next: NIL });
+          map[k] = ctx.i;
+          lookup = { text: "map.get(\"" + k + "\") → None,插入新條目", cls: "miss" };
+          hlRows[k] = "new"; hlSlots[ctx.i] = "new";
+          say("p", "put(\"" + k + "\", " + v + ")   有空位:nodes.push(..) -> 索引 " + ctx.i +
+                   ";map[\"" + k + "\"] = " + ctx.i);
+          render();
+          return;
+        }
+        ctx.mode = "evict";
+        ctx.i = tail;
+        ctx.evKey = nodes[tail].key;
+        ctx.evVal = nodes[tail].value;
+        lookup = { text: "map.get(\"" + k + "\") → None,但已滿", cls: "miss" };
+        hlSlots[ctx.i] = "evict";
+        hlRows[ctx.evKey] = "evict";
+        say("x", "put(\"" + k + "\", " + v + ")   滿了(len == cap == " + CAP +
+                 ")— 受害者 = tail = slot " + ctx.i + ",key \"" + ctx.evKey + "\"");
+        render();
+      },
+      function () {
+        if (ctx.mode === "insert") return "skip";
+        if (ctx.mode === "update" && head === ctx.i) {
+          ctx.done = true;
+          say("m", "head == " + ctx.i + " — 已經是 MRU,promote 短路:0 次指標改寫");
+          render();
+          return;
+        }
+        clearHl();
+        hlSlots[ctx.i] = ctx.mode === "evict" ? "evict" : "hit";
+        say("p", "unlink(" + ctx.i + ")   " + unlink(ctx.i));
+        render();
+      },
+      function () {
+        if (ctx.mode !== "evict") return "skip";
+        clearHl();
+        nodes[ctx.i] = { key: k, value: v, prev: NIL, next: NIL };
+        delete map[ctx.evKey];
+        map[k] = ctx.i;
+        lastEvicted = [ctx.evKey, ctx.evVal];
+        hlSlots[ctx.i] = "recycle";
+        hlRows[k] = "new";
+        hlFields[ctx.i + "|value"] = 1;
+        say("p", "mem::replace(&mut nodes[" + ctx.i + "], Node{..})   slot " + ctx.i +
+                 " 原地回收:同一塊記憶體換人住,零 alloc、零 free、零 memmove");
+        say("p", "map.remove(\"" + ctx.evKey + "\")   map.insert(\"" + k + "\", " + ctx.i +
+                 ")   node 裡那份 key 就是為了這一刻存的");
+        render();
+      },
+      function () {
+        if (ctx.done) return "skip";
+        clearHl();
+        hlSlots[ctx.i] = ctx.mode === "evict" ? "recycle" : "new";
+        say("p", "push_front(" + ctx.i + ")   " + pushFront(ctx.i));
+        render();
+      },
+      function () {
+        if (lastEvicted) {
+          say("g", "put -> Some((\"" + lastEvicted[0] + "\", " + lastEvicted[1] +
+                   "))   淘汰的 (K, V) 完整還給 caller;本次指標改寫 " + lastWrites + " 次");
+        } else {
+          say("g", "put -> None   沒有淘汰;本次指標改寫 " + lastWrites + " 次");
+        }
+        render();
+      }
+    ];
+  }
+
+  // ── 排程:一次跑一個 phase,讓改寫看得見 ─────────────────────────
+  var queue = [], running = false;
+
+  function setBusy(b) {
+    for (var i = 0; i < btns.length; i++) btns[i].disabled = b;
+  }
+
+  function pump() {
+    if (running) return;
+    if (!queue.length) { clearHl(); render(); setBusy(false); return; }
+    running = true;
+    setBusy(true);
+    var r = queue.shift()();
+    var wait = r === "skip" ? 0 : STEP;
+    setTimeout(function () { running = false; pump(); }, wait);
+  }
+
+  function enqueue(phases) {
+    queue = queue.concat(phases);
+    pump();
+  }
+
+  function runInstant(phases) {
+    for (var i = 0; i < phases.length; i++) phases[i]();
+  }
+
+  // ── 控制項 ───────────────────────────────────────────────────────
+  function readKey() {
+    var k = keyIn.value.trim();
+    return k === "" ? "a" : k;
+  }
+  function readVal() {
+    var v = parseInt(valIn.value, 10);
+    return isNaN(v) ? 1 : v;
+  }
+  function bumpVal() {
+    var v = parseInt(valIn.value, 10);
+    valIn.value = String(isNaN(v) ? 1 : v + 1);
+  }
+
+  document.getElementById("btn-get").addEventListener("click", function () {
+    enqueue(opGet(readKey()));
+  });
+  document.getElementById("btn-put").addEventListener("click", function () {
+    enqueue(opPut(readKey(), readVal()));
+    bumpVal();
+  });
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    queue = [];
+    reset();
+    valIn.value = "1";
+    keyIn.value = "a";
+  });
+  document.getElementById("btn-demo").addEventListener("click", function () {
+    queue = [];
+    reset();
+    // 前四個 put 直接落地(過程跟單獨按 put 一樣,不必再看一遍),
+    // 把動畫留給真正有戲的兩步:promote 中段節點、淘汰 tail。
+    runInstant(opPut("a", 1));
+    runInstant(opPut("b", 2));
+    runInstant(opPut("c", 3));
+    runInstant(opPut("d", 4));
+    clearHl();
+    say("m", "── 上面四次 put 已填滿。list = [d, c, b, a],tail = a(最久沒碰)。");
+    say("m", "── 接下來:get(\"b\") 把中段節點提到 head,然後 put(\"e\") 逼出淘汰。");
+    render();
+    enqueue(opGet("b"));
+    enqueue(opPut("e", 5));
+    keyIn.value = "e";
+    valIn.value = "6";
+  });
+
+  var chipsEl = document.getElementById("chips");
+  chipsEl.appendChild(cell("inl", "快選 key"));
+  KEYS.forEach(function (k) {
+    var b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = k;
+    b.addEventListener("click", function () {
+      keyIn.value = k;
+      Array.prototype.forEach.call(chipsEl.querySelectorAll(".chip"), function (x) {
+        x.classList.toggle("on", x === b);
+      });
+    });
+    chipsEl.appendChild(b);
+  });
+
+  reset();
+
+  // 測試掛鉤:讓 headless 驅動同一份模型,不繞過任何邏輯(不是給頁面用的)
+  window.__lru = {
+    get: function (k) { runInstant(opGet(k)); },
+    put: function (k, v) { runInstant(opPut(k, v)); },
+    reset: reset,
+    snapshot: function () {
+      return {
+        NIL: NIL, CAP: CAP, head: head, tail: tail,
+        map: JSON.parse(JSON.stringify(map)),
+        nodes: nodes.map(function (n) {
+          return { key: n.key, value: n.value, prev: n.prev, next: n.next };
+        }),
+        ops: ops, writes: writes, lastWrites: lastWrites, lastEvicted: lastEvicted
+      };
+    }
+  };
+})();
+</script>

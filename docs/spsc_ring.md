@@ -59,3 +59,8 @@ loom 驗的就是出貨的那份邏輯,而 production 路徑零 loom 依賴。
 
 rtrb(即本設計的工業級版,含 batch 讀寫)、ringbuf、
 crossbeam::queue::ArrayQueue(MPMC,每操作都是 CAS,慢於 SPSC 專用)。
+
+## 互動教材
+
+[artifacts/spsc_ring.html](artifacts/spsc_ring.html) —— 環的 push/pop 與 usize 溢位逐步操作;
+把 Release/Acquire 切成 Relaxed,親眼看那條 happens-before 邊消失、consumer 讀到未定義的值。

@@ -63,3 +63,12 @@ IO 需要 reactor(見 event_loop)把「fd ready」翻譯成 wake。
 
 futures::executor::block_on(同構)、tokio(多執行緒 runtime + driver)、
 smol / async-executor(精簡可讀,推薦源碼閱讀)。
+
+## 互動教材
+
+[artifacts/executor.html](artifacts/executor.html) —— 逐步驅動 `block_on` 的
+poll / park / wake 狀態機:兩條執行緒的狀態、`Arc<ThreadWaker>` 的 strong count
+與 RawWaker vtable、以及中間那個 park token。可自由排「wake 先於 park」與
+「wake 後於 park」兩種時序,兩者都會回到 `Poll::Ready`;再把 park 換成
+「無 token 的假想版」,同一組交錯就當場 parked forever——token 為什麼存在,
+一眼看完。

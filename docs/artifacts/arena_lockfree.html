@@ -1,0 +1,1270 @@
+<title>arena_lockfree — 值相等,不代表沒發生過事</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── arena_lockfree 專用 ─────────────────────────────────────────── */
+
+/* 兩條執行緒的交錯:同一個 grid,列 = 時間 */
+.interleave {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 1rem;
+  align-items: start;
+}
+.thread-head {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--line);
+}
+.thread-head.t1 { color: var(--consumer); grid-column: 1; grid-row: 1; }
+.thread-head.t2 { color: var(--producer); grid-column: 2; grid-row: 1; }
+.step {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  line-height: 1.55;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.45rem 0.6rem;
+  align-self: start;
+  transition: background 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+.step.pending { opacity: 0.32; }
+.step.done { opacity: 1; }
+.step.hot { border-color: var(--accent); background: var(--accent-bg); }
+.step.bad { border-color: var(--danger); background: var(--danger-bg); }
+.step.good { border-color: var(--ok); background: var(--ok-bg); }
+.step .why {
+  display: block;
+  font-family: var(--serif);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin-top: 0.35rem;
+}
+.step.bad .why { color: var(--danger); }
+.step.good .why { color: var(--ok); }
+.stall {
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--danger);
+  border-top: 1px dashed var(--danger);
+  border-bottom: 1px dashed var(--danger);
+  padding: 0.3rem 0;
+  text-align: center;
+  opacity: 0.35;
+}
+.stall.on { opacity: 1; }
+
+/* 機器字:packed u64 */
+.words { display: flex; flex-direction: column; gap: 0.55rem; }
+.word {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.55rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-x: auto;
+}
+.word .wlab {
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.word .wbits { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.word.match { border-color: var(--danger); background: var(--danger-bg); }
+.word.differ { border-color: var(--ok); background: var(--ok-bg); }
+.f-gen { color: var(--accent); font-weight: 600; }
+.f-idx { color: var(--producer); font-weight: 600; }
+.f-sep { color: var(--muted); }
+
+/* arena 槽位 */
+.arena { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.arena .slot {
+  flex: 1 1 8rem;
+  min-width: 8rem;
+  align-items: stretch;
+  gap: 0.22rem;
+  padding: 0.6rem 0.7rem;
+}
+.arena .slot .name {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.arena .slot .row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+.arena .slot .row .k { color: var(--muted); letter-spacing: 0.04em; }
+.arena .slot .row .v { color: var(--ink-2); }
+.arena .slot.instack { border-color: var(--ok); }
+.arena .slot.hot { border-color: var(--accent); background: var(--accent-bg); }
+.arena .slot.corrupt { border-color: var(--danger); background: var(--danger-bg); }
+.badge {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.04em 0.34em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.badge.stack { color: var(--ok); border-color: var(--ok); }
+.badge.free { color: var(--muted); border-color: var(--line); }
+.badge.both { color: var(--danger); border-color: var(--danger); font-weight: 600; }
+
+/* 鏈 */
+.chain {
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.chain .lab { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.chain .n { border: 1px solid var(--ok); color: var(--ok); border-radius: 3px; padding: 0.05em 0.4em; }
+.chain .n.dead { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); font-weight: 600; }
+.chain .arrow { color: var(--muted); }
+.chain .nil { color: var(--muted); }
+
+pre.code {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.85rem 0.95rem;
+  overflow-x: auto;
+  margin: 0;
+}
+pre.code .cm { color: var(--muted); }
+pre.code .kw { color: var(--accent); }
+
+@media (max-width: 46rem) {
+  .interleave { grid-template-columns: 1fr; }
+  .thread-head.t1, .thread-head.t2 { grid-column: 1; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 4 &nbsp;·&nbsp; atomic &amp; lock-free</p>
+  <h1>arena_lockfree</h1>
+  <p class="lede">
+    CAS 只會問一個問題:「這個字,還是不是我上次看到的那個值?」
+    它問不出「這中間發生過什麼」。<strong>ABA 就住在這個縫裡</strong>——
+    而修補它的東西,只是把一個計數器塞進同一個 <code>u64</code> 的高 32 位。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · ABA 重現機</h2>
+  <p>
+    下面是教科書級的 ABA 劇本,一步一步排出來。
+    stack 是 <code>top → A → B → C</code>;<strong>T1</strong> 進了 <code>pop()</code>、
+    讀完 <code>(top, A.next)</code> 就被搶佔;<strong>T2</strong> 在它睡著的期間把整個世界翻了一遍。
+    先用<strong>沒有 generation tag</strong> 的版本跑一次(CAS 只比 index),
+    再把開關打開,用<strong>同一組交錯</strong>再跑一次。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="generation tag">
+        <button id="aba-gen-off" aria-pressed="true">generation tag: OFF</button>
+        <button id="aba-gen-on" aria-pressed="false">generation tag: ON</button>
+      </div>
+      <button id="aba-step">下一步</button>
+      <button id="aba-run">一路跑完</button>
+      <button id="aba-reset">reset</button>
+    </div>
+
+    <div class="interleave" id="aba-lanes"></div>
+
+    <div class="words">
+      <div class="word" id="w-head">
+        <span class="wlab">head (AtomicU64) &nbsp;·&nbsp; 記憶體裡的真值</span>
+        <span class="wbits" id="w-head-bits"></span>
+      </div>
+      <div class="word" id="w-cur">
+        <span class="wlab">cur &nbsp;·&nbsp; T1 手上那份(可能已經過期)</span>
+        <span class="wbits" id="w-cur-bits"></span>
+      </div>
+    </div>
+
+    <div class="arena" id="aba-arena"></div>
+
+    <div class="chain" id="aba-chain"></div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">head</span><span class="v" id="st-head">-</span></div>
+      <div class="stat"><span class="k">T1 cur</span><span class="v" id="st-cur">-</span></div>
+      <div class="stat"><span class="k">T1 next</span><span class="v" id="st-next">-</span></div>
+      <div class="stat"><span class="k">T1 retry</span><span class="v" id="st-retry">0</span></div>
+      <div class="stat"><span class="k">不變量</span><span class="v" id="st-inv">HOLDS</span></div>
+    </div>
+
+    <div class="verdict ok" id="aba-verdict">
+      <b id="aba-verdict-tag">狀態</b>
+      <span id="aba-verdict-text"></span>
+    </div>
+  </div>
+
+  <p class="note">
+    不變量只有一條:<strong>任一時刻,一個槽位只能待在一條鏈上</strong>
+    ——stack 鏈、free 鏈,或某個執行緒手裡,三選一。
+    無 gen 版的 CAS 成功之後,slot[1] 同時掛在 stack 頂與 free 鏈上,這條線就斷了。
+    注意最毒的地方:<strong>當下沒有任何東西爆炸</strong>。元素數看起來還對,
+    程式繼續跑,直到某個 <code>push</code> 把 <code>B</code> 當空槽 alloc 出去、覆寫、改寫 <code>B.next</code>
+    ——那一刻 <code>C</code> 從 stack 上蒸發,而現場離犯罪現場已經十萬八千里。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 為什麼是 index 的 ABA,不是 pointer 的 ABA</h2>
+  <p>
+    課本的 Treiber stack 用裸指標:<code>Box::into_raw</code> 推進去、<code>Box::from_raw</code> 撿回來。
+    它同時踩兩顆雷——<strong>ABA</strong>(同一個位址被 malloc 重新發出來)與
+    <strong>use-after-free</strong>(落後的 popper 去讀 <code>A.next</code>,而 A 的那塊記憶體已經還給 allocator 了)。
+    後者是立即的 UB:讀已釋放記憶體,ASan 會叫,但通常太晚。
+  </p>
+  <p>
+    這個模組把指標換成 <strong>arena 索引</strong>:所有節點住在一個
+    <code>Box&lt;[Slot&lt;T&gt;]&gt;</code> 裡,永遠不釋放。於是:
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>裸指標 Treiber</th><th>arena + index(本模組)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>落後的 popper 讀 <code>A.next</code></td>
+          <td><strong style="color:var(--danger)">use-after-free</strong> — A 可能已被 free</td>
+          <td><strong style="color:var(--ok)">安全</strong> — 索引永遠在 bounds 內,最壞讀到 stale 值</td>
+        </tr>
+        <tr>
+          <td>身分被重複發放</td>
+          <td>malloc 把同一個位址發回來</td>
+          <td>free 鏈把<strong>同一個 index</strong> 發回來</td>
+        </tr>
+        <tr>
+          <td>ABA</td>
+          <td><strong style="color:var(--danger)">還在</strong></td>
+          <td><strong style="color:var(--danger)">還在</strong> — arena 只解掉回收安全,沒解掉身分重用</td>
+        </tr>
+        <tr>
+          <td>回收成本</td>
+          <td>epoch / hazard pointer(才敢真的 free)</td>
+          <td>零 — 從來不 free,只是換一條鏈掛</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    這就是 Rust 學 lock-free 先走 arena 的原因:<strong>它把「什麼時候可以真的釋放記憶體」這個最難的問題整個拿掉</strong>,
+    只留下 ABA 一顆雷,而 ABA 有一個 30 行的解。
+    <code>next</code> 也因此必須是 <code>AtomicU32</code> 而不是普通欄位——落後的 popper
+    <em>會</em> 讀到「已被回收再利用」槽位的 <code>next</code>。那個值 stale 沒關係(gen 會讓它的 CAS 失敗),
+    但那個並發讀寫本身在 C11 模型裡就是 data race = UB。
+    「無害的競爭」在 Rust 裡不存在,loom 會直接抓。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 一個 u64 裡的兩個世界</h2>
+  <p>
+    generation tag 要跟 index <strong>原子地一起比對</strong>——分成兩個 atomic 就白做了
+    (你會在讀 gen 與讀 idx 之間再開一個新的 ABA 視窗)。
+    做法:塞進同一個字,用一次單字 CAS 同時比對兩者。
+  </p>
+  <pre class="code"><span class="cm">/// head 打包格式:[generation:32 | index:32]</span>
+<span class="kw">fn</span> pack(generation: u32, idx: u32) -&gt; u64 {
+    (u64::from(generation) &lt;&lt; 32) | u64::from(idx)
+}
+<span class="kw">fn</span> unpack(v: u64) -&gt; (u32, u32) {
+    ((v &gt;&gt; 32) <span class="kw">as</span> u32, v <span class="kw">as</span> u32)
+}
+
+<span class="cm">// 每一次成功的 CAS 都 bump gen —— 這是整個修補的全部內容</span>
+self.head.compare_exchange_weak(
+    cur,
+    pack(generation.wrapping_add(1), next),
+    Ordering::Acquire,
+    Ordering::Acquire,
+)</pre>
+  <p>
+    上面那台重現機的 <code>head</code> 欄位就是這個字。開著 gen 跑到第 5 步,你會看到
+    <code>cur = 0x0000_0005_0000_0000</code> 而 <code>head = 0x0000_0008_0000_0000</code>
+    ——低 32 位一模一樣(都是 index 0),高 32 位差了 3。
+    <strong>CAS 比的是整個 64 bit</strong>,所以它失敗。這就是全部的魔法。
+  </p>
+  <p class="note">
+    誠實聲明的殘餘風險:gen 是 u32,<code>wrapping_add</code> 在 2<sup>32</sup> 次成功 CAS 後迴繞。
+    要中招,一條執行緒得剛好卡在 CAS 前、睡到另外 42 億次操作跑完、
+    而且醒來時 index 也剛好對上。實務上接受;不接受的話,答案是 128-bit CAS
+    (<code>AtomicU128</code> 不在 stable std)或直接跳到 epoch-based reclamation。
+    面試被問「gen 幾位夠?」——正確答案不是數字,是<strong>「取決於你願意承擔多長的 stall」</strong>。
+  </p>
+</section>
+
+<section>
+  <h2>4 · free 鏈也是同一個 stack</h2>
+  <p>
+    空槽管理用第二條 lock-free 鏈(<code>free: AtomicU64</code>),和主鏈共用 <code>Slot::next</code> 欄位——
+    一個槽位任一時刻只在其中一條上。它是 stack,所以它<strong>也會 ABA</strong>,所以它<strong>也帶 gen</strong>。
+    整份 code 裡只有兩個 <code>AtomicU64</code>,兩個都是 <code>(gen, idx)</code>,理由一模一樣。
+  </p>
+  <p>
+    值的所有權像接力棒:
+    <span class="mono">stack 鏈 → popper 手中 → free 鏈 → allocator 手中 → stack 鏈</span>。
+    每一棒交接都必須是一條 Release → Acquire 邊,否則下一任會看到上一任沒寫完的 <code>value</code>。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>交接</th><th>ordering</th><th>它保證什麼</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>push</code>:寫 value/next → CAS head</td><td class="ord rel">Release</td><td>任何 Acquire 讀到新 head 的 popper,必看到完整的 value</td></tr>
+        <tr><td><code>pop</code>:CAS head 成功</td><td class="ord acq">Acquire</td><td>配 pusher 的 Release,才敢 <code>assume_init_read</code></td></tr>
+        <tr><td><code>free_slot</code>:CAS free</td><td class="ord rel">Release</td><td>「我讀完 value 了」——下一任才能安全覆寫</td></tr>
+        <tr><td><code>alloc_slot</code>:CAS free 成功</td><td class="ord acq">Acquire</td><td>配前任的 Release,獨佔這個槽位直到 push 發布它</td></tr>
+        <tr><td>迴圈裡讀 <code>slots[i].next</code></td><td class="ord rlx">Relaxed</td><td>讀到 stale 值是<strong>被允許的</strong>——gen 會讓後面的 CAS 失敗;它只需要不是 UB</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    <strong>誠實補充(這個 arena 其實比課本更難壞)</strong>:上面那台重現機是教科書劇本
+    ——「T2 pop A、pop B,再把 A push 回來」。但本模組的 free 鏈是 LIFO:
+    連續 free 掉 A、B 之後,鏈頂是 B,所以下一個 <code>alloc_slot</code> 其實會拿到 B、不是 A。
+    事實上,只要<strong>干擾者只有一條執行緒、而且每個 push/pop 都完整跑完</strong>,
+    LIFO free 鏈會把 next 鏈原封不動地還原回去,舊 CAS 就算成功也剛好是對的。
+    真正會炸的交錯需要<strong>第三個角色</strong>:一條執行緒 <code>alloc_slot</code> 之後、CAS head 之前被搶佔
+    (手上握著一個槽位),它的 push 讓 stack 頂在 A 被重新 alloc 之前就已經換人。
+    機制完全相同,只是觸發條件更刁——這正是<strong>為什麼要用 loom 窮舉,而不是靠人腦想交錯</strong>。
+  </p>
+</section>
+
+<section>
+  <h2>5 · lock-free != wait-free</h2>
+  <p>
+    開著 gen 跑重現機,T1 的 retry 計數會變成 1:它的 CAS 失敗、重讀、重試。
+    這不是 bug,是 lock-free 的<strong>定義</strong>:
+    <strong>每一次 CAS 失敗,都代表別人成功了</strong> ⇒ 系統整體必有進展。
+    但單一執行緒可能每次都輸、永遠餓死——所以 lock-free 不保證延遲上界。
+  </p>
+  <p>
+    wait-free(每條執行緒都在有界步數內完成)更強,實作也貴得多
+    (通常要 announce array + helping)。這個模組不做,也不該做:
+    <strong>面試講得出這兩者的差別,比實作 wait-free 值錢得多。</strong>
+  </p>
+</section>
+
+<section>
+  <h2>6 · loom 抓得到,壓力測試抓不到</h2>
+  <p>
+    ABA 的觸發視窗是「讀完 next、CAS 之前」的幾個 cycle。
+    用真 OS thread 壓力測試去撞它,是拿亂數當證明:
+    x86 上跑上億次可能一次都排不到那條交錯。
+    loom 不是跑很多次,是在 C11 模型上<strong>窮舉</strong>所有交錯。
+  </p>
+  <pre class="code">cargo test -p reference --test loom_arena</pre>
+  <p>
+    三個 model:雙 pusher(不丟不重)、雙 popper 搶同一個 head(恰好一人得手)、
+    以及 <code>loom_aba_recycle_race</code>——一條執行緒 pop 卡半路,
+    另一條 pop → 槽位回收 → push 重用同一槽位。
+    <code>sync_shim</code> 讓同一份 <code>core_impl.rs</code> 被兩套記憶體模型實例化:
+    lib 走 std(production 路徑零依賴),loom 測試用 <code>#[path]</code> include 同一份原始碼。
+    <strong>loom 驗過的,就是出貨的那份邏輯。</strong>
+  </p>
+  <p class="note">
+    Production 對照:真實世界的 lock-free 容器不靠 generation tag,靠
+    <strong>crossbeam-epoch</strong>(epoch-based reclamation)——每條執行緒進臨界區時「pin」一個 epoch,
+    退休的節點掛進 garbage list,等到所有執行緒都推進過那個 epoch 才真的 free。
+    好處:不限容量、沒有 gen 迴繞、也能回收記憶體。代價:每次操作要 pin/unpin,
+    而且 reclamation 本身是一整套機制。
+    另一條路是 hazard pointer(每條執行緒公告它正在讀哪個節點)。
+    bounded 池的現成品:<code>crossbeam::queue::ArrayQueue</code>。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/arena_lockfree/core_impl.rs</code> · 設計取捨:<code>docs/arena_lockfree.md</code></div>
+  <div>驗證:<code>cargo test -p reference --test loom_arena</code> · 替換層:<code>reference/src/sync_shim.rs</code></div>
+  <div>前置:<code>spsc_ring</code>(acquire/release 基礎)· <code>lru</code>/<code>tree</code>(index 換指標的手法)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var NIL = 4294967295;
+  var NAME = ["A", "B", "C"];
+
+  var st = null;      // 模擬狀態
+  var steps = [];     // 這一輪要走的交錯
+  var pc = 0;         // 已執行到第幾步
+  var useGen = false;
+  var timer = null;
+
+  // ── 機器字:pack(gen, idx) ──────────────────────────────────────
+  function hex32(n) {
+    var s = (n >>> 0).toString(16);
+    while (s.length < 8) s = "0" + s;
+    return s.slice(0, 4) + "_" + s.slice(4);
+  }
+  function bin32(n) {
+    var s = (n >>> 0).toString(2);
+    while (s.length < 32) s = "0" + s;
+    var out = [];
+    for (var i = 0; i < 32; i += 4) out.push(s.slice(i, i + 4));
+    return out.join(" ");
+  }
+  function nameOf(i) { return i === NIL ? "NIL" : NAME[i]; }
+  function pairOf(g, i) { return g === null ? "-" : "(" + g + ", " + nameOf(i) + ")"; }
+
+  // ── 狀態 ────────────────────────────────────────────────────────
+  function fresh() {
+    return {
+      // arena:三個槽位,一開始全在 stack 上,top → A → B → C
+      slots: [
+        { val: 10, next: 1,   where: "stack", life: 1 },
+        { val: 20, next: 2,   where: "stack", life: 1 },
+        { val: 30, next: NIL, where: "stack", life: 1 }
+      ],
+      headGen: 5, headIdx: 0,        // 這個 stack 已經被用過幾輪了,gen 不是 0
+      curGen: null, curIdx: null,    // T1 手上那份 head
+      t1next: null,                  // T1 手上那份 A.next
+      retries: 0,
+      t1got: null,
+      taken: [],                     // 已經交給呼叫端的值
+      corrupt: false,
+      finished: false,
+      hotSlot: null
+    };
+  }
+
+  // 從 head 走鏈(帶 guard,避免損毀狀態下的無限迴圈)
+  function chainOf(s) {
+    var out = [], i = s.headIdx, guard = 0;
+    while (i !== NIL && guard++ < 8) { out.push(i); i = s.slots[i].next; }
+    return out;
+  }
+  // 不變量:stack 鏈上不該出現任何「已經在 free 鏈上」的槽位
+  function violated(s) {
+    var c = chainOf(s);
+    for (var k = 0; k < c.length; k++) if (s.slots[c[k]].where === "free") return true;
+    return false;
+  }
+
+  // ── 交錯腳本 ────────────────────────────────────────────────────
+  function baseSteps() {
+    return [
+      {
+        who: "t1",
+        code: "let mut cur = head.load(Acquire);",
+        why: "讀到 (gen 5, idx 0) —— 也就是 A。",
+        run: function (s) { s.curGen = s.headGen; s.curIdx = s.headIdx; s.hotSlot = s.headIdx; }
+      },
+      {
+        who: "t1",
+        code: "let next = slots[A].next.load(Relaxed);",
+        why: "next = B。T1 手上握著 (A, B) 這一對事實 —— 然後被搶佔。接下來的世界它一無所知。",
+        run: function (s) { s.t1next = s.slots[s.curIdx].next; s.hotSlot = s.curIdx; },
+        stallAfter: true
+      },
+      {
+        who: "t2",
+        code: "pop() -> Some(10)\n  CAS head (5,A) -> (6,B)",
+        why: "A 出棧,值 10 交給呼叫端,槽位還進 free 鏈。",
+        run: function (s) {
+          s.headIdx = s.slots[0].next; s.headGen += 1;
+          s.slots[0].where = "free"; s.slots[0].val = null;
+          s.taken.push(10); s.hotSlot = 0;
+        }
+      },
+      {
+        who: "t2",
+        code: "pop() -> Some(20)\n  CAS head (6,B) -> (7,C)",
+        why: "B 出棧。記住這一刻:B 已經死了 —— 它在 free 鏈上,不在 stack 上。",
+        run: function (s) {
+          s.headIdx = s.slots[1].next; s.headGen += 1;
+          s.slots[1].where = "free"; s.slots[1].val = null;
+          s.taken.push(20); s.hotSlot = 1;
+        }
+      },
+      {
+        who: "t2",
+        code: "push(99)\n  alloc_slot() -> A   (回收)\n  CAS head (7,C) -> (8,A)",
+        why: "arena 把同一個 index 0 交了回來 —— 但這是 A 的第 2 條命:值變成 99,next 指向 C。head 現在「字面上」又等於 A 了。",
+        run: function (s) {
+          s.slots[0].where = "stack"; s.slots[0].life += 1;
+          s.slots[0].val = 99; s.slots[0].next = s.headIdx;
+          s.headIdx = 0; s.headGen += 1; s.hotSlot = 0;
+        }
+      }
+    ];
+  }
+
+  function casStepsNoGen() {
+    return [{
+      who: "t1",
+      code: "head.compare_exchange(cur, pack(gen+1, next))\n  無 gen:只比對低 32 位(idx)\n  head.idx = 0, cur.idx = 0  ->  相等  ->  成功",
+      why: "CAS 成功了 —— 因為 head 字面上就是 A。head 被寫成 B。但 B 早就在 free 鏈上,它是一具屍體。",
+      kind: "bad",
+      run: function (s) {
+        s.headIdx = s.t1next;          // 寫進一個已死的 index
+        s.headGen += 1;
+        s.t1got = s.slots[0].val;      // 讀走 slot A 的值 —— 也就是 T2 剛推進去的 99
+        s.taken.push(s.t1got);
+        s.slots[0].where = "free"; s.slots[0].val = null;  // T1 的 free_slot(A)
+        s.corrupt = violated(s);
+        s.finished = true;
+        s.hotSlot = s.headIdx;
+      }
+    }];
+  }
+
+  function casStepsGen() {
+    return [
+      {
+        who: "t1",
+        code: "head.compare_exchange(cur, pack(gen+1, next))\n  比對整個 u64\n  cur = 0x0000_0005_...  head = 0x0000_0008_...\n  ->  失敗,回傳 actual",
+        why: "低 32 位確實一樣(都是 index 0),但高 32 位差了 3。整個字不相等 -> CAS 失敗 -> 重試。這就是全部的魔法。",
+        kind: "good",
+        run: function (s) {
+          s.retries += 1;
+          s.curGen = s.headGen; s.curIdx = s.headIdx;   // cur = actual,重讀
+          s.hotSlot = s.headIdx;
+        }
+      },
+      {
+        who: "t1",
+        code: "let next = slots[A].next.load(Relaxed);",
+        why: "重跑迴圈。這次讀到的是 A 的第 2 條命:next = C。",
+        run: function (s) { s.t1next = s.slots[s.curIdx].next; s.hotSlot = s.curIdx; }
+      },
+      {
+        who: "t1",
+        code: "head.compare_exchange(cur, pack(9, C))\n  cur 是新鮮的  ->  成功",
+        why: "T1 拿到 99,head 指向 C。結構完好:沒有任何槽位同時在兩條鏈上。",
+        kind: "good",
+        run: function (s) {
+          s.headIdx = s.t1next; s.headGen += 1;
+          s.t1got = s.slots[0].val;
+          s.taken.push(s.t1got);
+          s.slots[0].where = "free"; s.slots[0].val = null;
+          s.corrupt = violated(s);
+          s.finished = true;
+          s.hotSlot = s.headIdx;
+        }
+      }
+    ];
+  }
+
+  // ── DOM ─────────────────────────────────────────────────────────
+  var lanesEl   = document.getElementById("aba-lanes");
+  var arenaEl   = document.getElementById("aba-arena");
+  var chainEl   = document.getElementById("aba-chain");
+  var headBits  = document.getElementById("w-head-bits");
+  var curBits   = document.getElementById("w-cur-bits");
+  var wHead     = document.getElementById("w-head");
+  var wCur      = document.getElementById("w-cur");
+  var verdict   = document.getElementById("aba-verdict");
+  var vTag      = document.getElementById("aba-verdict-tag");
+  var vText     = document.getElementById("aba-verdict-text");
+  var btnStep   = document.getElementById("aba-step");
+  var btnRun    = document.getElementById("aba-run");
+  var btnReset  = document.getElementById("aba-reset");
+  var offBtn    = document.getElementById("aba-gen-off");
+  var onBtn     = document.getElementById("aba-gen-on");
+
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt !== undefined) e.textContent = txt;
+    return e;
+  }
+
+  function buildLanes() {
+    lanesEl.textContent = "";
+    var h1 = el("div", "thread-head t1", "T1  落後的 popper");
+    var h2 = el("div", "thread-head t2", "T2  回收者");
+    lanesEl.append(h1, h2);
+
+    var row = 2;
+    for (var i = 0; i < steps.length; i++) {
+      var s = steps[i];
+      var d = el("div", "step pending");
+      d.id = "step-" + i;
+      d.style.gridColumn = (s.who === "t1") ? "1" : "2";
+      d.style.gridRow = String(row++);
+      var codeSpan = el("span", "mono");
+      codeSpan.textContent = s.code;
+      codeSpan.style.whiteSpace = "pre-wrap";
+      d.appendChild(codeSpan);
+      d.appendChild(el("span", "why", s.why));
+      lanesEl.appendChild(d);
+
+      if (s.stallAfter) {
+        var stall = el("div", "stall", "T1 preempted   ///   排程器把 T1 換下去");
+        stall.id = "stall";
+        stall.style.gridRow = String(row++);
+        lanesEl.appendChild(stall);
+      }
+    }
+  }
+
+  function paintWord(container, bitsEl, gen, idx) {
+    bitsEl.textContent = "";
+    if (gen === null) {
+      container.className = "word";
+      bitsEl.appendChild(el("span", "f-sep", "-  (T1 還沒讀)"));
+      return;
+    }
+    var hex = el("span");
+    hex.appendChild(el("span", "f-sep", "0x"));
+    hex.appendChild(el("span", "f-gen", hex32(gen)));
+    hex.appendChild(el("span", "f-sep", "_"));
+    hex.appendChild(el("span", "f-idx", hex32(idx)));
+    hex.appendChild(el("span", "f-sep", "   gen=" + gen + "  idx=" + (idx === NIL ? "NIL" : idx + " (" + NAME[idx] + ")")));
+    bitsEl.appendChild(hex);
+    bitsEl.appendChild(document.createElement("br"));
+    var bits = el("span");
+    bits.appendChild(el("span", "f-gen", bin32(gen)));
+    bits.appendChild(el("span", "f-sep", " | "));
+    bits.appendChild(el("span", "f-idx", bin32(idx)));
+    bitsEl.appendChild(bits);
+  }
+
+  function renderArena() {
+    arenaEl.textContent = "";
+    var inChain = chainOf(st);
+    for (var i = 0; i < st.slots.length; i++) {
+      var sl = st.slots[i];
+      var onChain = inChain.indexOf(i) >= 0;
+      var bad = onChain && sl.where === "free";
+
+      var cls = "slot";
+      if (bad) cls += " corrupt";
+      else if (onChain) cls += " instack";
+      if (st.hotSlot === i && !bad) cls += " hot";
+      var card = el("div", cls);
+
+      var head = el("div", "name");
+      head.appendChild(el("span", null, NAME[i]));
+      var badgeCls = bad ? "badge both" : (sl.where === "stack" ? "badge stack" : "badge free");
+      var badgeTxt = bad ? "stack + free" : sl.where;
+      head.appendChild(el("span", badgeCls, badgeTxt));
+      card.appendChild(head);
+
+      var r1 = el("div", "row");
+      r1.appendChild(el("span", "k", "index"));
+      r1.appendChild(el("span", "v", String(i)));
+      card.appendChild(r1);
+
+      var r2 = el("div", "row");
+      r2.appendChild(el("span", "k", "value"));
+      r2.appendChild(el("span", "v", sl.val === null ? "uninit" : String(sl.val)));
+      card.appendChild(r2);
+
+      var r3 = el("div", "row");
+      r3.appendChild(el("span", "k", "next"));
+      r3.appendChild(el("span", "v", nameOf(sl.next)));
+      card.appendChild(r3);
+
+      var r4 = el("div", "row");
+      r4.appendChild(el("span", "k", "第幾條命"));
+      r4.appendChild(el("span", "v", String(sl.life)));
+      card.appendChild(r4);
+
+      arenaEl.appendChild(card);
+    }
+  }
+
+  function renderChain() {
+    chainEl.textContent = "";
+    chainEl.appendChild(el("span", "lab", "stack 鏈"));
+    chainEl.appendChild(el("span", "arrow", "top →"));
+    var c = chainOf(st);
+    if (c.length === 0) {
+      chainEl.appendChild(el("span", "nil", "NIL  (空)"));
+      return;
+    }
+    for (var k = 0; k < c.length; k++) {
+      var i = c[k];
+      var dead = st.slots[i].where === "free";
+      var n = el("span", "n" + (dead ? " dead" : ""),
+        NAME[i] + (dead ? " (已在 free 鏈上!)" : "=" + st.slots[i].val));
+      chainEl.appendChild(n);
+      chainEl.appendChild(el("span", "arrow", "→"));
+    }
+    chainEl.appendChild(el("span", "nil", "NIL"));
+  }
+
+  function renderStats() {
+    document.getElementById("st-head").textContent = pairOf(st.headGen, st.headIdx);
+    document.getElementById("st-cur").textContent = pairOf(st.curGen, st.curIdx);
+    document.getElementById("st-next").textContent = st.t1next === null ? "-" : nameOf(st.t1next);
+    document.getElementById("st-retry").textContent = String(st.retries);
+
+    var inv = document.getElementById("st-inv");
+    var bad = violated(st);
+    inv.textContent = bad ? "VIOLATED" : "HOLDS";
+    inv.className = "v " + (bad ? "warn" : "good");
+  }
+
+  function renderVerdict() {
+    if (!st.finished) {
+      verdict.className = "verdict " + (useGen ? "ok" : "bad");
+      vTag.textContent = useGen ? "generation tag: ON" : "generation tag: OFF";
+      vText.textContent = useGen
+        ? "head 是 pack(gen, idx),CAS 比對整個 64 bit。按「下一步」把同一組交錯再排一次 —— 看 T1 的 CAS 會怎麼樣。"
+        : "head 只存 index,CAS 只比對 index。按「下一步」逐格排這組交錯 —— 注意 T1 手上那對 (A, B) 什麼時候過期。";
+      return;
+    }
+    if (st.corrupt) {
+      verdict.className = "verdict bad";
+      vTag.textContent = "結構損毀 / CORRUPTED";
+      vText.textContent =
+        "CAS 錯誤地成功了。head 現在指向 B,而 B 同時還掛在 free 鏈上 —— 一個槽位待在兩條鏈上," +
+        "不變量破了。眼下沒有任何東西爆炸:值 " + st.taken.join("、") + " 都交出去了,元素數看起來還對。" +
+        "但下一個 push 會把 B 當空槽 alloc 出去、覆寫它的 value、改寫它的 next —— " +
+        "那一刻 C(值 30)從 stack 上蒸發,而且它會在離這裡十萬八千里的地方才爆。" +
+        "這正是 ABA 的簽名:靜默、延遲、無法用壓力測試重現。";
+    } else {
+      verdict.className = "verdict ok";
+      vTag.textContent = "結構完好 / CORRECT";
+      vText.textContent =
+        "T1 的第一次 CAS 失敗(gen 5 對不上 gen 8),它重讀、重試,拿到 99。retry = " + st.retries + "。" +
+        "最終 head → C,沒有任何槽位同時在兩條鏈上。多重集不變:" + st.taken.join("、") +
+        " 交給呼叫端,30 還在 stack 裡 —— 不丟、不重。" +
+        "注意 T1 什麼都沒做錯:它只是慢了。generation tag 的工作,就是讓「慢」變成「重試」,而不是「損毀」。";
+    }
+  }
+
+  function render() {
+    for (var i = 0; i < steps.length; i++) {
+      var d = document.getElementById("step-" + i);
+      if (!d) continue;
+      if (i < pc) {
+        var k = steps[i].kind;
+        d.className = "step done" + (k ? " " + k : "");
+      } else if (i === pc) {
+        d.className = "step hot";
+      } else {
+        d.className = "step pending";
+      }
+    }
+    var stall = document.getElementById("stall");
+    if (stall) stall.className = "stall" + (pc >= 2 ? " on" : "");
+
+    paintWord(wHead, headBits, st.headGen, st.headIdx);
+    paintWord(wCur, curBits, st.curGen, st.curIdx);
+    // T1 手上那份與記憶體裡的真值:低 32 位相同時,無 gen 的 CAS 就會誤判
+    if (st.curGen !== null && !st.finished) {
+      if (st.curGen === st.headGen && st.curIdx === st.headIdx) {
+        wCur.className = "word";
+      } else if (st.curIdx === st.headIdx) {
+        wCur.className = "word " + (useGen ? "differ" : "match");
+      } else {
+        wCur.className = "word";
+      }
+    } else {
+      wCur.className = "word";
+    }
+
+    renderArena();
+    renderChain();
+    renderStats();
+    renderVerdict();
+
+    btnStep.disabled = pc >= steps.length;
+    btnRun.disabled = pc >= steps.length;
+  }
+
+  function step() {
+    if (pc >= steps.length) return;
+    steps[pc].run(st);
+    pc += 1;
+    render();
+  }
+
+  function runAll() {
+    if (timer) return;
+    timer = setInterval(function () {
+      if (pc >= steps.length) { clearInterval(timer); timer = null; return; }
+      step();
+    }, 850);
+  }
+
+  function reset() {
+    if (timer) { clearInterval(timer); timer = null; }
+    st = fresh();
+    steps = baseSteps().concat(useGen ? casStepsGen() : casStepsNoGen());
+    pc = 0;
+    buildLanes();
+    render();
+  }
+
+  function setMode(g) {
+    useGen = g;
+    offBtn.setAttribute("aria-pressed", String(!g));
+    onBtn.setAttribute("aria-pressed", String(g));
+    reset();
+  }
+
+  btnStep.addEventListener("click", step);
+  btnRun.addEventListener("click", runAll);
+  btnReset.addEventListener("click", reset);
+  offBtn.addEventListener("click", function () { setMode(false); });
+  onBtn.addEventListener("click", function () { setMode(true); });
+
+  setMode(false);
+})();
+</script>

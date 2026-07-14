@@ -1,0 +1,1254 @@
+<title>sharded_map — 分片不會消滅競爭,只會把它切開</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── sharded_map:競爭模擬器 ─────────────────────────────────────── */
+.ctl-label {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-left: 0.3rem;
+}
+input[type="text"] {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--ink);
+  width: 8.5rem;
+}
+input[type="text"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.sim { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; align-items: stretch; }
+.sim-lane {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.sim-lane h3 {
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.sim-lane.single h3 { color: var(--danger); }
+.sim-lane.sharded h3 { color: var(--ok); }
+.sim-lane .eyebrow { font-size: 0.62rem; letter-spacing: 0.1em; }
+.sim-lane .readout { grid-template-columns: repeat(auto-fit, minmax(4.2rem, 1fr)); gap: 0.4rem; }
+.sim-lane .stat { padding: 0.35rem 0.5rem; background: var(--raised); }
+.sim-lane .stat .k { font-size: 0.58rem; letter-spacing: 0.08em; }
+.sim-lane .stat .v { font-size: 0.95rem; }
+
+.locks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.8rem, 1fr));
+  gap: 0.4rem;
+  align-content: start;
+  flex: 1 1 auto;
+}
+.locks.one { grid-template-columns: 1fr; }
+.locks.one .lock { min-height: 6.6rem; }
+.lock {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--raised);
+  padding: 0.4rem 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.lock .lk {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lock .holder {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  min-height: 1.2rem;
+}
+.lock .holder.free { font-weight: 400; color: var(--muted); }
+.lock .holder.hold-ins { color: var(--producer); }
+.lock .holder.hold-get { color: var(--consumer); }
+.lock .qq { display: flex; flex-wrap: wrap; gap: 0.15rem; min-height: 1.2rem; }
+.lock.busy { border-color: var(--accent); background: var(--accent-bg); }
+.lock.jam { border-color: var(--danger); background: var(--danger-bg); }
+
+.chip {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  padding: 0.02rem 0.26rem;
+  line-height: 1.5;
+}
+.chip.ins { color: var(--producer); border-color: var(--producer); background: var(--producer-bg); }
+.chip.get { color: var(--consumer); border-color: var(--consumer); background: var(--consumer-bg); }
+
+@media (max-width: 48rem) {
+  .sim { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 2 &nbsp;·&nbsp; mutex &amp; condvar</p>
+  <h1>sharded_map</h1>
+  <p class="lede">
+    一把鎖、八個執行緒,第二個以後永遠在排隊。分片把一把鎖換成 N 把——
+    但它<strong>沒有消滅競爭,只是把競爭切成 N 份</strong>。
+    切不開的那一份,就是你的瓶頸,而面試官問的正是那一份。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 一批 op,兩種鎖</h2>
+  <p>
+    下面兩條 lane 收到<strong>完全相同</strong>的一批操作。
+    左邊是 <code>Mutex&lt;HashMap&gt;</code>:一把鎖,誰先搶到誰先做,其餘全部 park。
+    右邊是 <code>[Mutex&lt;HashMap&gt;; 8]</code>:每個 op 先算 <code>hash(key) &amp; mask</code> 挑出 shard,
+    再去搶<em>那一把</em>鎖——落在不同 shard 的 op 是<strong>真的同時在跑</strong>。
+    按 burst,然後只看一個數字:<code>blocked</code>。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <button id="btn-burst">burst: 8 個並發 op</button>
+      <span class="ctl-label">workload</span>
+      <div class="switch" role="group" aria-label="workload" id="sw-work">
+        <button data-w="uniform" aria-pressed="true">uniform keys</button>
+        <button data-w="skew" aria-pressed="false">skewed(同 shard)</button>
+        <button data-w="hot" aria-pressed="false">hot key(同一把 key)</button>
+      </div>
+      <button id="btn-reset">reset</button>
+    </div>
+
+    <div class="controls">
+      <span class="ctl-label">shards</span>
+      <div class="switch" role="group" aria-label="shard count" id="sw-shards">
+        <button data-n="1" aria-pressed="false">1</button>
+        <button data-n="2" aria-pressed="false">2</button>
+        <button data-n="4" aria-pressed="false">4</button>
+        <button data-n="8" aria-pressed="true">8</button>
+        <button data-n="16" aria-pressed="false">16</button>
+      </div>
+      <span class="ctl-label">single op</span>
+      <input id="key-in" type="text" value="user:42" spellcheck="false" aria-label="key">
+      <button class="act-consumer" id="btn-get">get(key)</button>
+      <button class="act-producer" id="btn-ins">insert(key, v)</button>
+    </div>
+
+    <div class="sim">
+      <div class="sim-lane single">
+        <h3>Mutex&lt;HashMap&lt;K, V&gt;&gt;</h3>
+        <p class="eyebrow">no hash. one lock. 全部序列化</p>
+        <div class="locks one" id="locks-single"></div>
+        <div class="readout">
+          <div class="stat"><span class="k">len()</span><span class="v" id="s-len">0</span></div>
+          <div class="stat"><span class="k">ops</span><span class="v" id="s-ops">0</span></div>
+          <div class="stat"><span class="k">blocked</span><span class="v warn" id="s-blk">0</span></div>
+          <div class="stat"><span class="k">rounds</span><span class="v" id="s-tick">0</span></div>
+          <div class="stat"><span class="k">op/tick</span><span class="v" id="s-tput">0.00</span></div>
+        </div>
+      </div>
+
+      <div class="sim-lane sharded">
+        <h3 id="sh-title">[Mutex&lt;HashMap&lt;K, V&gt;&gt;; 8]</h3>
+        <p class="eyebrow" id="sh-mask">shard = hash &amp; 0b111</p>
+        <div class="locks" id="locks-sharded"></div>
+        <div class="readout">
+          <div class="stat"><span class="k">len()</span><span class="v" id="h-len">0</span></div>
+          <div class="stat"><span class="k">ops</span><span class="v" id="h-ops">0</span></div>
+          <div class="stat"><span class="k">blocked</span><span class="v good" id="h-blk">0</span></div>
+          <div class="stat"><span class="k">rounds</span><span class="v" id="h-tick">0</span></div>
+          <div class="stat"><span class="k">op/tick</span><span class="v" id="h-tput">0.00</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict ok" id="sim-verdict">
+      <b>scoreboard</b>
+      <span id="sim-verdict-text">按 burst,兩條 lane 會收到同一批 op。看 blocked 那一格。</span>
+    </div>
+
+    <div class="log" id="sim-log"></div>
+  </div>
+
+  <p class="note">
+    一個 tick = 一輪臨界區。每把鎖每輪只放一個 op 進去,其餘在 queue 裡多等一輪。
+    <code>blocked</code> = 至少等過一輪的 op 數;<code>rounds</code> = 這條 lane 排空所需的輪數。
+    單鎖那邊 <code>op/tick</code> 恆為 <code>1.00</code>——這就是「吞吐上限 = 1 / 持鎖時間」的意思,
+    加再多核也不會動。
+  </p>
+
+  <p class="note">
+    按單顆 <code>get(key)</code>:兩邊都 0 blocked。<strong>分片不會讓單執行緒變快</strong>,
+    它多做的那次 hash 反而是純成本。把 shards 切到 <code>1</code>:右邊逐格退化成左邊,
+    數字一模一樣——那正是 <code>ShardedMap::new(1)</code>,測試
+    <code>boundary_single_shard_degenerate_still_correct</code> 釘的就是「退化了也還是對的」。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 誠實的失敗:hot key</h2>
+  <p>
+    把 workload 切到 <strong>hot key</strong> 再按 burst。8 個 op 全打
+    <code>"session:hot"</code>——同一個 key、同一個 hash、同一個 shard。
+    右邊有 8 把鎖,能用的只有 1 把。<code>blocked</code> 兩邊一樣是 7,<code>rounds</code> 也一樣是 8。
+    <strong>分片一次都沒省到。</strong>
+  </p>
+  <p>
+    <strong>skewed</strong> 那顆按鈕更陰險:8 個<em>不同</em>的 key,但 <code>hash &amp; mask</code> 全撞進同一格。
+    log 裡的 hash 值各不相同,shard 索引卻一路相同。key 不一樣不代表鎖不一樣——
+    <strong>hash 分佈是機率,不是保證</strong>。
+  </p>
+  <p>
+    真實世界的 hot key:被搶爆的商品 id、<code>"total"</code> 這種全域計數器、被 DDoS 的那個 session。
+    分片對它們<strong>一點忙都幫不上</strong>。這句話要在面試時<em>主動講</em>,而不是等對方問——
+    「我用分片降競爭」是初階答案,「分片把競爭 partition 掉,但 hot key 會讓某個 partition 變回全域鎖,
+    所以我會先量 key 分佈」才是。
+  </p>
+  <p>
+    hot key 只能換維度救,不能靠加 shard 救:key 加隨機後綴打散成 M 份、讀時再聚合(counter sharding);
+    或把熱值提到 <code>AtomicU64</code> / per-thread cache;或整條讀路徑換成無鎖(第 6 節)。
+  </p>
+  <p class="note">
+    為什麼 uniform 會贏,數學上:N = 8、8 個 op,期望用到的<em>相異</em> shard 數是
+    <code>8 × (1 − (7/8)^8)</code> = 約 5.2,所以期望 blocked 約 <code>8 − 5.2 = 2.8</code>。
+    單鎖那邊永遠是 7。<strong>分片贏的是期望值,不是最壞情況</strong>——
+    最壞情況(全撞一格)分片跟單鎖<strong>完全一樣慘</strong>,而且還多付了 hash 的錢。
+  </p>
+</section>
+
+<section>
+  <h2>3 · shard 數:兩邊都是懸崖</h2>
+  <p>
+    「多切幾片就好」是錯的。shard 數是個 U 形取捨,兩端都掉下去。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>shard 數</th><th>鎖競爭</th><th>記憶體 / 快取</th><th>全域操作(len / iter)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ord">1</td>
+          <td>全域序列化,吞吐上限 1 / 持鎖時間</td>
+          <td>最省。locality 最好,一張大 table</td>
+          <td>O(1) 把鎖,而且是<strong>線性化</strong>的</td>
+        </tr>
+        <tr>
+          <td class="ord">2–4 × 核數<br>(典型 16–64)</td>
+          <td>兩個隨機 op 撞同一把鎖:1 / N</td>
+          <td>N 個 <code>HashMap</code> + N 個 <code>Mutex</code>,可接受</td>
+          <td>O(N) 依序取放鎖,非線性化快照</td>
+        </tr>
+        <tr>
+          <td class="ord">過大<br>(如 4096)</td>
+          <td>幾乎不撞——但你早就不缺這個了</td>
+          <td><strong>每個 shard 都太小</strong>:table 撐不滿一條 cache line,
+              entry 分散、TLB / prefetch 全失效;N 個 Mutex 的 header 本身就是幾十 KB</td>
+          <td>O(N) 變成真成本,<code>len()</code> 要摸 4096 把鎖</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    shard 數取 <strong>2 的冪</strong>不是美感,是為了把 <code>%</code> 換成 <code>&amp;</code>。
+    <code>hash % N</code> 是整數除法,x86 上 <code>div</code> 要 20–40 cycle 且不好 pipeline;
+    <code>hash &amp; (N − 1)</code> 是 1 cycle、無分支。
+    <code>new()</code> 用 <code>num_shards.max(1).next_power_of_two()</code> 上取,
+    <code>mask = n − 1</code> 存起來——之後每次操作都省下那次除法。
+  </p>
+  <p class="note">
+    還有一個沒寫在程式碼裡的坑:<code>Box&lt;[Mutex&lt;HashMap&gt;]&gt;</code> 裡相鄰的 Mutex
+    很可能落在同一條 64 位元組 cache line。兩個執行緒鎖<em>不同</em> shard,硬體層卻在同一條 line 上互相
+    invalidate——<strong>false sharing</strong>,分片的效果被打掉一截。dashmap 的作法是把每個 shard 對齊/填充。
+    這與 <code>spsc_ring</code> 給 head/tail 各自 <code>#[repr(align(64))]</code> 是同一課。
+  </p>
+</section>
+
+<section>
+  <h2>4 · 咬人的不變量:全域視角不再是原子的</h2>
+  <p>
+    分片買到並發,賣掉的是「一把鎖看得到整張表」這件事。任何需要<strong>全域視角</strong>的操作都碎了。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>操作</th><th>本實作怎麼做</th><th>你必須知道的代價</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>len()</code></td>
+          <td class="ord">依序 lock → 讀 len → unlock,加總</td>
+          <td><strong>非線性化快照</strong>。數到 shard 3 時 shard 0 可能已經被改。
+              它是<em>監控值</em>:能畫成 dashboard,不能拿來做決策。
+              <code>if map.len() == 0 { assume_empty() }</code> 是 bug。</td>
+        </tr>
+        <tr>
+          <td><code>iter()</code></td>
+          <td class="ord">不提供</td>
+          <td>同一個理由。要提供就得說清楚它是「拼接起來的快照」,而不是某個時刻真的存在過的狀態。</td>
+        </tr>
+        <tr>
+          <td>跨 key 原子更新<br>(把 a 的錢搬給 b)</td>
+          <td class="ord">不提供</td>
+          <td>需要同時持兩把鎖。要做就<strong>必須按 shard index 由小到大取鎖</strong>——
+              否則 T1 拿 3 等 5、T2 拿 5 等 3,<strong>死鎖</strong>。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    所以這個模組把不變量寫死成一句話:<strong>任何操作最多持有一把 shard 鎖</strong>。
+    永不同時持兩把 ⇒ 不存在 lock ordering ⇒ <strong>死鎖從設計上被排除</strong>,不是靠紀律避免。
+    <code>len()</code> 也遵守它:取一把、放一把、再取下一把,絕不疊著拿。
+    這是一個<em>刻意</em>放棄的能力,不是一個沒做完的 TODO。
+  </p>
+  <p class="note">
+    同一條不變量的另一面:<code>with(&amp;k, |v| ...)</code> 的 closure 在<strong>持鎖期間</strong>執行。
+    在 <code>f</code> 裡再碰同一個 map,若 <code>k2</code> 撞到同一個 shard,就是自己等自己——
+    <code>std::sync::Mutex</code> 不可重入,直接死鎖。<code>f</code> 必須短、必須純。
+  </p>
+  <p class="note">
+    <code>upsert</code> 為什麼要一段式:<code>get_cloned</code> 然後 <code>insert</code> 是兩把鎖區間,
+    兩個執行緒都讀到 5、各自寫回 6,更新掉了一次。<code>upsert</code> 在<em>同一把 shard 鎖裡</em>做完
+    <code>entry().or_insert()</code> + 修改,天然原子。
+    這跟 <code>fetch_add</code> vs <code>load; store</code> 是同一課,測試
+    <code>boundary_same_key_contended_upsert_loses_nothing</code>(8 執行緒 × 1000 次遞增 = 8000,一次不丟)
+    就是釘這個。
+  </p>
+</section>
+
+<section>
+  <h2>5 · <code>get(&amp;K) -&gt; Option&lt;&amp;V&gt;</code> 編不出來,而編譯器是對的</h2>
+  <p>
+    你會很想寫這個簽名。它編不過:<code>&amp;V</code> 指向 shard 內部的記憶體,
+    而保護那段記憶體的 <code>MutexGuard</code> 在函式返回時就 drop 了。
+    回傳的引用會<strong>立刻懸空</strong>。Rust 不是在刁難你——它是在攔下一個
+    C++ 寫得出來、上線後 use-after-free 的簽名。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>出路</th><th>簽名</th><th>代價</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ord">複製值</td>
+          <td><code>get_cloned(&amp;K) -&gt; Option&lt;V&gt;</code> where <code>V: Clone</code></td>
+          <td>一次 clone。V 小(數十 byte)時最省事;V 大時是純浪費。</td>
+        </tr>
+        <tr>
+          <td class="ord">closure</td>
+          <td><code>with&lt;R&gt;(&amp;K, impl FnOnce(Option&lt;&amp;V&gt;) -&gt; R) -&gt; R</code></td>
+          <td>零複製,借用只活在持鎖區間內。代價:<strong>f 執行期間佔著鎖</strong>,
+              f 要短、不可重入(見上一節)。</td>
+        </tr>
+        <tr>
+          <td class="ord">Arc&lt;V&gt;</td>
+          <td>值本身存 <code>Arc&lt;V&gt;</code>,clone 只是 refcount +1</td>
+          <td>一次原子遞增 + 一層間接。適合 V 大、且要讓值逸出鎖之外長期持有。</td>
+        </tr>
+        <tr>
+          <td class="ord">guard 型別<br>(dashmap 的解)</td>
+          <td>回傳 <code>Ref&lt;'_, K, V&gt;</code>——把 guard 跟引用綁在一起一起逸出</td>
+          <td>API 最像 <code>HashMap</code>,但 caller <strong>握著鎖而不自知</strong>。
+              忘了 drop 它就去碰同一個 shard = 死鎖。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    另一個非踩不可的坑,在 <code>ShardedMap</code> 的欄位裡:<code>build_hasher: RandomState</code>
+    必須存在 struct 上、<strong>全 map 共用一份</strong>。若每次操作都 <code>RandomState::new()</code>,
+    seed 每次不同,同一個 key 這次落 shard 2、下次落 shard 5——<strong>key 會憑空「消失」</strong>,
+    而且測試在單執行緒下多半還會過。上面模擬器的 hash 也是全域共用一份,原因一樣。
+  </p>
+</section>
+
+<section>
+  <h2>6 · 產品裡不要自己寫這個</h2>
+  <p>
+    這個模組的價值在於<strong>你講得出上面五節</strong>,不在於這 100 行程式碼上線。
+    真的要用:
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>選項</th><th>機制</th><th>什麼時候選它</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ord">dashmap</td>
+          <td>就是這東西的產品版:分片 + <code>RwLock</code> + guard 型別(<code>Ref</code> / <code>RefMut</code>)</td>
+          <td>預設選它。RwLock 讓<em>同一個 shard</em> 的多個 reader 也能並行,比純 Mutex 又多一層。</td>
+        </tr>
+        <tr>
+          <td class="ord">crossbeam</td>
+          <td><code>crossbeam-skiplist</code> 的 <code>SkipMap</code>:lock-free、有序;
+              背後是 <code>crossbeam-epoch</code> 的 epoch-based reclamation</td>
+          <td>要<strong>有序迭代</strong>或 range query,且不想為了迭代鎖住全表。
+              沒有分片,也就沒有 hot-shard 問題。</td>
+        </tr>
+        <tr>
+          <td class="ord">papaya / flurry</td>
+          <td>epoch-based,<strong>讀路徑完全無鎖</strong></td>
+          <td>讀極多、寫少,而且讀延遲 tail latency 不能有鎖抖動。</td>
+        </tr>
+        <tr>
+          <td class="ord">RwLock&lt;HashMap&gt;<br>/ arc-swap</td>
+          <td>單鎖讀寫分離,或整張表 immutable、換的時候整個換掉</td>
+          <td>寫<em>極</em>少(設定檔、路由表)。分片在這裡是過度工程。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    面試時的完整答案長這樣:「先量讀寫比和 key 分佈。讀寫比 100:1 就先問要不要
+    <code>RwLock&lt;HashMap&gt;</code> 或 arc-swap;真的是高並發讀寫混合,才上分片,
+    shard 數取 2–4 倍核數的 2 的冪;然後我會盯 key 分佈,因為分片對 hot key 沒有用。
+    產品裡我用 dashmap,不自己寫。」
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/sharded_map.rs</code> · 設計取捨:<code>docs/sharded_map.md</code></div>
+  <div>驗證:<code>cargo test -p reference sharded_map</code>(含並發插入無遺失、同 key 高競爭 upsert)</div>
+  <div>前置:<code>bounded_queue</code>(Mutex / Condvar 的基本盤)· 同階:<code>thread_pool</code> · 進階:<code>spsc_ring</code>(把鎖整個拿掉)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var THREADS = 8;
+  var TICK_MS = 300;
+  var SEED = 20260714;
+
+  var shardCount = 8;
+  var workload = "uniform";
+  var running = false;
+  var rngState = SEED;
+
+  var single = null;
+  var sharded = null;
+
+  var logEl = document.getElementById("sim-log");
+  var verdictEl = document.getElementById("sim-verdict");
+  var verdictTx = document.getElementById("sim-verdict-text");
+
+  // ── 工具 ────────────────────────────────────────────────────────
+  // 固定 seed 的 mulberry32:同一個 workload 每次按下去結果可重現,教學才對得起來。
+  // (不用課本 LCG:JS 的 number 是 double,state * 1103515245 會超過 2^53,
+  //  低位直接被浮點吃掉,序列會退化。Math.imul 才是 32-bit 的乘法。)
+  function rnd() {
+    rngState = (rngState + 0x6d2b79f5) | 0;
+    var t = rngState;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  // FNV-1a 32-bit。真正的 ShardedMap 用 RandomState(SipHash),
+  // 但重點一模一樣:整張 map 共用同一份 hasher,同一個 key 永遠落同一個 shard。
+  function fnv1a(s) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  function hex(h) { return "0x" + ("0000000" + h.toString(16)).slice(-8); }
+
+  function maskBits() {
+    var m = shardCount - 1;
+    var s = m.toString(2);
+    var bits = Math.max(1, Math.round(Math.log(shardCount) / Math.LN2));
+    while (s.length < bits) s = "0" + s;
+    return s;
+  }
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 80) logEl.removeChild(logEl.lastChild);
+  }
+
+  // ── lane 狀態 ───────────────────────────────────────────────────
+  function makeLane(n) {
+    var locks = [];
+    for (var i = 0; i < n; i++) locks.push({ q: [], holder: null, keys: {}, n: 0 });
+    return { locks: locks, ops: 0, blocked: 0, ticks: 0 };
+  }
+
+  function commit(lock, op) {
+    // get 不改狀態;insert 新 key 才長 len。兩條 lane 看到的 key 集合永遠相同。
+    if (op.kind === "ins" && !Object.prototype.hasOwnProperty.call(lock.keys, op.key)) {
+      lock.keys[op.key] = 1;
+      lock.n++;
+    }
+  }
+
+  // 一個 tick = 一輪臨界區:先讓上一輪的持有者做完,再讓每把空鎖各放一個 op 進去,
+  // 剩下還在 queue 裡的全部多等一輪。
+  function tickLane(L) {
+    var i, j, lk;
+    for (i = 0; i < L.locks.length; i++) {
+      lk = L.locks[i];
+      if (lk.holder) {
+        commit(lk, lk.holder);
+        L.ops++;
+        if (lk.holder.waited > 0) L.blocked++;
+        lk.holder = null;
+      }
+    }
+    var acquired = 0;
+    for (i = 0; i < L.locks.length; i++) {
+      lk = L.locks[i];
+      if (lk.q.length) { lk.holder = lk.q.shift(); acquired++; }
+      for (j = 0; j < lk.q.length; j++) lk.q[j].waited++;
+    }
+    if (acquired > 0) L.ticks++;
+  }
+
+  function laneBusy(L) {
+    for (var i = 0; i < L.locks.length; i++) {
+      if (L.locks[i].holder || L.locks[i].q.length) return true;
+    }
+    return false;
+  }
+
+  function laneLen(L) {
+    var t = 0;
+    for (var i = 0; i < L.locks.length; i++) t += L.locks[i].n;
+    return t;
+  }
+
+  // ── op 產生 ─────────────────────────────────────────────────────
+  function mkOp(tid, key, kind) {
+    return { tid: tid, key: key, kind: kind, hash: fnv1a(key), waited: 0 };
+  }
+
+  // 找出 8 個「不同 key、卻撞同一個 shard」的 key。hash 值各不相同,shard 索引全一樣。
+  function skewKeys() {
+    var mask = shardCount - 1;
+    var target = shardCount > 1 ? (shardCount >> 1) : 0;
+    var out = [];
+    var i = 0;
+    while (out.length < THREADS && i < 200000) {
+      var k = "user:" + i;
+      if ((fnv1a(k) & mask) === target) out.push(k);
+      i++;
+    }
+    while (out.length < THREADS) out.push("user:0");
+    return out;
+  }
+
+  function makeBurst() {
+    var ops = [];
+    var i;
+    if (workload === "hot") {
+      for (i = 0; i < THREADS; i++) ops.push(mkOp(i, "session:hot", rnd() < 0.4 ? "ins" : "get"));
+    } else if (workload === "skew") {
+      var ks = skewKeys();
+      for (i = 0; i < THREADS; i++) ops.push(mkOp(i, ks[i], rnd() < 0.4 ? "ins" : "get"));
+    } else {
+      for (i = 0; i < THREADS; i++) {
+        var key = "user:" + Math.floor(rnd() * 1000);
+        ops.push(mkOp(i, key, rnd() < 0.5 ? "ins" : "get"));
+      }
+    }
+    return ops;
+  }
+
+  // ── 派工:同一批 op 同時進兩條 lane ─────────────────────────────
+  function enqueue(ops) {
+    var mask = shardCount - 1;
+    var seen = {};
+    for (var i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      var s = o.hash & mask;
+      single.locks[0].q.push({ tid: o.tid, key: o.key, kind: o.kind, waited: 0 });
+      sharded.locks[s].q.push({ tid: o.tid, key: o.key, kind: o.kind, waited: 0 });
+
+      say(o.kind === "ins" ? "p" : "c",
+          "t" + o.tid + " " + (o.kind === "ins" ? "insert" : "get   ") +
+          "(\"" + o.key + "\")  h=" + hex(o.hash) + "  & 0b" + maskBits() + " -> shard " + s);
+
+      if (Object.prototype.hasOwnProperty.call(seen, String(s))) {
+        say("x", "     collision: t" + o.tid + " 與 t" + seen[String(s)] +
+                 " 同落 shard " + s + " —— 分片這邊也得排隊");
+      } else {
+        seen[String(s)] = o.tid;
+      }
+    }
+  }
+
+  function snap() {
+    return {
+      so: single.ops, sb: single.blocked, st: single.ticks,
+      ho: sharded.ops, hb: sharded.blocked, ht: sharded.ticks
+    };
+  }
+
+  function fire(ops) {
+    if (running) return;
+    var before = snap();
+    enqueue(ops);
+    running = true;
+    setButtons(false);
+    render();
+
+    var guard = 0;
+    function step() {
+      tickLane(single);
+      tickLane(sharded);
+      render();
+      if ((laneBusy(single) || laneBusy(sharded)) && guard++ < 400) {
+        setTimeout(step, TICK_MS);
+      } else {
+        running = false;
+        setButtons(true);
+        render();
+        verdictFor(before);
+      }
+    }
+    setTimeout(step, TICK_MS);
+  }
+
+  // 同一套 tick 邏輯,不走 timer——給 headless probe 用。
+  function fireSync(ops) {
+    var before = snap();
+    enqueue(ops);
+    var guard = 0;
+    while ((laneBusy(single) || laneBusy(sharded)) && guard++ < 1000) {
+      tickLane(single);
+      tickLane(sharded);
+    }
+    render();
+    verdictFor(before);
+    return {
+      workload: workload,
+      shards: shardCount,
+      ops: single.ops - before.so,
+      single: { blocked: single.blocked - before.sb, rounds: single.ticks - before.st },
+      sharded: { blocked: sharded.blocked - before.hb, rounds: sharded.ticks - before.ht }
+    };
+  }
+
+  // ── 判決 ────────────────────────────────────────────────────────
+  function verdictFor(b) {
+    var n = single.ops - b.so;
+    var sB = single.blocked - b.sb, hB = sharded.blocked - b.hb;
+    var sT = single.ticks - b.st, hT = sharded.ticks - b.ht;
+    var sP = sT ? (n / sT).toFixed(2) : "0.00";
+    var hP = hT ? (n / hT).toFixed(2) : "0.00";
+    var line = "本次 burst:" + n + " 個 op。單鎖 blocked=" + sB + "、" + sT + " 輪、" + sP +
+               " op/tick;分片 blocked=" + hB + "、" + hT + " 輪、" + hP + " op/tick。";
+
+    if (n <= 1) {
+      verdictEl.className = "verdict ok";
+      verdictTx.textContent = line + " 只有一個 op,沒人跟它搶——兩邊都 0 blocked。" +
+        "分片不會讓單執行緒變快,那次 hash 是純成本。";
+    } else if (shardCount === 1) {
+      verdictEl.className = "verdict bad";
+      verdictTx.textContent = line + " shards = 1:右邊就是左邊。ShardedMap::new(1) 完全退化成全域鎖——" +
+        "行為仍然正確,只是一點併發度都沒有。";
+    } else if (hB < sB) {
+      verdictEl.className = "verdict ok";
+      verdictTx.textContent = line + " 分片省下 " + (sB - hB) + " 次等待,排空從 " + sT + " 輪縮到 " +
+        hT + " 輪。省掉的不是鎖,是排隊。";
+    } else {
+      verdictEl.className = "verdict bad";
+      verdictTx.textContent = line + " 分片一次都沒省到。所有 op 的 hash 全落進同一個 shard——" +
+        "鎖有 " + shardCount + " 把,能用的只有 1 把。這就是 hot key / skew:" +
+        "分片 partition 競爭,但 partition 不了的東西它救不了。";
+    }
+  }
+
+  // ── 繪製 ────────────────────────────────────────────────────────
+  function renderLocks(el, L, isOne) {
+    el.className = "locks" + (isOne ? " one" : "");
+    el.textContent = "";
+    for (var i = 0; i < L.locks.length; i++) {
+      var lk = L.locks[i];
+      var cell = document.createElement("div");
+      cell.className = "lock" + (lk.holder ? (lk.q.length ? " jam" : " busy") : "");
+
+      var lab = document.createElement("span");
+      lab.className = "lk";
+      lab.textContent = (isOne ? "Mutex" : "shard " + i) + " · n=" + lk.n;
+
+      var hold = document.createElement("span");
+      if (lk.holder) {
+        hold.className = "holder " + (lk.holder.kind === "ins" ? "hold-ins" : "hold-get");
+        hold.textContent = "t" + lk.holder.tid + " " + (lk.holder.kind === "ins" ? "ins" : "get");
+      } else {
+        hold.className = "holder free";
+        hold.textContent = "free";
+      }
+
+      var q = document.createElement("span");
+      q.className = "qq";
+      for (var j = 0; j < lk.q.length; j++) {
+        var c = document.createElement("span");
+        c.className = "chip " + lk.q[j].kind;
+        c.textContent = "t" + lk.q[j].tid;
+        q.appendChild(c);
+      }
+
+      cell.append(lab, hold, q);
+      el.appendChild(cell);
+    }
+  }
+
+  function put(id, v) { document.getElementById(id).textContent = String(v); }
+
+  function render() {
+    renderLocks(document.getElementById("locks-single"), single, true);
+    renderLocks(document.getElementById("locks-sharded"), sharded, false);
+
+    put("s-len", laneLen(single));
+    put("s-ops", single.ops);
+    put("s-blk", single.blocked);
+    put("s-tick", single.ticks);
+    put("s-tput", single.ticks ? (single.ops / single.ticks).toFixed(2) : "0.00");
+
+    put("h-len", laneLen(sharded));
+    put("h-ops", sharded.ops);
+    put("h-blk", sharded.blocked);
+    put("h-tick", sharded.ticks);
+    put("h-tput", sharded.ticks ? (sharded.ops / sharded.ticks).toFixed(2) : "0.00");
+  }
+
+  // ── 控制 ────────────────────────────────────────────────────────
+  var ctlIds = ["btn-burst", "btn-get", "btn-ins", "btn-reset"];
+
+  function setButtons(on) {
+    var i;
+    for (i = 0; i < ctlIds.length; i++) document.getElementById(ctlIds[i]).disabled = !on;
+    var groups = [document.getElementById("sw-shards"), document.getElementById("sw-work")];
+    for (i = 0; i < groups.length; i++) {
+      var bs = groups[i].getElementsByTagName("button");
+      for (var j = 0; j < bs.length; j++) bs[j].disabled = !on;
+    }
+  }
+
+  function reset() {
+    single = makeLane(1);
+    sharded = makeLane(shardCount);
+    rngState = SEED;
+    running = false;
+    setButtons(true);
+    logEl.textContent = "";
+    say("m", "reset — shards = " + shardCount + ", mask = 0b" + maskBits() +
+             ", workload = " + workload + ", threads = " + THREADS);
+    verdictEl.className = "verdict ok";
+    verdictTx.textContent = "按 burst,兩條 lane 會收到同一批 op。看 blocked 那一格。";
+    render();
+  }
+
+  function setShards(n) {
+    if (running) return;
+    shardCount = n;
+    var bs = document.getElementById("sw-shards").getElementsByTagName("button");
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].setAttribute("aria-pressed", String(Number(bs[i].getAttribute("data-n")) === n));
+    }
+    document.getElementById("sh-title").textContent = "[Mutex<HashMap<K, V>>; " + n + "]";
+    document.getElementById("sh-mask").textContent = "shard = hash & 0b" + maskBits();
+    reset();
+  }
+
+  function setWorkload(w) {
+    if (running) return;
+    workload = w;
+    var bs = document.getElementById("sw-work").getElementsByTagName("button");
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].setAttribute("aria-pressed", String(bs[i].getAttribute("data-w") === w));
+    }
+    reset();
+  }
+
+  document.getElementById("btn-burst").addEventListener("click", function () {
+    fire(makeBurst());
+  });
+  document.getElementById("btn-get").addEventListener("click", function () {
+    var k = document.getElementById("key-in").value || "user:42";
+    fire([mkOp(0, k, "get")]);
+  });
+  document.getElementById("btn-ins").addEventListener("click", function () {
+    var k = document.getElementById("key-in").value || "user:42";
+    fire([mkOp(0, k, "ins")]);
+  });
+  document.getElementById("btn-reset").addEventListener("click", reset);
+
+  (function wireSwitches() {
+    var sh = document.getElementById("sw-shards").getElementsByTagName("button");
+    var i;
+    for (i = 0; i < sh.length; i++) {
+      (function (b) {
+        b.addEventListener("click", function () { setShards(Number(b.getAttribute("data-n"))); });
+      })(sh[i]);
+    }
+    var wk = document.getElementById("sw-work").getElementsByTagName("button");
+    for (i = 0; i < wk.length; i++) {
+      (function (b) {
+        b.addEventListener("click", function () { setWorkload(b.getAttribute("data-w")); });
+      })(wk[i]);
+    }
+  })();
+
+  // headless probe 的把手:同一套模擬邏輯,只是不等 timer。
+  window.__sharded = {
+    reset: reset,
+    setShards: setShards,
+    setWorkload: setWorkload,
+    burstSync: function () { return fireSync(makeBurst()); }
+  };
+
+  setShards(8);
+})();
+</script>

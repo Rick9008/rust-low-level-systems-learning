@@ -1,0 +1,1373 @@
+<title>hw_bridge — TCP 沒有 message,邊界是你自己畫的</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ══ hw_bridge 專用:byte 流 ═════════════════════════════════════ */
+.ctl-label {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.1rem;
+}
+button.act-danger { border-color: var(--danger); color: var(--danger); }
+button.act-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); }
+button.act-ok { border-color: var(--ok); color: var(--ok); }
+button.act-ok:hover:not(:disabled) { background: var(--ok-bg); border-color: var(--ok); }
+
+.verdict.wait { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+
+.wire-row { display: flex; flex-direction: column; gap: 0.45rem; }
+.wire-row > .lbl {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bytes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-content: flex-start;
+  min-height: 3.6rem;
+  padding: 0.35rem;
+  border: 1px dashed var(--line-soft);
+  border-radius: 5px;
+}
+.byte {
+  width: 2.7rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.28rem 0 0.16rem;
+  transition: background 180ms ease, border-color 180ms ease, opacity 180ms ease;
+}
+.byte .hx {
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  min-height: 1.1rem;
+  color: var(--ink);
+}
+.byte .rl {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-height: 0.85rem;
+  line-height: 1;
+}
+.byte .cu {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  line-height: 1;
+  min-height: 0.9rem;
+  color: var(--ink);
+  font-weight: 700;
+}
+.byte.len { border-color: var(--accent); background: var(--accent-bg); }
+.byte.len .hx, .byte.len .rl { color: var(--accent); }
+.byte.op { border-color: var(--producer); background: var(--producer-bg); }
+.byte.op .hx, .byte.op .rl { color: var(--producer); }
+.byte.pay { border-color: var(--consumer); background: var(--consumer-bg); }
+.byte.pay .hx, .byte.pay .rl { color: var(--consumer); }
+.byte.bad { border-color: var(--danger); background: var(--danger-bg); }
+.byte.bad .hx, .byte.bad .rl { color: var(--danger); }
+.byte.eaten { opacity: 0.32; border-style: dashed; }
+.byte.inflight { border-style: dashed; background: transparent; }
+.byte.inflight .hx { color: var(--muted); }
+.byte.ghost { border-color: transparent; background: transparent; width: 1.1rem; }
+.byte.fresh { box-shadow: 0 0 0 2px var(--accent); }
+.bytes .empty {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 0.7rem 0.3rem;
+}
+
+/* ── wire format 圖 ──────────────────────────────────────────────── */
+.fmt { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.fmt .fld {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.6rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-family: var(--mono);
+}
+.fmt .fld .n { font-size: 0.86rem; font-weight: 600; }
+.fmt .fld .d { font-size: 0.66rem; color: var(--ink-2); letter-spacing: 0.04em; }
+.fmt .fld.f-len { border-color: var(--accent); background: var(--accent-bg); }
+.fmt .fld.f-len .n { color: var(--accent); }
+.fmt .fld.f-op { border-color: var(--producer); background: var(--producer-bg); }
+.fmt .fld.f-op .n { color: var(--producer); }
+.fmt .fld.f-pay { border-color: var(--consumer); background: var(--consumer-bg); flex: 1 1 14rem; }
+.fmt .fld.f-pay .n { color: var(--consumer); }
+
+/* ── 兩種錯誤的對照 ──────────────────────────────────────────────── */
+.contrast { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  padding: 1.1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.card.good { border-color: var(--ok); }
+.card.bad { border-color: var(--danger); }
+.card .wirebytes {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+}
+.card p { font-size: 0.92rem; }
+.card .fate {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-top: 0.2rem;
+  border-top: 1px solid var(--line-soft);
+}
+.card.good .fate { color: var(--ok); }
+.card.bad .fate { color: var(--danger); }
+
+/* ── thread 圖 ───────────────────────────────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: 0.3rem; min-height: 1.9rem; align-items: center; }
+.thr {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  padding: 0.22rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.thr.io { border-color: var(--consumer); background: var(--consumer-bg); color: var(--consumer); }
+.thr.w { border-color: var(--producer); background: var(--producer-bg); color: var(--producer); }
+.thr.conn { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.thr.more { border-style: dashed; background: transparent; }
+
+@media (max-width: 46rem) {
+  .contrast { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 7 &nbsp;·&nbsp; binary protocol over TCP</p>
+  <h1>hw_bridge</h1>
+  <p class="lede">
+    TCP 只保證 byte 的<strong>順序</strong>,不保證你 <code>write()</code> 的<strong>切割方式</strong>。
+    一次 <code>read()</code> 拿到的可能是半個 frame、一個半 frame、三個 frame。
+    message 邊界是你的協定要重建的東西——kernel 不管。
+    這個模組的全部難度就在那個 <code>Ok(None)</code>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · wire format:一行註解決定成敗</h2>
+  <p>
+    整個協定只有三個欄位。難的不是佈局,是<strong>一句話的定義</strong>:
+    <code>len</code> 到底含不含它自己?兩種定義業界都有,拿錯對方的 = 永久錯位 4 bytes、
+    第一個 frame 之後全爛。本協定寫死:<strong>不含</strong>。
+  </p>
+
+  <div class="fmt">
+    <div class="fld f-len">
+      <span class="n">len : u32 BE</span>
+      <span class="d">4 bytes · opcode + payload 的長度 · 不含自己</span>
+    </div>
+    <div class="fld f-op">
+      <span class="n">opcode : u8</span>
+      <span class="d">1 byte · 最高位 0 = 命令,1 = 回應</span>
+    </div>
+    <div class="fld f-pay">
+      <span class="n">payload : (len - 1) bytes</span>
+      <span class="d">定長欄位 · 整數一律 big-endian(network byte order)</span>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>opcode</th><th>命令 / 回應</th><th>payload</th><th>wire bytes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="ord">0x01</td><td><code>Command::Ping</code></td><td>none</td><td class="mono">00 00 00 01 01</td></tr>
+        <tr><td class="ord">0x02</td><td><code>Command::ReadSensor</code></td><td>u16 sensor_id</td><td class="mono">00 00 00 03 02 00 19</td></tr>
+        <tr><td class="ord">0x03</td><td><code>Command::SetFan</code></td><td>u16 rpm</td><td class="mono">00 00 00 03 03 11 94</td></tr>
+        <tr><td class="ord">0x81</td><td><code>Response::Pong</code></td><td>none</td><td class="mono">00 00 00 01 81</td></tr>
+        <tr><td class="ord">0x82</td><td><code>Response::SensorValue</code></td><td>u16 id + i32 毫攝氏度</td><td class="mono">00 00 00 07 82 00 19 00 00 60 97</td></tr>
+        <tr><td class="ord">0x83</td><td><code>Response::Ack</code></td><td>none</td><td class="mono">00 00 00 01 83</td></tr>
+        <tr><td class="ord">0xFF</td><td><code>Response::Error</code></td><td>u8 code</td><td class="mono">00 00 00 02 ff 01</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    <code>MAX_FRAME_LEN = 64 KiB</code> 不是效能參數,是<strong>防禦線</strong>:
+    沒有它,對面宣稱 <code>len = 0xFFFFFFFF</code>,server 就會乖乖預留 4 GB 緩衝等它。
+    一個 byte 的攻擊面,一行常數擋掉。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 逐 byte 餵進 FrameReader:那個 Ok(None)</h2>
+  <p>
+    <code>drip 1 byte</code> 模擬最壞的 TCP 切割:一次 <code>read()</code> 只拿到 1 byte。
+    看 <code>next_frame()</code> 一次一次回 <code>Ok(None)</code>——它<strong>什麼都不能做</strong>,
+    只能把殘料留在 buffer 裡等。<code>len</code> 沒湊滿 4 byte 時不行;
+    湊滿了但 payload 還差 1 byte 時<strong>仍然</strong>不行。
+    這條路徑在單元測試裡是 <code>assert_eq!(reader.next_frame(), Ok(None))</code>——
+    餵完 5 個 byte,那個 <code>Ok(None)</code> 就有體感了。
+  </p>
+
+  <div class="stage" id="stage">
+    <div class="controls">
+      <span class="ctl-label">client write</span>
+      <button id="q-ping">Ping</button>
+      <button id="q-sensor">ReadSensor{25}</button>
+      <button id="q-fan">SetFan{4500}</button>
+      <button id="q-glued">2 frames 黏成一個 segment</button>
+      <button class="act-ok" id="q-badop">未知 opcode 0x7e</button>
+      <button class="act-danger" id="q-badlen">malformed len = ffffffff</button>
+    </div>
+
+    <div class="controls">
+      <span class="ctl-label">server</span>
+      <button class="act-producer" id="btn-drip">read() 1 byte &rarr; feed()</button>
+      <button class="act-consumer" id="btn-flush">read() 全部 &rarr; feed()</button>
+      <button id="btn-auto">自動 drip</button>
+      <button id="btn-reset">reset</button>
+    </div>
+
+    <div class="wire-row">
+      <span class="lbl">wire &mdash; client 已送出、server 還沒 read() 進來的 bytes</span>
+      <div class="bytes" id="wire"></div>
+    </div>
+
+    <div class="wire-row">
+      <span class="lbl">FrameReader.buf &mdash; 虛線 = read_pos 之前已切走的殘骸;<span class="mono">&uarr;</span> = read_pos</span>
+      <div class="bytes" id="rbuf"></div>
+    </div>
+
+    <div class="verdict wait" id="verdict">
+      <b id="v-title">next_frame() -&gt; Ok(None)</b>
+      <span id="v-text">buf 是空的。先按上排任一個按鈕把 bytes 放上 wire,再按 drip。</span>
+    </div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">buf.len()</span><span class="v" id="st-buflen">0</span></div>
+      <div class="stat"><span class="k">read_pos</span><span class="v" id="st-readpos">0</span></div>
+      <div class="stat"><span class="k">pending_len()</span><span class="v" id="st-pending">0</span></div>
+      <div class="stat"><span class="k">wire 未讀</span><span class="v" id="st-wire">0</span></div>
+      <div class="stat"><span class="k">切出 frames</span><span class="v" id="st-frames">0</span></div>
+      <div class="stat"><span class="k">connection</span><span class="v good" id="st-conn">LIVE</span></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    三個 off-by-one 埋伏點,全在這個小狀態機裡:
+    (1) <code>len</code> 含不含自己 &rarr; <code>total = 4 + len</code>,不是 <code>4 + len - 4</code>;
+    (2) 殘料的起點是 <code>buf[read_pos..]</code>,不是 <code>buf[0..]</code>;
+    (3) 等待條件是 <code>buf.len() &lt; 4 + len</code>——差 1 byte 也是差。
+    reference 的測試不靠手挑案例:<strong>窮舉 7-byte frame 的每一個切割點</strong>(1..6)
+    再加 byte-by-byte 餵三個 frame。這種 bug 挑幾個 case 抓不乾淨。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 兩種錯誤,兩種命運</h2>
+  <p>
+    上面那個 stepper 裡有兩顆按鈕會出錯,結果完全相反。這不是實作細節,
+    是<strong>協定的設計決策</strong>:framing 層與語意層必須分開,
+    因為它們對「stream 還能不能信」的答案不同。
+  </p>
+
+  <div class="contrast">
+    <div class="card good">
+      <h3>語意錯 &mdash; 未知 opcode</h3>
+      <div class="wirebytes">00 00 00 01 7e</div>
+      <p>
+        frame <strong>切得出來</strong>:len = 1 合法,frame 佔滿 5 bytes,
+        server 明確知道下一個 frame 從第 6 個 byte 開始。
+        只是 <code>0x7e</code> 不在 opcode 表裡——可能對面版本比你新。
+        回 <code>Response::Error{code: 1}</code>,byte 流<strong>完全沒失去同步</strong>。
+      </p>
+      <span class="fate">connection LIVE &mdash; 可恢復</span>
+      <div class="controls"><button class="act-ok" id="c-badop">在上面跑這條</button></div>
+    </div>
+
+    <div class="card bad">
+      <h3>framing 錯 &mdash; malformed len</h3>
+      <div class="wirebytes">ff ff ff ff</div>
+      <p>
+        len 宣稱 4294967295 bytes,遠超 <code>MAX_FRAME_LEN</code>。
+        為什麼不能像左邊一樣回個 Error 就算了?因為 length-prefix 協定
+        <strong>沒有 resync 點</strong>:len 一旦不可信,server 就不知道
+        下一個 frame 從<strong>哪一個 byte</strong> 開始。stream 已經失去意義。
+        唯一正解是 <code>close(conn)</code>。
+      </p>
+      <span class="fate">connection DEAD &mdash; 不可恢復</span>
+      <div class="controls"><button class="act-danger" id="c-badlen">在上面跑這條</button></div>
+    </div>
+  </div>
+
+  <p class="note">
+    按了 malformed len 之後回頭看 stepper:<strong>所有 client 按鈕都灰掉了</strong>——
+    連線真的死了,不是印個紅字了事。
+    這正是 delimiter 協定(<code>\n</code> 結尾)唯一贏過 length-prefix 的地方:
+    損毀後可以掃到下一個分隔符重新同步。代價是 payload 含分隔符要 escape
+    ——二進位資料<strong>必然</strong>含,所以這個協定不能用 delimiter。
+  </p>
+</section>
+
+<section>
+  <h2>4 · binary vs text、length-prefix vs delimiter</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>維度</th><th>選了</th><th>沒選的理由</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>binary</strong>(BE 整數)</td>
+          <td class="ord acq">&#10003;</td>
+          <td>text / JSON:嵌入式對端要塞一個 parser + 浮點。binary 定長欄位 O(1) 解析、頻寬小。
+              text 的優勢(可讀、telnet 好 debug)用 wireshark dissector 補回來</td>
+        </tr>
+        <tr>
+          <td><strong>length-prefix</strong></td>
+          <td class="ord acq">&#10003;</td>
+          <td>delimiter(<code>\n</code>):payload 含 delimiter 就要 escape,而二進位 payload 必含。
+              length-prefix 讀 4 bytes 就知道要等多少,切分零拷貝</td>
+        </tr>
+        <tr>
+          <td>delimiter 的優勢</td>
+          <td class="ord rlx">&mdash;</td>
+          <td>人可以 telnet 手打;損毀後可 resync(掃下一個 <code>\n</code>)。
+              length-prefix 損毀 = 只能斷線(見上一節)</td>
+        </tr>
+        <tr>
+          <td><strong>len 不含自己</strong></td>
+          <td class="ord acq">&#10003;</td>
+          <td>含自己也有人這樣定。重點不是哪個對,是<strong>當場說死並寫進註解</strong>——
+              這是整個協定唯一的 off-by-one 決策點</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>5 · thread-per-conn vs event loop</h2>
+  <p>
+    兩版 server 共用 protocol / framer / handler,重寫的只有 IO 骨架。
+    面試順序:<strong>先 threaded 打通端到端</strong>,有時間才上 evented——
+    寫完 threaded 再口頭把這張表講出來,比直接寫 evented 但寫不完高分。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <span class="ctl-label">並發連線數</span>
+      <div class="switch" role="group" aria-label="連線數">
+        <button id="n-5" aria-pressed="true">5</button>
+        <button id="n-100" aria-pressed="false">100</button>
+        <button id="n-1000" aria-pressed="false">1000</button>
+        <button id="n-10000" aria-pressed="false">10000</button>
+      </div>
+      <span class="ctl-label" id="measured">實測值</span>
+    </div>
+
+    <div class="lanes">
+      <div class="lane p">
+        <h3>--threaded</h3>
+        <div class="chips" id="chips-th"></div>
+        <div class="op" id="th-sum"></div>
+      </div>
+      <div class="gutter"></div>
+      <div class="lane c">
+        <h3>--evented</h3>
+        <div class="chips" id="chips-ev"></div>
+        <div class="op" id="ev-sum"></div>
+      </div>
+    </div>
+
+    <div class="verdict wait" id="scale-verdict">
+      <b id="sv-title">n = 5</b>
+      <span id="sv-text"></span>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>threaded</th><th>evented</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>複雜度</td><td>直線邏輯、阻塞 IO</td><td>interest 狀態機 + 欠帳緩衝 + 回程信箱</td></tr>
+        <tr><td>每連線成本</td><td class="mono">1 thread(8MB 位址空間、~10 微秒 switch)</td><td class="mono">~數百 bytes 狀態</td></tr>
+        <tr><td>連線上限</td><td class="mono">~10^2</td><td class="mono">~10^4+(C10K)</td></tr>
+        <tr><td>硬體序列化</td><td><code>Arc&lt;Mutex&lt;Handler&gt;&gt;</code></td><td>單一 command worker,天然序列</td></tr>
+        <tr><td>錯誤隔離</td><td>連線 thread 死掉,server 不動</td><td>一條連線的 <code>dead</code> 旗標,event loop 不動</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">
+    <strong>硬體控制器的連線數就是數十</strong>——threaded 是對的答案。
+    evented 是「如果要接一萬台」的答案,不是「比較厲害」的答案。
+    上面 n = 5 的數字是這個 repo 實際量到的:<code>--evented</code> 穩定在 <strong>2 threads</strong>,
+    <code>--threaded</code> 用掉 <strong>6</strong>(main + 每連線一條)。
+  </p>
+</section>
+
+<section>
+  <h2>6 · 為什麼 command worker 只有一條</h2>
+  <p>
+    evented server 是三段式:<strong>IO thread</strong>(epoll + framing)&rarr;
+    <strong>command worker</strong>(執行硬體命令,慢也不卡 IO)&rarr;
+    <strong>outbox + eventfd wake</strong> &rarr; IO thread 路由回應。
+    worker 恰好 1 條不是偷懶。
+  </p>
+  <p>
+    本協定<strong>沒有 request-id</strong>。client 靠 <strong>FIFO 順序</strong>對應回應:
+    第 n 個回應 = 第 n 個請求。多開一條 worker,同一連線的兩條命令就會亂序完成,
+    回應錯位——client 拿到的是別人的溫度值,而且<strong>不會報錯</strong>。
+  </p>
+  <p>
+    要多 worker,得<strong>先改協定</strong>加 request-id,client 端變成
+    <code>HashMap&lt;id, waker&gt;</code>。這是「協定設計決定並發上限」的活教材:
+    你的並發模型不是實作選擇,是<strong>協定的推論</strong>。
+  </p>
+  <p class="note">
+    <code>in_flight</code> 計數器守住最後一哩:EOF 之後不能立刻關線,
+    要等已派給 worker 的回應全部路由回來、flush 完才能關。
+    少了它,對端關閉 write 端的那一刻,最後幾個回應就被吞掉。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/hw_bridge/{protocol,framer,handler,server_threaded,server_evented,client}.rs</code></div>
+  <div>設計取捨 + 45 分鐘作戰順序:<code>docs/hw_bridge.md</code></div>
+  <div>親手跑:<code>cargo run -p reference --example hw_bridge_client -- drip 300</code> · <code>-- badlen</code> · <code>-- badop</code></div>
+  <div>前置:<code>tcp_echo</code>(IO 骨架)· <code>event_loop</code> · <code>thread_pool</code></div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ══ 協定常數(對齊 protocol.rs)═══════════════════════════════
+  var MAX_FRAME_LEN = 64 * 1024;
+  var OP_PING = 0x01, OP_READ_SENSOR = 0x02, OP_SET_FAN = 0x03;
+  var OP_PONG = 0x81, OP_SENSOR_VALUE = 0x82, OP_ACK = 0x83, OP_ERROR = 0xFF;
+  var ERR_UNKNOWN_OPCODE = 1, ERR_BAD_PAYLOAD = 2;
+
+  // ══ 狀態 ═════════════════════════════════════════════════════
+  var wire = [];      // client 已 write、server 還沒 read 的 bytes
+  var rbuf = [];      // FrameReader.buf:{ v, consumed, role, bad, fresh }
+  var readPos = 0;    // FrameReader.read_pos
+  var dead = false;   // 連線是否已因 framing 損毀被關掉
+  var frameCount = 0;
+  var timer = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var wireEl = $("wire"), rbufEl = $("rbuf"), logEl = $("log");
+
+  function hex(b) { return ("0" + b.toString(16)).slice(-2); }
+  function hexs(a) {
+    var o = [], i;
+    for (i = 0; i < a.length; i++) o.push(hex(a[i]));
+    return o.join(" ");
+  }
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 80) logEl.removeChild(logEl.lastChild);
+  }
+
+  // ══ encode(對齊 protocol.rs::encode_frame)════════════════════
+  function encodeFrame(op, payload) {
+    var len = 1 + payload.length;         // opcode + payload,不含 len 欄位自己
+    var out = [(len >>> 24) & 255, (len >>> 16) & 255, (len >>> 8) & 255, len & 255, op];
+    var i;
+    for (i = 0; i < payload.length; i++) out.push(payload[i]);
+    return out;
+  }
+  function be16(n) { return [(n >>> 8) & 255, n & 255]; }
+  function be32(n) {
+    n = n >>> 0;
+    return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  }
+  function sensorValue(id) { return id * 1000 - 273; } // MockHardware::sensor_value
+
+  // ══ try_decode(對齊 protocol.rs::try_decode)══════════════════
+  function tryDecode() {
+    var pending = rbuf.length - readPos;
+    if (pending < 4) return { kind: "none", pending: pending };
+
+    var len = ((rbuf[readPos].v << 24) | (rbuf[readPos + 1].v << 16) |
+               (rbuf[readPos + 2].v << 8) | rbuf[readPos + 3].v) >>> 0;
+
+    if (len === 0) return { kind: "err", err: "EmptyFrame", len: 0 };
+    if (len > MAX_FRAME_LEN) return { kind: "err", err: "FrameTooLarge(" + len + ")", len: len };
+
+    var total = 4 + len;                  // len 不含自己 => 整個 frame 佔 4+len
+    if (pending < total) return { kind: "none", pending: pending, len: len, total: total };
+
+    var payload = [], i;
+    for (i = readPos + 5; i < readPos + total; i++) payload.push(rbuf[i].v);
+    return { kind: "some", opcode: rbuf[readPos + 4].v, payload: payload, consumed: total, len: len };
+  }
+
+  function whyWait(r) {
+    if (r.pending === 0) {
+      return "buf 是空的 —— 連 len 欄位的第一個 byte 都還沒到。";
+    }
+    if (r.pending < 4) {
+      return "len 欄位要 4 bytes,現在只有 " + r.pending + " byte,還差 " + (4 - r.pending) +
+        " byte。連「這個 frame 有多長」都不知道 —— FrameReader 什麼都不能做,只能 return Ok(None)," +
+        "把殘料留在 buf 裡等下一次 feed()。";
+    }
+    return "len 到齊了 = " + r.len + "(opcode + payload 共 " + r.len +
+      " bytes,不含 len 欄位自己)。整個 frame = 4 + " + r.len + " = " + r.total +
+      " bytes,buf 裡只有 " + r.pending + " —— 還差 " + (r.total - r.pending) +
+      " byte。差 1 byte 也是差:條件是 buf.len() < 4 + len,還是 Ok(None)。";
+  }
+
+  // ══ 語意層(對齊 Command::try_from_frame + MockHardware)═══════
+  function badPayload(op, want, got) {
+    return {
+      ok: false,
+      cmd: "Err(WireError::BadPayloadLen{opcode:0x" + hex(op) + ", expected:" + want + ", got:" + got + "})",
+      resp: "Response::Error{code:" + ERR_BAD_PAYLOAD + "}",
+      bytes: encodeFrame(OP_ERROR, [ERR_BAD_PAYLOAD])
+    };
+  }
+
+  function semantic(op, payload) {
+    var id, mc, rpm;
+    if (op === OP_PING) {
+      if (payload.length !== 0) return badPayload(op, 0, payload.length);
+      return { ok: true, cmd: "Command::Ping", resp: "Response::Pong", bytes: encodeFrame(OP_PONG, []) };
+    }
+    if (op === OP_READ_SENSOR) {
+      if (payload.length !== 2) return badPayload(op, 2, payload.length);
+      id = (payload[0] << 8) | payload[1];
+      mc = sensorValue(id);
+      return {
+        ok: true,
+        cmd: "Command::ReadSensor{sensor_id:" + id + "}",
+        resp: "Response::SensorValue{sensor_id:" + id + ", millicelsius:" + mc + "}",
+        bytes: encodeFrame(OP_SENSOR_VALUE, be16(id).concat(be32(mc)))
+      };
+    }
+    if (op === OP_SET_FAN) {
+      if (payload.length !== 2) return badPayload(op, 2, payload.length);
+      rpm = (payload[0] << 8) | payload[1];
+      return {
+        ok: true,
+        cmd: "Command::SetFan{rpm:" + rpm + "}",
+        resp: "Response::Ack",
+        bytes: encodeFrame(OP_ACK, [])
+      };
+    }
+    return {
+      ok: false,
+      cmd: "Err(WireError::UnknownOpcode(0x" + hex(op) + "))",
+      resp: "Response::Error{code:" + ERR_UNKNOWN_OPCODE + "}",
+      bytes: encodeFrame(OP_ERROR, [ERR_UNKNOWN_OPCODE])
+    };
+  }
+
+  // ══ verdict ══════════════════════════════════════════════════
+  function setVerdict(cls, title, text) {
+    $("verdict").className = "verdict " + cls;
+    $("v-title").textContent = title;
+    $("v-text").textContent = text;
+  }
+
+  // ══ parse loop(對齊 server 的 `loop { match next_frame() }`)══
+  function pump() {
+    var produced = [], r, i, j, e, s, leftover, txt, anySemErr = false;
+
+    for (;;) {
+      r = tryDecode();
+
+      if (r.kind === "err") {
+        for (i = readPos; i < readPos + 4 && i < rbuf.length; i++) rbuf[i].bad = true;
+        dead = true;
+        wire = [];
+        stopAuto();
+        say("x", "next_frame() -> Err(DecodeError::" + r.err + ")");
+        say("x", "server: close(conn) —— length-prefix 沒有 resync 點,byte 流已失去意義");
+        setVerdict("bad", "next_frame() -> Err(DecodeError::" + r.err + ")",
+          "len 宣稱 " + r.len + " bytes > MAX_FRAME_LEN(" + MAX_FRAME_LEN + ")。" +
+          "server 不知道下一個 frame 從哪個 byte 開始 —— 沒有 resync 點,唯一正解是關連線。" +
+          "所有 client 按鈕現在都灰掉了:連線是真的死了。");
+        render();
+        return;
+      }
+
+      if (r.kind === "none") {
+        if (produced.length === 0) {
+          say("m", "next_frame() -> Ok(None)   pending=" + (rbuf.length - readPos));
+          setVerdict("wait", "next_frame() -> Ok(None)", whyWait(r));
+        } else {
+          leftover = rbuf.length - readPos;
+          txt = "parse loop 轉了 " + (produced.length + 1) + " 圈:切出 " + produced.length +
+            " 個 frame,最後一圈 Ok(None) 收工,殘料 " + leftover + " bytes 留在 buf 裡。";
+          if (produced.length > 1) {
+            txt += " 這 " + produced.length + " 個 frame 來自「同一次 feed()」—— 呼叫端" +
+              "必須 loop 到 Ok(None) 為止。漏掉這個 loop 就是「訊息延遲一拍」bug:" +
+              "第二個 frame 要等下一次 read() 才被處理,而下一次 read() 可能永遠不來。";
+          }
+          for (j = 0; j < produced.length; j++) if (!produced[j].s.ok) anySemErr = true;
+          if (anySemErr) {
+            txt += " 其中有 frame 的 opcode 不認得 —— 但 frame 切得出來,framing 沒問題。" +
+              "語意錯 -> 回 Error frame,連線活著。";
+          }
+          setVerdict("ok", "next_frame() -> Ok(Some(..)) x " + produced.length + " -> Ok(None)", txt);
+        }
+        break;
+      }
+
+      // Ok(Some((frame, consumed)))
+      for (j = 0; j < r.consumed; j++) {
+        e = rbuf[readPos + j];
+        e.consumed = true;
+        e.role = j < 4 ? "len" : (j === 4 ? "op" : "pay");
+      }
+      readPos += r.consumed;
+      frameCount++;
+
+      s = semantic(r.opcode, r.payload);
+      produced.push({ r: r, s: s });
+
+      say("p", "next_frame() -> Ok(Some(RawFrame{opcode:0x" + hex(r.opcode) +
+        ", payload:[" + hexs(r.payload) + "]}))  consumed=" + r.consumed);
+      if (s.ok) {
+        say("c", "  " + s.cmd + "  ->  " + s.resp);
+        say("c", "  write(" + s.bytes.length + "): " + hexs(s.bytes));
+      } else {
+        say("x", "  " + s.cmd);
+        say("x", "  -> " + s.resp + "   write: " + hexs(s.bytes) + "   (語意錯,連線活著)");
+      }
+    }
+
+    render();
+  }
+
+  // ══ 動作 ═════════════════════════════════════════════════════
+  function send(bytes, label) {
+    if (dead) return;
+    var i;
+    for (i = 0; i < bytes.length; i++) wire.push({ v: bytes[i] });
+    say("m", "client write(" + bytes.length + "): " + hexs(bytes) + "   // " + label);
+    render();
+  }
+
+  function intoBuf(v) {
+    rbuf.push({ v: v, consumed: false, role: null, bad: false, fresh: true });
+  }
+  function clearFresh() {
+    var i;
+    for (i = 0; i < rbuf.length; i++) rbuf[i].fresh = false;
+  }
+
+  function drip() {
+    if (dead || wire.length === 0) return;
+    clearFresh();
+    var b = wire.shift();
+    intoBuf(b.v);
+    say("m", "read() -> 1 byte [" + hex(b.v) + "]   feed()   buf.len()=" + rbuf.length);
+    pump();
+  }
+
+  function flushAll() {
+    if (dead || wire.length === 0) return;
+    clearFresh();
+    var n = wire.length, hs = [], b;
+    while (wire.length > 0) {
+      b = wire.shift();
+      hs.push(hex(b.v));
+      intoBuf(b.v);
+    }
+    say("m", "read() -> " + n + " bytes   feed([" + hs.join(" ") + "])");
+    pump();
+  }
+
+  function stopAuto() {
+    if (timer !== null) {
+      clearInterval(timer);
+      timer = null;
+    }
+    $("btn-auto").textContent = "自動 drip";
+  }
+  function toggleAuto() {
+    if (timer !== null) { stopAuto(); render(); return; }
+    if (dead || wire.length === 0) return;
+    $("btn-auto").textContent = "停止";
+    timer = setInterval(function () {
+      if (dead || wire.length === 0) { stopAuto(); render(); return; }
+      drip();
+    }, 420);
+    render();
+  }
+
+  function reset() {
+    stopAuto();
+    wire = []; rbuf = []; readPos = 0; dead = false; frameCount = 0;
+    logEl.textContent = "";
+    say("m", "reset — FrameReader::new():buf 空、read_pos = 0、連線 LIVE");
+    setVerdict("wait", "next_frame() -> Ok(None)",
+      "buf 是空的。先按上排任一個按鈕把 bytes 放上 wire,再按 drip。");
+    render();
+  }
+
+  // ══ render ═══════════════════════════════════════════════════
+  function cell(v, cls, role, caret) {
+    var d = document.createElement("div");
+    d.className = "byte" + (cls ? " " + cls : "");
+    var h = document.createElement("span");
+    h.className = "hx";
+    h.textContent = v === null ? "" : hex(v);
+    var r = document.createElement("span");
+    r.className = "rl";
+    r.textContent = role || "";
+    var c = document.createElement("span");
+    c.className = "cu";
+    c.textContent = caret ? "↑" : "";
+    d.append(h, r, c);
+    return d;
+  }
+
+  function render() {
+    var i, e, off, cls, role, lenKnown = null, pending = rbuf.length - readPos;
+
+    // wire:server 還沒讀進來的 bytes —— reader 對它們一無所知
+    wireEl.textContent = "";
+    if (wire.length === 0) {
+      var em = document.createElement("span");
+      em.className = "empty";
+      em.textContent = dead ? "(連線已關,wire 上的 bytes 全部丟棄)" : "(空 — 按上排按鈕送 bytes)";
+      wireEl.appendChild(em);
+    } else {
+      for (i = 0; i < wire.length; i++) wireEl.appendChild(cell(wire[i].v, "inflight", "", false));
+    }
+
+    // FrameReader.buf
+    if (pending >= 4) {
+      lenKnown = ((rbuf[readPos].v << 24) | (rbuf[readPos + 1].v << 16) |
+                  (rbuf[readPos + 2].v << 8) | rbuf[readPos + 3].v) >>> 0;
+    }
+    rbufEl.textContent = "";
+    if (rbuf.length === 0) {
+      rbufEl.appendChild(cell(null, "ghost", "", true));
+      var em2 = document.createElement("span");
+      em2.className = "empty";
+      em2.textContent = "(buf 空 — read_pos = 0)";
+      rbufEl.appendChild(em2);
+    } else {
+      for (i = 0; i < rbuf.length; i++) {
+        e = rbuf[i];
+        if (e.bad) {
+          cls = "bad"; role = "len";
+        } else if (e.consumed) {
+          role = e.role; cls = "eaten " + e.role;
+        } else {
+          off = i - readPos;
+          if (off < 4) {
+            role = "len";
+          } else if (lenKnown !== null && lenKnown > 0 && lenKnown <= MAX_FRAME_LEN) {
+            role = (off === 4) ? "op" : "pay";
+          } else {
+            role = "";
+          }
+          cls = role;
+        }
+        if (e.fresh) cls += " fresh";
+        rbufEl.appendChild(cell(e.v, cls, role, i === readPos));
+      }
+      if (readPos === rbuf.length) rbufEl.appendChild(cell(null, "ghost", "", true));
+    }
+
+    $("st-buflen").textContent = String(rbuf.length);
+    $("st-readpos").textContent = String(readPos);
+    $("st-pending").textContent = String(pending);
+    $("st-wire").textContent = String(wire.length);
+    $("st-frames").textContent = String(frameCount);
+    var conn = $("st-conn");
+    conn.textContent = dead ? "DEAD" : "LIVE";
+    conn.className = dead ? "v warn" : "v good";
+
+    var noBytes = wire.length === 0;
+    $("btn-drip").disabled = dead || noBytes;
+    $("btn-flush").disabled = dead || noBytes;
+    $("btn-auto").disabled = dead || (noBytes && timer === null);
+    ["q-ping", "q-sensor", "q-fan", "q-glued", "q-badop", "q-badlen",
+     "c-badop", "c-badlen"].forEach(function (id) { $(id).disabled = dead; });
+  }
+
+  // ══ 綁定 ═════════════════════════════════════════════════════
+  $("q-ping").addEventListener("click", function () {
+    send(encodeFrame(OP_PING, []), "Command::Ping");
+  });
+  $("q-sensor").addEventListener("click", function () {
+    send(encodeFrame(OP_READ_SENSOR, be16(25)), "Command::ReadSensor{sensor_id:25}");
+  });
+  $("q-fan").addEventListener("click", function () {
+    send(encodeFrame(OP_SET_FAN, be16(4500)), "Command::SetFan{rpm:4500}");
+  });
+
+  // 黏包:兩個 frame 一次 write、server 一次 read 全收到 —— parse loop 必須切出兩個
+  function glued() {
+    if (dead) return;
+    var b = encodeFrame(OP_PING, []).concat(encodeFrame(OP_READ_SENSOR, be16(7)));
+    send(b, "Ping + ReadSensor{7},一次 write");
+    flushAll();
+  }
+  function badop() {
+    if (dead) return;
+    send(encodeFrame(0x7E, []), "未知 opcode 0x7e");
+    flushAll();
+  }
+  function badlen() {
+    if (dead) return;
+    send([0xFF, 0xFF, 0xFF, 0xFF], "malformed len");
+    flushAll();
+  }
+
+  $("q-glued").addEventListener("click", glued);
+  $("q-badop").addEventListener("click", badop);
+  $("q-badlen").addEventListener("click", badlen);
+  $("c-badop").addEventListener("click", function () {
+    badop();
+    $("stage").scrollIntoView({ block: "center" });
+  });
+  $("c-badlen").addEventListener("click", function () {
+    badlen();
+    $("stage").scrollIntoView({ block: "center" });
+  });
+
+  $("btn-drip").addEventListener("click", drip);
+  $("btn-flush").addEventListener("click", flushAll);
+  $("btn-auto").addEventListener("click", toggleAuto);
+  $("btn-reset").addEventListener("click", reset);
+
+  say("m", "FrameReader::new() — buf 空、read_pos = 0");
+  say("m", "按 Ping 把 5 bytes 放上 wire,然後一次 drip 一個 byte。");
+  render();
+
+  // ══ scale 面板 ═══════════════════════════════════════════════
+  var NS = [5, 100, 1000, 10000];
+  var scaleBtns = NS.map(function (n) { return $("n-" + n); });
+
+  function chip(cls, txt) {
+    var d = document.createElement("span");
+    d.className = "thr" + (cls ? " " + cls : "");
+    d.textContent = txt;
+    return d;
+  }
+
+  function mem(n) {
+    var mb = n * 8; // 每 thread ~8MB stack 位址空間
+    if (mb >= 1024) return (mb / 1024).toFixed(mb >= 10240 ? 0 : 1) + " GB";
+    return mb + " MB";
+  }
+
+  function setN(n) {
+    var i, shown, th = $("chips-th"), ev = $("chips-ev");
+    scaleBtns.forEach(function (b, k) {
+      b.setAttribute("aria-pressed", String(NS[k] === n));
+    });
+
+    th.textContent = "";
+    th.appendChild(chip("io", "main: accept()"));
+    shown = Math.min(n, 8);
+    for (i = 0; i < shown; i++) th.appendChild(chip("conn", "conn " + (i + 1)));
+    if (n > shown) th.appendChild(chip("more", "... 再 " + (n - shown) + " 條"));
+
+    ev.textContent = "";
+    ev.appendChild(chip("io", "event loop: epoll + framing"));
+    ev.appendChild(chip("w", "command worker x1"));
+
+    $("th-sum").textContent = (n + 1) + " threads  ·  " + mem(n + 1) + " 位址空間";
+    $("ev-sum").textContent = "2 threads  ·  每連線 ~數百 bytes 狀態";
+
+    $("sv-title").textContent = "n = " + n;
+    $("measured").textContent = n === 5 ? "n = 5 是本 repo 實測值" : "外推";
+
+    if (n === 5) {
+      $("scale-verdict").className = "verdict ok";
+      $("sv-text").textContent =
+        "實測:--evented 穩定在 2 threads(event loop + command worker),--threaded 用掉 6" +
+        "(main + 每連線一條)。差 4 條 thread —— 這個規模下,evented 的複雜度換不到任何東西。" +
+        "硬體控制器的連線數就是這個量級,threaded 是對的答案。";
+    } else if (n === 100) {
+      $("scale-verdict").className = "verdict wait";
+      $("sv-text").textContent =
+        "101 threads 仍在 Linux 排程器的舒適區(~800 MB 位址空間,實體記憶體只用到碰過的頁)。" +
+        "threaded 還撐得住,但每條命令多一次 context switch(~10 微秒)——開始有感。";
+    } else if (n === 1000) {
+      $("scale-verdict").className = "verdict wait";
+      $("sv-text").textContent =
+        "1001 threads:位址空間 8 GB,排程器要在千條 thread 間輪轉,cache 一直被打掉。" +
+        "還能跑,但已經是在硬撐。evented 這裡開始明顯划算。";
+    } else {
+      $("scale-verdict").className = "verdict bad";
+      $("sv-text").textContent =
+        "10001 threads = 經典的 C10K。位址空間 78 GB,排程器先跪。" +
+        "evented 版還是 2 threads —— 每條連線只是 HashMap 裡的幾百 bytes 狀態。" +
+        "這就是 event loop 存在的理由,也是它值得那些 interest 狀態機的唯一理由。";
+    }
+  }
+
+  scaleBtns.forEach(function (b, k) {
+    b.addEventListener("click", function () { setN(NS[k]); });
+  });
+  setN(5);
+})();
+</script>

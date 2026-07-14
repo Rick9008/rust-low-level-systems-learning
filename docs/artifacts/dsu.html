@@ -1,0 +1,1279 @@
+<title>dsu — 樹是畫給人看的,陣列才是真的</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── dsu:森林 + backing array ─────────────────────────────────── */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15.5rem;
+  gap: 1rem;
+  align-items: start;
+}
+.pane { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.pane-k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* 森林:canvas 畫邊,絕對定位的 div 當節點 */
+.forest {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.forest-inner { position: relative; }
+.forest canvas { display: block; }
+.fnode {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.fnode.root { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.fnode.path { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.fnode.moved { border-color: var(--consumer); background: var(--consumer-bg); color: var(--consumer); }
+.fnode.cursor {
+  border-color: var(--producer);
+  background: var(--producer-bg);
+  color: var(--producer);
+  box-shadow: 0 0 0 3px var(--producer-bg);
+}
+
+/* backing array:parent[] 與 rank[] */
+.arr {
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+.arr .hd, .arr .rw { display: grid; grid-template-columns: 2.9rem 1fr 3rem; }
+.arr .hd {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+.arr .hd span, .arr .rw span { padding: 0.26rem 0.5rem; }
+.arr .hd span + span, .arr .rw span + span { border-left: 1px solid var(--line-soft); }
+.arr .rw { border-bottom: 1px solid var(--line-soft); transition: background 200ms ease; }
+.arr .rw:last-child { border-bottom: none; }
+.arr .rw .i { color: var(--muted); }
+.arr .rw .p { font-weight: 600; transition: background 200ms ease, color 200ms ease; }
+.arr .rw .r { color: var(--ink-2); transition: color 200ms ease; }
+.arr .rw.isroot .p { color: var(--ok); }
+.arr .rw.onpath { background: var(--accent-bg); }
+.arr .rw.cursor { background: var(--producer-bg); }
+.arr .rw.chg .p { background: var(--consumer-bg); color: var(--consumer); }
+.arr.norank .rw .r, .arr.norank .hd span:last-child { opacity: 0.3; }
+
+/* 控制列 */
+.selrow { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.selrow select {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.45rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--ink);
+}
+.selrow select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.knob {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.switch button { font-size: 0.72rem; padding: 0.42rem 0.7rem; }
+
+/* 程式碼區塊 */
+pre.code {
+  font-family: var(--mono);
+  font-size: 0.79rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.85rem 1.1rem;
+  margin: 0;
+  overflow-x: auto;
+  color: var(--ink-2);
+}
+pre.code b { color: var(--ink); font-weight: 600; }
+pre.code i { color: var(--muted); font-style: normal; }
+pre.code u { text-decoration: none; color: var(--consumer); font-weight: 600; }
+
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.num.a { color: var(--accent); font-weight: 600; }
+
+@media (max-width: 52rem) {
+  .hero { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 3 &nbsp;·&nbsp; index-based data structures</p>
+  <h1>dsu</h1>
+  <p class="lede">
+    union-find 沒有節點、沒有指標、沒有 <code>Box</code>。只有一個
+    <code>parent: Vec&lt;usize&gt;</code>——「樹」是我們畫給自己看的。
+    整個模組的難度不在合併,在<strong>兩個優化各自擋掉哪一種退化</strong>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 樹是畫給人看的,陣列才是真的</h2>
+  <p>
+    左邊是森林,右邊是 <code>parent[]</code>。它們是<strong>同一份資料</strong>:
+    <code>parent[i] == i</code> 就是根,否則往上指。
+    按 <code>find(x)</code> 看游標一路爬到根,然後看第二趟——
+    沿路每個節點的 <code>parent</code> 被<strong>直接改寫成根</strong>。
+    右邊那幾格跳動的數字,就是 path compression 的全部。
+  </p>
+
+  <div class="stage">
+    <div class="selrow">
+      <span class="knob">union by rank</span>
+      <div class="switch" role="group" aria-label="union by rank">
+        <button id="rk-on" aria-pressed="true">ON</button>
+        <button id="rk-off" aria-pressed="false">OFF</button>
+      </div>
+      <span class="knob">path compression</span>
+      <div class="switch" role="group" aria-label="path compression">
+        <button id="pc-on" aria-pressed="true">ON</button>
+        <button id="pc-off" aria-pressed="false">OFF</button>
+      </div>
+    </div>
+
+    <div class="selrow">
+      <button class="act-producer" id="btn-union">union(</button>
+      <select id="sel-a" aria-label="union 第一個元素"></select>
+      <select id="sel-b" aria-label="union 第二個元素"></select>
+      <span class="knob">)</span>
+      <button class="act-consumer" id="btn-find">find(</button>
+      <select id="sel-x" aria-label="find 的元素"></select>
+      <span class="knob">)</span>
+      <button id="btn-chain">建立退化鏈 union(0,1),(1,2),…,(8,9)</button>
+      <button id="btn-reset">reset</button>
+    </div>
+
+    <div class="hero">
+      <div class="pane">
+        <span class="pane-k">forest &mdash; 人的視角</span>
+        <div class="forest"><div class="forest-inner" id="forest">
+          <canvas id="cv"></canvas>
+        </div></div>
+      </div>
+      <div class="pane">
+        <span class="pane-k">parent[] / rank[] &mdash; 機器的視角</span>
+        <div class="arr" id="arr">
+          <div class="hd"><span>i</span><span>parent[i]</span><span>rank</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">樹高 max depth</span><span class="v" id="st-depth">0</span></div>
+      <div class="stat"><span class="k">上次 find 步數</span><span class="v" id="st-steps">&mdash;</span></div>
+      <div class="stat"><span class="k">壓縮改寫格數</span><span class="v" id="st-rw">&mdash;</span></div>
+      <div class="stat"><span class="k">components</span><span class="v" id="st-comp">10</span></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    先照預設(兩個都 ON)按「建立退化鏈」——樹高停在 <strong>1</strong>,鏈根本長不出來。
+    再把 <strong>union by rank 切成 OFF</strong>、reset、按同一顆按鈕:
+    這次 <code>0 → 1 → 2 → … → 9</code> 疊成一根竹竿,樹高 9。
+    對 <code>find(0)</code> 按下去,步數計數器會一路數到 9 ——這就是退化的 O(n)。
+    然後看第二趟壓縮:<strong>8 格 <code>parent[]</code> 被改寫成 9</strong>,樹高瞬間掉到 1。
+    <strong>再 find(0) 一次,步數 = 1。</strong>
+  </p>
+  <p class="note">
+    為什麼是 8 格不是 9 格?因為節點 8 本來就直指根,不必改——
+    這正是 Rust 那句 <code>while self.parent[x] != root</code> 的迴圈條件在做的事。
+    互動裡的「壓縮改寫格數」就是這個 while 迴圈跑了幾圈。
+  </p>
+</section>
+
+<section>
+  <h2>2 · find:兩趟迭代,重點在第二趟</h2>
+  <p>
+    第一趟只是「爬到根」——任何 naive 實作都會做。真正把複雜度壓下來的是第二趟:
+    <strong>把沿路每一個節點重新掛到根底下</strong>。這是一次寫入換未來所有讀取,
+    典型的攤銷分析場景:單次 <code>find</code> 可能很貴,但它<strong>順手把路鋪平了</strong>,
+    貴不了第二次。
+  </p>
+
+  <pre class="code"><i>// reference/src/dsu.rs</i>
+pub fn find(&amp;mut self, mut x: usize) -&gt; usize {
+    let mut root = x;
+    <i>// 第一趟:爬到根</i>
+    while self.parent[root] != root {
+        root = self.parent[root];
+    }
+    <i>// 第二趟:沿路全部直掛根,下次 find 這條路徑 1 步</i>
+    <b>while self.parent[x] != root {</b>
+        <b>let next = self.parent[x];</b>
+        <u>self.parent[x] = root;</u>
+        <b>x = next;</b>
+    <b>}</b>
+    root
+}</pre>
+
+  <p class="note">
+    為什麼不用遞迴版的 <code>parent[x] = find(parent[x])</code>?一行就寫完,而且更漂亮。
+    因為<strong>遞迴深度 = 壓縮前的樹高</strong>。壓縮還沒發生的那一刻,樹高可能就是 O(n)——
+    對一條 10<sup>6</sup> 長的鏈做第一次 <code>find</code>,你會先 stack overflow,
+    根本活不到享受攤銷的那一天。這不是風格偏好,是<strong>正確性</strong>。
+  </p>
+
+  <p class="note">
+    注意 <code>find(&amp;mut self, …)</code> 要 <code>&amp;mut</code>——它是個查詢,卻會改資料。
+    這在 Rust 裡不是小事:它讓 DSU 不能放進 <code>&amp;self</code> 的 API,
+    也不能兩個執行緒同時查。想要 <code>&amp;self</code> 版就得放棄壓縮,或改用 atomic/內部可變性。
+    <strong>攤銷複雜度的代價,在型別簽名上收</strong>。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 一個治療,一個預防</h2>
+  <p>
+    兩個優化常被當成同一件事的兩半,其實它們的作用<strong>方向相反</strong>,
+    所以互補而不是重複。上面那個互動的四種開關組合,就是在演這張表:
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>組合</th><th>退化鏈之後</th><th>攤銷複雜度</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">都 OFF</td>
+          <td>樹高 9,<code>find(0)</code> 每次都 9 步——永遠不會變好</td>
+          <td class="num">O(n)</td>
+        </tr>
+        <tr>
+          <td class="mono">只有 compression</td>
+          <td>第一次 <code>find(0)</code> 9 步,之後全部 1 步——<strong>事後把爛樹壓平</strong></td>
+          <td class="num">O(log n)</td>
+        </tr>
+        <tr>
+          <td class="mono">只有 by rank</td>
+          <td>鏈根本沒長出來,樹高 1——<strong>事前不讓爛樹發生</strong></td>
+          <td class="num">O(log n)</td>
+        </tr>
+        <tr>
+          <td class="mono">都 ON</td>
+          <td>樹高 1,而且任何路徑走過一次就永久扁平</td>
+          <td class="num a">O(α(n))</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    <strong>path compression 是治療</strong>:它不阻止你長出爛樹,只在你踩到的時候順手修好。
+    單獨用時,對手可以構造一堆「只 union 不 find」的操作序列,把樹疊高後才開始查——
+    所以界只到 O(log n)。
+  </p>
+  <p>
+    <strong>union by rank 是預防</strong>:矮樹掛到高樹下,樹高只在<em>兩棵同 rank 的樹相遇</em>時 +1。
+    要讓樹高變成 h,底下至少得有 2<sup>h</sup> 個節點,所以樹高天生不超過 log n。
+    但它不會把已經走過的長路徑變短——查一百次同一條 log n 路徑,就付一百次 log n。
+  </p>
+  <p class="note">
+    疊在一起才會出現 α(n):by rank 把樹高壓進 log n,compression 再把「走過的路」永久攤平,
+    兩者的交互作用讓<strong>整段操作序列</strong>的總成本掉到近乎線性。
+    Tarjan 1975 證的就是這個組合——單獨任一個都證不到。
+  </p>
+</section>
+
+<section>
+  <h2>4 · α(n):誠實一點,它不是 O(1)</h2>
+  <p>
+    α 是 Ackermann 函數的反函數。它長得有多慢,看這張表就懂
+    (CLRS 定義:<code>α(n) = min{ k : A_k(1) &gt;= n }</code>):
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>n 的範圍</th><th>α(n)</th><th>白話</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">0 .. 2</td><td class="num">0</td><td>&mdash;</td></tr>
+        <tr><td class="num">3</td><td class="num">1</td><td>&mdash;</td></tr>
+        <tr><td class="num">4 .. 7</td><td class="num">2</td><td>&mdash;</td></tr>
+        <tr><td class="num">8 .. 2047</td><td class="num">3</td><td>一台機器裝得下的東西,大概都在這</td></tr>
+        <tr>
+          <td class="num">2048 .. A_4(1)</td>
+          <td class="num a">4</td>
+          <td><code>A_4(1)</code> 遠大於 2^65536,更遠大於 10^80(可觀測宇宙的原子數)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    所以:<strong>你這輩子能配置出來的任何 n,α(n) 都不超過 4</strong>。
+    不是「通常」,是<strong>物理上</strong>——你把整個宇宙的原子拿來當元素,它還是 4。
+    工程上把它當常數,完全正當。
+  </p>
+  <p class="note">
+    但別在面試裡說「union-find 是 O(1)」。它<strong>真的不是</strong>,而且不是「我們證不出來」——
+    Fredman &amp; Saks 1989 在 cell-probe 模型下證明了 α(n) 是<strong>下界</strong>:
+    任何實作都不可能做到攤銷 O(1)。這是個罕見的、複雜度上真的卡在非常數的自然問題。
+    正確說法是:<strong>攤銷 O(α(n)),實務上與常數無法區分</strong>。
+  </p>
+  <p class="note">
+    還有兩個常被吞掉的字:<strong>攤銷</strong>。α 界是攤在 m 次操作上的
+    (總成本 O(m·α(n)))——<strong>單次</strong> <code>find</code> 仍可能走 O(log n) 步,
+    第一次踩到深樹甚至更多。要的是 worst-case 單次界?那得換資料結構,DSU 給不了。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 面試會追問的四件事</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>追問</th><th>答案</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>rank</code> 為什麼敢用 <code>u8</code>?</td>
+          <td>rank 只在<strong>兩棵同 rank 樹合併</strong>時 +1,而 rank = r 的樹至少 2<sup>r</sup> 個節點。
+              要讓 rank 溢位到 255,需要 2<sup>255</sup> 個元素。省下 7/8 的 rank 記憶體,空間 n + n/8 字。</td>
+        </tr>
+        <tr>
+          <td>by rank 還是 by size?</td>
+          <td>攤銷界<strong>相同</strong>。size 版順便給你 O(1) 的「這個集合幾個元素」
+              (很常見的 follow-up:「這個 partition 有幾台機器」);rank 版少存一個 <code>usize</code>。
+              答得出這個差異就行,選哪個都對。</td>
+        </tr>
+        <tr>
+          <td><code>components()</code> 怎麼 O(1)?</td>
+          <td>不要掃一遍數根(O(n))。開個計數器,<code>union</code> <strong>真的合併成功</strong>時才 <code>-= 1</code>。
+              這也是 <code>union</code> 回傳 <code>bool</code> 的理由——呼叫端常常想知道「這次真的合了嗎」。</td>
+        </tr>
+        <tr>
+          <td>能 un-union 嗎?</td>
+          <td><strong>不能。</strong>拆集合要 rollback DSU(操作堆疊 + <em>放棄 path compression</em>,
+              因為壓縮把歷史改掉了),或整批 offline 重算。
+              面試時先聲明「只合不拆」再往前走,比中途發現卡死好。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/dsu.rs</code> · 設計取捨:<code>docs/dsu.md</code></div>
+  <div>驗證:<code>cargo test -p reference dsu</code> — 含 proptest 對照「天真連通標號」oracle,
+       以及直接檢查壓縮後 <code>parent[x]</code> 距根不超過 1 步的內部不變量</div>
+  <div>同階:<code>lru</code>(index-based 雙向鏈表)· <code>graph</code>(Kruskal MST 就是拿 DSU 當連通性判定)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 狀態:這就是 Rust 那三個欄位 ──────────────────────────────
+  var N = 10;
+  var parent = [], rank = [], comps = N;
+  var byRank = true, compress = true;
+
+  // ── 版面常數 ────────────────────────────────────────────────
+  var COLW = 42, ROWH = 40, PADY = 26, TREEGAP = 0.45;
+  var W = 600, H = PADY * 2 + (N - 1) * ROWH; // 最深的鏈(深度 9)也放得下
+  var R = 15;
+
+  var reduced = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var forest = document.getElementById("forest");
+  var arrEl = document.getElementById("arr");
+  var logEl = document.getElementById("log");
+
+  var nodeEls = [], rowEls = [], pEls = [], rEls = [];
+  var cur = [], tgt = [], depths = [];
+  var marks = { cursor: -1, path: {}, moved: {}, chg: {} };
+  var busy = false, raf = 0, fallbackT = 0;
+
+  // ── DOM 建置 ────────────────────────────────────────────────
+  function build() {
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr;
+    cv.height = H * dpr;
+    cv.style.width = W + "px";
+    cv.style.height = H + "px";
+    ctx.scale(dpr, dpr);
+    forest.style.width = W + "px";
+    forest.style.height = H + "px";
+
+    for (var i = 0; i < N; i++) {
+      var d = document.createElement("div");
+      d.className = "fnode";
+      d.textContent = String(i);
+      forest.appendChild(d);
+      nodeEls.push(d);
+
+      var rw = document.createElement("div");
+      rw.className = "rw";
+      var si = document.createElement("span");
+      si.className = "i";
+      si.textContent = String(i);
+      var sp = document.createElement("span");
+      sp.className = "p";
+      var sr = document.createElement("span");
+      sr.className = "r";
+      rw.append(si, sp, sr);
+      arrEl.appendChild(rw);
+      rowEls.push(rw); pEls.push(sp); rEls.push(sr);
+
+      cur.push({ x: 0, y: 0 });
+      tgt.push({ x: 0, y: 0 });
+    }
+
+    var mk = function (id) {
+      var s = document.getElementById(id);
+      for (var k = 0; k < N; k++) {
+        var o = document.createElement("option");
+        o.value = String(k);
+        o.textContent = String(k);
+        s.appendChild(o);
+      }
+      return s;
+    };
+    selA = mk("sel-a"); selB = mk("sel-b"); selX = mk("sel-x");
+    selB.value = "1";
+  }
+  var selA, selB, selX;
+
+  // ── 佈局:從 parent[] 推出森林座標 ───────────────────────────
+  function layout() {
+    var kids = [], roots = [], i;
+    for (i = 0; i < N; i++) kids.push([]);
+    for (i = 0; i < N; i++) {
+      if (parent[i] === i) roots.push(i);
+      else kids[parent[i]].push(i);
+    }
+    var xs = new Array(N), ys = new Array(N);
+    var nextX = 0;
+
+    function place(u, d) {
+      ys[u] = d;
+      var ch = kids[u];
+      if (ch.length === 0) { xs[u] = nextX; nextX += 1; return; }
+      var lo = Infinity, hi = -Infinity;
+      for (var k = 0; k < ch.length; k++) {
+        place(ch[k], d + 1);
+        if (xs[ch[k]] < lo) lo = xs[ch[k]];
+        if (xs[ch[k]] > hi) hi = xs[ch[k]];
+      }
+      xs[u] = (lo + hi) / 2;
+    }
+    for (var r = 0; r < roots.length; r++) { place(roots[r], 0); nextX += TREEGAP; }
+
+    // 水平置中整片森林;垂直也置中,免得只有 singleton 時整排擠在頂端
+    var minX = Infinity, maxX = -Infinity, maxY = 0;
+    for (i = 0; i < N; i++) {
+      if (xs[i] < minX) minX = xs[i];
+      if (xs[i] > maxX) maxX = xs[i];
+      if (ys[i] > maxY) maxY = ys[i];
+    }
+    var offX = (W - (maxX - minX) * COLW) / 2 - minX * COLW;
+    var offY = (H - maxY * ROWH) / 2;
+    for (i = 0; i < N; i++) {
+      tgt[i] = { x: offX + xs[i] * COLW, y: offY + ys[i] * ROWH };
+    }
+    depths = ys;
+  }
+
+  function maxDepth() {
+    var m = 0;
+    for (var i = 0; i < N; i++) if (depths[i] > m) m = depths[i];
+    return m;
+  }
+
+  // ── 繪製 ────────────────────────────────────────────────────
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function paint() {
+    var cLine = css("--line"), cAcc = css("--accent"), cCon = css("--consumer");
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < N; i++) {
+      if (parent[i] === i) continue;
+      var a = cur[i], b = cur[parent[i]];
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ux = dx / len, uy = dy / len;
+      ctx.beginPath();
+      ctx.moveTo(a.x + ux * R, a.y + uy * R);
+      ctx.lineTo(b.x - ux * R, b.y - uy * R);
+      if (marks.moved[i]) { ctx.strokeStyle = cCon; ctx.lineWidth = 2; }
+      else if (marks.path[i]) { ctx.strokeStyle = cAcc; ctx.lineWidth = 2; }
+      else { ctx.strokeStyle = cLine; ctx.lineWidth = 1.2; }
+      ctx.stroke();
+    }
+    for (i = 0; i < N; i++) {
+      nodeEls[i].style.left = cur[i].x + "px";
+      nodeEls[i].style.top = cur[i].y + "px";
+    }
+  }
+
+  function classes() {
+    for (var i = 0; i < N; i++) {
+      var c = "fnode";
+      if (parent[i] === i) c += " root";
+      if (marks.path[i]) c += " path";
+      if (marks.moved[i]) c += " moved";
+      if (marks.cursor === i) c += " cursor";
+      nodeEls[i].className = c;
+
+      var rc = "rw";
+      if (parent[i] === i) rc += " isroot";
+      if (marks.path[i]) rc += " onpath";
+      if (marks.chg[i]) rc += " chg";
+      if (marks.cursor === i) rc += " cursor";
+      rowEls[i].className = rc;
+
+      pEls[i].textContent = String(parent[i]);
+      rEls[i].textContent = String(rank[i]);
+    }
+    arrEl.className = byRank ? "arr" : "arr norank";
+    document.getElementById("st-depth").textContent = String(maxDepth());
+    document.getElementById("st-comp").textContent = String(comps);
+  }
+
+  function snapPositions() {
+    for (var i = 0; i < N; i++) { cur[i].x = tgt[i].x; cur[i].y = tgt[i].y; }
+    paint();
+  }
+
+  function tween() {
+    classes(); // 陣列與節點顏色是同步更新的:畫面上的 parent[] 永遠等於真實的 parent[]
+    if (reduced) { snapPositions(); return; }
+
+    var from = [];
+    for (var k = 0; k < N; k++) from.push({ x: cur[k].x, y: cur[k].y });
+    var t0 = null;
+    if (raf) cancelAnimationFrame(raf);
+    if (fallbackT) clearTimeout(fallbackT);
+
+    // 位置用 rAF 內插;所有邏輯步驟走 setTimeout,兩者互不依賴。
+    function frame(now) {
+      if (t0 === null) t0 = now;
+      var t = Math.min(1, (now - t0) / 300);
+      var e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      for (var j = 0; j < N; j++) {
+        cur[j].x = from[j].x + (tgt[j].x - from[j].x) * e;
+        cur[j].y = from[j].y + (tgt[j].y - from[j].y) * e;
+      }
+      paint();
+      if (t < 1) raf = requestAnimationFrame(frame); else raf = 0;
+    }
+    raf = requestAnimationFrame(frame);
+
+    // 保險:背景分頁(或無頭瀏覽器的虛擬時間)不發 frame,rAF 可能一次都不跑。
+    // 補間只是裝飾,不能讓森林停在舊座標上跟 parent[] 說不同的故事 —— 時間到就直接 snap。
+    fallbackT = setTimeout(function () {
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      snapPositions();
+    }, 420);
+  }
+
+  // 狀態改完就呼叫:重算佈局 → 更新陣列 DOM → 補間
+  function commit() { layout(); tween(); }
+
+  function snap() {
+    layout();
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    if (fallbackT) { clearTimeout(fallbackT); fallbackT = 0; }
+    snapPositions();
+    classes();
+  }
+
+  // ── log ─────────────────────────────────────────────────────
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 60) logEl.removeChild(logEl.lastChild);
+  }
+
+  function setEnabled(on) {
+    ["btn-union", "btn-find", "btn-chain", "btn-reset",
+     "rk-on", "rk-off", "pc-on", "pc-off"].forEach(function (id) {
+      document.getElementById(id).disabled = !on;
+    });
+  }
+
+  // ── 核心:find(有動畫)─────────────────────────────────────
+  function pathTo(x) {
+    var p = [], u = x;
+    while (parent[u] !== u) { p.push(u); u = parent[u]; }
+    return { path: p, root: u };
+  }
+
+  function doFind(x) {
+    if (busy) return;
+    busy = true; setEnabled(false);
+    marks = { cursor: -1, path: {}, moved: {}, chg: {} };
+
+    var r = pathTo(x);
+    var walk = r.path.concat([r.root]);
+    var stepsEl = document.getElementById("st-steps");
+    var rwEl = document.getElementById("st-rw");
+    stepsEl.className = "v";
+    rwEl.className = "v";
+    stepsEl.textContent = "0";
+    rwEl.textContent = "-";
+
+    var i = 0;
+    function walkTick() {
+      if (i < walk.length) {
+        marks.cursor = walk[i];
+        if (i > 0) marks.path[walk[i - 1]] = true; // 走過的那條邊
+        stepsEl.textContent = String(i);
+        if (i === walk.length - 1 && i >= 4) stepsEl.className = "v warn";
+        classes(); paint();
+        i++;
+        setTimeout(walkTick, 300);
+      } else {
+        afterWalk();
+      }
+    }
+
+    function afterWalk() {
+      var steps = r.path.length;
+      say("c", "find(" + x + ") -> " + r.root + "   第一趟爬到根,走了 " + steps + " 步");
+
+      if (steps === 0) {
+        rwEl.textContent = "0";
+        say("m", x + " 自己就是根(parent[" + x + "] == " + x + "),0 步,沒有東西要壓縮");
+        return done();
+      }
+      if (!compress) {
+        rwEl.textContent = "0";
+        say("m", "path compression 關閉 —— 樹沒有變扁,下次 find(" + x + ") 還是 " + steps + " 步");
+        return done();
+      }
+      // 第二趟:while parent[x] != root  →  只有還沒直指根的節點要改
+      var todo = r.path.filter(function (u) { return parent[u] !== r.root; });
+      if (todo.length === 0) {
+        rwEl.textContent = "0";
+        say("m", "沿路已經全部直指根,第二趟沒有東西要改 —— 這條路徑已是 1 步");
+        return done();
+      }
+      rwEl.className = "v good";
+      var k = 0;
+      function compTick() {
+        if (k >= todo.length) {
+          say("p", "第二趟完成:" + todo.length + " 格 parent[] 被改寫成 " + r.root +
+              " —— 樹高 " + maxDepth() + ",再 find(" + x + ") 只要 1 步");
+          return done();
+        }
+        var u = todo[k];
+        var old = parent[u];
+        parent[u] = r.root;          // <<< path compression 本體
+        marks.moved[u] = true;
+        marks.chg[u] = true;
+        marks.cursor = -1;
+        rwEl.textContent = String(k + 1);
+        say("p", "  parent[" + u + "]: " + old + " -> " + r.root);
+        commit();
+        k++;
+        setTimeout(compTick, 340);
+      }
+      compTick();
+    }
+
+    function done() {
+      setTimeout(function () {
+        marks = { cursor: -1, path: {}, moved: {}, chg: {} };
+        commit();
+        busy = false; setEnabled(true);
+      }, 900);
+    }
+
+    walkTick();
+  }
+
+  // ── 核心:union(即時,不做逐格動畫)────────────────────────
+  function findRaw(x) {
+    var r = pathTo(x);
+    if (compress) {
+      for (var i = 0; i < r.path.length; i++) {
+        if (parent[r.path[i]] !== r.root) {
+          parent[r.path[i]] = r.root;
+          marks.chg[r.path[i]] = true;
+        }
+      }
+    }
+    return r.root;
+  }
+
+  function doUnion(a, b, quiet) {
+    var ra = findRaw(a), rb = findRaw(b);
+    if (ra === rb) {
+      if (!quiet) say("m", "union(" + a + "," + b + ") -> false   本來就同集合,components 不動");
+      return false;
+    }
+    var low, high;
+    if (byRank) {
+      // 矮樹掛高樹;同 rank 時任選一邊(照 reference 的 tie-break)並讓 rank +1
+      if (rank[ra] < rank[rb]) { low = ra; high = rb; } else { low = rb; high = ra; }
+      parent[low] = high;
+      if (rank[low] === rank[high]) rank[high] += 1;
+    } else {
+      // naive:x 的根直接掛到 y 的根底下,不看高度 —— 鏈就是這樣長出來的
+      low = ra; high = rb;
+      parent[low] = high;
+    }
+    marks.chg[low] = true;
+    comps -= 1;
+    if (!quiet) {
+      say("p", "union(" + a + "," + b + ") -> true   parent[" + low + "] = " + high +
+          (byRank ? "   (rank[" + high + "] = " + rank[high] + ")" : "   (rank 未使用)"));
+    }
+    return true;
+  }
+
+  // ── 事件 ────────────────────────────────────────────────────
+  function reset(quiet) {
+    parent = []; rank = [];
+    for (var i = 0; i < N; i++) { parent.push(i); rank.push(0); }
+    comps = N;
+    marks = { cursor: -1, path: {}, moved: {}, chg: {} };
+    document.getElementById("st-steps").textContent = "-";
+    document.getElementById("st-steps").className = "v";
+    document.getElementById("st-rw").textContent = "-";
+    document.getElementById("st-rw").className = "v";
+    if (!quiet) { logEl.textContent = ""; say("m", "reset — 10 個 singleton,parent[i] = i"); }
+    snap();
+  }
+
+  function chain() {
+    if (busy) return;
+    reset(true);
+    logEl.textContent = "";
+    for (var i = 0; i + 1 < N; i++) doUnion(i, i + 1, true);
+    commit();
+    var d = maxDepth();
+    say("p", "退化鏈:依序 union(0,1), (1,2), …, (8,9)   [union by rank " +
+        (byRank ? "ON" : "OFF") + "]");
+    if (d >= 4) {
+      say("x", "樹高 " + d + " —— 樹退化成一條鏈,find(0) 要走 " + d + " 步。O(n)。");
+      say("m", "現在對 0 做 find(),看第一趟數到 " + d + ",第二趟把整條鏈壓平。");
+    } else {
+      say("m", "樹高 " + d + " —— union by rank 讓鏈根本長不出來,矮的永遠掛到高的底下。");
+      say("m", "把 union by rank 切到 OFF,再按一次這顆按鈕,就看得到竹竿。");
+    }
+    setTimeout(function () {
+      marks.chg = {};
+      classes();
+    }, 700);
+  }
+
+  function setRank(on) {
+    if (busy) return;
+    byRank = on;
+    document.getElementById("rk-on").setAttribute("aria-pressed", String(on));
+    document.getElementById("rk-off").setAttribute("aria-pressed", String(!on));
+    say("m", "union by rank = " + (on ? "ON" : "OFF") +
+        (on ? "   矮樹掛高樹,樹高不超過 log n" : "   naive:x 的根掛到 y 的根,樹高可能 O(n)"));
+    classes();
+  }
+
+  function setPC(on) {
+    if (busy) return;
+    compress = on;
+    document.getElementById("pc-on").setAttribute("aria-pressed", String(on));
+    document.getElementById("pc-off").setAttribute("aria-pressed", String(!on));
+    say("m", "path compression = " + (on ? "ON" : "OFF") +
+        (on ? "   find 的第二趟會把沿路全部直掛根" : "   find 只爬不改,走過的路下次還要再走一遍"));
+  }
+
+  document.getElementById("btn-union").addEventListener("click", function () {
+    if (busy) return;
+    marks = { cursor: -1, path: {}, moved: {}, chg: {} };
+    doUnion(Number(selA.value), Number(selB.value), false);
+    commit();
+    setTimeout(function () { marks.chg = {}; classes(); }, 700);
+  });
+  document.getElementById("btn-find").addEventListener("click", function () {
+    doFind(Number(selX.value));
+  });
+  document.getElementById("btn-chain").addEventListener("click", chain);
+  document.getElementById("btn-reset").addEventListener("click", function () { reset(false); });
+  document.getElementById("rk-on").addEventListener("click", function () { setRank(true); });
+  document.getElementById("rk-off").addEventListener("click", function () { setRank(false); });
+  document.getElementById("pc-on").addEventListener("click", function () { setPC(true); });
+  document.getElementById("pc-off").addEventListener("click", function () { setPC(false); });
+
+  build();
+  reset(true);
+  say("m", "10 個 singleton。parent[i] = i 就是根 —— 右邊那一整排 i,就是左邊那一排孤兒節點。");
+  say("m", "試試「建立退化鏈」,然後 find(0)。");
+})();
+</script>

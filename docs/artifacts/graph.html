@@ -1,0 +1,1560 @@
+<title>graph — 換一個容器,就換一個演算法</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── graph:圖面板 ────────────────────────────────────────────────── */
+.gwrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+.canvas-box {
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.4rem;
+}
+canvas { display: block; width: 100%; height: auto; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.legend i {
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-style: normal;
+}
+.legend i.f { border-color: var(--producer); background: var(--producer-bg); }
+.legend i.c { border-color: var(--accent); background: var(--accent-bg); }
+.legend i.d { border-color: var(--ok); background: var(--ok-bg); }
+.legend i.s { border-color: var(--danger); background: var(--danger-bg); }
+
+/* ── 前緣容器(整個模組的重點)──────────────────────────────────── */
+.frontier {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--raised);
+  padding: 0.75rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 8.4rem;
+}
+.fr-head { display: flex; flex-direction: column; gap: 0.15rem; }
+.fr-type {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--producer);
+  word-break: break-word;
+}
+.fr-note {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.fr-cells { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: flex-end; min-height: 3rem; }
+.fr-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12rem;
+}
+.fr-item .cap {
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  min-height: 0.85rem;
+}
+.fr-item .box {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--producer);
+  background: var(--producer-bg);
+  color: var(--producer);
+  border-radius: 3px;
+  padding: 0.22rem 0.42rem;
+  white-space: nowrap;
+}
+.fr-item.top .cap { color: var(--accent); font-weight: 600; }
+.fr-item.top .box { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.fr-empty { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); padding: 0.5rem 0; }
+
+/* ── 陣列(dist / indeg / visited)────────────────────────────────── */
+.arow { display: flex; flex-direction: column; gap: 0.25rem; }
+.arow .alabel {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.acells { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.acell {
+  flex: 1 1 2.1rem;
+  min-width: 2.1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.16rem 0;
+}
+.acell .i {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  color: var(--muted);
+}
+.acell .v {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.acell .v.none { color: var(--muted); font-weight: 400; }
+.acell.hit { border-color: var(--accent); background: var(--accent-bg); }
+.acell.zero { border-color: var(--ok); background: var(--ok-bg); }
+.orderline {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--ok);
+  padding-left: 0.7rem;
+  word-break: break-word;
+}
+.orderline b { color: var(--ok); }
+
+/* ── 程式碼(帶行高亮)───────────────────────────────────────────── */
+.code {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.7;
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.6rem 0;
+  overflow-x: auto;
+}
+.code .cl {
+  display: block;
+  padding: 0 0.85rem;
+  white-space: pre;
+  color: var(--ink-2);
+  border-left: 2px solid transparent;
+}
+.code .cl.on {
+  background: var(--accent-bg);
+  border-left-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.code .cl.stale-on {
+  background: var(--danger-bg);
+  border-left-color: var(--danger);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.codepair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.codepair h3 { margin-bottom: 0.35rem; }
+.codepair .swap { color: var(--danger); font-weight: 600; }
+
+.status {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border-radius: 4px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  padding: 0.5rem 0.75rem;
+  color: var(--ink-2);
+  min-height: 1.2rem;
+}
+.status.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.status.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+
+button.act-cycle { border-color: var(--danger); color: var(--danger); }
+button.act-cycle:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); }
+button.act-cycle[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
+button.act-cycle[aria-pressed="true"]:hover { background: var(--danger); }
+
+@media (max-width: 54rem) {
+  .gwrap { grid-template-columns: 1fr; }
+  .codepair { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 3 &nbsp;·&nbsp; 單執行緒資料結構</p>
+  <h1>graph</h1>
+  <p class="lede">
+    BFS 和 DFS 的程式碼幾乎逐字相同——差別只有一個:<strong>前緣放在佇列還是堆疊</strong>。
+    Kahn 換成 in-degree 陣列,Dijkstra 換成一個堆。
+    四個演算法,一份骨架,<strong>容器決定一切</strong>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 圖就是 <code>Vec&lt;Vec&lt;(usize, u64)&gt;&gt;</code></h2>
+  <p>
+    <code>adj[u]</code> 是一條 <code>Vec</code>,裝著 <code>(鄰居, 邊權)</code>。節點是 dense id <code>0..n</code>
+    ——外部實體(字串、IP)先過一層 <code>HashMap</code> 映射再進來,把「識別」和「演算法」切開。
+    節點的 payload、邊的名字都不進 <code>Graph</code>:圖只管拓撲,屬性用平行陣列外掛。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>表示法</th><th>空間</th><th>走鄰居</th><th>問「u→v 有邊嗎」</th><th>什麼時候用</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Vec&lt;Vec&lt;(usize, u64)&gt;&gt;</code></td>
+          <td class="mono">O(V+E)</td>
+          <td class="mono">O(deg)</td>
+          <td class="mono">O(deg)</td>
+          <td>稀疏圖(E 遠小於 V^2)——現實網路幾乎都是</td>
+        </tr>
+        <tr>
+          <td><code>Vec&lt;Vec&lt;bool&gt;&gt;</code>(matrix)</td>
+          <td class="mono">O(V^2)</td>
+          <td class="mono">O(V)</td>
+          <td class="mono">O(1)</td>
+          <td>dense 圖,或邊查詢是熱路徑</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    無向圖 <code>add_edge(u, v, w)</code> 存<strong>兩份</strong>(<code>adj[u]</code> 和 <code>adj[v]</code> 各一)。
+    用空間換掉「遍歷時還要判方向」的分支。下面的示範圖是<strong>有向</strong>的——topo 和 Dijkstra 都需要方向。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 一張圖,四個演算法,一個 stepper</h2>
+  <p>
+    同一張 8 節點有向加權圖。切換演算法,右邊的<strong>前緣容器</strong>會跟著換——
+    那個容器就是演算法本身。盯著它看:誰進去、誰出來、從哪一端出來。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="algorithm">
+        <button id="alg-bfs" aria-pressed="true">BFS</button>
+        <button id="alg-dfs" aria-pressed="false">DFS</button>
+        <button id="alg-topo" aria-pressed="false">Kahn topo</button>
+        <button id="alg-dij" aria-pressed="false">Dijkstra</button>
+      </div>
+      <button id="btn-prev">上一步</button>
+      <button id="btn-next">下一步</button>
+      <button id="btn-auto">自動播放</button>
+      <button id="btn-end">跑到底</button>
+      <button id="btn-reset">reset</button>
+      <button class="act-cycle" id="btn-cycle" aria-pressed="false">加 back-edge 6→3(製造環)</button>
+    </div>
+
+    <div class="gwrap">
+      <div style="display:flex; flex-direction:column; gap:0.7rem;">
+        <div class="canvas-box"><canvas id="cv" width="880" height="440"></canvas></div>
+        <div class="legend">
+          <span><i></i>未訪</span>
+          <span><i class="f"></i>在前緣容器裡</span>
+          <span><i class="c"></i>current(剛 pop 出來)</span>
+          <span><i class="d"></i>已處理 / 已定案</span>
+          <span><i class="s"></i>stale / 卡住</span>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:0.7rem;">
+        <div class="frontier">
+          <div class="fr-head">
+            <span class="fr-type" id="fr-type">VecDeque&lt;usize&gt;</span>
+            <span class="fr-note" id="fr-note">FIFO — 從最前面 pop</span>
+          </div>
+          <div class="fr-cells" id="fr-cells"></div>
+        </div>
+        <div class="readout">
+          <div class="stat"><span class="k">step</span><span class="v" id="st-step">0 / 0</span></div>
+          <div class="stat"><span class="k">pop 次數</span><span class="v" id="st-pops">0</span></div>
+        </div>
+        <div class="status" id="status">按「下一步」開始。</div>
+      </div>
+    </div>
+
+    <div id="arrays" style="display:flex; flex-direction:column; gap:0.7rem;"></div>
+    <div class="orderline" id="orderline"><b>order</b> = []</div>
+
+    <pre class="code" id="code"></pre>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    邊上的數字是權重。<strong>BFS、DFS、Kahn 從頭到尾沒有讀過任何一個 <code>w</code></strong>
+    ——它們只走拓撲。只有 Dijkstra 用得到權重(所以只有它需要堆)。
+    另外注意:按下「加 back-edge」以後,BFS / DFS / Dijkstra 的答案<strong>完全不變</strong>
+    (visited 陣列擋掉了環,非負權讓繞環永遠不划算),只有 topo 會壞掉。這正是 topo 特別的地方。
+  </p>
+</section>
+
+<section>
+  <h2>3 · BFS 與 DFS:只有一行不一樣</h2>
+  <p>
+    把兩份程式碼疊在一起看。變數名不同、容器型別不同,骨架一模一樣:
+    <em>pop 一個 → 掃它的鄰居 → 沒看過的丟進容器</em>。
+    差別在紅色那兩行——<strong>從哪一端拿</strong>。
+  </p>
+  <div class="codepair">
+    <div>
+      <h3>BFS — VecDeque(FIFO)</h3>
+      <pre class="code"><span class="cl">let mut q = VecDeque::new();</span><span class="cl swap">while let Some(u) = q.pop_front() {</span><span class="cl">    for &amp;(v, _) in &amp;adj[u] {</span><span class="cl">        if dist[v].is_none() {</span><span class="cl">            dist[v] = Some(dist[u].unwrap() + 1);</span><span class="cl swap">            q.push_back(v);</span><span class="cl">        }</span><span class="cl">    }</span><span class="cl">}</span></pre>
+    </div>
+    <div>
+      <h3>DFS — Vec(LIFO)</h3>
+      <pre class="code"><span class="cl">let mut st = vec![src];</span><span class="cl swap">while let Some(u) = st.pop() {</span><span class="cl">    if visited[u] { continue; }</span><span class="cl">    visited[u] = true;</span><span class="cl">    order.push(u);</span><span class="cl swap">    for &amp;(v, _) in adj[u].iter().rev() {</span><span class="cl">        if !visited[v] { st.push(v); }</span><span class="cl">    }</span><span class="cl">}</span></pre>
+    </div>
+  </div>
+  <p>
+    兩個實作上的細節,面試會被追問:
+  </p>
+  <ul>
+    <li><strong>BFS 在「入隊時」標記,不是出隊時。</strong>出隊才標記的話,同一個節點會被多條邊各推一次,
+      佇列最壞膨脹到 O(E)。這一行決定了 BFS 是不是真的 O(V+E)。</li>
+    <li><strong>DFS 在「彈出時」去重。</strong>一個節點可能被多條路徑推進 stack(示範圖裡的節點 5 就被推了兩次),
+      所以 <code>pop</code> 出來第一件事是 <code>if visited[u] { continue; }</code>。
+      在 stepper 裡把 DFS 跑到底,你會看到那個重複的 5 被彈出來然後丟掉。</li>
+    <li><strong>鄰居要反向 push</strong>,迭代版的前序才會跟遞迴版一致(後 push 的先 pop)。</li>
+    <li>用迭代版而不是遞迴版的理由:遞迴深度 = 最長路徑。1e6 個節點的鏈會爆 call stack
+      (Rust main thread 預設 8MB,<code>spawn</code> 出來的只有 2MB)。顯式 stack 開在 heap 上,沒有這個上限。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>4 · Kahn:cycle 偵測是免費附贈的</h2>
+  <p>
+    Kahn 的前緣容器是「<strong>in-degree 已經歸零</strong>的節點」——所有前置條件都清掉了,現在可以做了。
+    每 pop 一個節點就把它的鄰居 in-degree 減一;減到 0 就入隊。
+    輸出天然是拓撲序,因為一個節點只會在它所有前驅都出來之後才進隊。
+  </p>
+  <p>
+    現在是關鍵:<strong>環上的節點,in-degree 永遠不會歸零</strong>——它們互相是對方的前置條件。
+    所以佇列會提早空掉,<code>order</code> 湊不滿 <code>n</code>。
+  </p>
+  <pre class="code"><span class="cl on">(order.len() == n).then_some(order)   // 湊不滿 ⇒ None ⇒ 有環</span></pre>
+  <p>
+    去上面按「加 back-edge 6→3」再跑一次 Kahn:輸出只吐得出 <strong>3 個節點</strong>(共 8 個)就卡死。
+    卡住的不只是環上的 3、4、6——連環<em>下游</em>的 5、7 也一起卡住(它們永遠等不到前驅)。
+    所以「輸出長度 &lt; n」只告訴你<strong>有環</strong>,不告訴你環在哪。要定位環得另外做(DFS 三色標記 / Tarjan SCC)。
+  </p>
+  <p class="note">
+    DFS 後序反轉也能得到拓撲序,但那條路要偵測環得維護三色標記(白/灰/黑),
+    面試現場容易寫錯灰色的判斷。Kahn 只有一個 <code>indeg</code> 陣列和一個佇列,
+    而且 cycle 偵測是<strong>順便</strong>的——同樣 O(V+E),寫錯的機會少一半。
+  </p>
+</section>
+
+<section>
+  <h2>5 · Dijkstra:Reverse、懶刪除、以及負邊</h2>
+  <p>
+    Rust 的 <code>BinaryHeap</code> 是 <strong>max-heap</strong>。Dijkstra 要每次拿出「目前 tentative 距離最小」的節點,
+    所以要把比較反過來——<code>Reverse</code> 就是幹這個的:
+  </p>
+  <pre class="code"><span class="cl">let mut heap = BinaryHeap::new();          // max-heap</span><span class="cl on">heap.push(Reverse((dist, node)));          // Reverse ⇒ 比較反轉 ⇒ 拿出來的是最小</span><span class="cl">while let Some(Reverse((d, u))) = heap.pop() { ... }</span></pre>
+  <p>
+    <code>(dist, node)</code> 這個 tuple 的順序不是隨便排的:tuple 的 <code>Ord</code> 是字典序,
+    <strong>先比第一個欄位</strong>。dist 必須放前面,不然你排的是 node id。
+  </p>
+
+  <h3>懶刪除(lazy deletion)——這題是分水嶺</h3>
+  <p>
+    課本的 Dijkstra 用 <em>decrease-key</em>:找到更短的路徑時,就地把堆裡那個節點的 key 調小。
+    <strong><code>std::collections::BinaryHeap</code> 沒有 decrease-key</strong>——它連「節點 u 在堆的哪個位置」都不知道。
+    要有 decrease-key,你得自己寫一個帶 <code>pos[]</code> 索引的堆,每次 sift 都要同步更新索引。
+  </p>
+  <p>
+    標準解法是<strong>不刪</strong>:鬆弛成功就<strong>再 push 一筆新的</strong>,舊的那筆留在堆裡爛掉。
+    彈出來的時候檢查一次——
+  </p>
+  <pre class="code"><span class="cl">while let Some(Reverse((d, u))) = heap.pop() {</span><span class="cl stale-on">    if dist[u].is_some_and(|best| d &gt; best) { continue; }  // stale,丟掉</span><span class="cl">    // ... 走 u 的鄰居</span><span class="cl">}</span></pre>
+  <p>
+    <code>d &gt; dist[u]</code> 表示這筆條目在入堆之後,<code>dist[u]</code> 又被別的路徑改小了 ⇒ 這筆過期了 ⇒ 直接 <code>continue</code>。
+    在上面的 stepper 裡跑 Dijkstra 到底,你會看到<strong>三次</strong> stale pop 被跳過(紅色那幾格):
+    <code>(4, 1)</code>、<code>(6, 4)</code>、<code>(9, 5)</code>。這是絕大多數人手寫時會漏掉的一行——
+    漏了不會 panic,只會多做一次鬆弛(通常結果還是對的,但複雜度證明破了)。
+  </p>
+  <p class="note">
+    代價:堆裡最多 O(E) 筆條目(每條邊最多推一次),所以是 <strong>O((V+E) log E)</strong>,
+    而不是索引堆的 O((V+E) log V)。因為 E 小於 V^2,<code>log E &lt; 2 log V</code> ——
+    常數級的差距,換掉一整個自訂資料結構。面試講得出這個取捨,比寫出 decrease-key 更值錢。
+  </p>
+
+  <h3>負邊:Dijkstra 直接是錯的</h3>
+  <p>
+    Dijkstra 的正確性建立在一個貪心不變式上:<strong>從堆裡彈出的節點,它的 dist 就定案了</strong>。
+    這句話只有在「邊權非負」時才成立——因為往後走只會讓距離變大,不可能繞遠路反而更短。
+  </p>
+  <p>
+    <strong>有一條負邊,這個不變式就垮了</strong>,Dijkstra 會給出錯的答案(不是慢,是錯)。
+    這也是簽名寫 <code>w: u64</code> 而不是 <code>i64</code> 的原因:用型別把前提釘死。
+    真的有負邊 ⇒ Bellman-Ford(O(VE),還順便偵測負環);全點對 ⇒ Johnson 或 Floyd-Warshall。
+  </p>
+  <p class="note">
+    順帶一提,堆的內部陣列<strong>不是排序好的</strong>——binary heap 只保證根是最小(這裡是被 <code>Reverse</code> 反轉過的最小)。
+    上面 stepper 顯示的堆內容是真的堆陣列,你會看到它長得很亂,但 index 0 永遠是下一個要彈出的。
+  </p>
+</section>
+
+<section>
+  <h2>6 · 四件套的複雜度</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>演算法</th><th>前緣容器</th><th>時間</th><th>空間</th><th>前提 / 限制</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>BFS</td>
+          <td><code>VecDeque&lt;usize&gt;</code></td>
+          <td class="mono">O(V+E)</td>
+          <td class="mono">O(V)</td>
+          <td>只給<strong>邊數</strong>最短路。有權重就不能用(除非全部等權)</td>
+        </tr>
+        <tr>
+          <td>DFS(迭代)</td>
+          <td><code>Vec&lt;usize&gt;</code></td>
+          <td class="mono">O(V+E)</td>
+          <td class="mono">O(V)</td>
+          <td>不給最短路。用途是連通性、環偵測、SCC、後序</td>
+        </tr>
+        <tr>
+          <td>Kahn topo</td>
+          <td><code>VecDeque</code> + <code>indeg[]</code></td>
+          <td class="mono">O(V+E)</td>
+          <td class="mono">O(V)</td>
+          <td>只對<strong>有向圖</strong>有意義。順便偵測環</td>
+        </tr>
+        <tr>
+          <td>Dijkstra</td>
+          <td><code>BinaryHeap&lt;Reverse&lt;(u64, usize)&gt;&gt;</code></td>
+          <td class="mono">O((V+E) log E)</td>
+          <td class="mono">O(V+E)</td>
+          <td><strong style="color:var(--danger)">邊權必須非負</strong>。堆裡有 O(E) 筆懶刪除條目</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    Production 對照:Rust 生態是 <code>petgraph</code>(泛型圖 + 一整套演算法)。
+    真的大圖會把 <code>Vec&lt;Vec&lt;_&gt;&gt;</code> 換成 <strong>CSR</strong>(compressed sparse row):
+    兩條扁平陣列 <code>offsets[]</code> 和 <code>targets[]</code>,消掉第二層指標跳躍,
+    鄰居在記憶體裡連續 ⇒ prefetcher 幫你把整段拉進 cache。
+    原理跟 <code>arena_lockfree</code> 的 arena 一樣:<strong>把散落 heap 的東西攤平成連續陣列</strong>。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/graph.rs</code> · 設計取捨:<code>docs/graph.md</code></div>
+  <div>驗證:<code>cargo test -p reference graph</code></div>
+  <div>前置:<code>dsu</code>(同樣的 dense id 映射手法)· 相關:<code>tree</code>、<code>trie</code></div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 示範圖:8 節點有向加權。邊的插入順序 == adj[u] 裡的順序,
+  //    直接決定 BFS / DFS 的走訪順序,所以順序是刻意的。 ────────────
+  var N = 8;
+  var BASE_EDGES = [
+    [0, 1, 4], [0, 2, 1],
+    [2, 1, 1], [2, 4, 5],
+    [1, 3, 1],
+    [3, 4, 2], [3, 5, 6],
+    [4, 5, 1], [4, 6, 3],
+    [5, 7, 2],
+    [6, 7, 1]
+  ];
+  // back-edge:6→3 讓 3→4→6→3 成環。BFS/DFS/Dijkstra 的答案不受影響,
+  // 只有 topo 會從 Some(8 個) 變成 None。
+  var CYCLE_EDGE = [6, 3, 2];
+
+  var POS = [
+    [70, 215], [215, 110], [215, 320], [360, 110],
+    [500, 235], [645, 120], [645, 345], [810, 230]
+  ];
+
+  function buildAdj(withCycle) {
+    var adj = [], i;
+    for (i = 0; i < N; i++) adj.push([]);
+    var es = BASE_EDGES.slice();
+    if (withCycle) es.push(CYCLE_EDGE);
+    for (i = 0; i < es.length; i++) adj[es[i][0]].push([es[i][1], es[i][2]]);
+    return adj;
+  }
+  function edgeList(withCycle) {
+    var es = BASE_EDGES.slice();
+    if (withCycle) es.push(CYCLE_EDGE);
+    return es;
+  }
+
+  // ── 四份程式碼(行號是 frame.line 的索引)────────────────────────
+  var CODE = {
+    bfs: [
+      "let mut dist = vec![None; n];",
+      "let mut q = VecDeque::new();          // FIFO",
+      "dist[src] = Some(0);  q.push_back(src);",
+      "while let Some(u) = q.pop_front() {   // 從最前面取",
+      "    for &(v, _) in &adj[u] {",
+      "        if dist[v].is_none() {        // 沒訪過?",
+      "            dist[v] = Some(dist[u].unwrap() + 1);",
+      "            q.push_back(v);           // 入隊時就標記",
+      "        }",
+      "    }",
+      "}"
+    ],
+    dfs: [
+      "let mut visited = vec![false; n];",
+      "let mut st = vec![src];               // LIFO",
+      "let mut order = Vec::new();",
+      "while let Some(u) = st.pop() {        // 從最後面取",
+      "    if visited[u] { continue; }       // 彈出時去重",
+      "    visited[u] = true;  order.push(u);",
+      "    for &(v, _) in adj[u].iter().rev() {",
+      "        if !visited[v] { st.push(v); }",
+      "    }",
+      "}"
+    ],
+    topo: [
+      "let mut indeg = vec![0; n];",
+      "for u in 0..n { for &(v, _) in &adj[u] { indeg[v] += 1; } }",
+      "let mut q: VecDeque<_> = (0..n).filter(|&v| indeg[v] == 0).collect();",
+      "let mut order = Vec::with_capacity(n);",
+      "while let Some(u) = q.pop_front() {",
+      "    order.push(u);",
+      "    for &(v, _) in &adj[u] {",
+      "        indeg[v] -= 1;",
+      "        if indeg[v] == 0 { q.push_back(v); }   // 前置條件都清了",
+      "    }",
+      "}",
+      "(order.len() == n).then_some(order)    // 湊不滿 n ⇔ 有環"
+    ],
+    dij: [
+      "let mut dist: Vec<Option<u64>> = vec![None; n];",
+      "let mut heap = BinaryHeap::new();      // 這是 max-heap",
+      "dist[src] = Some(0);",
+      "heap.push(Reverse((0u64, src)));       // Reverse ⇒ min-heap",
+      "while let Some(Reverse((d, u))) = heap.pop() {",
+      "    if dist[u].is_some_and(|best| d > best) { continue; }  // 懶刪除",
+      "    for &(v, w) in &adj[u] {",
+      "        let nd = d + w;",
+      "        if dist[v].is_none_or(|cur| nd < cur) {",
+      "            dist[v] = Some(nd);",
+      "            heap.push(Reverse((nd, v)));   // 不 decrease-key,直接再 push",
+      "        }",
+      "    }",
+      "}"
+    ]
+  };
+
+  var META = {
+    bfs:  { type: "VecDeque<usize>",                     note: "FIFO — 從最前面 pop" },
+    dfs:  { type: "Vec<usize>",                          note: "LIFO — 從最後面 pop" },
+    topo: { type: "VecDeque<usize>  (indeg == 0 的節點)", note: "FIFO — 前置條件都清了的任務" },
+    dij:  { type: "BinaryHeap<Reverse<(u64, usize)>>",    note: "min-heap — index 0 是下一個要彈的" }
+  };
+
+  var OLABEL = {
+    bfs: "pop 順序", dfs: "preorder", topo: "order(拓撲序)", dij: "定案順序"
+  };
+
+  // ── 一個誠實的 binary min-heap:顯示的是真的堆陣列,不是排序陣列 ──
+  function hLess(a, b) { return a[0] !== b[0] ? a[0] < b[0] : a[1] < b[1]; }
+  function hPush(h, x) {
+    h.push(x);
+    var i = h.length - 1;
+    while (i > 0) {
+      var p = (i - 1) >> 1;
+      if (hLess(h[i], h[p])) { var t = h[p]; h[p] = h[i]; h[i] = t; i = p; } else break;
+    }
+  }
+  function hPop(h) {
+    var top = h[0], last = h.pop();
+    if (h.length) {
+      h[0] = last;
+      var i = 0;
+      for (;;) {
+        var l = 2 * i + 1, r = l + 1, m = i;
+        if (l < h.length && hLess(h[l], h[m])) m = l;
+        if (r < h.length && hLess(h[r], h[m])) m = r;
+        if (m === i) break;
+        var t = h[m]; h[m] = h[i]; h[i] = t; i = m;
+      }
+    }
+    return top;
+  }
+
+  // ── frame 產生器:每個 frame 是一份完整快照 ──────────────────────
+  function mk(alg, withCycle) {
+    var adj = buildAdj(withCycle);
+    var frames = [];
+    var state = [];   // 'unseen' | 'seen' | 'cur' | 'done'
+    var order = [];
+    var i;
+    for (i = 0; i < N; i++) state.push("unseen");
+
+    function snap(o) {
+      var st = state.slice();
+      if (o.over) { for (var k in o.over) st[k] = o.over[k]; }
+      frames.push({
+        line: o.line,
+        msg: o.msg,
+        cls: o.cls || "m",
+        cur: (o.cur === undefined) ? null : o.cur,
+        edge: o.edge || null,
+        state: st,
+        frontier: o.frontier,
+        rows: o.rows,
+        order: order.slice(),
+        pops: o.pops,
+        status: o.status || "",
+        statusCls: o.statusCls || ""
+      });
+    }
+
+    if (alg === "bfs") {
+      var dist = [], q = [], pops = 0, prev = null;
+      for (i = 0; i < N; i++) dist.push(null);
+      function bq() { return q.map(function (v, k) { return { t: String(v), top: k === 0 }; }); }
+      function brows(hit) { return [{ label: "dist[]  (邊數)", vals: dist.slice(), hit: hit, zero: null }]; }
+
+      dist[0] = 0; q.push(0); state[0] = "seen";
+      snap({ line: 2, msg: "init: dist[0] = Some(0), q.push_back(0)", frontier: bq(), rows: brows(0), pops: 0,
+             status: "src = 0。dist 陣列同時當 visited 用:None 就是沒訪過。" });
+
+      while (q.length) {
+        if (prev !== null) state[prev] = "done";
+        var u = q.shift(); pops++; state[u] = "cur"; prev = u; order.push(u);
+        snap({ line: 3, cur: u, msg: "pop_front() -> " + u + "   FIFO:最早入隊的先出來", cls: "c",
+               frontier: bq(), rows: brows(u), pops: pops,
+               status: "current = " + u + ",dist = " + dist[u] + "。掃它的 " + adj[u].length + " 個鄰居。" });
+        for (i = 0; i < adj[u].length; i++) {
+          var v = adj[u][i][0];
+          if (dist[v] === null) {
+            dist[v] = dist[u] + 1; q.push(v); state[v] = "seen";
+            snap({ line: 7, cur: u, edge: [u, v], msg: "  " + u + "->" + v + "  dist[" + v + "] 是 None -> Some(" + dist[v] + "),push_back(" + v + ")", cls: "p",
+                   frontier: bq(), rows: brows(v), pops: pops,
+                   status: "標記在「入隊時」——出隊才標記的話 " + v + " 會被推進佇列好幾次。" });
+          } else {
+            snap({ line: 5, cur: u, edge: [u, v], msg: "  " + u + "->" + v + "  dist[" + v + "] 已是 Some(" + dist[v] + ") -> 跳過", cls: "m",
+                   frontier: bq(), rows: brows(v), pops: pops,
+                   status: "dist 有值 == 已訪過。BFS 不需要另一個 visited 陣列。" });
+          }
+        }
+      }
+      if (prev !== null) state[prev] = "done";
+      snap({ line: null, msg: "queue 空 -> 結束。dist = [" + dist.join(", ") + "]", cls: "c",
+             frontier: [], rows: brows(null), pops: pops,
+             status: "BFS 給的是最短「邊數」。權重從頭到尾沒被讀過。", statusCls: "ok" });
+
+    } else if (alg === "dfs") {
+      var vis = [], stk = [0], pops2 = 0, prev2 = null;
+      for (i = 0; i < N; i++) vis.push(false);
+      function dq() { return stk.map(function (v, k) { return { t: String(v), top: k === stk.length - 1 }; }); }
+      function drows(hit) {
+        var vv = vis.map(function (b) { return b ? "T" : null; });
+        return [{ label: "visited[]", vals: vv, hit: hit, zero: null }];
+      }
+      state[0] = "seen";
+      snap({ line: 1, msg: "init: st = vec![0]", frontier: dq(), rows: drows(0), pops: 0,
+             status: "同一份骨架,容器從 VecDeque 換成 Vec。" });
+
+      while (stk.length) {
+        var u2 = stk.pop(); pops2++;
+        if (vis[u2]) {
+          snap({ line: 4, cur: u2, over: (function () { var o = {}; o[u2] = "stale"; return o; })(),
+                 msg: "pop() -> " + u2 + "   已 visited -> continue(彈出時去重)", cls: "x",
+                 frontier: dq(), rows: drows(u2), pops: pops2,
+                 status: "節點 " + u2 + " 被兩條路徑各推過一次。第二筆彈出來就丟掉——這就是「彈出時去重」。",
+                 statusCls: "bad" });
+          continue;
+        }
+        if (prev2 !== null) state[prev2] = "done";
+        vis[u2] = true; order.push(u2); state[u2] = "cur"; prev2 = u2;
+        snap({ line: 5, cur: u2, msg: "pop() -> " + u2 + "   LIFO:最晚入堆疊的先出來,visited[" + u2 + "] = true", cls: "c",
+               frontier: dq(), rows: drows(u2), pops: pops2,
+               status: "current = " + u2 + "。鄰居要 .rev() 反向 push,前序才跟遞迴版一致。" });
+        var nb = adj[u2].slice().reverse();
+        for (i = 0; i < nb.length; i++) {
+          var v2 = nb[i][0];
+          if (!vis[v2]) {
+            stk.push(v2);
+            if (state[v2] === "unseen") state[v2] = "seen";
+            snap({ line: 7, cur: u2, edge: [u2, v2], msg: "  " + u2 + "->" + v2 + "  未訪 -> st.push(" + v2 + ")", cls: "p",
+                   frontier: dq(), rows: drows(v2), pops: pops2,
+                   status: "push 進 stack。注意:這裡沒標記 visited——所以同一個節點可能進去多次。" });
+          } else {
+            snap({ line: 7, cur: u2, edge: [u2, v2], msg: "  " + u2 + "->" + v2 + "  已 visited -> 不 push", cls: "m",
+                   frontier: dq(), rows: drows(v2), pops: pops2, status: "" });
+          }
+        }
+      }
+      if (prev2 !== null) state[prev2] = "done";
+      snap({ line: null, msg: "stack 空 -> 結束。preorder = [" + order.join(", ") + "]", cls: "c",
+             frontier: [], rows: drows(null), pops: pops2,
+             status: "同一張圖、同一份骨架,只因為換了容器,走訪順序完全不同。", statusCls: "ok" });
+
+    } else if (alg === "topo") {
+      var indeg = [], q3 = [], pops3 = 0, prev3 = null;
+      for (i = 0; i < N; i++) indeg.push(0);
+      for (i = 0; i < N; i++) {
+        for (var j = 0; j < adj[i].length; j++) indeg[adj[i][j][0]]++;
+      }
+      function tq() { return q3.map(function (v, k) { return { t: String(v), top: k === 0 }; }); }
+      function trows(hit) { return [{ label: "indeg[]", vals: indeg.slice(), hit: hit, zero: true }]; }
+
+      snap({ line: 1, msg: "掃全部 " + edgeList(withCycle).length + " 條邊,算 in-degree: [" + indeg.join(", ") + "]",
+             frontier: [], rows: trows(null), pops: 0,
+             status: "indeg[v] = 有幾件事必須在 v 之前做完。" });
+      for (i = 0; i < N; i++) if (indeg[i] === 0) { q3.push(i); state[i] = "seen"; }
+      snap({ line: 2, msg: "種子:in-degree == 0 的節點 -> q = [" + q3.join(", ") + "]", cls: "p",
+             frontier: tq(), rows: trows(null), pops: 0,
+             status: "沒有任何前置條件的任務,現在就能做。" });
+
+      while (q3.length) {
+        if (prev3 !== null) state[prev3] = "done";
+        var u3 = q3.shift(); pops3++; order.push(u3); state[u3] = "cur"; prev3 = u3;
+        snap({ line: 5, cur: u3, msg: "pop_front() -> " + u3 + "   order.push(" + u3 + ")", cls: "c",
+               frontier: tq(), rows: trows(u3), pops: pops3,
+               status: "current = " + u3 + "。它的前驅全部已經出去了 -> 現在輪到它。" });
+        for (i = 0; i < adj[u3].length; i++) {
+          var v3 = adj[u3][i][0];
+          indeg[v3]--;
+          if (indeg[v3] === 0) {
+            q3.push(v3); state[v3] = "seen";
+            snap({ line: 8, cur: u3, edge: [u3, v3], msg: "  indeg[" + v3 + "] -= 1 -> 0  -> push_back(" + v3 + ")", cls: "p",
+                   frontier: tq(), rows: trows(v3), pops: pops3,
+                   status: "節點 " + v3 + " 的前置條件都清光了,可以排進去了。" });
+          } else {
+            snap({ line: 7, cur: u3, edge: [u3, v3], msg: "  indeg[" + v3 + "] -= 1 -> " + indeg[v3] + "  (還在等)", cls: "m",
+                   frontier: tq(), rows: trows(v3), pops: pops3,
+                   status: "節點 " + v3 + " 還有 " + indeg[v3] + " 個前驅沒出來。" });
+          }
+        }
+      }
+      if (prev3 !== null) state[prev3] = "done";
+      var ok = order.length === N;
+      var over = null;
+      if (!ok) {
+        over = {};
+        for (i = 0; i < N; i++) if (state[i] !== "done") over[i] = "stale";
+      }
+      snap({ line: 10, over: over,
+             msg: ok
+               ? "queue 空。order.len() = " + order.length + " == n = " + N + " -> Some(order) ✓ 無環"
+               : "queue 空。order.len() = " + order.length + " < n = " + N + " -> None ✗ 有環",
+             cls: ok ? "c" : "x",
+             frontier: [], rows: trows(null), pops: pops3,
+             status: ok
+               ? "湊滿 n 個 -> 這是一個 DAG,order 就是合法的拓撲序。"
+               : "紅色的 " + (N - order.length) + " 個節點 in-degree 永遠歸不了零(環上的互相卡住,下游的等不到前驅)。輸出湊不滿 n —— 這就是 cycle detection,免費附贈。",
+             statusCls: ok ? "ok" : "bad" });
+
+    } else { // dij
+      var dist4 = [], heap = [], pops4 = 0, prev4 = null;
+      for (i = 0; i < N; i++) dist4.push(null);
+      function hq() {
+        return heap.map(function (e, k) {
+          return { t: "(" + e[0] + "," + e[1] + ")", top: k === 0 };
+        });
+      }
+      function drows4(hit) { return [{ label: "dist[]  (權重和)", vals: dist4.slice(), hit: hit, zero: null }]; }
+
+      dist4[0] = 0; hPush(heap, [0, 0]); state[0] = "seen";
+      snap({ line: 3, msg: "init: dist[0] = Some(0), heap.push(Reverse((0, 0)))",
+             frontier: hq(), rows: drows4(0), pops: 0,
+             status: "BinaryHeap 是 max-heap;Reverse 把比較反轉,pop 出來的就是最小的。" });
+
+      while (heap.length) {
+        var e = hPop(heap); pops4++;
+        var d = e[0], u4 = e[1];
+        if (dist4[u4] !== null && d > dist4[u4]) {
+          snap({ line: 5, cur: u4, over: (function () { var o = {}; o[u4] = "stale"; return o; })(),
+                 msg: "pop -> (" + d + ", " + u4 + ")   d=" + d + " > dist[" + u4 + "]=" + dist4[u4] + "  -> STALE,continue", cls: "x",
+                 frontier: hq(), rows: drows4(u4), pops: pops4,
+                 status: "懶刪除的關鍵:這筆是舊條目,入堆之後 dist[" + u4 + "] 又被改小了。丟掉就好——沒有 decrease-key。",
+                 statusCls: "bad" });
+          continue;
+        }
+        if (prev4 !== null) state[prev4] = "done";
+        state[u4] = "cur"; prev4 = u4; order.push(u4);
+        snap({ line: 4, cur: u4, msg: "pop -> (" + d + ", " + u4 + ")   d == dist[" + u4 + "] -> 定案", cls: "c",
+               frontier: hq(), rows: drows4(u4), pops: pops4,
+               status: "貪心不變式:彈出的節點 dist 就定案了(只有邊權非負才成立)。" });
+        for (i = 0; i < adj[u4].length; i++) {
+          var v4 = adj[u4][i][0], w4 = adj[u4][i][1];
+          var nd = d + w4;
+          if (dist4[v4] === null || nd < dist4[v4]) {
+            var old = dist4[v4];
+            dist4[v4] = nd; hPush(heap, [nd, v4]);
+            if (state[v4] === "unseen") state[v4] = "seen";
+            snap({ line: 10, cur: u4, edge: [u4, v4],
+                   msg: "  " + u4 + "->" + v4 + " (w=" + w4 + ")  nd=" + nd +
+                        (old === null ? " < None" : " < " + old) +
+                        "  -> dist[" + v4 + "]=" + nd + ", push Reverse((" + nd + "," + v4 + "))", cls: "p",
+                   frontier: hq(), rows: drows4(v4), pops: pops4,
+                   status: old === null
+                     ? "第一次碰到 " + v4 + ",推一筆進堆。"
+                     : "鬆弛成功。舊條目 (" + old + "," + v4 + ") 還躺在堆裡 —— 它已經 stale 了,之後彈出來會被跳過。" });
+          } else {
+            snap({ line: 8, cur: u4, edge: [u4, v4],
+                   msg: "  " + u4 + "->" + v4 + " (w=" + w4 + ")  nd=" + nd + " 不比 dist[" + v4 + "]=" + dist4[v4] + " 小 -> 不鬆弛", cls: "m",
+                   frontier: hq(), rows: drows4(v4), pops: pops4,
+                   status: "沒有更短,什麼都不做。" });
+          }
+        }
+      }
+      if (prev4 !== null) state[prev4] = "done";
+      snap({ line: null, msg: "heap 空 -> 結束。dist = [" + dist4.join(", ") + "]   (pop " + pops4 + " 次,其中 " + (pops4 - order.length) + " 次是 stale)", cls: "c",
+             frontier: [], rows: drows4(null), pops: pops4,
+             status: "定案順序 = " + order.join(" -> ") + ",dist 遞增。堆共 pop " + pops4 + " 次,節點只有 " + N + " 個 —— 多出來的就是懶刪除的代價。",
+             statusCls: "ok" });
+    }
+
+    return frames;
+  }
+
+  // ── 畫布 ────────────────────────────────────────────────────────
+  var cv = document.getElementById("cv");
+  var ctx = cv.getContext("2d");
+  var LW = 880, LH = 440, R = 21;
+
+  function cssvar(n) {
+    return getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  }
+  function fitCanvas() {
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = LW * dpr;
+    cv.height = LH * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  var NODE_STYLE = {
+    unseen: ["--line", "--raised", "--muted", 1.5],
+    seen:   ["--producer", "--producer-bg", "--producer", 2],
+    cur:    ["--accent", "--accent-bg", "--accent", 3.5],
+    done:   ["--ok", "--ok-bg", "--ok", 2],
+    stale:  ["--danger", "--danger-bg", "--danger", 3]
+  };
+
+  function arrow(x, y, ang, col) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-10, 4.2);
+    ctx.lineTo(-10, -4.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(fr, withCycle, showW) {
+    fitCanvas();
+    ctx.clearRect(0, 0, LW, LH);
+
+    var cLine = cssvar("--line"), cAcc = cssvar("--accent"), cDang = cssvar("--danger");
+    var cMuted = cssvar("--muted"), cInk2 = cssvar("--ink-2"), cRaised = cssvar("--raised");
+    var es = edgeList(withCycle);
+    var st = fr ? fr.state : null;
+    var ae = fr ? fr.edge : null;
+
+    for (var k = 0; k < es.length; k++) {
+      var u = es[k][0], v = es[k][1], w = es[k][2];
+      var isCycle = withCycle && k === es.length - 1;
+      var hot = ae && ae[0] === u && ae[1] === v;
+      var col = hot ? cAcc : (isCycle ? cDang : cLine);
+      var lw = hot ? 3 : (isCycle ? 1.8 : 1.4);
+
+      var p0 = POS[u], p2 = POS[v], mx, my, ea;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = lw;
+      ctx.setLineDash(isCycle && !hot ? [7, 5] : []);
+      ctx.beginPath();
+
+      if (isCycle) {
+        var C = [400, 432];
+        var d0 = [C[0] - p0[0], C[1] - p0[1]];
+        var l0 = Math.hypot(d0[0], d0[1]);
+        var s = [p0[0] + d0[0] / l0 * R, p0[1] + d0[1] / l0 * R];
+        var d1 = [p2[0] - C[0], p2[1] - C[1]];
+        var l1 = Math.hypot(d1[0], d1[1]);
+        var t = [p2[0] - d1[0] / l1 * (R + 9), p2[1] - d1[1] / l1 * (R + 9)];
+        ctx.moveTo(s[0], s[1]);
+        ctx.quadraticCurveTo(C[0], C[1], t[0], t[1]);
+        ctx.stroke();
+        ea = Math.atan2(d1[1], d1[0]);
+        arrow(t[0] + d1[0] / l1 * 9, t[1] + d1[1] / l1 * 9, ea, col);
+        mx = 0.25 * p0[0] + 0.5 * C[0] + 0.25 * p2[0];
+        my = 0.25 * p0[1] + 0.5 * C[1] + 0.25 * p2[1];
+      } else {
+        var dx = p2[0] - p0[0], dy = p2[1] - p0[1];
+        var L = Math.hypot(dx, dy);
+        var ux = dx / L, uy = dy / L;
+        var sx = p0[0] + ux * R, sy = p0[1] + uy * R;
+        var tx = p2[0] - ux * (R + 9), ty = p2[1] - uy * (R + 9);
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        arrow(p2[0] - ux * R, p2[1] - uy * R, Math.atan2(dy, dx), col);
+        mx = (sx + tx) / 2 - uy * 13;
+        my = (sy + ty) / 2 + ux * 13;
+      }
+      ctx.setLineDash([]);
+
+      // 邊權標籤:非 Dijkstra 時淡掉——因為那三個演算法根本不看它
+      var wl = String(w);
+      ctx.font = "600 12px " + cssvar("--mono").split(",")[0];
+      var tw = ctx.measureText(wl).width;
+      ctx.fillStyle = cRaised;
+      ctx.globalAlpha = 0.92;
+      ctx.fillRect(mx - tw / 2 - 3, my - 8, tw + 6, 16);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = hot ? cAcc : (showW ? cInk2 : cMuted);
+      ctx.globalAlpha = showW || hot ? 1 : 0.42;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(wl, mx, my);
+      ctx.globalAlpha = 1;
+    }
+
+    for (var i = 0; i < N; i++) {
+      var s2 = st ? st[i] : "unseen";
+      var sty = NODE_STYLE[s2] || NODE_STYLE.unseen;
+      ctx.beginPath();
+      ctx.arc(POS[i][0], POS[i][1], R, 0, Math.PI * 2);
+      ctx.fillStyle = cssvar(sty[1]);
+      ctx.fill();
+      ctx.lineWidth = sty[3];
+      ctx.strokeStyle = cssvar(sty[0]);
+      ctx.stroke();
+      ctx.fillStyle = cssvar(sty[2]);
+      ctx.font = "600 16px " + cssvar("--mono").split(",")[0];
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i), POS[i][0], POS[i][1] + 0.5);
+    }
+  }
+
+  // ── UI 狀態 ─────────────────────────────────────────────────────
+  var alg = "bfs", cyc = false, frames = mk("bfs", false), idx = 0, timer = null;
+
+  var els = {
+    frType: document.getElementById("fr-type"),
+    frNote: document.getElementById("fr-note"),
+    frCells: document.getElementById("fr-cells"),
+    arrays: document.getElementById("arrays"),
+    orderline: document.getElementById("orderline"),
+    code: document.getElementById("code"),
+    log: document.getElementById("log"),
+    status: document.getElementById("status"),
+    step: document.getElementById("st-step"),
+    pops: document.getElementById("st-pops")
+  };
+
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt !== undefined) e.textContent = txt;
+    return e;
+  }
+
+  function renderCode(line, stale) {
+    els.code.textContent = "";
+    var src = CODE[alg];
+    for (var i = 0; i < src.length; i++) {
+      var c = "cl";
+      if (i === line) c += stale ? " stale-on" : " on";
+      els.code.appendChild(el("span", c, src[i]));
+    }
+  }
+
+  function renderFrontier(items) {
+    els.frCells.textContent = "";
+    if (!items || !items.length) {
+      els.frCells.appendChild(el("div", "fr-empty", "(空)"));
+      return;
+    }
+    for (var i = 0; i < items.length; i++) {
+      var it = el("div", "fr-item" + (items[i].top ? " top" : ""));
+      it.appendChild(el("span", "cap", items[i].top ? "pop 這個" : ""));
+      it.appendChild(el("span", "box", items[i].t));
+      els.frCells.appendChild(it);
+    }
+  }
+
+  function renderRows(rows) {
+    els.arrays.textContent = "";
+    if (!rows) return;
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      var box = el("div", "arow");
+      box.appendChild(el("span", "alabel", row.label));
+      var cells = el("div", "acells");
+      for (var i = 0; i < row.vals.length; i++) {
+        var c = el("div", "acell");
+        if (row.hit === i) c.className += " hit";
+        else if (row.zero && row.vals[i] === 0) c.className += " zero";
+        c.appendChild(el("span", "i", String(i)));
+        var v = row.vals[i];
+        var vs = el("span", "v" + (v === null || v === undefined ? " none" : ""),
+                    (v === null || v === undefined) ? "·" : String(v));
+        c.appendChild(vs);
+        cells.appendChild(c);
+      }
+      box.appendChild(cells);
+      els.arrays.appendChild(box);
+    }
+  }
+
+  function renderLog(upTo) {
+    els.log.textContent = "";
+    var lo = Math.max(0, upTo - 40);
+    for (var k = upTo; k >= lo; k--) {
+      els.log.appendChild(el("div", frames[k].cls, frames[k].msg));
+    }
+  }
+
+  function render() {
+    var fr = frames[idx];
+    var stale = fr.cls === "x";
+    draw(fr, cyc, alg === "dij");
+    renderFrontier(fr.frontier);
+    renderRows(fr.rows);
+    renderCode(fr.line, stale);
+    renderLog(idx);
+    els.orderline.innerHTML = "";
+    els.orderline.appendChild(el("b", null, OLABEL[alg]));
+    els.orderline.appendChild(document.createTextNode(
+      " = [" + fr.order.join(", ") + "]   (" + fr.order.length + " 個)"));
+    els.status.className = "status" + (fr.statusCls ? " " + fr.statusCls : "");
+    els.status.textContent = fr.status || "";
+    els.step.textContent = idx + " / " + (frames.length - 1);
+    els.pops.textContent = String(fr.pops);
+    els.frType.textContent = META[alg].type;
+    els.frNote.textContent = META[alg].note;
+    document.getElementById("btn-prev").disabled = idx === 0;
+    document.getElementById("btn-next").disabled = idx >= frames.length - 1;
+    document.getElementById("btn-end").disabled = idx >= frames.length - 1;
+  }
+
+  function rebuild(keep) {
+    frames = mk(alg, cyc);
+    if (!keep) idx = 0;
+    if (idx > frames.length - 1) idx = frames.length - 1;
+    stopAuto();
+    render();
+  }
+
+  function stopAuto() {
+    if (timer) { clearInterval(timer); timer = null; }
+    document.getElementById("btn-auto").textContent = "自動播放";
+  }
+  function toggleAuto() {
+    if (timer) { stopAuto(); return; }
+    if (idx >= frames.length - 1) idx = 0;
+    document.getElementById("btn-auto").textContent = "暫停";
+    timer = setInterval(function () {
+      if (idx >= frames.length - 1) { stopAuto(); return; }
+      idx++; render();
+    }, 750);
+  }
+
+  function pickAlg(a) {
+    alg = a;
+    ["bfs", "dfs", "topo", "dij"].forEach(function (x) {
+      document.getElementById("alg-" + x).setAttribute("aria-pressed", String(x === a));
+    });
+    rebuild(false);
+  }
+
+  ["bfs", "dfs", "topo", "dij"].forEach(function (x) {
+    document.getElementById("alg-" + x).addEventListener("click", function () { pickAlg(x); });
+  });
+  document.getElementById("btn-next").addEventListener("click", function () {
+    stopAuto();
+    if (idx < frames.length - 1) { idx++; render(); }
+  });
+  document.getElementById("btn-prev").addEventListener("click", function () {
+    stopAuto();
+    if (idx > 0) { idx--; render(); }
+  });
+  document.getElementById("btn-end").addEventListener("click", function () {
+    stopAuto(); idx = frames.length - 1; render();
+  });
+  document.getElementById("btn-auto").addEventListener("click", toggleAuto);
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    stopAuto(); idx = 0; render();
+  });
+  document.getElementById("btn-cycle").addEventListener("click", function () {
+    cyc = !cyc;
+    this.setAttribute("aria-pressed", String(cyc));
+    this.textContent = cyc ? "移除 back-edge 6→3" : "加 back-edge 6→3(製造環)";
+    rebuild(false);
+  });
+
+  // 主題切換(host 會在 :root 上蓋 data-theme)時重畫 canvas
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (mq.addEventListener) mq.addEventListener("change", function () { render(); });
+  }
+  new MutationObserver(function () { render(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  window.addEventListener("resize", function () { render(); });
+
+  render();
+
+  // 給 headless 驗證用:把 frame 產生器暴露出去,probe 可以直接跑完四個演算法。
+  window.GRAPH_DEMO = { mk: mk, N: N, edges: edgeList, adj: buildAdj };
+})();
+</script>

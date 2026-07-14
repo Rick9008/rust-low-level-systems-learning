@@ -48,3 +48,11 @@ pool 大小:磁碟 IO 是「等待為主」,可以開比核數多(tokio blocking
 
 tokio `spawn_blocking`/`tokio::fs`、tokio-uring、glommio(io_uring +
 thread-per-core)。
+
+## 互動教材
+
+[artifacts/file_io_offload.html](artifacts/file_io_offload.html) ——
+把檔案 fd 丟進 epoll,看它被回報成「永遠 readable」,再看 `read()` 照樣
+把整條 event loop 凍在 page cache miss 上(其他連線的延遲計數器就在旁邊爬);
+然後切到 offload,同樣的磁碟時間,但 loop 一個 tick 都沒停。
+附:`Mutex<(result, waker)>` 三種交棒時序(含 lost wakeup)。

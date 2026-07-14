@@ -1,0 +1,1298 @@
+<title>ring_buffer — head + len,以及那一格沒有被浪費的空間</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── ring_buffer 專用:算術面板、接縫、犧牲格、共享 len ──────────── */
+.arith {
+  font-family: var(--mono);
+  font-size: 0.79rem;
+  line-height: 1.85;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  overflow-x: auto;
+}
+.arith .row { white-space: pre; color: var(--ink-2); }
+.arith .row.w { color: var(--producer); }
+.arith .row.r { color: var(--consumer); }
+.arith .row.f { color: var(--muted); }
+.arith .row.f b { color: var(--ink); font-weight: 600; }
+.arith .mark { color: var(--accent); font-weight: 600; }
+.arith .full { color: var(--danger); font-weight: 600; }
+
+.seamline {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.seamline .seam {
+  color: var(--muted);
+  font-weight: 600;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  transition: background 200ms ease, color 200ms ease;
+}
+.seamline .seam.hot { color: var(--accent); background: var(--accent-bg); }
+
+.slot.wraphit { border-color: var(--accent); background: var(--accent-bg); }
+.slot.ghost { border-style: dashed; opacity: 0.55; }
+.slot .idx.wrapped { color: var(--accent); }
+
+.lanes.race .gutter { width: 5.5rem; }
+.shared {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-family: var(--mono);
+}
+.shared .k {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.shared .v {
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.6rem;
+  background: var(--surface);
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+.shared .v.hot { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.shared .v.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.shared .t {
+  font-size: 0.58rem;
+  color: var(--muted);
+  text-align: center;
+  min-height: 1.6rem;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 3 &nbsp;·&nbsp; single-threaded structures</p>
+  <h1>ring_buffer</h1>
+  <p class="lede">
+    固定容量、push/pop O(1)、零 realloc。難度不在資料結構——在
+    <strong>wrap 那一步的算術</strong>,以及一個面試必問:
+    為什麼經典 head/tail 版要犧牲一格,而這版一格都不用犧牲。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 環是怎麼轉的</h2>
+  <p>
+    這個實作只存兩個數字:<code>head</code>(最舊元素的實體索引)和 <code>len</code>(現在有幾個)。
+    寫入位置不是存出來的,是<strong>算出來的</strong>:<code>wrap(head + len)</code>。
+    <code>len</code> 一存在,滿/空就沒有任何歧義——<code>len == cap</code> 是滿,<code>len == 0</code> 是空。
+    按按鈕,盯著下面那三行算術。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="滿時策略">
+        <button id="pol-reject" aria-pressed="true">滿時拒絕 push_back</button>
+        <button id="pol-over" aria-pressed="false">滿時覆蓋 push_overwrite</button>
+      </div>
+      <button class="act-producer" id="btn-push">push</button>
+      <button class="act-consumer" id="btn-pop">pop_front()</button>
+      <button id="btn-lap">繞一圈給我看</button>
+      <button id="btn-reset">reset</button>
+    </div>
+
+    <div class="slots" id="slots"></div>
+
+    <div class="seamline">
+      <span>實體索引:</span>
+      <span class="mono">0 → 1 → 2 → 3 → 4</span>
+      <span class="seam" id="seam">↺ 回到 0</span>
+      <span>接縫在 slot 4 與 slot 0 之間</span>
+    </div>
+
+    <div class="arith" id="arith"></div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">head</span><span class="v" id="st-head">0</span></div>
+      <div class="stat"><span class="k">len</span><span class="v" id="st-len">0</span></div>
+      <div class="stat"><span class="k">cap</span><span class="v">5</span></div>
+      <div class="stat"><span class="k">write idx</span><span class="v" id="st-widx">0</span></div>
+      <div class="stat"><span class="k">read idx</span><span class="v" id="st-ridx">0</span></div>
+      <div class="stat"><span class="k">state</span><span class="v" id="st-state">empty</span></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="note">
+    <strong>cap = 5,故意不是 2 的冪。</strong>這版的 wrap 是<code>條件減法</code>,不是 <code>&amp; mask</code>——
+    容量可以是任意正整數。<br>
+    <strong>滿的時候看那格。</strong><code>len == cap</code> 時 <code>wrap(head + len) == head</code>:
+    寫入位置與讀取位置<strong>疊在同一格</strong>。兩個 tag 同時亮起來的那一瞬間,就是下一節整節在講的東西——
+    如果你手上只有 head 和 tail 這兩個索引,你根本分不出這是滿還是空。
+  </p>
+
+  <p class="note">
+    <strong>滿時的兩種策略,這個 crate 兩種都給,由 caller 選。</strong><br>
+    <code>push_back</code> 回 <code>Err(item)</code>:值<strong>歸還</strong>呼叫端,ring 不替你決定要 spin、park 還是丟棄
+    ——backpressure 是 caller 的事。工作佇列用這個。<br>
+    <code>push_overwrite</code> 回 <code>Some(evicted)</code>:擠掉最舊的那個並交還給你。
+    telemetry、最近 N 筆 log 用這個——新資料比舊資料值錢。
+  </p>
+</section>
+
+<section>
+  <h2>2 · 那一格,你到底有沒有浪費</h2>
+  <p>
+    經典教科書版本存的是 <code>head</code> 和 <code>tail</code>,沒有 <code>len</code>。
+    問題來了:<code>head == tail</code> 是空,還是滿?下面這個環<strong>沒有 len</strong>,
+    你只能看那兩個數字。把它填滿,再把它清空,比對一下那兩個數字。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="滿的判定">
+        <button id="sw-naive" aria-pressed="true">只有 head / tail(4 格全用)</button>
+        <button id="sw-sac" aria-pressed="false">犧牲一格來消歧義</button>
+      </div>
+      <button class="act-producer" id="btn-s2-push">push</button>
+      <button class="act-consumer" id="btn-s2-pop">pop</button>
+      <button id="btn-s2-reset">reset</button>
+    </div>
+
+    <div class="slots" id="s2-slots"></div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">head</span><span class="v" id="s2-head">0</span></div>
+      <div class="stat"><span class="k">tail</span><span class="v" id="s2-tail">0</span></div>
+      <div class="stat"><span class="k">cap</span><span class="v">4</span></div>
+      <div class="stat"><span class="k">可用容量</span><span class="v" id="s2-usable">4</span></div>
+      <div class="stat"><span class="k">真實元素數</span><span class="v" id="s2-truth">0</span></div>
+    </div>
+
+    <div class="verdict ok" id="s2-verdict">
+      <b>判定</b>
+      <span id="s2-verdict-text">head == tail == 0。環是空的——目前為止沒問題。</span>
+    </div>
+  </div>
+
+  <p class="note">
+    「真實元素數」那一格是<strong>作弊用的</strong>:它不存在於這個表示法裡,只是讓你看見 head/tail 看不見的真相。
+    左邊模式按 4 次 push,<code>tail</code> 繞回 0,<code>head == tail == 0</code>——
+    和全空時<strong>一模一樣的兩個數字</strong>。判定崩潰。<br>
+    右邊模式是教科書解法:規定<code>滿 = wrap(tail + 1) == head</code>,永遠留一格不填。
+    <code>head == tail</code> 於是只可能是空。代價:<strong>4 格只裝得下 3 個</strong>,cap 越小虧越大
+    (cap = 2 直接砍半)。
+  </p>
+
+  <p>
+    第三條路就是第 1 節那個環:<strong>多存一個 <code>len</code></strong>。
+    <code>len == 0</code> 空、<code>len == cap</code> 滿,兩個狀態的數字不同,不需要犧牲任何一格,
+    也不需要 cap 是 2 的冪。單執行緒下,這是最簡單而且正確的形狀。
+    ——這正是面試官問「你怎麼判斷滿」時真正想聽的:三種表示法,各自的代價是什麼。
+  </p>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>索引表示法</th><th>滿 / 空判定</th><th>代價</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>head + tail</code>,犧牲一格</td>
+          <td class="mono">滿 <code>wrap(tail+1)==head</code><br>空 <code>head==tail</code></td>
+          <td>浪費 1 slot;每個 <code>next()</code> 都要 wrap</td>
+        </tr>
+        <tr>
+          <td><code>head + tail</code>,自由跑計數器(不 wrap)</td>
+          <td class="mono">滿 <code>tail-head==cap</code><br>空 <code>tail-head==0</code></td>
+          <td>要求 cap 是 2 的冪(<code>&amp; mask</code> 取實體位)+ wrapping 算術。<strong>但兩個計數器各自只有一個寫者——這就是 SPSC 選它的原因</strong></td>
+        </tr>
+        <tr>
+          <td><strong><code>head + len</code>(本實作)</strong></td>
+          <td class="mono">滿 <code>len==cap</code><br>空 <code>len==0</code></td>
+          <td>最直白,不浪費格、不限 cap。<strong>但 len 被 push 和 pop 兩方共寫——並發下不可用</strong>(第 5 節)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>3 · wrap 的三種寫法</h2>
+  <p>
+    <code>wrap(i)</code> 每次 push 和每次 pop 都會跑到。它是這個資料結構的熱點,
+    而它的三種寫法差了一個數量級。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>寫法</th><th>成本</th><th>限制</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>i % cap</code></td>
+          <td class="ord rlx">整數除法,x86 約 20-40 cycle</td>
+          <td>無。任意 cap 都對——只是慢</td>
+        </tr>
+        <tr>
+          <td><code>i &amp; (cap - 1)</code></td>
+          <td class="ord acq">1 cycle</td>
+          <td><strong>強制 cap 是 2 的冪</strong>。不是的話會跳格——那是正確性 bug,不是效能問題</td>
+        </tr>
+        <tr>
+          <td><strong><code>if i &gt;= cap { i - cap } else { i }</code></strong></td>
+          <td class="ord rel">1 cmp + 1 sub</td>
+          <td>前置條件 <code>i &lt; 2*cap</code>。cap 任意</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    <strong>條件減法為什麼一次就夠?</strong>不變量是 <code>head &lt; cap</code> 且 <code>len &lt;= cap</code>,
+    所以送進 <code>wrap()</code> 的最大值是 <code>head + len &lt;= (cap-1) + cap = 2*cap - 1</code>。
+    減一次 cap 之後必然落在 <code>[0, cap)</code>。<code>pop</code> 那邊 <code>head + 1 &lt;= cap</code>,更寬鬆。
+    ——這個前置條件必須<strong>證明</strong>,不能用感覺的;它是把 <code>%</code> 換掉的唯一憑據。
+  </p>
+</section>
+
+<section>
+  <h2>4 · Vec&lt;Option&lt;T&gt;&gt; 還是 Vec&lt;MaybeUninit&lt;T&gt;&gt;</h2>
+  <p>
+    這版用 <code>Vec&lt;Option&lt;T&gt;&gt;</code>:每格多一個 discriminant(<code>T</code> 有 niche 時,
+    像 <code>NonZero</code> 或參照,那個 tag 是<strong>免費</strong>的),換來<strong>零 unsafe</strong>。
+    <code>pop</code> 就是 <code>self.buf[self.head].take()</code>,Drop 由編譯器處理,不用你維護任何東西。
+  </p>
+  <p>
+    <code>MaybeUninit</code> 版密實一點,但你要自己維護「哪幾格已經初始化」這個不變量,
+    還要手寫 <code>Drop</code> 去 drop 剩下的元素——一整類 UB 風險,換幾個 byte。
+    <strong>面試先寫 Option 版</strong>,被追問再談升級路徑。真的非升不可的場景是下一節:
+    跨執行緒共享時,<code>Vec</code> 的 <code>&amp;mut</code> 拿不到,你會被逼到 <code>UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;</code>。
+  </p>
+</section>
+
+<section>
+  <h2>5 · len 活不過並發</h2>
+  <p>
+    <code>len</code> 是這整個模組的支柱:它讓滿/空判定變成一行,讓那一格不必被犧牲。
+    但把同一份程式碼放進兩條執行緒——一條只 push,一條只 pop,連 SPSC 都算不上激烈——
+    它<strong>立刻壞掉</strong>,而且壞在你看不見的地方。
+    <code>len</code> 是唯一被<strong>兩個角色同時寫</strong>的變數:push 做 <code>+1</code>,pop 做 <code>-1</code>。
+  </p>
+
+  <div class="stage">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="執行方式">
+        <button id="sch-seq" aria-pressed="true">單執行緒(循序執行)</button>
+        <button id="sch-race" aria-pressed="false">兩執行緒(交錯執行)</button>
+      </div>
+      <button id="btn-race">執行</button>
+    </div>
+
+    <div class="lanes race">
+      <div class="lane p">
+        <h3>thread A — push_back</h3>
+        <div class="op" id="a1">if len == cap { return Err }</div>
+        <div class="op" id="a2">buf[wrap(head + len)] = x</div>
+        <div class="op" id="a3">len = len + 1</div>
+      </div>
+      <div class="gutter">
+        <div class="shared">
+          <span class="k">shared</span>
+          <span class="v" id="race-len">3</span>
+          <span class="t" id="race-note">len</span>
+        </div>
+      </div>
+      <div class="lane c">
+        <h3>thread B — pop_front</h3>
+        <div class="op" id="b1">if len == 0 { return None }</div>
+        <div class="op" id="b2">head = wrap(head + 1)</div>
+        <div class="op" id="b3">len = len - 1</div>
+      </div>
+    </div>
+
+    <div class="verdict ok" id="race-verdict">
+      <b>結果</b>
+      <span id="race-verdict-text">起始 len = 3。A 推入一個、B 取走一個,正確的結果是 len = 3。按「執行」。</span>
+    </div>
+  </div>
+
+  <p class="note">
+    <strong>「那我把 len 換成 AtomicUsize 就好了吧?」</strong>——不行,而且錯兩層。<br>
+    第一層:<code>len += 1</code> 是 read-modify-write,必須換成 <code>fetch_add</code>,
+    否則就是上面那個 lost update。這層還救得回來。<br>
+    第二層救不回來:<code>if len == cap</code> 和 <code>len = len + 1</code> 是<strong>兩個</strong>記憶體操作。
+    <code>fetch_add</code> 只讓「加」變原子,不讓「檢查完再加」變原子。
+    A 檢查完發現沒滿,還沒寫進去,B 就把它的觀察作廢了。這是 TOCTOU,不是 ordering 問題——
+    要修就得上 CAS 迴圈或鎖,而那正是我們想避開的東西。
+  </p>
+
+  <p>
+    <code>spsc_ring</code> 的答案是<strong>把 len 丟掉</strong>。改存兩個只增不減的自由跑計數器:
+    <code>head</code> 只有 consumer 寫、<code>tail</code> 只有 producer 寫。
+    <strong>每個變數恰好一個寫者</strong>,於是沒有 read-modify-write,沒有 CAS,沒有鎖。
+    <code>tail - head</code> 就是元素數,滿/空判定跟這裡一樣不必犧牲格子。
+    代價是容量必須是 2 的冪(要用 <code>&amp; mask</code> 取實體位),
+    以及一個全新的、遠比 index 算術難的問題:<strong>那兩個計數器之間看不見的 happens-before 邊</strong>。
+  </p>
+
+  <p class="note">
+    下一步 → <a href="spsc_ring.html"><code>artifacts/spsc_ring.html</code></a><br>
+    同一個環,拿掉 <code>len</code>,加上兩條執行緒。那裡會證明:為什麼壓力測試跑兩百萬次都抓不到的 bug,
+    loom 在 379 微秒內就抓到了。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/ring_buffer.rs</code> · 設計取捨:<code>docs/ring_buffer.md</code></div>
+  <div>驗證:<code>cargo test -p reference ring_buffer</code>(含 wrap 臨界點逐格 trace + proptest 對照 <code>VecDeque</code>)</div>
+  <div>手搓:<code>drills/src/ring_buffer.rs</code>(挖空版)· <code>challenges/</code>(空白起點)</div>
+  <div>進階:<a href="spsc_ring.html"><code>spsc_ring</code></a>(丟掉 len,兩個自由跑計數器 + acquire/release)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ══ 1 · head + len 的環 ═══════════════════════════════════════════
+     cap = 5:故意不是 2 的冪,證明條件減法不需要 mask。 */
+  var CAP = 5;
+  var head = 0, len = 0;
+  var slots = [null, null, null, null, null];
+  var nextVal = 1;
+  var overwrite = false;
+
+  var slotsEl = document.getElementById("slots");
+  var logEl = document.getElementById("log");
+  var arithEl = document.getElementById("arith");
+  var seamEl = document.getElementById("seam");
+
+  function wrap(i) { return i >= CAP ? i - CAP : i; }
+  function isFull() { return len === CAP; }
+  function isEmpty() { return len === 0; }
+  function writeIdx() { return wrap(head + len); }
+
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 60) logEl.removeChild(logEl.lastChild);
+  }
+
+  function live(i) {
+    for (var k = 0; k < len; k++) {
+      if (wrap(head + k) === i) return true;
+    }
+    return false;
+  }
+
+  function arithRow(cls, text, markFrom) {
+    var d = document.createElement("div");
+    d.className = "row " + cls;
+    if (markFrom == null) {
+      d.textContent = text;
+    } else {
+      d.appendChild(document.createTextNode(text));
+      var m = document.createElement("span");
+      m.className = "mark";
+      m.textContent = markFrom;
+      d.appendChild(m);
+    }
+    arithEl.appendChild(d);
+    return d;
+  }
+
+  function renderArith() {
+    arithEl.textContent = "";
+    var sum = head + len;
+    var wrapped = sum >= CAP;
+    var w = writeIdx();
+
+    var line = "write idx = wrap(head + len) = wrap(" + head + " + " + len + ") = wrap(" + sum + ") = ";
+    if (wrapped) {
+      arithRow("w", line + sum + " - " + CAP + " = " + w + "   ", "← i >= cap,減掉一個 cap");
+    } else {
+      arithRow("w", line + w + "   (i < cap,原封不動)");
+    }
+    arithRow("r", "read  idx = head = " + head);
+
+    var fRow = document.createElement("div");
+    fRow.className = "row f";
+    fRow.appendChild(document.createTextNode("is_full  = (len == cap) = (" + len + " == " + CAP + ") = "));
+    var fb = document.createElement("b");
+    fb.textContent = isFull() ? "true" : "false";
+    if (isFull()) fb.className = "full";
+    fRow.appendChild(fb);
+    if (isFull()) {
+      var extra = document.createElement("span");
+      extra.className = "mark";
+      extra.textContent = "    滿:wrap(head + len) == head,寫入位置疊在讀取位置上";
+      fRow.appendChild(extra);
+    }
+    arithEl.appendChild(fRow);
+
+    var eRow = document.createElement("div");
+    eRow.className = "row f";
+    eRow.appendChild(document.createTextNode("is_empty = (len == 0)   = (" + len + " == 0) = "));
+    var eb = document.createElement("b");
+    eb.textContent = isEmpty() ? "true" : "false";
+    eRow.appendChild(eb);
+    arithEl.appendChild(eRow);
+  }
+
+  function render(flash, flashCls, wraphit) {
+    slotsEl.textContent = "";
+    var w = writeIdx();
+    for (var i = 0; i < CAP; i++) {
+      var cell = document.createElement("div");
+      cell.className = "slot" + (live(i) ? " live" : "");
+      if (wraphit && w === i) cell.className += " wraphit";
+      if (flash === i) cell.className += " " + flashCls;
+
+      var idx = document.createElement("span");
+      idx.className = "idx";
+      idx.textContent = "slot " + i;
+
+      var val = document.createElement("span");
+      if (slots[i] === null) {
+        val.className = "val uninit";
+        val.textContent = "None";
+      } else {
+        val.className = "val";
+        val.textContent = String(slots[i]);
+      }
+
+      var ptr = document.createElement("span");
+      ptr.className = "ptr";
+      if (w === i) {
+        var t = document.createElement("span");
+        t.className = "tag-t";
+        t.textContent = "write";
+        ptr.appendChild(t);
+      }
+      if (head === i) {
+        var h = document.createElement("span");
+        h.className = "tag-h";
+        h.textContent = "head";
+        ptr.appendChild(h);
+      }
+
+      cell.append(idx, val, ptr);
+      slotsEl.appendChild(cell);
+    }
+
+    document.getElementById("st-head").textContent = String(head);
+    document.getElementById("st-len").textContent = String(len);
+    document.getElementById("st-widx").textContent = String(w);
+    document.getElementById("st-ridx").textContent = isEmpty() ? "-" : String(head);
+
+    var st = document.getElementById("st-state");
+    if (isEmpty()) { st.textContent = "empty"; st.className = "v"; }
+    else if (isFull()) { st.textContent = "FULL"; st.className = "v warn"; }
+    else { st.textContent = len + " / " + CAP; st.className = "v good"; }
+
+    seamEl.className = "seam" + (head + len >= CAP ? " hot" : "");
+    renderArith();
+
+    // 刻意不 disable push/pop:滿時按 push 才看得到 Err(item) 歸還,
+    // 空時按 pop 才看得到 None。那兩條路徑正是邊界的教學重點,擋掉就沒了。
+  }
+
+  function pushBack() {
+    if (isFull()) {
+      say("x", "push_back(" + nextVal + ") -> Err(" + nextVal + ")   len == cap == " + CAP + ",值歸還 caller");
+      render();
+      return;
+    }
+    var sum = head + len;
+    var i = wrap(sum);
+    var wrapped = sum >= CAP;
+    var v = nextVal++;
+    slots[i] = v;
+    len += 1;
+    // log 用 column-reverse 排版:先 say 的在上面。主行先,縮排的註解跟在它下面。
+    say("p", "push_back(" + v + ") -> Ok(())   write idx = wrap(" + head + " + " + (len - 1) + ") = wrap(" + sum + ") = " + i);
+    if (wrapped) {
+      say("m", "  wrap!  " + sum + " >= cap " + CAP + "  ->  " + sum + " - " + CAP + " = " + i + "   寫入位置繞過尾巴,回到開頭");
+    }
+    render(i, "flash-w", wrapped);
+    setTimeout(function () { render(); }, 420);
+  }
+
+  function pushOverwrite() {
+    if (isFull()) {
+      var evicted = slots[head];
+      // 覆蓋 = pop_front() 騰一格,再 push_back();剛騰出來的那格必然是 head 原本那格。
+      slots[head] = null;
+      head = wrap(head + 1);
+      len -= 1;
+      var sum = head + len;
+      var i = wrap(sum);
+      var wrapped = sum >= CAP;
+      var v = nextVal++;
+      slots[i] = v;
+      len += 1;
+      say("p", "push_overwrite(" + v + ") -> Some(" + evicted + ")   滿了,擠掉最舊的 " + evicted + ";write idx = wrap(" + sum + ") = " + i);
+      if (wrapped) {
+        say("m", "  wrap!  " + sum + " >= cap " + CAP + "  ->  " + sum + " - " + CAP + " = " + i);
+      }
+      render(i, "flash-w", wrapped);
+      setTimeout(function () { render(); }, 420);
+      return;
+    }
+    var sum2 = head + len;
+    var i2 = wrap(sum2);
+    var wrapped2 = sum2 >= CAP;
+    var v2 = nextVal++;
+    slots[i2] = v2;
+    len += 1;
+    say("p", "push_overwrite(" + v2 + ") -> None   沒滿,行為同 push_back;write idx = wrap(" + sum2 + ") = " + i2);
+    if (wrapped2) {
+      say("m", "  wrap!  " + sum2 + " >= cap " + CAP + "  ->  " + sum2 + " - " + CAP + " = " + i2);
+    }
+    render(i2, "flash-w", wrapped2);
+    setTimeout(function () { render(); }, 420);
+  }
+
+  function push() {
+    if (overwrite) pushOverwrite(); else pushBack();
+  }
+
+  function pop() {
+    if (isEmpty()) {
+      say("m", "pop_front() -> None   len == 0,空的");
+      render();
+      return;
+    }
+    var i = head;
+    var v = slots[i];
+    slots[i] = null;
+    head = wrap(head + 1);
+    len -= 1;
+    say("c", "pop_front() -> Some(" + v + ")   read idx = head = " + i + ";head -> wrap(" + (i + 1) + ") = " + head);
+    render(i, "flash-r");
+    setTimeout(function () { render(); }, 420);
+  }
+
+  function reset() {
+    head = 0; len = 0;
+    slots = [null, null, null, null, null];
+    nextVal = 1;
+    logEl.textContent = "";
+    say("m", "reset — head = 0, len = 0, cap = 5");
+    render();
+  }
+
+  var lapping = false;
+  function lap() {
+    if (lapping) return;
+    lapping = true;
+    reset();
+    say("m", "自動示範:填到滿 -> pop 兩個 -> 再 push 兩個(寫入索引會跨過接縫)");
+    // 5 push(填滿) + 2 pop + 2 push(第一個 push 的 write idx 就會 wrap 到 0)
+    var script = [push, push, push, push, push, pop, pop, push, push];
+    script.forEach(function (fn, k) {
+      setTimeout(fn, 700 * (k + 1));
+    });
+    setTimeout(function () { lapping = false; }, 700 * (script.length + 1));
+  }
+
+  function setPolicy(isOver) {
+    overwrite = isOver;
+    document.getElementById("pol-reject").setAttribute("aria-pressed", String(!isOver));
+    document.getElementById("pol-over").setAttribute("aria-pressed", String(isOver));
+    document.getElementById("btn-push").textContent = isOver ? "push_overwrite(v)" : "push_back(v)";
+    say("m", isOver
+      ? "策略 = push_overwrite:滿時擠掉最舊的,回傳它(telemetry 語意)"
+      : "策略 = push_back:滿時回 Err(item),值歸還 caller(backpressure 語意)");
+  }
+
+  document.getElementById("btn-push").addEventListener("click", push);
+  document.getElementById("btn-pop").addEventListener("click", pop);
+  document.getElementById("btn-lap").addEventListener("click", lap);
+  document.getElementById("btn-reset").addEventListener("click", reset);
+  document.getElementById("pol-reject").addEventListener("click", function () { setPolicy(false); });
+  document.getElementById("pol-over").addEventListener("click", function () { setPolicy(true); });
+
+  say("m", "cap = 5(不是 2 的冪)。head = 0, len = 0。按 push 開始。");
+  setPolicy(false);
+  render();
+
+  /* ══ 2 · 沒有 len 的環:head == tail 是空還是滿 ═══════════════════ */
+  var S2CAP = 4;
+  var s2head = 0, s2tail = 0, s2n = 0, s2next = 1;
+  var s2slots = [null, null, null, null];
+  var sacrifice = false;
+
+  var s2slotsEl = document.getElementById("s2-slots");
+  var s2verdict = document.getElementById("s2-verdict");
+  var s2vtext = document.getElementById("s2-verdict-text");
+
+  function s2wrap(i) { return i >= S2CAP ? i - S2CAP : i; }
+  function s2usable() { return sacrifice ? S2CAP - 1 : S2CAP; }
+  function s2full() { return s2n === s2usable(); }
+
+  function s2render() {
+    s2slotsEl.textContent = "";
+    for (var i = 0; i < S2CAP; i++) {
+      var cell = document.createElement("div");
+      cell.className = "slot" + (s2slots[i] === null ? "" : " live");
+      // 犧牲模式且已滿:tail 指的那格永遠是空的——那就是被犧牲掉的那一格。
+      if (sacrifice && s2full() && i === s2tail) cell.className += " ghost";
+
+      var idx = document.createElement("span");
+      idx.className = "idx";
+      idx.textContent = "slot " + i;
+
+      var val = document.createElement("span");
+      if (s2slots[i] === null) {
+        val.className = "val uninit";
+        val.textContent = (sacrifice && s2full() && i === s2tail) ? "犧牲格" : "None";
+      } else {
+        val.className = "val";
+        val.textContent = String(s2slots[i]);
+      }
+
+      var ptr = document.createElement("span");
+      ptr.className = "ptr";
+      if (s2tail === i) {
+        var t = document.createElement("span");
+        t.className = "tag-t";
+        t.textContent = "tail";
+        ptr.appendChild(t);
+      }
+      if (s2head === i) {
+        var h = document.createElement("span");
+        h.className = "tag-h";
+        h.textContent = "head";
+        ptr.appendChild(h);
+      }
+
+      cell.append(idx, val, ptr);
+      s2slotsEl.appendChild(cell);
+    }
+
+    document.getElementById("s2-head").textContent = String(s2head);
+    document.getElementById("s2-tail").textContent = String(s2tail);
+    document.getElementById("s2-usable").textContent = String(s2usable());
+    document.getElementById("s2-truth").textContent = String(s2n);
+
+    s2judge();
+  }
+
+  function s2judge() {
+    var same = s2head === s2tail;
+    if (sacrifice) {
+      s2verdict.className = "verdict ok";
+      if (same) {
+        s2vtext.textContent =
+          "head == tail == " + s2head + "。這個表示法下,head == tail 只可能是空——因為滿的定義是 " +
+          "wrap(tail + 1) == head,滿的時候 tail 永遠差 head 一格。判定明確。代價:4 格只裝得下 3 個。";
+      } else if (s2full()) {
+        s2vtext.textContent =
+          "滿了:wrap(tail + 1) == wrap(" + (s2tail + 1) + ") == " + s2wrap(s2tail + 1) + " == head。" +
+          "slot " + s2tail + " 永遠是空的——那一格就是消歧義的價錢。可用容量 3,不是 4。";
+      } else {
+        s2vtext.textContent =
+          "head = " + s2head + ", tail = " + s2tail + ",兩者不同 -> 既不空也不滿。目前 " + s2n + " 個元素。";
+      }
+      return;
+    }
+    // naive:4 格全用
+    if (same && s2n === 0) {
+      s2verdict.className = "verdict ok";
+      s2vtext.textContent = "head == tail == " + s2head + "。環是空的——目前為止沒問題。再按滿它試試。";
+    } else if (same && s2n > 0) {
+      s2verdict.className = "verdict bad";
+      s2vtext.textContent =
+        "head == tail == " + s2head + " —— 但環現在是滿的(4 個元素)。和全空時是一模一樣的兩個數字。" +
+        "只有 head 和 tail,is_empty() 和 is_full() 寫不出來:同一組狀態,兩種完全相反的意義。這就是為什麼教科書要犧牲一格。";
+    } else {
+      s2verdict.className = "verdict ok";
+      s2vtext.textContent =
+        "head = " + s2head + ", tail = " + s2tail + ",兩者不同 -> 一定不空。目前 " + s2n + " 個元素。歧義只發生在 head == tail 那一刻。";
+    }
+  }
+
+  function s2push() {
+    if (s2full()) { s2render(); return; }
+    s2slots[s2tail] = s2next++;
+    s2tail = s2wrap(s2tail + 1);
+    s2n += 1;
+    s2render();
+  }
+
+  function s2pop() {
+    if (s2n === 0) { s2render(); return; }
+    s2slots[s2head] = null;
+    s2head = s2wrap(s2head + 1);
+    s2n -= 1;
+    s2render();
+  }
+
+  function s2reset() {
+    s2head = 0; s2tail = 0; s2n = 0; s2next = 1;
+    s2slots = [null, null, null, null];
+    s2render();
+  }
+
+  function setSacrifice(on) {
+    sacrifice = on;
+    document.getElementById("sw-naive").setAttribute("aria-pressed", String(!on));
+    document.getElementById("sw-sac").setAttribute("aria-pressed", String(on));
+    s2reset();
+  }
+
+  document.getElementById("btn-s2-push").addEventListener("click", s2push);
+  document.getElementById("btn-s2-pop").addEventListener("click", s2pop);
+  document.getElementById("btn-s2-reset").addEventListener("click", s2reset);
+  document.getElementById("sw-naive").addEventListener("click", function () { setSacrifice(false); });
+  document.getElementById("sw-sac").addEventListener("click", function () { setSacrifice(true); });
+  setSacrifice(false);
+
+  /* ══ 5 · len 在兩條執行緒下的 lost update ═════════════════════════ */
+  var racing = false;
+  var raceMode = false; // false = 循序, true = 交錯
+  var raceOps = ["a1", "a2", "a3", "b1", "b2", "b3"].map(function (id) {
+    return document.getElementById(id);
+  });
+  var raceLenEl = document.getElementById("race-len");
+  var raceNoteEl = document.getElementById("race-note");
+  var raceVerdict = document.getElementById("race-verdict");
+  var raceVText = document.getElementById("race-verdict-text");
+  var raceBtn = document.getElementById("btn-race");
+
+  var A1 = "if len == cap { return Err }";
+  var B1 = "if len == 0 { return None }";
+  var A3 = "len = len + 1";
+  var B3 = "len = len - 1";
+
+  function raceReset() {
+    raceOps.forEach(function (o) { o.className = "op"; });
+    raceOps[0].textContent = A1;
+    raceOps[2].textContent = A3;
+    raceOps[3].textContent = B1;
+    raceOps[5].textContent = B3;
+    raceLenEl.textContent = "3";
+    raceLenEl.className = "v";
+    raceNoteEl.textContent = "len";
+    raceVerdict.className = "verdict " + (raceMode ? "bad" : "ok");
+    raceVText.textContent = raceMode
+      ? "起始 len = 3。兩條執行緒交錯:A 讀 len、B 讀 len、A 寫回、B 寫回。按「執行」看 len 變成幾。"
+      : "起始 len = 3。A 推入一個、B 取走一個,正確的結果是 len = 3。按「執行」。";
+    raceBtn.disabled = false;
+  }
+
+  function setSchedule(isRace) {
+    raceMode = isRace;
+    document.getElementById("sch-seq").setAttribute("aria-pressed", String(!isRace));
+    document.getElementById("sch-race").setAttribute("aria-pressed", String(isRace));
+    raceReset();
+  }
+
+  function runRace() {
+    raceBtn.disabled = true;
+    raceReset();
+    raceVerdict.className = "verdict " + (raceMode ? "bad" : "ok");
+
+    var steps;
+    if (!raceMode) {
+      // 循序:A 整段跑完,B 才開始。len: 3 -> 4 -> 3。
+      steps = [
+        function () { raceOps[0].className = "op hot"; raceOps[0].textContent = A1 + "   // 讀到 3,沒滿"; },
+        function () { raceOps[1].className = "op hot"; },
+        function () { raceOps[2].className = "op hot"; raceOps[2].textContent = "len = 3 + 1 = 4"; raceLenEl.textContent = "4"; raceLenEl.className = "v hot"; },
+        function () { raceOps[3].className = "op hot"; raceOps[3].textContent = B1 + "   // 讀到 4,不空"; },
+        function () { raceOps[4].className = "op hot"; },
+        function () {
+          raceOps[5].className = "op good"; raceOps[5].textContent = "len = 4 - 1 = 3";
+          raceLenEl.textContent = "3"; raceLenEl.className = "v";
+          raceNoteEl.textContent = "len = 3 ✓";
+          raceVerdict.className = "verdict ok";
+          raceVText.textContent =
+            "len = 3。正確。單執行緒下 push 的 read-modify-write 和 pop 的 read-modify-write 之間沒有交錯," +
+            "每一次 len 的讀取都看得到前一次的寫入。這就是第 1 節那個環成立的全部前提。";
+          setTimeout(function () { raceBtn.disabled = false; }, 600);
+        }
+      ];
+    } else {
+      // 交錯:A 讀 3、B 讀 3、A 寫 4、B 寫 2。lost update。
+      steps = [
+        function () {
+          raceOps[0].className = "op hot"; raceOps[0].textContent = A1 + "   // A 讀到 len = 3";
+          raceNoteEl.textContent = "A 讀到 3";
+        },
+        function () {
+          raceOps[3].className = "op hot"; raceOps[3].textContent = B1 + "   // B 也讀到 len = 3";
+          raceLenEl.className = "v hot";
+          raceNoteEl.textContent = "A 讀到 3\nB 也讀到 3";
+        },
+        function () { raceOps[1].className = "op hot"; raceOps[4].className = "op hot"; },
+        function () {
+          raceOps[2].className = "op hot"; raceOps[2].textContent = "len = 3 + 1 = 4";
+          raceLenEl.textContent = "4";
+          raceNoteEl.textContent = "A 寫回 4";
+        },
+        function () {
+          raceOps[5].className = "op bad"; raceOps[5].textContent = "len = 3 - 1 = 2";
+          raceLenEl.textContent = "2"; raceLenEl.className = "v bad";
+          raceNoteEl.textContent = "B 用它那份過期的\n3 寫回 2";
+          raceOps[2].className = "op bad";
+          raceVerdict.className = "verdict bad";
+          raceVText.textContent =
+            "len = 2。但環裡其實有 3 個元素——A 寫進去的那格還在,只是沒人算得到它。" +
+            "B 拿的是它自己那份過期的 len(3),覆蓋掉了 A 剛寫的 4:lost update。" +
+            "這一格從此永遠漏算;錯誤會累積,len 最後會漂到 0,而 usize 再減一就是 underflow panic(release build 下是天文數字)。";
+          setTimeout(function () { raceBtn.disabled = false; }, 600);
+        }
+      ];
+    }
+
+    steps.forEach(function (fn, i) { setTimeout(fn, 520 * (i + 1)); });
+  }
+
+  document.getElementById("sch-seq").addEventListener("click", function () { setSchedule(false); });
+  document.getElementById("sch-race").addEventListener("click", function () { setSchedule(true); });
+  raceBtn.addEventListener("click", runRace);
+  setSchedule(false);
+})();
+</script>

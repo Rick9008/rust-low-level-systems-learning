@@ -45,3 +45,10 @@ LeetCode 版 LRU 沒有 remove,先收斂範圍。
 
 `lru` crate(同構,索引版)、`hashlink`(LinkedHashMap)、
 caffeine/moka(並發 + TinyLFU 準入策略,遠超面試範圍)。
+
+## 互動教材
+
+[artifacts/lru.html](artifacts/lru.html) —— HashMap 與 arena 並排、逐步同步:
+`get` 命中時看 `prev`/`next` 欄位被逐格改寫(unlink + push_front),
+`put` 滿載時看 tail 被淘汰、map 條目移除、arena 槽位原地回收。
+「指標改寫(本次)」計數器把 O(1) 釘死:無論 cache 多大,每次操作都不超過 7 次寫。

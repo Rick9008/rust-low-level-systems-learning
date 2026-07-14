@@ -83,3 +83,11 @@ async/pipeline 版:request-id → `HashMap<id, waker/channel>`。
 
 tokio + `tokio_util::codec`(`LengthDelimitedCodec` 就是 FrameReader 的
 工業版)、prost/protobuf(schema 化的 payload)、gRPC(HTTP/2 之上的全家桶)。
+
+## 互動教材
+
+[artifacts/hw_bridge.html](artifacts/hw_bridge.html) — 逐 byte 餵進 FrameReader,
+親眼看 `next_frame()` 一次一次回 `Ok(None)`(len 沒湊滿 4 byte 不行、湊滿了但 payload
+還差 1 byte 仍然不行);黏包一次 feed 切出兩個 frame、malformed len 斷線 vs
+未知 opcode 續命的對照(按下 malformed len,client 按鈕會真的全部灰掉);
+threaded 6 threads vs evented 2 threads 的實測對比。

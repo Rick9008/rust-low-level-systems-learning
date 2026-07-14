@@ -1,0 +1,1381 @@
+<title>epoll_sys — 一個 u32、一個 u64,和 12 個位元組的約定</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+/* ── 版面 ────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+
+/* ── 機器的聲音:等寬 ────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--ink);
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.lede {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+p code, li code, td code {
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+strong { font-weight: 600; color: var(--ink); }
+
+/* ── 卡片與面板 ──────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.6rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.note {
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  border-left: 2px solid var(--line);
+  padding-left: 0.9rem;
+  max-width: 64ch;
+}
+
+/* ── 控制項 ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.act-producer { border-color: var(--producer); color: var(--producer); }
+button.act-producer:hover:not(:disabled) { background: var(--producer-bg); border-color: var(--producer); }
+button.act-consumer { border-color: var(--consumer); color: var(--consumer); }
+button.act-consumer:hover:not(:disabled) { background: var(--consumer-bg); border-color: var(--consumer); }
+
+/* ── 記憶體格 ────────────────────────────────────────────────────── */
+.slots { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 5.2rem;
+  min-width: 5.2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.slot .idx {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.slot .val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  min-height: 1.6rem;
+  display: flex;
+  align-items: center;
+}
+.slot .val.uninit { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.slot .ptr {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  min-height: 1rem;
+  display: flex;
+  gap: 0.35rem;
+}
+.slot.live { background: var(--consumer-bg); border-color: var(--consumer); }
+.slot.flash-w { background: var(--producer-bg); border-color: var(--producer); }
+.slot.flash-r { background: var(--ok-bg); border-color: var(--ok); }
+.slot.torn { background: var(--danger-bg); border-color: var(--danger); }
+.tag-t { color: var(--producer); }
+.tag-h { color: var(--consumer); }
+
+/* ── 讀數 ────────────────────────────────────────────────────────── */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.7rem;
+}
+.stat {
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.stat .k {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat .v {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stat .v.warn { color: var(--danger); }
+.stat .v.good { color: var(--ok); }
+
+/* ── log ─────────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.7rem 0.85rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.1rem;
+}
+.log div { white-space: pre-wrap; }
+.log .p { color: var(--producer); }
+.log .c { color: var(--consumer); }
+.log .x { color: var(--danger); font-weight: 600; }
+.log .m { color: var(--muted); }
+
+/* ── 表格 ────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.ord { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+td.ord.rel { color: var(--producer); }
+td.ord.acq { color: var(--consumer); }
+td.ord.rlx { color: var(--muted); }
+
+/* ── 記憶體序實驗 ────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch; }
+.lane { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.9rem; }
+.lane.p { border-right: 0; }
+.lane h3 { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.lane.p h3 { color: var(--producer); }
+.lane.c h3 { color: var(--consumer); }
+.op {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.6rem;
+  transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease;
+}
+.op.hot { border-color: var(--accent); background: var(--accent-bg); }
+.op.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.op.good { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.gutter { width: 3.5rem; position: relative; }
+.hb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--ok);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.hb.on { opacity: 1; }
+.hb::before,
+.hb::after {
+  content: "";
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  height: 1px;
+  background: var(--ok);
+}
+.hb::before { top: 38%; }
+.hb::after { top: 62%; }
+.verdict {
+  border-radius: 5px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.95rem;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.verdict.ok { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.verdict.bad { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.verdict b { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict span { color: var(--ink-2); }
+
+.switch { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+/* ── 頁尾導覽 ────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
+footer a:hover { border-bottom-color: var(--accent); }
+
+@media (max-width: 40rem) {
+  .lanes { grid-template-columns: 1fr; }
+  .gutter { width: auto; height: 2.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── epoll_sys:位元 ─────────────────────────────────────────────── */
+.flagrow { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+button.flag { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; line-height: 1.3; padding: 0.4rem 0.7rem; }
+button.flag .fv { font-size: 0.66rem; font-weight: 400; color: var(--muted); letter-spacing: 0.04em; }
+button.flag[aria-pressed="true"].k-io { background: var(--consumer-bg); border-color: var(--consumer); color: var(--consumer); }
+button.flag[aria-pressed="true"].k-err { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+button.flag[aria-pressed="true"].k-ctl { background: var(--producer-bg); border-color: var(--producer); color: var(--producer); }
+button.flag[aria-pressed="true"] .fv { color: inherit; opacity: 0.85; }
+
+.bitline { display: flex; flex-wrap: wrap; gap: 3px; align-items: flex-end; }
+.bitcell { display: flex; flex-direction: column; align-items: center; width: 1.3rem; }
+.bitcell.sep { margin-right: 0.55rem; }
+.bitcell .bnum { font-family: var(--mono); font-size: 0.54rem; color: var(--muted); line-height: 1.2; }
+.bitcell .bval {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+  line-height: 1.5rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--muted);
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.bitcell.on.k-io .bval { background: var(--consumer-bg); border-color: var(--consumer); color: var(--consumer); }
+.bitcell.on.k-err .bval { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.bitcell.on.k-ctl .bval { background: var(--producer-bg); border-color: var(--producer); color: var(--producer); }
+
+.words { display: flex; flex-wrap: wrap; gap: 0.7rem 1.6rem; }
+.word { display: flex; flex-direction: column; gap: 0.1rem; }
+.word .k { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.word .v { font-family: var(--mono); font-size: 1.35rem; font-weight: 600; letter-spacing: 0.02em; }
+
+.decoded { display: flex; flex-direction: column; gap: 0.3rem; }
+.dline { font-family: var(--mono); font-size: 0.8rem; display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.dline .dn { font-weight: 600; min-width: 11rem; }
+.dline .dh { color: var(--muted); min-width: 6rem; }
+.dline .dc { font-family: var(--serif); font-size: 0.9rem; color: var(--ink-2); }
+.dline.k-io .dn { color: var(--consumer); }
+.dline.k-err .dn { color: var(--danger); }
+.dline.k-ctl .dn { color: var(--producer); }
+.dempty { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+
+/* ── epoll_sys:位元組佈局 ───────────────────────────────────────── */
+.layouts { display: grid; grid-template-columns: 1fr; gap: 1.2rem; }
+.layout { display: flex; flex-direction: column; gap: 0.45rem; }
+.layout h3 { display: flex; gap: 0.6rem; align-items: baseline; }
+.layout h3 .sz { font-size: 0.72rem; letter-spacing: 0.08em; color: var(--muted); }
+.layout.bad h3 { color: var(--danger); }
+.layout.bad h3 .sz { color: var(--danger); }
+.bytes { display: flex; flex-wrap: wrap; gap: 3px; }
+.byte {
+  width: 2.15rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.15rem 0;
+}
+.byte .bo { font-family: var(--mono); font-size: 0.54rem; color: var(--muted); }
+.byte .bf { font-family: var(--mono); font-size: 0.68rem; font-weight: 600; }
+.byte.ev { background: var(--consumer-bg); border-color: var(--consumer); }
+.byte.ev .bf, .byte.ev .bo { color: var(--consumer); }
+.byte.dt { background: var(--producer-bg); border-color: var(--producer); }
+.byte.dt .bf, .byte.dt .bo { color: var(--producer); }
+.byte.pad { background: var(--danger-bg); border-color: var(--danger); }
+.byte.pad .bf, .byte.pad .bo { color: var(--danger); }
+
+/* ── epoll_sys:syscall stepper ──────────────────────────────────── */
+.crow { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.lbl { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.sig { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; padding: 0.4rem 0.6rem; }
+.sig b { color: var(--accent); font-weight: 600; }
+td.st-quiet { color: var(--muted); }
+td.st-ready { color: var(--consumer); font-weight: 600; }
+td.st-err { color: var(--danger); font-weight: 600; }
+td.mono-cell { font-family: var(--mono); font-size: 0.84rem; white-space: nowrap; }
+td button { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
+.empty-row td { color: var(--muted); font-style: italic; }
+.evbuf { display: flex; flex-direction: column; gap: 0.4rem; }
+.evslot {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--consumer);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.45rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.evslot.err { border-left-color: var(--danger); }
+.evslot .why { font-family: var(--serif); font-size: 0.88rem; color: var(--ink-2); }
+.evslot .why.warn { color: var(--danger); }
+.evslot.empty { border-left-color: var(--line); color: var(--muted); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / stage 6 &nbsp;·&nbsp; ffi &amp; kernel abi</p>
+  <h1>epoll_sys</h1>
+  <p class="lede">
+    這裡沒有 libc crate。只有七個 <code>unsafe extern "C"</code> 宣告,
+    和一個 kernel 說了算的位元組佈局。整個模組的難度不在 epoll 的語意——
+    在<strong>你和 kernel 之間那條沒有型別檢查的邊界</strong>:一個 u32 的位元、
+    一個 12 位元組的 struct、一個回傳 <code>-1</code> 的整數。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>1 · 邊界長什麼樣子</h2>
+  <p>
+    Rust 對 kernel 一無所知。<code>unsafe extern "C"</code> 區塊做的事只有一件:
+    <strong>宣告一個承諾</strong>——「這個符號存在,它的參數與回傳值長這樣」。
+    編譯器不驗證,linker 只比對符號名。簽名抄錯一個型別,程式照樣編過、照樣連結,
+    然後在執行期把垃圾交給 kernel。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>宣告</th><th>C 原型(man page)</th><th>回傳約定</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>epoll_create1</code></td>
+          <td class="mono">int epoll_create1(int flags)</td>
+          <td>fd,或 <code>-1</code> + errno(EMFILE / ENOMEM)</td>
+        </tr>
+        <tr>
+          <td><code>epoll_ctl</code></td>
+          <td class="mono">int epoll_ctl(int, int, int, struct epoll_event *)</td>
+          <td><code>0</code>,或 <code>-1</code> + errno(EEXIST / ENOENT / EPERM)</td>
+        </tr>
+        <tr>
+          <td><code>epoll_wait</code></td>
+          <td class="mono">int epoll_wait(int, struct epoll_event *, int, int)</td>
+          <td>就緒數(<code>0</code> = timeout,不是錯誤),或 <code>-1</code> + errno(EINTR)</td>
+        </tr>
+        <tr>
+          <td><code>close</code></td>
+          <td class="mono">int close(int fd)</td>
+          <td><code>0</code> 或 <code>-1</code> + errno(EBADF)。<strong>絕不重試</strong></td>
+        </tr>
+        <tr>
+          <td><code>eventfd</code></td>
+          <td class="mono">int eventfd(unsigned int, int)</td>
+          <td>fd,或 <code>-1</code> + errno</td>
+        </tr>
+        <tr>
+          <td><code>read</code> / <code>write</code></td>
+          <td class="mono">ssize_t read(int, void *, size_t)</td>
+          <td>位元組數,或 <code>-1</code> + errno(EAGAIN)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    C 沒有 <code>Result</code>。錯誤全部擠在同一個整數的「負數區」裡,
+    真正的原因放在另一個地方:<strong>errno,一個 thread-local</strong>。
+    C 的 <code>errno</code> 其實是巨集,展開成 <code>*__errno_location()</code>——
+    每個執行緒一份。所以「讀 errno」這件事本身也是一次 FFI 呼叫。
+    本模組刻意<strong>不綁它</strong>:<code>std::io::Error::last_os_error()</code>
+    就是 std 已經綁好的同一條路。少一個 <code>unsafe</code> 面,少一次抄錯簽名的機會。
+  </p>
+</section>
+
+<section>
+  <h2>2 · events 是一個 u32,不是「一組選項」</h2>
+  <p>
+    <code>EPOLLIN</code> 不是一個常數的名字,它是<strong>第 0 個位元</strong>。
+    你交給 kernel 的 <code>events</code> 是一個 32 位元整數:
+    <code>|</code> 是把位元點亮,<code>&amp;</code> 是問「這一位亮著嗎」。
+    點開下面的旗標,看那個 u32 真正變成什麼。
+  </p>
+
+  <div class="stage">
+    <div class="flagrow" id="flags"></div>
+
+    <div class="bitline" id="bits"></div>
+
+    <div class="words">
+      <div class="word"><span class="k">hex</span><span class="v" id="mask-hex">0x00000001</span></div>
+      <div class="word"><span class="k">decimal</span><span class="v" id="mask-dec">1</span></div>
+      <div class="word"><span class="k">popcount</span><span class="v" id="mask-pop">1</span></div>
+    </div>
+
+    <div class="sig" id="mask-expr">events = EPOLLIN</div>
+
+    <div class="controls">
+      <span class="lbl">套用一個實例:</span>
+      <button id="pre-1">0x00000001</button>
+      <button id="pre-2">0x00002001</button>
+      <button id="pre-3">0x00000019</button>
+      <button id="pre-4">0x80000001</button>
+      <button id="pre-0">clear</button>
+    </div>
+
+    <h3>decode(events)</h3>
+    <div class="decoded" id="decoded"></div>
+  </div>
+
+  <p class="note">
+    三類旗標,語意完全不同,卻塞在同一個 u32 裡:
+    <strong style="color:var(--consumer)">IO 旗標</strong>(你要求、kernel 也回報)、
+    <strong style="color:var(--danger)">EPOLLERR / EPOLLHUP</strong>(你<strong>不能</strong>要求,
+    kernel <strong>一定</strong>回報——所以 <code>events &amp; EPOLLIN</code> 之前必須先檢查它們,
+    否則你會對一條已經死掉的連線呼叫 <code>read()</code>,拿到 ECONNRESET 才發現)、
+    <strong style="color:var(--producer)">EPOLLET / EPOLLONESHOT</strong>(註冊用的修飾詞,
+    kernel 回報時<strong>從不設它們</strong>——如果你在回傳的 <code>events</code> 裡看到 <code>EPOLLET</code>,
+    那不是 kernel 在跟你說話,是你讀錯記憶體了,理由見下一節)。
+  </p>
+</section>
+
+<section>
+  <h2>3 · 12 個位元組,不是 16</h2>
+  <p>
+    <code>struct epoll_event</code> 是一個 <code>u32</code> 後面接一個 <code>u64</code>。
+    自然對齊會在中間塞 4 個位元組的 padding,湊成 16。
+    但 x86_64 的 kernel ABI 上它是 <code>__attribute__((packed))</code>——
+    <strong>12 個位元組,沒有洞</strong>(歷史包袱:為了讓 64-bit kernel 直接吃 32-bit 程序的結構)。
+    Rust 這邊必須 <code>#[repr(C, packed)]</code> 跟上,
+    否則你和 kernel 對同一塊記憶體的解讀會差 4 個位元組。
+  </p>
+
+  <div class="stage">
+    <div class="layouts">
+      <div class="layout">
+        <h3>#[repr(C, packed)] <span class="sz">12 bytes &nbsp;·&nbsp; kernel 說了算</span></h3>
+        <div class="bytes" id="bytes-packed"></div>
+      </div>
+      <div class="layout bad">
+        <h3>#[repr(C)] 自然對齊 <span class="sz">16 bytes &nbsp;·&nbsp; 多出 4 bytes 的洞</span></h3>
+        <div class="bytes" id="bytes-aligned"></div>
+      </div>
+    </div>
+
+    <p class="note" style="max-width:none">
+      單看一個 struct,差 4 個位元組好像沒什麼。但 <code>epoll_wait</code> 是<strong>寫一整個陣列</strong>:
+      kernel 以 12 為 stride 往下寫,你以 16 為 stride 往下讀。以下是 kernel 回報三個事件
+      <span class="mono">(EPOLLIN, token=100) (EPOLLOUT, token=200) (EPOLLIN|EPOLLRDHUP, token=300)</span>
+      時,忘了 <code>packed</code> 的 Rust 實際讀到的東西:
+    </p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Rust 讀到的元素</th><th>events</th><th>data(token)</th><th>發生什麼事</th></tr>
+        </thead>
+        <tbody id="stride-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="verdict bad">
+      <b>punchline</b>
+      <span id="stride-punch"></span>
+    </div>
+  </div>
+
+  <p class="note">
+    注意這裡<strong>沒有記憶體越界</strong>:kernel 只寫 12×N 個位元組,你的緩衝有 16×N。
+    沒有 segfault、沒有 ASan 報警,測試甚至可能會過——第一個事件的 <code>events</code> 是對的。
+    症狀是「token 偶爾亂掉」,而根因在 struct 宣告上,兩者距離極遠。
+    這就是為什麼 <code>size_of::&lt;EpollEvent&gt;() == 12</code> 值得被寫成一個測試:
+    <strong>把 ABI 契約釘在編譯的那一刻,而不是在生產環境的日誌裡追它。</strong>
+  </p>
+  <p class="note">
+    packed 的代價:<strong>不能取欄位的參照</strong>。
+    <code>&amp;ev.data</code> 是一個未對齊參照,是 UB,編譯器直接擋下(E0793)。
+    連 <code>assert_eq!(ev.data, 7)</code> 都會踩到——巨集內部會取參照。
+    正確做法是<strong>把整個值複製出來</strong>:<code>let data = ev.data;</code>,
+    或用 <code>&amp;raw const ev.data</code>(舊寫法 <code>addr_of!</code>)拿裸指標再 <code>read_unaligned</code>。
+  </p>
+</section>
+
+<section>
+  <h2>4 · 一次 epoll 的完整生命</h2>
+  <p>
+    下面跑的是真正的 syscall 順序與回傳值。註冊用的 <code>events</code>
+    <strong>直接取自上面那個遮罩</strong>——改上面的旗標,這裡 ADD 進去的東西就跟著變。
+    請特別看 <code>epoll_wait</code> 回 <code>-1</code> 的那一刻:那不是「壞掉了」,
+    那是你必須自己去讀 errno 才知道發生了什麼事的那一刻。
+  </p>
+
+  <div class="stage">
+    <div class="crow">
+      <button class="act-consumer" id="btn-create">epoll_create1(EPOLL_CLOEXEC)</button>
+      <button id="btn-drop" disabled>drop(Epoll) &rarr; close(epfd)</button>
+    </div>
+
+    <div class="crow">
+      <span class="lbl">target fd</span>
+      <div class="switch" role="group" aria-label="target fd">
+        <button id="fd-7" aria-pressed="true">7 listener</button>
+        <button id="fd-9" aria-pressed="false">9 conn A</button>
+        <button id="fd-11" aria-pressed="false">11 conn B</button>
+      </div>
+      <button class="act-producer" id="btn-add" disabled>epoll_ctl(ADD)</button>
+      <button class="act-producer" id="btn-mod" disabled>epoll_ctl(MOD)</button>
+      <button class="act-producer" id="btn-del" disabled>epoll_ctl(DEL)</button>
+    </div>
+
+    <div class="sig">
+      epoll_ctl(epfd, EPOLL_CTL_ADD, <b id="ctl-fd">7</b>, &amp;mut EpollEvent {
+      events: <b id="ctl-mask">0x00000001</b>, data: <b id="ctl-token">100</b> })
+    </div>
+
+    <div class="crow">
+      <button class="act-consumer" id="btn-wait" disabled>epoll_wait(epfd, buf, maxevents=4, timeout=100)</button>
+      <button id="btn-eintr" aria-pressed="false" disabled>下一次 wait 被 signal 打斷</button>
+    </div>
+
+    <div class="readout">
+      <div class="stat"><span class="k">epfd</span><span class="v" id="st-epfd">--</span></div>
+      <div class="stat"><span class="k">interest list</span><span class="v" id="st-nreg">0</span></div>
+      <div class="stat"><span class="k">last ret</span><span class="v" id="st-ret">--</span></div>
+      <div class="stat"><span class="k">errno</span><span class="v" id="st-errno">0</span></div>
+    </div>
+
+    <h3>kernel 端的 interest list(紅黑樹)</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>fd</th><th>events</th><th>data</th><th>模式</th><th>fd 狀態</th><th>模擬</th></tr>
+        </thead>
+        <tbody id="interest-rows"></tbody>
+      </table>
+    </div>
+
+    <h3>buf: [EpollEvent; 4] &mdash; epoll_wait 寫回來的東西</h3>
+    <div class="evbuf" id="ready-out"></div>
+
+    <div class="log" id="sc-log"></div>
+  </div>
+
+  <p class="note">
+    <strong>EINTR 不是錯誤。</strong>signal 打斷 <code>epoll_wait</code> 時,
+    什麼事都沒發生:沒有事件、沒有損壞、沒有狀態改變。
+    把它上拋給 caller,等於逼每一個 caller 都寫一次 <code>if err == EINTR { retry }</code>。
+    所以 wrapper 在 <code>loop</code> 裡吞掉它:
+    <code>Err(e) if e.kind() == Interrupted =&gt; continue</code>。
+    其他 errno 一律如實上拋——wrapper 的工作是消除<strong>假錯誤</strong>,不是隱藏真錯誤。
+  </p>
+  <p class="note">
+    <code>epoll_wait</code> 回 <code>0</code> 也不是錯誤,是 timeout 到期。
+    <code>&lt; 0</code> 才是。這個「負數即錯誤」的約定是 C 的世界觀,
+    <code>cvt()</code> 這個十行函式的全部工作,就是把它翻譯成 <code>io::Result</code>——
+    翻譯完之後,整份程式碼就再也不用看到 <code>-1</code>。
+  </p>
+</section>
+
+<section>
+  <h2>5 · 每個 unsafe 到底在斷言什麼</h2>
+  <p>
+    <code>unsafe</code> 不是「我要做危險的事」,而是「<strong>我向編譯器保證某件它無法驗證的事</strong>」。
+    保證的內容必須寫下來,否則三個月後沒有人知道破壞它會怎樣。
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>unsafe 區塊</th><th>斷言了什麼</th><th>破壞它會怎樣</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>epoll_create1(EPOLL_CLOEXEC)</code></td>
+          <td>沒有指標參數;flags 是合法常數</td>
+          <td>幾乎無法破壞——七個裡面最無害的一個</td>
+        </tr>
+        <tr>
+          <td><code>epoll_ctl(epfd, op, fd, &amp;mut ev)</code></td>
+          <td><code>ev</code> 是活著的區域變數,指標在整個 syscall 期間有效;
+              <code>fd</code> 的有效性由 caller 負責</td>
+          <td>傳懸空指標 &rarr; kernel 從你的 stack 讀垃圾;傳已經 close 的 fd &rarr; EBADF(這算走運)</td>
+        </tr>
+        <tr>
+          <td><code>epoll_wait(epfd, buf.as_mut_ptr(), buf.len(), t)</code></td>
+          <td><code>buf</code> 至少有 <code>maxevents</code> 個<strong>佈局正確</strong>的元素可寫</td>
+          <td><strong>唯一能讓 kernel 幫你踩壞記憶體的地方。</strong>
+              <code>maxevents</code> 大於實際容量 &rarr; kernel 直接寫出界 &rarr; heap 損毀</td>
+        </tr>
+        <tr>
+          <td><code>close(self.epfd)</code>(在 Drop 裡)</td>
+          <td>epfd 由本結構<strong>獨佔</strong>,Drop 只跑一次,所以只 close 一次</td>
+          <td>double-close:那個 fd 號碼可能已經被 kernel 重新配給別的連線 &rarr;
+              你關掉了別人的 socket,而且不會有任何錯誤訊息</td>
+        </tr>
+        <tr>
+          <td><code>write(fd, &amp;raw const one, 8)</code></td>
+          <td>指標指向<strong>恰好 8 個位元組</strong>的 u64(eventfd 的 ABI 要求)</td>
+          <td>少於 8 bytes &rarr; EINVAL;傳錯位址 &rarr; EFAULT</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    看第三列。安全 wrapper 的價值不在「包起來比較好看」,
+    而在 <code>wait(&amp;self, buf: &amp;mut [EpollEvent])</code> 這個簽名裡,
+    <strong><code>buf.len()</code> 這個數字不可能說謊</strong>。
+    C 的介面允許你把 <code>maxevents</code> 和實際緩衝大小分開傳——那正是 bug 的產地。
+    slice 把兩者綁成同一個東西,整條 buffer overflow 的路徑就在型別層蒸發了。
+  </p>
+
+  <h3>EPOLL_CLOEXEC:一個旗標換掉一整類 bug</h3>
+  <p>
+    <code>fork()</code> 的子行程會繼承所有 fd;<code>exec()</code> 預設<strong>不會</strong>關掉它們。
+    所以一個沒有 <code>CLOEXEC</code> 的 epfd,會活在你 spawn 出去的每一個子行程裡:
+    子行程完全不知道自己握著它,但那個 fd 就是不會被釋放——而且它還讀得到。
+    在會 spawn 子行程的服務裡,這是 fd 洩漏與權限外洩的雙重來源。
+  </p>
+  <p>
+    正確答案不是「exec 之後記得關」:競態就發生在 <code>fork</code> 與 <code>exec</code> 之間,
+    多執行緒下你根本沒有那個空隙。正確答案是
+    <strong>在建立 fd 的那一刻就原子地標上 CLOEXEC</strong>。
+    這正是 <code>epoll_create1(EPOLL_CLOEXEC)</code>(而不是舊的 <code>epoll_create</code>)存在的理由,
+    也是 <code>EFD_CLOEXEC</code>、<code>SOCK_CLOEXEC</code>、<code>O_CLOEXEC</code>
+    這一整排旗標存在的理由。
+  </p>
+
+  <h3>Drop:fd 的生命週期是型別的一部分</h3>
+  <p>
+    <code>Epoll</code> 這個 struct 裡只有一個 <code>RawFd</code>,但它做到兩件 C 做不到的事:
+    忘記 <code>close</code> 不可能發生(Drop 一定跑),
+    <code>close</code> 兩次也不可能發生(<code>Epoll</code> 不是 <code>Copy</code>,move 掉就沒了)。
+    而在上面那個 stepper 裡你會發現:<strong>還沒拿到 epfd 之前,ADD 是按不下去的</strong>。
+    在 Rust 這一層,「對一個還沒建立的 epoll 呼叫 epoll_ctl」這個錯誤根本無法被表達,
+    因為 <code>Epoll::add(&amp;self)</code> 需要一個已經存在的 <code>Epoll</code>。
+    RAII 把一個執行期的 EBADF,變成了一個編譯期的型別錯誤。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div>原始碼:<code>reference/src/epoll_sys.rs</code> · 設計取捨:<code>docs/epoll_sys.md</code></div>
+  <div>驗證:<code>cargo test -p reference epoll_sys</code>(ABI 尺寸、timeout=0、eventfd roundtrip、LT vs ET)</div>
+  <div>下游:<code>event_loop</code>(把這層包成 poll + token 派發)· 對照:io_uring(completion model,本 repo 不實作)</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── 旗標定義(值抄自 <sys/epoll.h>)──────────────────────────────
+  // cat: io  = 你要求、kernel 也回報
+  //      err = 你不能要求,kernel 一定回報
+  //      ctl = 註冊用修飾詞,kernel 回報時從不設它
+  var FLAGS = [
+    { n: "EPOLLIN",      v: 0x00000001, bit: 0,  cat: "io",  d: "可讀" },
+    { n: "EPOLLPRI",     v: 0x00000002, bit: 1,  cat: "io",  d: "帶外資料(OOB)" },
+    { n: "EPOLLOUT",     v: 0x00000004, bit: 2,  cat: "io",  d: "可寫" },
+    { n: "EPOLLERR",     v: 0x00000008, bit: 3,  cat: "err", d: "錯誤 — 不請自來" },
+    { n: "EPOLLHUP",     v: 0x00000010, bit: 4,  cat: "err", d: "掛斷 — 不請自來" },
+    { n: "EPOLLRDHUP",   v: 0x00002000, bit: 13, cat: "io",  d: "對端關閉寫端(半關閉)" },
+    { n: "EPOLLONESHOT", v: 0x40000000, bit: 30, cat: "ctl", d: "報一次就自我停用,要 MOD 才復活" },
+    { n: "EPOLLET",      v: 0x80000000, bit: 31, cat: "ctl", d: "edge-triggered:只在狀態變化時報" }
+  ];
+  var EPOLLIN = 0x1, EPOLLOUT = 0x4, EPOLLERR = 0x8, EPOLLHUP = 0x10;
+  var EPOLLRDHUP = 0x2000, EPOLLONESHOT = 0x40000000, EPOLLET = 0x80000000;
+  var CTL_BITS = (EPOLLET | EPOLLONESHOT) >>> 0;   // kernel 回報時會被剝掉
+  var ALWAYS   = (EPOLLERR | EPOLLHUP) >>> 0;      // 不請自來
+
+  var mask = EPOLLIN >>> 0;
+
+  function pad(s, n, c) { while (s.length < n) s = c + s; return s; }
+  function hex8(v) { return "0x" + pad((v >>> 0).toString(16).toUpperCase(), 8, "0"); }
+  function popcount(v) {
+    var c = 0, x = v >>> 0;
+    while (x) { c += x & 1; x >>>= 1; }
+    return c;
+  }
+  function flagAt(bitval) {
+    for (var i = 0; i < FLAGS.length; i++) if (FLAGS[i].v === (bitval >>> 0)) return FLAGS[i];
+    return null;
+  }
+  function decodeNames(m) {
+    var out = [];
+    for (var i = 0; i < FLAGS.length; i++) {
+      if (((m >>> 0) & FLAGS[i].v) !== 0) out.push(FLAGS[i].n);
+    }
+    return out;
+  }
+
+  // ── A-1. 位元遮罩實驗室 ─────────────────────────────────────────
+  var flagsEl = document.getElementById("flags");
+  var bitsEl = document.getElementById("bits");
+  var decodedEl = document.getElementById("decoded");
+
+  FLAGS.forEach(function (f) {
+    var b = document.createElement("button");
+    b.className = "flag k-" + f.cat;
+    b.id = "f-" + f.n;
+    b.setAttribute("aria-pressed", "false");
+    var nm = document.createElement("span");
+    nm.textContent = f.n;
+    var vv = document.createElement("span");
+    vv.className = "fv";
+    vv.textContent = f.bit >= 30 ? "1 << " + f.bit : hex8(f.v);
+    b.append(nm, vv);
+    b.addEventListener("click", function () {
+      mask = ((mask >>> 0) ^ f.v) >>> 0;
+      renderMask();
+    });
+    flagsEl.appendChild(b);
+  });
+
+  // 32 個位元格,bit 31 在最左邊(和人腦讀二進位的方向一致)
+  var bitCells = [];
+  for (var bi = 31; bi >= 0; bi--) {
+    var cell = document.createElement("div");
+    cell.className = "bitcell";
+    var num = document.createElement("span");
+    num.className = "bnum";
+    num.textContent = String(bi);
+    var val = document.createElement("span");
+    val.className = "bval";
+    val.textContent = "0";
+    cell.append(num, val);
+    bitsEl.appendChild(cell);
+    bitCells[bi] = cell;
+  }
+
+  function renderMask() {
+    var m = mask >>> 0;
+
+    FLAGS.forEach(function (f) {
+      document.getElementById("f-" + f.n)
+        .setAttribute("aria-pressed", String((m & f.v) !== 0));
+    });
+
+    for (var i = 0; i < 32; i++) {
+      var on = ((m >>> i) & 1) === 1;
+      var f = flagAt(Math.pow(2, i));   // 1 << 31 在 JS 是負的,用 pow 迴避
+      var cls = "bitcell";
+      if (i % 8 === 0 && i !== 0) cls += " sep";
+      if (on) cls += " on" + (f ? " k-" + f.cat : "");
+      bitCells[i].className = cls;
+      bitCells[i].lastChild.textContent = on ? "1" : "0";
+      bitCells[i].title = f ? f.n + " (bit " + i + ")" : "bit " + i + " — 未使用";
+    }
+
+    document.getElementById("mask-hex").textContent = hex8(m);
+    document.getElementById("mask-dec").textContent = String(m >>> 0);
+    document.getElementById("mask-pop").textContent = String(popcount(m));
+
+    var names = decodeNames(m);
+    document.getElementById("mask-expr").textContent =
+      "events = " + (names.length ? names.join(" | ") : "0");
+    document.getElementById("ctl-mask").textContent = hex8(m);
+
+    decodedEl.textContent = "";
+    if (!names.length) {
+      var e = document.createElement("div");
+      e.className = "dempty";
+      e.textContent = "0 — 一個位元都沒點亮。epoll_ctl(ADD) 收 0 是合法的:註冊了,但對任何事件都沒興趣。";
+      decodedEl.appendChild(e);
+    } else {
+      FLAGS.forEach(function (fl) {
+        if ((m & fl.v) === 0) return;
+        var row = document.createElement("div");
+        row.className = "dline k-" + fl.cat;
+        var dn = document.createElement("span"); dn.className = "dn"; dn.textContent = fl.n;
+        var dh = document.createElement("span"); dh.className = "dh"; dh.textContent = "bit " + fl.bit;
+        var dc = document.createElement("span"); dc.className = "dc"; dc.textContent = fl.d;
+        row.append(dn, dh, dc);
+        decodedEl.appendChild(row);
+      });
+    }
+    renderInterest();   // 遮罩變了,ADD 的簽名與註冊內容都跟著變
+  }
+
+  function setMask(m) { mask = m >>> 0; renderMask(); }
+  document.getElementById("pre-1").addEventListener("click", function () { setMask(0x00000001); });
+  document.getElementById("pre-2").addEventListener("click", function () { setMask(0x00002001); });
+  document.getElementById("pre-3").addEventListener("click", function () { setMask(0x00000019); });
+  document.getElementById("pre-4").addEventListener("click", function () { setMask(0x80000001); });
+  document.getElementById("pre-0").addEventListener("click", function () { setMask(0); });
+
+  // ── A-2. 位元組佈局 ─────────────────────────────────────────────
+  function renderBytes(el, packed) {
+    el.textContent = "";
+    var n = packed ? 12 : 16;
+    for (var i = 0; i < n; i++) {
+      var cls, lab;
+      if (i < 4) { cls = "byte ev"; lab = "e" + i; }
+      else if (!packed && i < 8) { cls = "byte pad"; lab = "??"; }
+      else { cls = "byte dt"; lab = "d" + (packed ? i - 4 : i - 8); }
+      var b = document.createElement("div");
+      b.className = cls;
+      var bo = document.createElement("span"); bo.className = "bo"; bo.textContent = String(i);
+      var bf = document.createElement("span"); bf.className = "bf"; bf.textContent = lab;
+      b.append(bo, bf);
+      el.appendChild(b);
+    }
+  }
+  renderBytes(document.getElementById("bytes-packed"), true);
+  renderBytes(document.getElementById("bytes-aligned"), false);
+
+  // kernel 以 12 為 stride 寫;忘了 packed 的 Rust 以 16 為 stride 讀
+  (function strideLab() {
+    var K = [
+      { e: 0x00000001, t: 100 },
+      { e: 0x00000004, t: 200 },
+      { e: 0x00002001, t: 300 }
+    ];
+    var dv = new DataView(new ArrayBuffer(48));   // Rust 的緩衝:3 個 16-byte 元素
+    for (var i = 0; i < 3; i++) {                 // kernel 只寫 36 bytes
+      dv.setUint32(i * 12, K[i].e >>> 0, true);
+      dv.setBigUint64(i * 12 + 4, BigInt(K[i].t), true);
+    }
+    var rows = document.getElementById("stride-rows");
+    var e1 = 0;
+    for (var j = 0; j < 3; j++) {
+      var e = dv.getUint32(j * 16, true) >>> 0;
+      var d = dv.getBigUint64(j * 16 + 8, true);
+      if (j === 1) e1 = e;
+      var why;
+      if (j === 0) {
+        why = "events 恰好是對的 — 兩種佈局的起點一樣。但 data 讀成 " + d.toString() +
+              ":它撈到的是自己的 padding 加上 ev[1] 的 events。第一個元素半對半錯,測試很容易放它過。";
+      } else if (j === 1) {
+        why = "整整錯位 4 個位元組:events 讀到的是 ev[1] 的 token 低 32 位元(" + e + ")。";
+      } else {
+        why = "讀到 kernel 根本沒寫過的位址(從 offset 32 起,kernel 只寫到 36)。這裡是零,真實情況是上一輪殘留的資料。";
+      }
+      var tr = document.createElement("tr");
+      var c0 = document.createElement("td"); c0.className = "mono-cell"; c0.textContent = "buf[" + j + "] @ byte " + (j * 16);
+      var c1 = document.createElement("td"); c1.className = "mono-cell"; c1.textContent = hex8(e);
+      var c2 = document.createElement("td"); c2.className = "mono-cell"; c2.textContent = d.toString();
+      var c3 = document.createElement("td"); c3.textContent = why;
+      tr.append(c0, c1, c2, c3);
+      rows.appendChild(tr);
+    }
+    document.getElementById("stride-punch").textContent =
+      "buf[1].events == " + hex8(e1) + " —— 那是 token 200 的低 32 位元,被當成事件遮罩解讀。" +
+      "而 " + hex8(e1) + " & EPOLLERR(0x8) 不等於 0,所以你的程式會判定「這條連線出錯了」," +
+      "然後把一條好好的連線關掉。kernel 什麼都沒做錯,是 struct 宣告差了 4 個位元組。";
+  })();
+
+  // ── B. syscall stepper ──────────────────────────────────────────
+  var ERRNO = { EPERM: 1, ENOENT: 2, EINTR: 4, EBADF: 9, EEXIST: 17 };
+  var FDS = [
+    { fd: 7,  name: "listener" },
+    { fd: 9,  name: "conn A" },
+    { fd: 11, name: "conn B" }
+  ];
+  // fd 的「真實狀態」:kernel 那邊發生了什麼,和你註冊了什麼無關
+  var STATES = [
+    { k: "quiet", label: "靜默",        bits: 0,                            cls: "st-quiet" },
+    { k: "read",  label: "有資料可讀",   bits: EPOLLIN,                      cls: "st-ready" },
+    { k: "write", label: "可寫",        bits: EPOLLOUT,                     cls: "st-ready" },
+    { k: "rdhup", label: "對端關了寫端", bits: (EPOLLIN | EPOLLRDHUP) >>> 0, cls: "st-ready" },
+    { k: "error", label: "連線炸了",     bits: ALWAYS,                       cls: "st-err" }
+  ];
+
+  var epfd = -1;
+  var interest = {};                      // fd -> { events, token, et, oneshot, fired, edgeSeen }
+  var fdState = { 7: 0, 9: 0, 11: 0 };    // STATES 的索引
+  var target = 7;
+  var tokenSeq = 100;
+  var eintrArmed = false;
+  var lastRet = null, lastErrno = 0;
+
+  var logEl = document.getElementById("sc-log");
+  function say(cls, msg) {
+    var d = document.createElement("div");
+    d.className = cls;
+    d.textContent = msg;
+    logEl.prepend(d);
+    while (logEl.childNodes.length > 90) logEl.removeChild(logEl.lastChild);
+  }
+  function fail(call, errName) {
+    lastRet = -1;
+    lastErrno = ERRNO[errName];
+    say("x", call + "  ->  -1");
+    say("x", "  __errno_location() -> " + lastErrno + "   " + errName);
+    renderStats();
+  }
+  function ok(call, ret) {
+    lastRet = ret;
+    say("c", call + "  ->  " + ret);
+    renderStats();
+  }
+  function nreg() { return Object.keys(interest).length; }
+
+  function renderStats() {
+    document.getElementById("st-epfd").textContent = epfd < 0 ? "--" : String(epfd);
+    document.getElementById("st-nreg").textContent = String(nreg());
+    var r = document.getElementById("st-ret");
+    r.textContent = lastRet === null ? "--" : String(lastRet);
+    r.className = "v" + (lastRet === null ? "" : (lastRet < 0 ? " warn" : " good"));
+    var e = document.getElementById("st-errno");
+    e.textContent = String(lastErrno);
+    e.className = "v" + (lastErrno ? " warn" : "");
+  }
+
+  function setEnabled() {
+    var live = epfd >= 0;
+    ["btn-add", "btn-mod", "btn-del", "btn-wait", "btn-eintr"].forEach(function (id) {
+      document.getElementById(id).disabled = !live;
+    });
+    document.getElementById("btn-create").disabled = live;
+    document.getElementById("btn-drop").disabled = !live;
+  }
+
+  function renderInterest() {
+    var tb = document.getElementById("interest-rows");
+    if (!tb) return;
+    tb.textContent = "";
+    if (!nreg()) {
+      var tr0 = document.createElement("tr");
+      tr0.className = "empty-row";
+      var td0 = document.createElement("td");
+      td0.colSpan = 6;
+      td0.textContent = epfd < 0
+        ? "還沒有 epoll 實例 — 先按 epoll_create1"
+        : "interest list 是空的 — kernel 的紅黑樹裡一個節點都沒有";
+      tr0.appendChild(td0);
+      tb.appendChild(tr0);
+    }
+    FDS.forEach(function (f) {
+      var reg = interest[f.fd];
+      if (!reg) return;
+      var st = STATES[fdState[f.fd]];
+      var tr = document.createElement("tr");
+
+      var c0 = document.createElement("td");
+      c0.className = "mono-cell";
+      c0.textContent = f.fd + "  " + f.name;
+
+      var c1 = document.createElement("td");
+      c1.className = "mono-cell";
+      c1.textContent = hex8(reg.events);
+
+      var c2 = document.createElement("td");
+      c2.className = "mono-cell";
+      c2.textContent = String(reg.token);
+
+      var c3 = document.createElement("td");
+      c3.className = "mono-cell";
+      var mode = reg.et ? "ET" : "LT";
+      if (reg.oneshot) mode += "+ONESHOT";
+      if (reg.fired) mode += "  已停用";
+      else if (reg.et && reg.edgeSeen) mode += "  邊緣已消耗";
+      c3.textContent = mode;
+
+      var c4 = document.createElement("td");
+      c4.className = st.cls;
+      c4.textContent = st.label;
+
+      var c5 = document.createElement("td");
+      var b = document.createElement("button");
+      b.id = "cyc-" + f.fd;
+      b.textContent = "改變 fd 狀態";
+      b.addEventListener("click", function () { cycle(f.fd); });
+      c5.appendChild(b);
+
+      tr.append(c0, c1, c2, c3, c4, c5);
+      tb.appendChild(tr);
+    });
+
+    document.getElementById("ctl-fd").textContent = String(target);
+    document.getElementById("ctl-token").textContent = String(tokenSeq);
+    renderStats();
+  }
+
+  function cycle(fd) {
+    fdState[fd] = (fdState[fd] + 1) % STATES.length;
+    var reg = interest[fd];
+    if (reg) reg.edgeSeen = false;   // 狀態變了 = 一個新的邊緣,ET 會再報一次
+    say("m", "[模擬] fd " + fd + " 的狀態變成:" + STATES[fdState[fd]].label +
+      "  (kernel 側 bits = " + hex8(STATES[fdState[fd]].bits) + ")");
+    renderInterest();
+  }
+
+  function reg(events, token) {
+    return {
+      events: events >>> 0,
+      token: token,
+      et: (events & EPOLLET) !== 0,
+      oneshot: (events & EPOLLONESHOT) !== 0,
+      fired: false,
+      edgeSeen: false
+    };
+  }
+
+  function create1() {
+    epfd = 3;
+    interest = {};
+    tokenSeq = 100;
+    lastErrno = 0;
+    ok("epoll_create1(EPOLL_CLOEXEC)", 3);
+    say("m", "  CLOEXEC:這個 fd 不會被 exec 出去的子行程繼承");
+    setEnabled();
+    renderInterest();
+  }
+
+  function dropEpoll() {
+    say("m", "drop(Epoll) — RAII 的 close 在這裡跑");
+    ok("close(" + epfd + ")", 0);
+    say("m", "  kernel 一併釋放 interest list(" + nreg() + " 個註冊)");
+    epfd = -1;
+    interest = {};
+    lastErrno = 0;
+    setEnabled();
+    renderInterest();
+    renderReady([]);
+  }
+
+  function ctlAdd() {
+    var call = "epoll_ctl(" + epfd + ", EPOLL_CTL_ADD, " + target +
+      ", &EpollEvent { events: " + hex8(mask) + ", data: " + tokenSeq + " })";
+    if (interest[target]) {
+      fail(call, "EEXIST");
+      say("m", "  這個 fd 已經在紅黑樹裡了 — 要改就用 MOD");
+      return;
+    }
+    interest[target] = reg(mask, tokenSeq);
+    tokenSeq += 1;
+    lastErrno = 0;
+    ok(call, 0);
+    renderInterest();
+  }
+
+  function ctlMod() {
+    var call = "epoll_ctl(" + epfd + ", EPOLL_CTL_MOD, " + target +
+      ", &EpollEvent { events: " + hex8(mask) + ", data: " + tokenSeq + " })";
+    if (!interest[target]) {
+      fail(call, "ENOENT");
+      say("m", "  沒註冊過的 fd 不能 MOD — 先 ADD");
+      return;
+    }
+    interest[target] = reg(mask, tokenSeq);   // MOD 會重新武裝 ONESHOT,這正是它的用途
+    tokenSeq += 1;
+    lastErrno = 0;
+    ok(call, 0);
+    say("m", "  token 換成 " + interest[target].token + ";若 ONESHOT 已停用,MOD 會把它重新武裝");
+    renderInterest();
+  }
+
+  function ctlDel() {
+    var call = "epoll_ctl(" + epfd + ", EPOLL_CTL_DEL, " + target + ", NULL)";
+    if (!interest[target]) {
+      fail(call, "ENOENT");
+      return;
+    }
+    delete interest[target];
+    lastErrno = 0;
+    ok(call, 0);
+    say("m", "  DEL 的 event 參數可以是 NULL(kernel 2.6.9 之後忽略它)");
+    renderInterest();
+  }
+
+  function renderReady(list) {
+    var out = document.getElementById("ready-out");
+    out.textContent = "";
+    if (!list.length) {
+      var d0 = document.createElement("div");
+      d0.className = "evslot empty";
+      d0.textContent = "buf 沒被碰過 — epoll_wait 回 0,代表 timeout 到期,不是錯誤";
+      out.appendChild(d0);
+      return;
+    }
+    list.forEach(function (ev, i) {
+      var unasked = (ev.events & ALWAYS & ~ev.asked) >>> 0;
+      var d = document.createElement("div");
+      d.className = "evslot" + (unasked ? " err" : "");
+      var head = document.createElement("div");
+      head.textContent = "buf[" + i + "] = EpollEvent { events: " + hex8(ev.events) +
+        ", data: " + ev.data + " }   // fd " + ev.fd;
+      var names = document.createElement("div");
+      names.textContent = "          " + decodeNames(ev.events).join(" | ");
+      var why = document.createElement("div");
+      why.className = "why" + (unasked ? " warn" : "");
+      why.textContent = unasked
+        ? decodeNames(unasked).join(" | ") +
+          ":你根本沒註冊它,kernel 還是塞給你了 — 這兩個永遠白送。先檢查它們,再談 read()。"
+        : "data 原樣帶回你 ADD 時給的 token —— 這是你找回「是哪一條連線」的唯一線索。";
+      d.append(head, names, why);
+      out.appendChild(d);
+    });
+  }
+
+  function epollWait() {
+    var call = "epoll_wait(" + epfd + ", buf, 4, 100)";
+
+    if (eintrArmed) {
+      eintrArmed = false;
+      document.getElementById("btn-eintr").setAttribute("aria-pressed", "false");
+      fail(call, "EINTR");
+      say("m", "  wrapper: EINTR 什麼事都沒發生 -> continue,重新進 syscall");
+    }
+
+    var list = [];
+    FDS.forEach(function (f) {
+      var r = interest[f.fd];
+      if (!r) return;
+      if (r.fired) return;                    // ONESHOT 已自我停用
+      if (r.et && r.edgeSeen) return;         // ET:狀態沒變,就沒有新的邊緣
+      var stbits = STATES[fdState[f.fd]].bits >>> 0;
+      // kernel 的回報規則:(你要求的 & 實際狀態) 再或上永遠白送的 ERR/HUP;
+      // ET/ONESHOT 只是註冊修飾詞,絕不會出現在回報值裡。
+      var reported = (((stbits & r.events) | (stbits & ALWAYS)) & ~CTL_BITS) >>> 0;
+      if (!reported) return;
+      if (list.length >= 4) return;           // maxevents = 4
+      list.push({ fd: f.fd, events: reported, data: r.token, asked: r.events >>> 0 });
+      if (r.et) r.edgeSeen = true;
+      if (r.oneshot) r.fired = true;
+    });
+
+    lastErrno = 0;
+    ok(call, list.length);
+    if (!list.length) {
+      say("m", "  0 不是錯誤:100ms 內沒有任何 fd 就緒");
+    } else {
+      list.forEach(function (ev, i) {
+        say("c", "  buf[" + i + "] = { events: " + hex8(ev.events) + ", data: " + ev.data +
+          " }   // fd " + ev.fd);
+      });
+    }
+    renderReady(list);
+    renderInterest();
+  }
+
+  function setTarget(fd) {
+    target = fd;
+    [7, 9, 11].forEach(function (x) {
+      document.getElementById("fd-" + x).setAttribute("aria-pressed", String(x === fd));
+    });
+    renderInterest();
+  }
+
+  document.getElementById("btn-create").addEventListener("click", create1);
+  document.getElementById("btn-drop").addEventListener("click", dropEpoll);
+  document.getElementById("btn-add").addEventListener("click", ctlAdd);
+  document.getElementById("btn-mod").addEventListener("click", ctlMod);
+  document.getElementById("btn-del").addEventListener("click", ctlDel);
+  document.getElementById("btn-wait").addEventListener("click", epollWait);
+  document.getElementById("btn-eintr").addEventListener("click", function () {
+    eintrArmed = !eintrArmed;
+    this.setAttribute("aria-pressed", String(eintrArmed));
+    say("m", eintrArmed
+      ? "[模擬] 下一次 epoll_wait 會被 signal 打斷(回 -1 / EINTR)"
+      : "[模擬] 取消 signal");
+  });
+  [7, 9, 11].forEach(function (fd) {
+    document.getElementById("fd-" + fd).addEventListener("click", function () { setTarget(fd); });
+  });
+
+  setEnabled();
+  renderMask();      // 會順帶 renderInterest()
+  renderReady([]);
+  say("m", "還沒有 epoll 實例。從 epoll_create1 開始。");
+})();
+</script>
