@@ -24,3 +24,6 @@ pub mod trie;
 pub mod arena_lockfree;
 pub mod spsc_ring;
 pub(crate) mod sync_shim;
+
+// stage 5:async internals
+pub mod executor;
