@@ -1,0 +1,116 @@
+//! drill:framer —— 填 FrameReader::next_frame(有狀態的 stream 黏合)。
+//!
+//! 已給:結構(buf + read_pos 游標)、feed、壓實。
+//! 要填:`next_frame`。呼叫端會 loop 到 Ok(None)——你只管「切一個」。
+
+use super::protocol::{DecodeError, RawFrame, try_decode};
+
+pub struct FrameReader {
+    buf: Vec<u8>,
+    /// 已消費前綴(邏輯上 buf[..read_pos] 已切走;壓實時才真的搬)。
+    read_pos: usize,
+}
+
+impl Default for FrameReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FrameReader {
+    pub fn new() -> Self {
+        Self {
+            buf: Vec::new(),
+            read_pos: 0,
+        }
+    }
+
+    pub fn feed(&mut self, bytes: &[u8]) {
+        self.buf.extend_from_slice(bytes);
+    }
+
+    /// spec:對「未消費區間」`&self.buf[self.read_pos..]` 呼叫 try_decode:
+    /// - Ok(Some((frame, consumed))) → read_pos += consumed、
+    ///   `self.maybe_compact()`、回 Ok(Some(frame))
+    /// - Ok(None) → 殘料留著(半個 frame 等下次 feed)、回 Ok(None)
+    /// - Err → 原樣上拋(framing 損毀,連線該關)
+    pub fn next_frame(&mut self) -> Result<Option<RawFrame>, DecodeError> {
+        todo!("spec: try_decode 未消費區間;成功前進游標")
+    }
+
+    pub fn pending_len(&self) -> usize {
+        self.buf.len() - self.read_pos
+    }
+
+    /// 已給:攤銷壓實(消費前綴夠大時把殘料搬回開頭)。
+    fn maybe_compact(&mut self) {
+        const COMPACT_THRESHOLD: usize = 4096;
+        if self.read_pos >= COMPACT_THRESHOLD && self.read_pos >= self.pending_len() {
+            self.buf.drain(..self.read_pos);
+            self.read_pos = 0;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hw_bridge::protocol::{OP_PING, OP_READ_SENSOR, encode_frame};
+
+    fn drain_frames(r: &mut FrameReader) -> Vec<RawFrame> {
+        let mut out = Vec::new();
+        while let Some(f) = r.next_frame().unwrap() {
+            out.push(f);
+        }
+        out
+    }
+
+    /// boundary:partial frame 窮舉所有切割點。
+    #[test]
+    #[ignore = "填完 next_frame 後移除"]
+    fn partial_all_split_points() {
+        let full = encode_frame(OP_READ_SENSOR, &[1, 2]);
+        for split in 1..full.len() {
+            let mut r = FrameReader::new();
+            r.feed(&full[..split]);
+            assert!(drain_frames(&mut r).is_empty(), "split {split}");
+            r.feed(&full[split..]);
+            assert_eq!(drain_frames(&mut r).len(), 1, "split {split}");
+            assert_eq!(r.pending_len(), 0);
+        }
+    }
+
+    /// boundary:一次 feed 兩個 frame + 半個——完整的全出、殘料正確留存。
+    #[test]
+    #[ignore = "填完 next_frame 後移除"]
+    fn two_and_a_half_frames() {
+        let f = encode_frame(OP_PING, &[]);
+        let mut bytes: Vec<u8> = f.iter().chain(f.iter()).copied().collect();
+        bytes.extend(&f[..2]);
+        let mut r = FrameReader::new();
+        r.feed(&bytes);
+        assert_eq!(drain_frames(&mut r).len(), 2);
+        assert_eq!(r.pending_len(), 2);
+        r.feed(&f[2..]);
+        assert_eq!(drain_frames(&mut r).len(), 1);
+    }
+
+    /// boundary:byte-by-byte 餵三個 frame。
+    #[test]
+    #[ignore = "填完 next_frame 後移除"]
+    fn byte_by_byte() {
+        let frames = [
+            encode_frame(OP_PING, &[]),
+            encode_frame(OP_READ_SENSOR, &[7, 7]),
+            encode_frame(OP_PING, &[1]),
+        ];
+        let bytes: Vec<u8> = frames.iter().flatten().copied().collect();
+        let mut r = FrameReader::new();
+        let mut got = 0;
+        for b in bytes {
+            r.feed(&[b]);
+            got += drain_frames(&mut r).len();
+        }
+        assert_eq!(got, 3);
+    }
+}

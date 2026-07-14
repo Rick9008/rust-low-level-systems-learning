@@ -4,6 +4,11 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
+# drills 練「某一層」時,其他層直接用 reference 的已驗證實作
+# (例:event_loop drill 用 reference 的 epoll_sys 當底)。
+[dependencies]
+reference = { path = "../reference" }
+
 [dev-dependencies]
 proptest = "1"
 

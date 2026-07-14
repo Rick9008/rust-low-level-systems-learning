@@ -63,6 +63,7 @@ name = "drills"
 version = "0.1.0"
 dependencies = [
  "proptest",
+ "reference",
 ]
 
 [[package]]
