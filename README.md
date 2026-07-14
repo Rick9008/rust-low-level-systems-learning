@@ -17,7 +17,9 @@ std-only 的 low-level systems 面試學習教材:concurrency、event loop、bin
 
 ## 學習路徑(git log 即閱讀順序)
 
-commit 歷史按難度遞增分階段,`git log --oneline --reverse` 就是建議閱讀順序:
+commit 歷史按難度遞增分階段,`git log --oneline --reverse` 就是建議閱讀順序。
+(stage 編號 = commit 編號,不是主題編號。**Stage 1 是 workspace 骨架 + README**,
+沒有學習模組,所以主題從 Stage 2 開始。)
 
 **Stage 2 —— mutex/condvar 基礎**
 - `bounded_queue`:Mutex + Condvar 的 predicate-wait、close 語意、滿/空邊界
@@ -56,7 +58,56 @@ commit 歷史按難度遞增分階段,`git log --oneline --reverse` 就是建議
 
 **Stage 8 / 9 —— drills 層、challenges 層**(見下方使用法)
 
+**Stage 10 —— 可執行的 examples**(見下方「跑起來看」)
+
 每個主題在 `docs/` 有一份設計取捨文件(非 code 重複),各模組 doc 有交叉連結。
+
+## 跑起來看
+
+測試證明程式碼是對的,但建立不了直覺。`reference/examples/` 讓你**親手打進去**——
+不改 library 一行,不加任何 dependency。
+
+```sh
+# terminal 1:起 server(--threaded 或 --evented,行為相同、thread 數不同)
+cargo run -p reference --example hw_bridge_server -- --evented
+
+# terminal 2:打進去
+cargo run -p reference --example hw_bridge_client -- demo       # 完整劇本
+cargo run -p reference --example hw_bridge_client -- drip 200   # 一次一 byte
+cargo run -p reference --example hw_bridge_client -- badop      # 語意錯:連線活著
+cargo run -p reference --example hw_bridge_client -- badlen     # framing 錯:連線報廢
+```
+
+**`drip` 是這裡最值得跑的一個。** 它把 5-byte 的 Ping frame 拆成 5 次 write、
+每次間隔 200ms。server 那邊整整安靜 800ms,直到最後一 byte 到齊才吐出命令:
+
+```
+  [   8µs] byte 0 = 0x00   len 還差 3 byte
+  [ 200ms] byte 1 = 0x00   len 還差 2 byte
+  [ 400ms] byte 2 = 0x00   len 還差 1 byte
+  [ 600ms] byte 3 = 0x01   len 到齊了(=1),payload 還差 1 byte
+  [ 800ms] byte 4 = 0x01   frame 完整 → server 現在才能解
+  [ 801ms] <- Pong
+```
+
+單元測試裡那句 `assert_eq!(reader.next_frame(), Ok(None))`——跑一次 drip,它就有了體感。
+「TCP 是 byte stream,沒有 message 邊界」不再是一句話,是螢幕上的 800ms。
+
+其餘兩支:
+
+```sh
+cargo run -p reference --example tcp_echo_server   # 單執行緒 epoll echo,開幾個 nc 打
+cargo run -p reference --example loom_vs_stress    # 見下節
+```
+
+並發模型的 trade-off 也變成可測的數字——5 條連線壓著時:
+
+| server | thread 數 |
+|---|---|
+| `--evented` | **2**(event loop + command worker),不隨連線數成長 |
+| `--threaded` | **6**(main + 每連線一條) |
+
+`ls /proc/$(pgrep -f hw_bridge_server)/task | wc -l` 自己數。
 
 ## 面試對映
 
@@ -103,25 +154,98 @@ cargo test -p challenges -- --include-ignored   # 同樣以 #[ignore] 保持 wor
 server/client 用 reference 版接起來當整合測試 harness;`tcp_echo` challenge 同理,
 epoll 綁定已提供,只從頭寫 accept/read/write 迴圈。
 
-## 驗證說明:loom 是窮舉,不是 fuzz
+## loom 是怎麼做出來的
 
-並發 bug 不能靠 random fuzz:一個依賴特定 interleaving + 弱記憶體序可見性的 bug,
-隨機跑 10⁹ 次可能一次都不觸發。loom 是 **model checker**:
+### 先看證據
 
-- 它接管 atomic / 鎖 / thread 的排程,把(preemption bound 內)**所有可能的 interleaving
-  逐一執行**,並模擬 C11 memory model——`Relaxed` 下允許的重排它真的會排給你看。
-- 所以 loom 測過 = 在該模型與 bound 內**證明**正確,不是「跑很多次沒炸」。
+```sh
+cargo run -p reference --example loom_vs_stress
+```
 
-工程上的接法:library 本體 std-only(loom 只在 `[dev-dependencies]`),
-`spsc_ring` / `arena_lockfree` 的核心演算法透過 sync-shim(`#[path]` include)
-在測試裡以 loom 的 atomic 型別重新實例化。直接跑即可:
+同一份**故意寫壞**的 SPSC(acquire/release 全降級成 `Relaxed`),三種驗證方式。
+以下是在這台機器上實際跑出來的:
+
+| 回合 | 驗證方式 | 結果 |
+|---|---|---|
+| 1 | 真 OS thread,**2,000,000 次** push/pop | **通過**,0 個異常(486ms)。debug 與 release 都一樣 |
+| 2 | loom,**同一份原始碼** | **`Causality violation: Concurrent read and write accesses`**,379 **µs** |
+| 3 | loom,`reference` 出貨的正確版 | 通過(6.6ms) |
+
+兩百萬次操作抓不到的東西,loom 用 379 微秒抓到。這個落差就是 loom 存在的全部理由。
+
+### 為什麼壓力測試抓不到
+
+bug 是「`Relaxed` 不建立 happens-before」:consumer 看到 `tail` 前進,
+不保證看得到 producer 寫進槽位的值。這在 C11 記憶體模型裡是貨真價實的 data race。
+
+但你的 CPU 是 x86-64,而 **x86 是 TSO**——硬體本來就不重排 store-store、不重排 load-load,
+`Relaxed` 編出來跟 `Release` 是同一條 `mov`。**這個 bug 在 x86 上根本沒有物理表現**:
+跑 10⁹ 次也是綠的,直到有人拿去 ARM / RISC-V(弱記憶體序)跑,或編譯器某次升級決定重排它。
+
+random fuzz 的搜尋空間是「這台機器實際會發生的 interleaving」;
+bug 藏在「C11 **允許**、但這台機器不會做」的那一區。fuzz 永遠掃不到那裡。
+
+### loom 的四個機關
+
+**1. 型別替換。** `loom::sync::atomic::AtomicUsize`、`loom::cell::UnsafeCell`、
+`loom::sync::Arc` 的 API 跟 std 一模一樣,但它們是**假的**:每一次 load / store /
+UnsafeCell 存取都會回報給 loom 的執行期。這就是為什麼被測程式碼**不能直接 `use std::sync`**
+——也正是 `sync_shim.rs` 存在的理由(見下)。
+
+**2. thread 不是 OS thread。** `loom::thread::spawn` 開的是 green thread
+(loom 底層依賴 `generator` crate)。任一時刻**只有一條在跑**,由 loom 自己排程。
+所以執行是**決定性的**:給定一個排程,結果每次都一樣——失敗可重現,不是海森堡 bug。
+
+**3. 窮舉 + 回溯。** `loom::model(f)` 不是把 `f` 跑一次,是把 `f` **跑上百上千次**:
+每次在某個決策點(atomic 存取、鎖、`yield_now`)走一條沒走過的分支,DFS 遍歷整棵排程樹。
+獨立的操作(不同位址、兩個 load)可交換,**partial-order reduction** 把這種對稱分支剪掉,
+否則是階乘爆炸。loom 的技術來源是 CDSChecker(Norris & Demsky, OOPSLA'13)。
+
+**4. 模擬 C11 記憶體模型——這才是關鍵。** loom 的 atomic 變數存的不是「一個值」,
+而是**一整段寫入歷史 + happens-before 的因果圖**。一次 `Relaxed` load,loom 會依 C11 規則
+算出「哪些舊值是合法可見的」,然後**真的把過期的值回給你**。x86 硬體不會這樣做,loom 會。
+同理它記錄每個 `UnsafeCell` 的存取:兩次存取之間沒有 happens-before 邊、且至少一次是寫
+→ 判定 data race,當場 panic。回合 2 那句 `Causality violation` 就是這樣來的。
+
+所以 **loom 通過 = 在該模型與 bound 內「證明」沒有這類 bug**,不是「跑很多次沒炸」。
+
+### 工程上怎麼接:sync_shim
+
+矛盾:library 本體要 std-only(零依賴),但 loom 要求被測程式用**它的**型別——
+總不能為了測試把 production 程式碼綁上 loom。
+
+解法在 `reference/src/sync_shim.rs`。核心演算法(`spsc_ring/core_impl.rs`、
+`arena_lockfree/core_impl.rs`)一律寫 `use crate::sync_shim as sync`,**不直接碰 std**:
+
+- **lib 編譯時**:`sync_shim` 是 std 型別的薄殼(`UnsafeCell` 的閉包式 API 必然內聯)
+  → production 路徑零依賴、零開銷。
+- **loom 測試時**(`tests/loom_*.rs`):測試 crate 自己定義一個同名 `sync_shim`
+  re-export loom 型別,再用 `#[path]` include **同一份**演算法原始碼。
+
+同一份演算法、兩套記憶體模型實例化——**loom 驗過的就是 lib 出貨的那份邏輯**,
+而不是一份「為了測試而寫的相似程式碼」。`loom_vs_stress` 這個 example 把同一個機關
+又用了一次(而且是三次實例化:壞版 × std、壞版 × loom、好版 × loom)。
 
 ```sh
 cargo test -p reference --test loom_spsc
 cargo test -p reference --test loom_arena
 ```
 
-`proptest`(也是 dev-only)用於資料結構不變量:隨機生成輸入、失敗時自動縮小到最小反例。
+### 誠實的邊界
+
+loom 驗的是**它模擬的那個模型**:C11 的一個子集、preemption bound 之內
+(`LOOM_MAX_PREEMPTIONS`)、以及**你真的寫進 model 裡的那些操作**。
+它不模擬編譯器優化,不管邏輯錯,也不會幫你檢查沒被 model 覆蓋到的 API。
+
+代價是**指數級狀態空間**:model 必須小(2 條 thread、2–3 個操作)。
+loom 測試跑超過十幾秒,通常代表模型開太大了,不是 loom 慢——
+`loom_spsc` 用容量 1、兩個元素,不是偷懶,是刻意。
+
+loom 綠燈 ≠ 程式沒 bug,而是「這段演算法的這組操作,在 C11 下沒有 interleaving /
+可見性層級的錯誤」。範圍很窄——但窄得非常值錢,因為這正是人類 review 最看不出來的那一類。
+
+`proptest`(同為 dev-only)負責另一件事:資料結構不變量,隨機生成輸入、失敗時自動縮小到
+最小反例。**proptest 找邏輯錯,loom 找並發錯**,兩者不重疊。
 
 ## 品質閘門(每個 commit 都過)
 
