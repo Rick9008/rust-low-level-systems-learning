@@ -287,3 +287,8 @@ tokio(async runtime)、crossbeam(channel、epoch-based reclamation)、
 rayon(data parallelism)、mio(跨平台 epoll/kqueue 抽象)、bytes(zero-copy buffer)。
 各模組 doc 有註明對應的 production crate。唯一的非 std 依賴是 `epoll_sys` 的
 raw syscall 綁定(自寫 `unsafe extern "C"`,不依賴 libc crate)。
+
+**允許用 crate 的話 epoll 長什麼樣?** 見 [`docs/epoll_libc.md`](docs/epoll_libc.md)——
+libc 版的完整可跑實作(已編過跑過)、它省掉什麼(`repr(packed)`、errno)、
+它沒省掉而且會咬你什麼(常數是 `i32` 但欄位是 `u32`,而 `EPOLLET` 是負數),
+以及 `raw syscall → libc → mio → tokio` 這條線各自把什麼扛走。
