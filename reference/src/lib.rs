@@ -6,3 +6,8 @@
 //! 閱讀順序見 repo 根目錄 README 的「學習路徑」。
 //! 每個模組頂端的 `//!` doc 依 5 pillars 結構撰寫:
 //! [Clarify] → [Abstract] → [Iterate] → [Trade-offs] → [Dry-Run]。
+
+// stage 2:mutex/condvar 基礎
+pub mod bounded_queue;
+pub mod sharded_map;
+pub mod thread_pool;
