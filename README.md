@@ -153,6 +153,9 @@ cargo run -p reference --example loom_vs_stress    # 見下節
 | `hw_bridge` | 橋接軟硬體 + 定義通訊協定:binary framing、並發模型取捨 |
 | `ring_buffer` `lru` `dsu` `graph` `trie` `tree` | systems-level data structures:index-based、O(1) 設計 |
 
+邊寫邊講的數字底稿:[`docs/cost-model.md`](docs/cost-model.md)
+(ns/µs 數量級、queue 三型、poll vs epoll、並發模型轉折點)。
+
 每個模組檔頂端的 `//!` doc 依 5 pillars 結構撰寫:
 **[Clarify]**(解決什麼、constraints、規模)→ **[Abstract]**(次要關注點 stub 掉往前走)→
 **[Iterate]**(naive → optimized 演進可見)→ **[Trade-offs]**(關鍵決策含 Big-O)→

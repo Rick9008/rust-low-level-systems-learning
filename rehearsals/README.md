@@ -6,7 +6,7 @@
 
 ## 規則
 
-1. **計時 45 分鐘一題。** 時間到就停筆,誠實記錄做到哪。
+1. **計時 45 分鐘一題,照下方〈45 分鐘 protocol〉切段。** 時間到就停筆,誠實記錄做到哪。
 2. **模擬單檔:** 實作寫在 `src/<name>.rs`,**你自己的測試也寫在同檔底部的
    `#[cfg(test)] mod tests`**——CoderPad 就是全部擠一個 buffer。
 3. **彩排時自己寫測試。** 先想 boundary、自己出測項。
@@ -21,6 +21,41 @@
    對照重點不是過不過,是:**你的測試漏了哪一類邊界?** 漏掉的那類
    (wrap?空?重複操作?欄位切斷點?)下次要在動手前就想到。
 5. 開始前不要偷看 `tests/`,也不要看 `reference/` 對應模組。寫完隨便你 diff。
+
+## 45 分鐘 protocol
+
+| 時間 | 做什麼 | 紀律 |
+|---|---|---|
+| 0–5 | **Clarify,大聲問** | 鎖 contract(滿了怎辦?單雙執行緒?shutdown 語意?),問完不准中途改設計 |
+| 5–10 | **Skeleton** | struct + 全部簽名 + `todo!()`,先求能編譯——這 5 分鐘決定後面不用 refactor |
+| 10–30 | **Core,一次一個函式** | 邊寫邊講不變量(「len = tail − head」「worker 醒來先查 stop」) |
+| 30–40 | **自己點名 boundary + dry-run** | 空/單元素/滿/wrap/切斷點;先在註解手 trace,**再**按 Run(pad 一次 ~7 秒,省著用) |
+| 40–45 | **Trade-offs 收尾** | drop-oldest vs backpressure、Mutex vs atomics、規模轉折點在哪(→ epoll/tokio) |
+
+每次彩排記錄各段實際花的分鐘數:第一次通常 core 爆,第二次通常 debug 爆,
+第三次收斂。**設計在家裡決定,場上只是重放**——每題一個 canonical 設計練到反射
+(ring = head+len;pool = `Arc<(Mutex<State>, Condvar)>` + `VecDeque`;
+framer = `Vec<u8>` 累積 + drain 迴圈)。
+
+## 大題定界:escalation ladder
+
+Prompt 看起來像「build a runtime」(thread pool + executor + reactor 全都要)時,
+考的是**定界**,不是手速。開場 30 秒先說:
+
+> 「45 分鐘我先做單執行緒的 `block_on` + 一個 `Delay` future,因為 Waker 協議是
+> 整個 runtime 的心臟;多 task spawn 和 IO reactor 我講架構不寫——時間剩我補 spawn。」
+
+然後照階梯走——**一顆用寫的,其餘用講的**:
+
+| 階段 | 形式 | 內容 |
+|---|---|---|
+| 1(25–30 分)| 寫 | `block_on` + `Waker` + park/unpark + `Delay`(那條計時 thread 就是微型 reactor) |
+| 2(~3 分)| 講 | 多 task:run queue + `Arc<Task>`,wake = 把自己 push 回 queue——thread pool 骨架換 payload |
+| 3(~3 分)| 講 | 真 IO:reactor thread + epoll + interest table;std 沒有多路等待原語,這層是 tokio(mio→epoll)接手 |
+| 4(~2 分)| 收 | 轉折點:何時要 work-stealing、何時 readiness 不夠要 completion(io_uring) |
+
+背景知識見 [`docs/async-runtime-anatomy.md`](../docs/async-runtime-anatomy.md);
+邊講邊用的數字在 [`docs/cost-model.md`](../docs/cost-model.md)。
 
 ---
 
