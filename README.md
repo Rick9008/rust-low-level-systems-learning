@@ -15,50 +15,52 @@ std-only 的 low-level systems 面試學習教材:concurrency、event loop、bin
 `challenges/` 對應面試 live coding 的真實條件(空白起點)。execution 的缺口只有靠
 `drills/` 和 `challenges/` 補;純讀 `reference/` 不能取代手搓。
 
-## 學習路徑(git log 即閱讀順序)
+## 學習路徑(依面試環境分兩級)
 
-commit 歷史按難度遞增分階段,`git log --oneline --reverse` 就是建議閱讀順序。
-(stage 編號 = commit 編號,不是主題編號。**Stage 1 是 workspace 骨架 + README**,
-沒有學習模組,所以主題從 Stage 2 開始。)
+面試在 CoderPad:單檔、Cargo 只有固定 crate 清單——**無 libc、無 tokio、無 crossbeam**
+(細節見 [`docs/coderpad-constraints.md`](docs/coderpad-constraints.md))。
+沒有 libc、單檔裡也不現實手寫 `unsafe extern "C"` syscall 綁定,
+所以 **epoll 一族在面試環境裡做不了**——它們降級為 deep-dive 材料,不是白學,
+是拿來回答 readiness model / event loop 概念題,以及看懂真實系統。
 
-**Stage 2 —— mutex/condvar 基礎**
-- `bounded_queue`:Mutex + Condvar 的 predicate-wait、close 語意、滿/空邊界
-- `thread_pool`:worker 醒來先查 stop、drop 時 join 全部、graceful shutdown
-- `sharded_map`:per-shard Mutex 降鎖競爭,shard 選擇與整體不變量
+### 【TPS 直接相關 — 優先】
 
-**Stage 3 —— 單執行緒資料結構(index-based 優先)**
-- `ring_buffer`:bounded ring 的 head/tail/len 算術與 wrap 邊界
-- `lru`:HashMap<K, index> + 放在 Vec 裡的 index-based 雙向鏈表,O(1) get/put
-- `dsu`:union-find,path compression + union by rank,α(n)
-- `graph`:adjacency list;BFS / DFS / Kahn's topo / Dijkstra(BinaryHeap<Reverse>)
-- `trie`:children 放 arena 的 prefix tree
-- `tree`:index-based arena 版與 Rc<RefCell> 版並列,取捨對照
+CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序**,
+每個模組走三層:讀 `reference/` → 填 `drills/` → 有 ★ 的從 `challenges/` 空白手搓:
 
-**Stage 4 —— atomic / lock-free(loom 驗證)**
-- `spsc_ring`:兩個 atomic index + acquire/release、power-of-2 mask、
-  `#[repr(align(64))]` 防 false sharing
+1. `bounded_queue`:Mutex + Condvar 的 predicate-wait、close 語意、滿/空邊界
+2. `thread_pool`:worker 醒來先查 stop、drop 時 join 全部、graceful shutdown
+3. `ring_buffer`:bounded ring 的 head/tail/len 算術與 wrap 邊界
+4. `spsc_ring`:兩個 atomic index + acquire/release、power-of-2 mask、
+   `#[repr(align(64))]` 防 false sharing ★
+5. `executor`:mini `block_on`,`std::task::Wake` + Arc 做 Waker、
+   thread::park/unpark 的 token 語意(wake 先於 park 不丟)★
+6. `lru`:HashMap<K, index> + 放在 Vec 裡的 index-based 雙向鏈表,O(1) get/put ★
+7. `hw_bridge` 的 **protocol + framer**:wire format `[u32 len(BE)][u8 opcode][payload]`、
+   `try_decode` + `FrameReader` 的 read-buffer parse loop
+   (半個 frame / 多個 frame 正確切分)★
+8. `dsu`:union-find,path compression + union by rank,α(n) ★
+9. `sharded_map`:per-shard Mutex 降鎖競爭,shard 選擇與整體不變量 ★
+
+次優先(CoderPad 做得了、一般面試常見,但非 TPS 核心考點,時間有限就往後排):
+`graph`(BFS / DFS / Kahn's topo / Dijkstra)、`trie`、`tree`。
+
+### 【deep-dive 材料 — 不會考,讀懂即可】
+
+原因如上:CoderPad 無 libc,epoll 在面試環境做不了。讀到「能把機制講清楚」為止,
+不必手搓:
+
 - `arena_lockfree`:arena + generation-tagged index 的 lock-free stack,
-  示範 index-ABA 與 generation 解法
-
-**Stage 5 —— async internals from scratch**
-- `executor`:mini `block_on`,`std::task::Wake` + Arc 做 Waker、
-  thread::park/unpark 的 token 語意(wake 先於 park 不丟)、一個 Delay future
-
-**Stage 6 —— event loop / IO 綜合**
+  示範 index-ABA 與 generation 解法(`spsc_ring` 的延伸)
 - `epoll_sys`:unsafe extern "C" 的最小 epoll 綁定 + 安全 wrapper(不依賴 libc crate)
 - `event_loop`:register / epoll_wait / dispatch;LT 與 ET 都示範;eventfd self-wake
 - `tcp_echo`:nonblocking TCP echo;write 塞住 → 緩存 + EPOLLOUT
-- `file_io_offload`:file IO 用 thread pool offload(epoll 為何不適用 regular file)
+- `file_io_offload`:file IO 用 thread pool offload(readiness vs completion)
+- `hw_bridge` 的 `server_threaded` / `server_evented`:thread-per-connection 與
+  event-loop 兩種並發模型並存對照(framer 本身在優先級,見上)
 
-**Stage 7 —— 橋接軟硬體(JD 直擊題)**
-- `hw_bridge`:binary protocol server + client。
-  wire format `[u32 len(BE)][u8 opcode][payload]`、`try_decode` + `FrameReader`
-  的 read-buffer parse loop(半個 frame / 多個 frame 正確切分)、
-  thread-per-connection 與 event-loop 兩種 server 並存對照、sync client。
-
-**Stage 8 / 9 —— drills 層、challenges 層**(見下方使用法)
-
-**Stage 10 —— 可執行的 examples**(見下方「跑起來看」)
+(commit 歷史仍按難度分 stage,`git log --oneline --reverse` 是照 stage 走的另一種讀法;
+上面的順序是把 stage 順序按面試優先級重排過的版本。)
 
 每個主題在 `docs/` 有一份設計取捨文件(非 code 重複),各模組 doc 有交叉連結。
 
@@ -169,8 +171,8 @@ cargo test -p challenges -- --include-ignored   # 同樣以 #[ignore] 保持 wor
 2. 從 public API 簽名開始整個自己寫,轉綠。
 3. `diff` 對照 `reference/` 對答案。
 
-建議順序(★ = 先做):★ `spsc_ring` → ★ `executor` → ★ `lru` → ★ `hw_bridge` →
-`dsu` → `sharded_map` → `tcp_echo`。
+順序照上方「學習路徑」優先級清單的 ★ 走:`spsc_ring` → `executor` → `lru` →
+`hw_bridge` → `dsu` → `sharded_map`。`tcp_echo` 的 challenge 屬 deep-dive 級,可跳過。
 
 範圍註記:`hw_bridge` challenge 聚焦 **`try_decode` + `FrameReader`**(45 分鐘可寫完的核心),
 server/client 用 reference 版接起來當整合測試 harness;`tcp_echo` challenge 同理,
