@@ -20,6 +20,11 @@ pub mod ring_buffer;
 pub mod tree;
 pub mod trie;
 
+// 語言慣用法(std-only,面試高頻):邊迭代邊修改 Vec / slice
+pub mod iter_mutate;
+// 上面 pattern 的高頻 LeetCode in-place 題示範
+pub mod inplace_leetcode;
+
 // stage 4:atomic / lock-free(loom 驗證見 tests/loom_*.rs)
 pub mod arena_lockfree;
 pub mod spsc_ring;

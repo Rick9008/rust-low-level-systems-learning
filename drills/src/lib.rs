@@ -14,12 +14,15 @@
 // 挖空的函式參數/為你準備的 import 在你填完之前用不到;
 // 骨架 helper 也可能暫時沒人呼叫。這些 allow 讓 drills 在「全部挖空」
 // 狀態下依然過 -D warnings 閘門。填完所有 todo 後可拿掉自查。
-#![allow(unused_variables, dead_code, unused_imports)]
+// clippy::ptr_arg:挖空狀態下 `&mut Vec<T>` 的 body 是 todo!(),clippy 看不到
+// 需要 Vec 的方法(truncate / retain_mut)而誤判成該收窄成 &mut [T]。填完即消失。
+#![allow(unused_variables, dead_code, unused_imports, clippy::ptr_arg)]
 
 pub mod bounded_queue;
 pub mod dsu;
 pub mod graph;
 pub mod hw_bridge;
+pub mod iter_mutate;
 pub mod lru;
 pub mod ring_buffer;
 pub mod sharded_map;
