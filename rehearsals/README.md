@@ -79,6 +79,20 @@ window、capacity、heap)。
 
 認不出來就問。開場永遠是:*"Before I start, let me make sure I understand the constraints."*
 
+## 對答案
+
+每題有一份**已對參考測試驗證全綠**的 solution:`examples/sol_<name>.rs`。
+**寫完(或時間到)才開**——信任模型跟 challenges 不偷看 `reference/` 相同。
+solution 檔頂端註明該題的 canonical 設計與關鍵取捨;可直接跑 smoke:
+
+```sh
+cargo run -p rehearsals --example sol_ring_drop_oldest
+```
+
+題 a–c 在 `reference/` 另有教學版近親(`ring_buffer` / `thread_pool` /
+`hw_bridge` framer),contract 略有差異(reference 的 ring 是滿了拒收,
+不是 drop-oldest),diff 時注意語意差。
+
 ---
 
 ## 題目 a:ring_drop_oldest

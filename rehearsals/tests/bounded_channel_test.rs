@@ -3,6 +3,10 @@
 //! 彩排時先自己寫測試;轉綠後才跑這組:
 //! `cargo test -p rehearsals --test bounded_channel_test -- --include-ignored`
 
+// 骨架期 Sender/Receiver 是 placeholder、還沒有 Drop 實作,drop(tx) 會觸發
+// 這個 lint;你的實作有 Drop(斷線語意靠它)之後,這行可移除。
+#![allow(clippy::drop_non_drop)]
+
 use rehearsals::bounded_channel::channel;
 use std::sync::mpsc;
 use std::thread;
