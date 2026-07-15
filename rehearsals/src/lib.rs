@@ -10,3 +10,4 @@
 pub mod frame_parser_heartbeat;
 pub mod pool_graceful_shutdown;
 pub mod ring_drop_oldest;
+pub mod tokio_frame_server;

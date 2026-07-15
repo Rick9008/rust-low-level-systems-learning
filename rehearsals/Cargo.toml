@@ -6,8 +6,11 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
-# 刻意零依賴(連 reference 都不依賴):這三題都是 std 基本盤題,
-# 彩排時只准用 std——pad 的固定 crate 清單見 docs/coderpad-constraints.md。
+# 題 a–c 是 std 基本盤題,刻意不依賴任何 crate(連 reference 都不依賴)。
+# 題 d(tokio_frame_server)用 tokio——pad 實測清單裡有它,
+# idiomatic async 是另一塊要練的肌肉。
+[dependencies]
+tokio = { version = "1", features = ["full"] }
 
 [lints]
 workspace = true

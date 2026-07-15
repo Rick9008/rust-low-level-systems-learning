@@ -1,7 +1,8 @@
 # rehearsals —— 計時彩排(模擬 CoderPad 條件)
 
-三題計時彩排。題目是面試 prompt 風格:只給場景、contract、規模,**不給任何做法提示**。
+四題計時彩排。題目是面試 prompt 風格:只給場景、contract、規模,**不給任何做法提示**。
 環境約束照 [`docs/coderpad-constraints.md`](../docs/coderpad-constraints.md)。
+題 a–c 只准 std;題 d 用 tokio(pad 實測清單有)。
 
 ## 規則
 
@@ -73,3 +74,21 @@ TCP 是 byte stream,沒有 message 邊界:一次 `read` 拿到的 bytes 可能�
 假設 stream 格式正確(信任的 peer,不需處理 malformed)。
 
 API 簽名在 `src/frame_parser_heartbeat.rs`。
+
+## 題目 d:tokio_frame_server
+
+(唯一用 crate 的一題:tokio。)
+
+裝置閘道器:多台裝置同時透過 TCP 連上來,講題目 c 的協定——
+`[u32 len(BE)][payload]`,`len == 0` 是 heartbeat。
+
+需求:
+- 用 tokio 寫 server:`serve(listener, idle_timeout)`,服務到 listener 出錯為止。
+- 每條連線並發服務、互相獨立。
+- 收到 data frame → 原封不動 echo 回去(同 wire format)。
+- 收到 heartbeat → 不回應。
+- 一條連線超過 `idle_timeout` 沒有任何 bytes 進來 → 關閉該連線。
+  heartbeat 算流量,能讓閒置的裝置連線活著——這就是它存在的目的。
+- TCP 照樣沒有 message 邊界(半個 / 多個 frame),題目 c 的功課這裡要重用。
+
+API 簽名在 `src/tokio_frame_server.rs`。
