@@ -191,9 +191,11 @@ epoll 綁定已提供,只從頭寫 accept/read/write 迴圈。
 
 ## rehearsals 使用法(計時彩排)
 
-`rehearsals/` 是四題計時彩排,模擬 CoderPad 條件(單檔、固定 crate 清單;
+`rehearsals/` 是八題計時彩排,模擬 CoderPad 條件(單檔、固定 crate 清單;
 見 [`docs/coderpad-constraints.md`](docs/coderpad-constraints.md))。
-題 a–c 只准 std;題 d(tokio frame server)練 idiomatic async——pad 實測有 tokio。
+題 a–c 是主菜、題 d(tokio frame server)練 idiomatic async——pad 實測有 tokio;
+題 e–h(event registry / telemetry aggregator / bounded channel / timer queue)
+對應題型預測的 Q4–Q7,預設做 recognition 練習(讀題 → 定界宣言 → 口述 arc)。
 題目在 [`rehearsals/README.md`](rehearsals/README.md),面試 prompt 風格、不給提示。
 
 1. 計時 45 分鐘一題。實作與**你自己寫的測試**都放 `src/<name>.rs` 同一個檔案

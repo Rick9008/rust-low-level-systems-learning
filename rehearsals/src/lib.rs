@@ -7,7 +7,11 @@
 // 骨架期參數必然未使用(todo!());與 challenges crate 同款 allow。
 #![allow(unused_variables, dead_code)]
 
+pub mod bounded_channel;
+pub mod event_registry;
 pub mod frame_parser_heartbeat;
 pub mod pool_graceful_shutdown;
 pub mod ring_drop_oldest;
+pub mod telemetry_aggregator;
+pub mod timer_queue;
 pub mod tokio_frame_server;

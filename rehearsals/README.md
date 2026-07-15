@@ -1,8 +1,12 @@
 # rehearsals —— 計時彩排(模擬 CoderPad 條件)
 
-四題計時彩排。題目是面試 prompt 風格:只給場景、contract、規模,**不給任何做法提示**。
+八題計時彩排。題目是面試 prompt 風格:只給場景、contract、規模,**不給任何做法提示**。
 環境約束照 [`docs/coderpad-constraints.md`](../docs/coderpad-constraints.md)。
-題 a–c 只准 std;題 d 用 tokio(pad 實測清單有)。
+題 a–c、e–h 只准 std;題 d 用 tokio(pad 實測清單有)。
+
+定位:**題 a–d 是主菜**,全程 45 分鐘照 protocol 跑。**題 e–h 對應題型預測的
+Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → 口述 arc 與 trade-off
+——想全程寫也照 protocol 跑,骨架與參考測試都在。
 
 ## 規則
 
@@ -56,6 +60,24 @@ Prompt 看起來像「build a runtime」(thread pool + executor + reactor 全都
 
 背景知識見 [`docs/async-runtime-anatomy.md`](../docs/async-runtime-anatomy.md);
 邊講邊用的數字在 [`docs/cost-model.md`](../docs/cost-model.md)。
+
+## 當天認題(掃描表)
+
+貫穿所有題的一句話:**「串流是無限的,你的記憶體不是。界在哪?」**
+每題都是同一題的變形——差別只在「界」是什麼(容量、執行緒數、buffer、id 空間、
+window、capacity、heap)。
+
+| 聽到這個 | 題 | 第一個 clarify |
+|---|---|---|
+| "continuous stream" / "most recent N" | a(Q1) | **滿了怎麼辦?** |
+| "concurrently" / "health checks" / "no external libraries" | b(Q2) | 幾條 thread?shutdown 語意? |
+| "byte stream" / "protocol" / "frames" | c(Q3) | len 含不含 header?max frame size? |
+| "event id" / "handlers" / "thousands of signals" | e(Q4) | **id 密集還是稀疏?** |
+| "can't store them all" / "aggregate" / "windows" | f(Q5) | window 多大?timestamp 會亂序嗎? |
+| "producers block when full" | g(Q6) | capacity?close 語意? |
+| "periodic" / "interval" / "what runs next" | h(Q7) | 幾個 timer?精度? |
+
+認不出來就問。開場永遠是:*"Before I start, let me make sure I understand the constraints."*
 
 ---
 
@@ -127,3 +149,73 @@ API 簽名在 `src/frame_parser_heartbeat.rs`。
 - TCP 照樣沒有 message 邊界(半個 / 多個 frame),題目 c 的功課這裡要重用。
 
 API 簽名在 `src/tokio_frame_server.rs`。
+
+## 題目 e:event_registry(Q4)
+
+硬體訊號帶著 event id 進來。要一個 registry:掛 handler、事件進來就 dispatch。
+幾千種 id、高事件率。
+
+需求:
+- `register(id, handler)`:同一 id 可掛多個;`dispatch(id, payload)` 依**註冊順序**
+  執行該 id 的所有 handler,回傳執行個數。
+- handler 執行完回報去留(`After::Keep` / `After::Remove`)——`Remove` 從此不再被呼叫。
+- 未知 id 是 no-op。
+- dispatch 進行中不會有人 register(caller 保證)。
+
+【clarify points——動手前先自答】
+- id 密集還是稀疏?這決定你選什麼結構、trade-off 是什麼。
+- 「dispatch 中途 unregister」為什麼在 Rust 裡特別麻煩?這份 API 用什麼方式繞開?
+
+API 簽名在 `src/event_registry.rs`。
+
+## 題目 f:telemetry_aggregator(Q5)
+
+整機櫃數十億筆訊號,全存是不可能的。聚合進**固定數量**的 time window。
+
+需求:
+- `new(window_ms, num_windows)`:記憶體固定 O(num_windows),與樣本數無關。
+- `record(ts, value)`;`stats(ts)` 回該 window 目前的 count / sum / min / max。
+- window 是半開區間 `[k*w, (k+1)*w)`。
+- timestamp 可能亂序:落在已淘汰的過去 → 拒絕(false);仍在保留範圍 → 收。
+- ts 跳到未來 → 成為最新 window,中間被跳過的 window 視同空。
+- 沒有資料的 window,`stats` → `None`。
+
+【clarify points——動手前先自答】
+- 為什麼空 window 不能回 zero 填充的 stats?
+- slot 被重用之前,必須發生什麼事?
+
+API 簽名在 `src/telemetry_aggregator.rs`。
+
+## 題目 g:bounded_channel(Q6)
+
+從零打造 bounded channel:producer 滿了 block、consumer 空了 block。std-only。
+
+需求:
+- `channel(capacity)`(capacity ≥ 1)→ `(Sender, Receiver)`;`Sender: Clone`
+  (多生產者)、單消費者。
+- `send`:滿 → block 到有空位;receiver 已 drop → `Err(SendError(v))` 把值原封還你。
+- `recv`:空 → block;**所有** sender drop 且 buffer 清空 → `None`。
+- block 中的一方,在對向條件成立**或對向消失**時都必須醒得來。
+
+【clarify points——動手前先自答】
+- 被喚醒就代表條件成立嗎?wait 要怎麼寫才對?
+- 一顆還是兩顆 condvar?差在哪?
+
+API 簽名在 `src/bounded_channel.rs`。
+
+## 題目 h:timer_queue(Q7)
+
+N 個 node、各自不同 interval 的週期 health check。誰下一個跑?該睡到什麼時候?
+
+需求:
+- `schedule(id, first_at, interval)`(interval ≥ 1;id 唯一性 caller 負責)。
+- `next_deadline()`:給 caller 當 park 目標——**park 到那個時間點,不是輪詢**。
+- `pop_due(now)`:收割所有到期觸發,依 (deadline, id) 排序;觸發後以
+  「舊 deadline + interval」自動重排;now 落後很多時要補發錯過的週期。
+- 時間用邏輯毫秒(u64),測試可決定性控制。
+
+【clarify points——動手前先自答】
+- 重排為什麼從舊 deadline 起算,不是 now?差在哪個字?
+- heap 空的時候,caller 該 park 多久?新 timer 進來誰叫醒它?(接 executor 的 park token)
+
+API 簽名在 `src/timer_queue.rs`。
