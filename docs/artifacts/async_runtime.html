@@ -138,7 +138,7 @@ code {
 }
 pre {
   font-family: var(--mono);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   line-height: 1.6;
   background: var(--surface);
   border: 1px solid var(--line-soft);
@@ -148,6 +148,9 @@ pre {
   margin: 0;
 }
 pre code { background: none; border: none; padding: 0; }
+pre code i { color: var(--muted); font-style: normal; }
+pre code b { color: var(--ink); font-weight: 600; }
+pre code u { text-decoration: none; color: var(--consumer); font-weight: 600; }
 
 .panel {
   background: var(--surface);
@@ -483,19 +486,19 @@ footer { color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--lin
     let n = epoll_wait(&mut events);
     for ev in &events[..n] {
         let waker = interest[ev.fd];
-        waker.wake();          // 「可以做了」
-    }                          // read 由醒來的 task 自己補
+        <u>waker.wake();</u>          <i>// 「可以做了」</i>
+    }                          <i>// read 由醒來的 task 自己補</i>
 }</code></pre>
     </figure>
     <figure>
       <figcaption>completion event loop(io_uring)——in-flight table:op id → (waker, buffer)</figcaption>
       <pre><code>loop {
-    submit(&mut sq);           // 批次送出
+    submit(&mut sq);           <i>// 批次送出</i>
     let n = wait_cqe(&mut cq);
     for cqe in &cq[..n] {
         let (waker, buf) = inflight.remove(cqe.id);
-        deliver(cqe.result, buf);
-        waker.wake();          // 「做好了」
+        <b>deliver(cqe.result, buf);</b>
+        <u>waker.wake();</u>          <i>// 「做好了」</i>
     }
 }</code></pre>
     </figure>

@@ -579,6 +579,11 @@ footer a:hover { border-bottom-color: var(--accent); }
   overflow-x: auto;
   color: var(--ink);
 }
+.codebox pre i { color: var(--muted); font-style: normal; }
+.codebox pre b { color: var(--ink); font-weight: 600; }
+.codebox pre u { text-decoration: none; color: var(--consumer); font-weight: 600; }
+.codebox.bad pre b.bad { color: var(--danger); }
+.codebox.good pre u { color: var(--ok); }
 .codebox p { font-size: 0.86rem; color: var(--ink-2); }
 
 @media (max-width: 46rem) {
@@ -803,11 +808,11 @@ footer a:hover { border-bottom-color: var(--accent); }
     <div class="codebox bad">
       <h3>if — 一票否決級的 bug</h3>
 <pre>let mut st = lock().unwrap();
-if st.buf.is_empty() &amp;&amp; !st.closed {
+<b class="bad">if</b> st.buf.is_empty() &amp;&amp; !st.closed {
     st = not_empty.wait(st).unwrap();
 }
-// 假設:醒來 ⇒ 有資料
-st.buf.pop_front().unwrap()   // 空佇列 → panic</pre>
+<i>// 假設:醒來 ⇒ 有資料</i>
+<b class="bad">st.buf.pop_front().unwrap()</b>   <i>// 空佇列 → panic</i></pre>
       <p>
         醒來只證明「<strong>曾經</strong>有人 notify 過,或什麼都沒發生」。
         它不證明條件<strong>現在</strong>成立。這行 <code>unwrap()</code> 是在一個過期的前提上做決策。
@@ -817,9 +822,9 @@ st.buf.pop_front().unwrap()   // 空佇列 → panic</pre>
       <h3>while / wait_while — 唯一正確形狀</h3>
 <pre>let mut st = lock().unwrap();
 st = not_empty
-    .wait_while(st, |s| s.buf.is_empty() &amp;&amp; !s.closed)
+    .<u>wait_while</u>(st, |s| s.buf.is_empty() &amp;&amp; !s.closed)
     .unwrap();
-// 保證:非空,或已 closed
+<i>// 保證:非空,或已 closed</i>
 let item = st.buf.pop_front();</pre>
       <p>
         每次醒來(含 spurious)都重查。條件不成立就再睡回去。

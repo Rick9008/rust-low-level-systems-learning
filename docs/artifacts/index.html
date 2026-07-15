@@ -469,6 +469,26 @@ footer a:hover { border-bottom-color: var(--accent); }
 .sw-d { background: var(--danger); }
 .sw-o { background: var(--ok); }
 </style>
+<style>
+/* index refresh:優先級標記、閱讀順序、彩排 */
+.stage-num.pri { border-color: var(--accent); color: var(--accent); }
+.stage-num.deep { border-style: dashed; }
+.card .ord {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.3rem; height: 1.3rem; margin-right: 0.5rem;
+  border-radius: 3px; background: var(--accent-bg); color: var(--accent);
+  font-size: 0.7rem; font-weight: 700; vertical-align: 0.06em;
+}
+.card .star { color: var(--producer); font-weight: 700; margin-left: 0.35rem; }
+.oneliner {
+  font-family: var(--mono); font-size: 0.98rem; color: var(--accent);
+  border: 1px solid var(--accent); background: var(--accent-bg);
+  border-radius: 6px; padding: 0.9rem 1.1rem; text-wrap: balance;
+}
+td.write { color: var(--producer); font-weight: 600; white-space: nowrap; }
+td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
+.stage-block h3 { margin-top: 0.4rem; }
+</style>
 
 <div class="wrap">
 
@@ -476,23 +496,23 @@ footer a:hover { border-bottom-color: var(--accent); }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    17 個模組,每個一頁。測試證明程式碼是對的,但建立不了直覺——
-    這些頁面讓你<strong>親手把它弄壞</strong>,再看它為什麼壞。
+    18 個互動模組,加 8 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
 
 <main>
 
 <section>
-  <h2>怎麼用</h2>
+  <h2>兩種用法</h2>
   <p>
-    每一頁的主體是一個可以操作的機制,不是一張圖。刻意把每個模組最容易錯的那一步做成按鈕:
+    <strong>互動模組</strong>是可以操作的機制,不是圖。刻意把每個模組最容易錯的那一步做成按鈕:
     把 <code>Acquire</code> 降成 <code>Relaxed</code>、把 <code>while</code> 換成 <code>if</code>、
     ET 模式下只讀一半就停手、拔掉 generation tag——然後看它當場壞給你看。
   </p>
   <p>
-    順序建議跟著 stage 走(<code>git log --oneline --reverse</code> 就是這個順序),
-    但每頁都能獨立讀。程式碼在 <code>reference/src/</code>,設計取捨在 <code>docs/*.md</code>。
+    <strong>計時彩排</strong>是面試 prompt 風格的題目:只給場景、contract、規模,不給做法。
+    照 45 分鐘 protocol 跑,測試自己寫在同一個檔案底部——重演 CoderPad 的單檔條件。
   </p>
   <div class="legend">
     <span><i class="swatch sw-p"></i>producer / writer / thread A</span>
@@ -502,24 +522,70 @@ footer a:hover { border-bottom-color: var(--accent); }
   </div>
 </section>
 
+<section>
+  <h2>先讀哪些:面試優先級</h2>
+  <p>
+    面試在 CoderPad:單檔、固定 crate 清單——實測 Rust 1.92(2024 Edition),
+    <strong>有 tokio、無 libc / mio</strong>。自寫 <code>unsafe extern "C"</code> 綁 raw syscall 連得上,
+    epoll 技術上做得到;但 45 分鐘單檔手搓 epoll loop 是壞賭注、tokio 又在清單裡——
+    所以 epoll 一族分在 <strong>deep-dive</strong>:拿來答 readiness model / event loop 概念題、
+    看懂 tokio 底下發生什麼,讀懂即可,不手搓。
+  </p>
+  <p class="note">
+    下面的模組不再按 stage 排,改按面試優先級。難度順序(mutex → 資料結構 → atomics → executor → event loop)
+    仍在 <code>git log --oneline --reverse</code>。<span class="mono">★</span> = 有 <code>challenges/</code> 空白手搓版。
+  </p>
+</section>
+
 <section class="stage-block">
   <div class="stage-head">
-    <span class="stage-num">stage 2</span>
-    <span class="stage-title">mutex / condvar 基礎</span>
+    <span class="stage-num pri">TPS 優先</span>
+    <span class="stage-title">面試直接會考</span>
+    <span class="stage-sub">編號 = 建議閱讀順序</span>
   </div>
   <div class="cards">
     <a class="card" href="bounded_queue.html">
-      <span class="name">bounded_queue</span>
+      <span class="name"><span class="ord">1</span>bounded_queue</span>
       <span class="hook">Condvar 的 predicate-wait。把 <code>while</code> 換成 <code>if</code>,看被喚醒的 consumer 從空佇列取值。</span>
       <span class="hits">wakeup 是提示,不是保證 · close 語意</span>
     </a>
     <a class="card" href="thread_pool.html">
-      <span class="name">thread_pool</span>
+      <span class="name"><span class="ord">2</span>thread_pool</span>
       <span class="hook">shutdown 才是難的部分。worker 先阻塞再查 stop 旗標,就永遠醒不來。</span>
       <span class="hits">檢查順序 · notify_all · Drop 時 join</span>
     </a>
+    <a class="card" href="ring_buffer.html">
+      <span class="name"><span class="ord">3</span>ring_buffer</span>
+      <span class="hook">head + len 的 wrap 算術。也解釋為什麼 len 一進入並發就活不下去。</span>
+      <span class="hits">滿/空邊界 · 不浪費一格</span>
+    </a>
+    <a class="card" href="spsc_ring.html">
+      <span class="name"><span class="ord">4</span>spsc_ring<span class="star">★</span></span>
+      <span class="hook">兩個自由跑計數器,無 CAS。把 Release/Acquire 降成 Relaxed,看那條 happens-before 邊消失。</span>
+      <span class="hits">壓 2,000,000 次抓不到 · loom 379µs 抓到</span>
+    </a>
+    <a class="card" href="executor.html">
+      <span class="name"><span class="ord">5</span>executor<span class="star">★</span></span>
+      <span class="hook">poll → Pending → park → wake → unpark → Ready。park 的 <strong>token</strong> 語意:wake 先於 park 也不會丟。</span>
+      <span class="hits">Waker = Arc&lt;Wake&gt; · 沒有 token 就死鎖</span>
+    </a>
+    <a class="card" href="lru.html">
+      <span class="name"><span class="ord">6</span>lru<span class="star">★</span></span>
+      <span class="hook">HashMap 與 arena 雙結構同步。O(1) 的關鍵是 index-based 侵入式雙向鏈表。</span>
+      <span class="hits">move-to-front · 淘汰 tail · 槽位回收</span>
+    </a>
+    <a class="card" href="hw_bridge.html">
+      <span class="name"><span class="ord">7</span>hw_bridge<span class="star">★</span></span>
+      <span class="hook">framer:逐 byte 餵進 FrameReader,親眼看 <code>Ok(None)</code> 在等。TCP 是 byte stream,沒有 message 邊界。</span>
+      <span class="hits">黏包切分 · framing 錯斷線 vs 語意錯續命</span>
+    </a>
+    <a class="card" href="dsu.html">
+      <span class="name"><span class="ord">8</span>dsu<span class="star">★</span></span>
+      <span class="hook">路徑壓縮把整條路上的節點直接指向根。關掉 union by rank 就退化成鏈表。</span>
+      <span class="hits">α(n) ≤ 4 · 樹其實只是 parent[]</span>
+    </a>
     <a class="card" href="sharded_map.html">
-      <span class="name">sharded_map</span>
+      <span class="name"><span class="ord">9</span>sharded_map<span class="star">★</span></span>
       <span class="hook">per-shard Mutex 不是消除競爭,是<strong>切分</strong>競爭。hot key 下它一點忙也幫不上。</span>
       <span class="hits">hash → shard · 全域操作不再原子</span>
     </a>
@@ -528,26 +594,11 @@ footer a:hover { border-bottom-color: var(--accent); }
 
 <section class="stage-block">
   <div class="stage-head">
-    <span class="stage-num">stage 3</span>
-    <span class="stage-title">單執行緒資料結構</span>
-    <span class="stage-sub">index-based 優先——「用 index 當窮人的指標」</span>
+    <span class="stage-num">次優先</span>
+    <span class="stage-title">常見、CoderPad 做得了,但非 TPS 核心考點</span>
+    <span class="stage-sub">時間有限就往後排</span>
   </div>
   <div class="cards">
-    <a class="card" href="ring_buffer.html">
-      <span class="name">ring_buffer</span>
-      <span class="hook">head + len 的 wrap 算術。也解釋為什麼 len 一進入並發就活不下去。</span>
-      <span class="hits">滿/空邊界 · 不浪費一格</span>
-    </a>
-    <a class="card" href="lru.html">
-      <span class="name">lru</span>
-      <span class="hook">HashMap 與 arena 雙結構同步。O(1) 的關鍵是 index-based 侵入式雙向鏈表。</span>
-      <span class="hits">move-to-front · 淘汰 tail · 槽位回收</span>
-    </a>
-    <a class="card" href="dsu.html">
-      <span class="name">dsu</span>
-      <span class="hook">路徑壓縮把整條路上的節點直接指向根。關掉 union by rank 就退化成鏈表。</span>
-      <span class="hits">α(n) ≤ 4 · 樹其實只是 parent[]</span>
-    </a>
     <a class="card" href="graph.html">
       <span class="name">graph</span>
       <span class="hook">四個演算法一個 stepper。BFS 與 DFS 的差別只是換了容器。</span>
@@ -568,44 +619,16 @@ footer a:hover { border-bottom-color: var(--accent); }
 
 <section class="stage-block">
   <div class="stage-head">
-    <span class="stage-num">stage 4</span>
-    <span class="stage-title">atomic / lock-free</span>
-    <span class="stage-sub">loom 窮舉驗證</span>
+    <span class="stage-num deep">deep-dive</span>
+    <span class="stage-title">不會考,讀懂即可</span>
+    <span class="stage-sub">epoll 在 pad 上「可行但不划算」;讀到能把機制講清楚為止</span>
   </div>
   <div class="cards">
-    <a class="card" href="spsc_ring.html">
-      <span class="name">spsc_ring</span>
-      <span class="hook">兩個自由跑計數器,無 CAS。把 Release/Acquire 降成 Relaxed,看那條 happens-before 邊消失。</span>
-      <span class="hits">壓 2,000,000 次抓不到 · loom 379µs 抓到</span>
-    </a>
     <a class="card" href="arena_lockfree.html">
       <span class="name">arena_lockfree</span>
       <span class="hook">ABA 重現器。拔掉 generation tag,T1 的 CAS 會「成功」——成功指向一個已經死掉的節點。</span>
-      <span class="hits">index-ABA · generation 打包進 usize</span>
+      <span class="hits">index-ABA · generation 打包進 usize · spsc_ring 的延伸</span>
     </a>
-  </div>
-</section>
-
-<section class="stage-block">
-  <div class="stage-head">
-    <span class="stage-num">stage 5</span>
-    <span class="stage-title">async internals from scratch</span>
-  </div>
-  <div class="cards">
-    <a class="card" href="executor.html">
-      <span class="name">executor</span>
-      <span class="hook">poll → Pending → park → wake → unpark → Ready。park 的 <strong>token</strong> 語意:wake 先於 park 也不會丟。</span>
-      <span class="hits">Waker = Arc&lt;Wake&gt; · 沒有 token 就死鎖</span>
-    </a>
-  </div>
-</section>
-
-<section class="stage-block">
-  <div class="stage-head">
-    <span class="stage-num">stage 6</span>
-    <span class="stage-title">event loop / IO</span>
-  </div>
-  <div class="cards">
     <a class="card" href="epoll_sys.html">
       <span class="name">epoll_sys</span>
       <span class="hook">自寫 <code>unsafe extern "C"</code>,不靠 libc crate。位元遮罩實驗室 + <code>repr(C, packed)</code> 的陷阱。</span>
@@ -617,7 +640,7 @@ footer a:hover { border-bottom-color: var(--accent); }
       <span class="hits">ET 必須讀到 EWOULDBLOCK · eventfd 自我喚醒</span>
     </a>
     <a class="card" href="tcp_echo.html">
-      <span class="name">tcp_echo</span>
+      <span class="name">tcp_echo<span class="star">★</span></span>
       <span class="hook">read 容易,write 才難。寫不完的 bytes 要緩存 + 掛 EPOLLOUT,寫完要<strong>拿掉</strong>它。</span>
       <span class="hits">backpressure · 忘了拿掉 EPOLLOUT = 100% CPU</span>
     </a>
@@ -626,43 +649,103 @@ footer a:hover { border-bottom-color: var(--accent); }
       <span class="hook">regular file 在 epoll 眼中<strong>永遠可讀</strong>,但 read 照樣阻塞。整個 event loop 凍住。</span>
       <span class="hits">readiness vs completion · io_uring 才是答案</span>
     </a>
-  </div>
-</section>
-
-<section class="stage-block">
-  <div class="stage-head">
-    <span class="stage-num">stage 7</span>
-    <span class="stage-title">橋接軟硬體</span>
-    <span class="stage-sub">binary protocol + framing;JD 直擊題</span>
-  </div>
-  <div class="cards">
-    <a class="card" href="hw_bridge.html">
-      <span class="name">hw_bridge</span>
-      <span class="hook">逐 byte 餵進 FrameReader,親眼看 <code>Ok(None)</code> 在等。TCP 是 byte stream,沒有 message 邊界。</span>
-      <span class="hits">黏包切分 · framing 錯斷線 vs 語意錯續命</span>
-    </a>
-  </div>
-</section>
-
-<section class="stage-block">
-  <div class="stage-head">
-    <span class="stage-num">總圖</span>
-    <span class="stage-title">跨模組:async runtime 解剖</span>
-    <span class="stage-sub">executor × reactor × proactor;docs/async-runtime-anatomy.md 的互動版</span>
-  </div>
-  <div class="cards">
     <a class="card" href="async_runtime.html">
-      <span class="name">async_runtime</span>
-      <span class="hook">誰該跑、誰該醒、誰做 IO。walk 一圈 waker 環路;<strong>忘記登記 waker</strong> → 事件被丟在地上,task 永遠 Pending。</span>
-      <span class="hits">葉子才要 thread · readiness cancel=drop,completion 不行</span>
+      <span class="name">async_runtime<span class="star">總圖</span></span>
+      <span class="hook">誰該跑、誰該醒、誰做 IO。走一圈 waker 環路;<strong>忘記登記 waker</strong> → 事件被丟在地上,task 永遠 Pending。</span>
+      <span class="hits">executor × reactor × proactor · 葉子才要 thread</span>
     </a>
   </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num pri">rehearsals</span>
+    <span class="stage-title">8 題計時彩排</span>
+    <span class="stage-sub">模擬 CoderPad;題 a–d 主菜全程 45 分,題 e–h 對應 Q4–Q7 做 recognition</span>
+  </div>
+  <p class="oneliner">串流是無限的,你的記憶體不是。界在哪?</p>
+  <p>
+    這些沒有互動頁——它們是計時練習,不是模擬器。題目只給場景、contract、規模,不給做法;
+    每題一個 canonical 設計練到反射(ring = head+len;pool = <code>Arc&lt;(Mutex, Condvar)&gt;</code> + <code>VecDeque</code>;
+    framer = <code>Vec&lt;u8&gt;</code> 累積 + drain 迴圈)。std-only,題 d 用 tokio。
+  </p>
+
+  <h3>當天認題(掃描表)</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>聽到這個</th><th>題</th><th>第一個 clarify</th></tr></thead>
+      <tbody>
+        <tr><td>"continuous stream" / "most recent N"</td><td class="ord">a · Q1</td><td>滿了怎麼辦?(drop-oldest)</td></tr>
+        <tr><td>"concurrently" / "health checks" / "no external libraries"</td><td class="ord">b · Q2</td><td>幾條 thread?shutdown 語意?</td></tr>
+        <tr><td>"byte stream" / "protocol" / "frames"</td><td class="ord">c · Q3</td><td>len 含不含 header?max frame size?</td></tr>
+        <tr><td>"gateway" / "many devices" / "keep-alive"</td><td class="ord">d</td><td>(tokio)idle timeout?heartbeat 算流量?</td></tr>
+        <tr><td>"event id" / "handlers" / "thousands of signals"</td><td class="ord">e · Q4</td><td>id 密集還是稀疏?</td></tr>
+        <tr><td>"can't store them all" / "aggregate" / "windows"</td><td class="ord">f · Q5</td><td>window 多大?timestamp 會亂序嗎?</td></tr>
+        <tr><td>"producers block when full"</td><td class="ord">g · Q6</td><td>capacity?close 語意?</td></tr>
+        <tr><td>"periodic" / "interval" / "what runs next"</td><td class="ord">h · Q7</td><td>幾個 timer?精度?</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>45 分鐘 protocol</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>分鐘</th><th>做什麼</th><th>紀律</th></tr></thead>
+      <tbody>
+        <tr><td class="ord">0–5</td><td>Clarify,大聲問</td><td>鎖 contract(滿了怎辦?單雙執行緒?shutdown?),問完不准中途改設計</td></tr>
+        <tr><td class="ord">5–10</td><td>Skeleton</td><td>struct + 全部簽名 + <code>todo!()</code>,先求能編譯</td></tr>
+        <tr><td class="ord">10–30</td><td>Core,一次一個函式</td><td>邊寫邊講不變量(len = tail − head;worker 醒來先查 stop)</td></tr>
+        <tr><td class="ord">30–40</td><td>自己點名 boundary + dry-run</td><td>空/單元素/滿/wrap/切斷點;先手 trace,<strong>再</strong>按 Run(pad 一次 ~7 秒)</td></tr>
+        <tr><td class="ord">40–45</td><td>Trade-offs 收尾</td><td>drop-oldest vs backpressure、Mutex vs atomics、規模轉折點(→ epoll/tokio)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>大題定界:escalation ladder</h3>
+  <p class="note">
+    Prompt 看起來像「build a runtime」(pool + executor + reactor 全都要)時,考的是<strong>定界</strong>,不是手速。
+    開場 30 秒宣告切法,然後照階梯走——一顆用寫的,其餘用講的:
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>階段</th><th>形式</th><th>內容</th></tr></thead>
+      <tbody>
+        <tr><td class="ord">1 · 25–30 分</td><td class="write">寫</td><td><code>block_on</code> + Waker + park/unpark + <code>Delay</code>(那條計時 thread 就是微型 reactor)</td></tr>
+        <tr><td class="ord">2 · ~3 分</td><td class="talk">講</td><td>多 task:run queue + <code>Arc&lt;Task&gt;</code>,wake = 把自己 push 回 queue——thread pool 骨架換 payload</td></tr>
+        <tr><td class="ord">3 · ~3 分</td><td class="talk">講</td><td>真 IO:reactor thread + epoll + interest table;std 沒有多路等待原語,這層是 tokio(mio→epoll)接手</td></tr>
+        <tr><td class="ord">4 · ~2 分</td><td class="talk">收</td><td>轉折點:何時要 work-stealing、何時 readiness 不夠要 completion(io_uring)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>cost model 速查</h2>
+  <p>面試公式:<strong>先給 Big-O,再給常數,再指出規模轉折點</strong>。講數量級就夠,講得比這精確反而可疑。</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>操作</th><th>數量級</th><th>面試用途</th></tr></thead>
+      <tbody>
+        <tr><td>atomic load/store(x86,無競爭)</td><td class="ord">~1 ns</td><td>編出來就是 <code>mov</code>;acquire/release 在 x86 免費</td></tr>
+        <tr><td>Mutex lock/unlock(無競爭)</td><td class="ord">~20 ns</td><td>純 userspace CAS,沒有 syscall</td></tr>
+        <tr><td><strong>Mutex(有競爭)</strong></td><td class="ord">~1–10 µs</td><td>futex syscall + context switch——貴 100× 的來源</td></tr>
+        <tr><td>context switch</td><td class="ord">~1–5 µs</td><td>外加 cache 汙染的隱性成本</td></tr>
+        <tr><td>thread spawn</td><td class="ord">~數十 µs</td><td>stack 預設 2 MiB;一萬條 = 20 GB 虛擬位址</td></tr>
+        <tr><td>poll O(N) vs epoll O(ready)</td><td class="ord">1000×</td><td>N=10,000、ready=10:每次 wakeup 掃 10,000 vs 碰 10</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    並發模型轉折點:thread-per-conn(百級連線)→ acceptor + 固定 pool(需並發上限)→
+    epoll / tokio(萬級 IO-bound)→ CPU-bound 任務凍住 loop 就 offload;
+    readiness(epoll)碰到 regular file 永遠 ready → completion(io_uring)。
+  </p>
 </section>
 
 <section>
   <h2>也可以直接跑</h2>
   <p>
-    這些頁面是模擬器。真的要看它跑,repo 裡有四支可執行的 example——不加任何 dependency:
+    互動頁是模擬器。真的要看它跑,repo 裡有可執行的 example——不加任何 dependency:
   </p>
   <div class="tablewrap">
     <table>
@@ -686,6 +769,10 @@ footer a:hover { border-bottom-color: var(--accent); }
           <td><code>cargo run -p reference --example tcp_echo_server</code></td>
           <td>單執行緒 epoll,開幾個 <code>nc</code> 同時連,thread 數不會長</td>
         </tr>
+        <tr>
+          <td><code>cargo run -p rehearsals --example sol_ring_drop_oldest</code></td>
+          <td>彩排題 a 的 canonical 解,smoke 跑一遍(寫完再開)</td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -694,8 +781,8 @@ footer a:hover { border-bottom-color: var(--accent); }
 </main>
 
 <footer>
-  <div>程式碼:<code>reference/</code>(完整解答)· <code>drills/</code>(挖空)· <code>challenges/</code>(空白起點)</div>
-  <div>設計取捨文件:<code>docs/*.md</code> · 本頁:<code>docs/artifacts/index.html</code></div>
+  <div>四層:<code>reference/</code>(完整解答)· <code>drills/</code>(挖空 <code>todo!()</code>)· <code>challenges/</code>(空白起點)· <code>rehearsals/</code>(計時彩排)</div>
+  <div>設計取捨:<code>docs/*.md</code> · 本頁:<code>docs/artifacts/index.html</code></div>
 </footer>
 
 </div>
