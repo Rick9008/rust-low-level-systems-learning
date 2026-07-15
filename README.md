@@ -17,11 +17,11 @@ std-only 的 low-level systems 面試學習教材:concurrency、event loop、bin
 
 ## 學習路徑(依面試環境分兩級)
 
-面試在 CoderPad:單檔、Cargo 只有固定 crate 清單——**無 libc、無 tokio、無 crossbeam**
-(細節見 [`docs/coderpad-constraints.md`](docs/coderpad-constraints.md))。
-沒有 libc、單檔裡也不現實手寫 `unsafe extern "C"` syscall 綁定,
+面試在 CoderPad:單檔、Cargo 只有固定 crate 清單——實測 Rust 1.92(2024 Edition),
+**有 tokio、無 libc / mio**(細節見 [`docs/coderpad-constraints.md`](docs/coderpad-constraints.md))。
+沒有 libc / mio、單檔裡也不現實手寫 `unsafe extern "C"` syscall 綁定,
 所以 **epoll 一族在面試環境裡做不了**——它們降級為 deep-dive 材料,不是白學,
-是拿來回答 readiness model / event loop 概念題,以及看懂真實系統。
+是拿來回答 readiness model / event loop 概念題,以及看懂 tokio 底下發生什麼。
 
 ### 【TPS 直接相關 — 優先】
 
@@ -182,7 +182,7 @@ epoll 綁定已提供,只從頭寫 accept/read/write 迴圈。
 
 ## rehearsals 使用法(計時彩排)
 
-`rehearsals/` 是三題計時彩排,模擬 CoderPad 條件(單檔、std-only、edition 2021;
+`rehearsals/` 是三題計時彩排,模擬 CoderPad 條件(單檔、固定 crate 清單;
 見 [`docs/coderpad-constraints.md`](docs/coderpad-constraints.md))。
 題目在 [`rehearsals/README.md`](rehearsals/README.md),面試 prompt 風格、不給提示。
 

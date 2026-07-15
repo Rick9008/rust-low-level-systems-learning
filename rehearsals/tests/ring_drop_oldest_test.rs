@@ -4,7 +4,7 @@
 //! 才跑這組對照,看漏了哪一類邊界:
 //! `cargo test -p rehearsals --test ring_drop_oldest_test -- --include-ignored`
 
-use rehearsals::ring_drop_oldest::{channel, SensorRing};
+use rehearsals::ring_drop_oldest::{SensorRing, channel};
 use std::thread;
 
 /// boundary:空 buffer——pop 回 None、len/is_empty/dropped 全零。

@@ -3,6 +3,9 @@
 面試在 CoderPad 上進行。這份文件記錄已確認的環境限制,以及每條限制對練習方式的
 實際影響。repo 的模組分級(README「學習路徑」)與 `rehearsals/` 的彩排規則都以此為準。
 
+> 2026-07-15 實測更新:版本與 crate 清單以**登入 pad 親測**為準。
+> CoderPad 官方 languages 頁面(寫 Rust 1.59 / 2021 Edition)已過時,勿引用。
+
 ## 限制與影響
 
 ### 1. 單檔
@@ -15,30 +18,38 @@
   `rehearsals/` 的規則「自己的測試寫在 `src/<name>.rs` 底部」就是在模擬這件事。
 - 不要依賴「拆檔整理思路」的習慣——面試時沒有這個選項。
 
-### 2. Cargo 有,但 crate 清單固定:無 libc、無 tokio、無 crossbeam
+### 2. Cargo 有,但 crate 清單固定:有 tokio,無 libc / mio
 
-環境跑的是 Cargo,但依賴是預先固定的一組,不能自己加。已確認**沒有**
-libc、tokio、crossbeam。
+環境跑的是 Cargo,依賴是預先固定的一組,不能自己加。實測清單:
+**tokio**、serde / serde_json、rand、rayon、regex、reqwest、chrono、anyhow、
+thiserror、itertools、bitflags、url、uuid(另列有 core)。
+**實測確認沒有**:libc、mio;crossbeam、loom、nix 也不在清單上。
 
 **影響:**
-- 一切以 std 為前提:併發只有 `std::thread` / `std::sync`(Mutex、Condvar、
-  Arc、mpsc)/ `std::sync::atomic`。這正是本 repo「std-only」約束的來源。
+- 併發基本盤仍是 std:`std::thread` / `std::sync`(Mutex、Condvar、Arc、mpsc)/
+  `std::sync::atomic`——本 repo 的 std-only 練法完全對口。
+- **tokio 可用 → async 題是可考的**(async TCP、timeout、`tokio::sync::mpsc`、
+  `select!`)。repo 的 `executor` 模組管 runtime internals 概念;
+  idiomatic tokio 用法是另一塊肌肉,要另外練。
 - **epoll 一族(`epoll_sys`、`event_loop`、`tcp_echo`、`file_io_offload`)在
-  面試環境做不了**:沒有 libc,單檔裡手寫 `unsafe extern "C"` syscall 綁定
-  也不現實。它們是 deep-dive 學習材料,拿來回答概念題,不是 live coding 題。
+  面試環境仍然做不了**:沒有 libc / mio,單檔裡手寫 `unsafe extern "C"`
+  syscall 綁定也不現實。它們是 deep-dive 學習材料,拿來回答概念題、
+  看懂 tokio 底下發生什麼,不是 live coding 題。
 - 沒有 loom / proptest:正確性只能靠自己當場寫的測試 + 腦內 dry-run。
   平時練習時 loom 幫你「證明」的那些 interleaving 直覺,面試時要內化成
   「我知道這裡為什麼對」的口頭論證。
 
-### 3. Toolchain 可能偏舊 → 寫 edition 2021 相容的 code
+### 3. Toolchain:Rust 1.92.0(2024 Edition)——實測,不算舊
 
-不能假設環境是最新 stable。
+pad 上實際顯示 `Running Rust 1.92.0 (2024 Edition)`。
 
 **影響:**
-- 語法與 std API 停在 edition 2021 相容範圍:不用 edition 2024 才有的語法,
-  std API 優先用穩定已久的那批,別賭新 API 存在。
-- `rehearsals/` crate 刻意設 `edition = "2021"`:在這裡寫得過編譯,
-  到了 CoderPad 至少語法層不會爆。
+- 現代語法照用:`let-else`、`std::thread::scope`、edition 2024 語法全部都在,
+  不需要 MSRV 降級寫法。
+- 本 repo workspace 就是 edition 2024,`rehearsals/` 跟著 workspace 走,
+  語法層與 pad 對齊;整個 workspace 用 `cargo +1.92.0 test` 驗證過可編譯全綠。
+- 反向的唯一風險:本機 toolchain 若比 1.92 新,別用比 1.92 還新的 std API
+  (要驗就 `rustup toolchain install 1.92.0` 後 `cargo +1.92.0 test --workspace`)。
 
 ### 4. 有 Run 按鈕 → "dry-run before you Run" 是字面意思
 
@@ -53,6 +64,7 @@ CoderPad 有 Run 按鈕,隨時可以編譯執行。誘惑是寫兩行按一次,�
 
 ## 一句話總結
 
-CoderPad = 單檔 + std-only + 舊 toolchain + 有 Run 按鈕。
+CoderPad = 單檔 + 固定 crate 清單(std 基本盤 + tokio,無 libc / mio)+
+新 toolchain(1.92 / 2024 Edition)+ 有 Run 按鈕。
 能考的是:鎖/條件變數、atomic、執行緒生命週期、ring/framing/index-based
-資料結構——全部都在 README 優先級清單裡;epoll 考不了,留作深讀。
+資料結構,以及 tokio 層級的 async 題;epoll / raw syscall 考不了,留作深讀。

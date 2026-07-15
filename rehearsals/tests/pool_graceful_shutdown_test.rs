@@ -5,7 +5,7 @@
 
 use rehearsals::pool_graceful_shutdown::{Pool, Rejected};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 

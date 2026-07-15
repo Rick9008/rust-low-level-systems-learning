@@ -1,13 +1,13 @@
 [package]
 name = "rehearsals"
-# 刻意不繼承 workspace 的 edition 2024:CoderPad toolchain 可能偏舊,
-# 彩排寫出來的 code 必須 edition 2021 相容(見 docs/coderpad-constraints.md)。
-edition = "2021"
+# pad 實測是 Rust 1.92(2024 Edition),edition 直接跟 workspace 對齊
+# (見 docs/coderpad-constraints.md)。
+edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
-# 刻意零依賴(連 reference 都不依賴):CoderPad 是單檔 + 固定 crate 清單,
-# 彩排時只有 std 可用,這裡的編譯環境就照著模擬。
+# 刻意零依賴(連 reference 都不依賴):這三題都是 std 基本盤題,
+# 彩排時只准用 std——pad 的固定 crate 清單見 docs/coderpad-constraints.md。
 
 [lints]
 workspace = true
