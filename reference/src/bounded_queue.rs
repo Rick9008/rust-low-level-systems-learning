@@ -370,6 +370,58 @@ mod tests {
         assert_eq!(total, (0..400).sum::<i64>());
     }
 
+    /// 壓力版(比上面煙霧測試更狠):4 producer × 2000 + 3 consumer,cap 只有 8——
+    /// 逼出滿/空頻繁交替的高競爭。用 `count` 抓數量、`XOR` 抓「每個值恰好一次」:
+    /// 值域 `1..=P*N` 互異,漏一個或重一個 XOR 都不會等於期望值(sum 版可能因數值
+    /// 抵銷而漏抓)。這種規模才驗得到 lost wakeup / notify 錯邊——單產單消的 boundary
+    /// 測試驗不到。若實作有 lost wakeup,這裡會 **hang**(join 永不返回)。
+    #[test]
+    fn stress_mpmc_no_loss_no_dup() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        const P: usize = 4;
+        const C: usize = 3;
+        const N: usize = 2000;
+        let q = Arc::new(BoundedQueue::new(8));
+        let count = Arc::new(AtomicUsize::new(0));
+        let xor = Arc::new(AtomicUsize::new(0));
+
+        let producers: Vec<_> = (0..P)
+            .map(|p| {
+                let q = Arc::clone(&q);
+                thread::spawn(move || {
+                    for i in 0..N {
+                        q.push(p * N + i + 1).unwrap(); // 值 1..=P*N,互異
+                    }
+                })
+            })
+            .collect();
+        let consumers: Vec<_> = (0..C)
+            .map(|_| {
+                let q = Arc::clone(&q);
+                let count = Arc::clone(&count);
+                let xor = Arc::clone(&xor);
+                thread::spawn(move || {
+                    while let Some(v) = q.pop() {
+                        count.fetch_add(1, Ordering::Relaxed);
+                        xor.fetch_xor(v, Ordering::Relaxed);
+                    }
+                })
+            })
+            .collect();
+
+        for p in producers {
+            p.join().unwrap();
+        }
+        q.close(); // producer 全完成才 close → consumer drain 完 pop 回 None 退出
+        for c in consumers {
+            c.join().unwrap();
+        }
+
+        let expected_xor = (1..=P * N).fold(0usize, |a, v| a ^ v);
+        assert_eq!(count.load(Ordering::Relaxed), P * N); // 無漏無重的數量
+        assert_eq!(xor.load(Ordering::Relaxed), expected_xor); // 每個值恰好一次
+    }
+
     /// naive 版行為等價(單 condvar + notify_all,效率差但正確)。
     #[test]
     fn naive_version_same_semantics() {
