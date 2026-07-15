@@ -19,9 +19,10 @@ std-only 的 low-level systems 面試學習教材:concurrency、event loop、bin
 
 面試在 CoderPad:單檔、Cargo 只有固定 crate 清單——實測 Rust 1.92(2024 Edition),
 **有 tokio、無 libc / mio**(細節見 [`docs/coderpad-constraints.md`](docs/coderpad-constraints.md))。
-沒有 libc / mio、單檔裡也不現實手寫 `unsafe extern "C"` syscall 綁定,
-所以 **epoll 一族在面試環境裡做不了**——它們降級為 deep-dive 材料,不是白學,
-是拿來回答 readiness model / event loop 概念題,以及看懂 tokio 底下發生什麼。
+自寫 `unsafe extern "C"` 綁 raw syscall 實測**連得上**,epoll 技術上做得到;
+但單檔 + 45 分鐘手搓 epoll loop 是壞賭注、tokio 又在清單裡,
+所以 **epoll 一族仍分在 deep-dive**——拿來回答 readiness model / event loop
+概念題、看懂 tokio 底下發生什麼,必要時現場 demo 幾行綁定鎮場。
 
 ### 【TPS 直接相關 — 優先】
 
@@ -49,8 +50,8 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 
 ### 【deep-dive 材料 — 不會考,讀懂即可】
 
-原因如上:CoderPad 無 libc,epoll 在面試環境做不了。讀到「能把機制講清楚」為止,
-不必手搓:
+原因如上:epoll 在 pad 上「可行但不划算」,不會是題目要求。
+讀到「能把機制講清楚」為止,不必手搓:
 
 - `arena_lockfree`:arena + generation-tagged index 的 lock-free stack,
   示範 index-ABA 與 generation 解法(`spsc_ring` 的延伸)
@@ -61,6 +62,10 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 - `hw_bridge` 的 `server_threaded` / `server_evented`:thread-per-connection 與
   event-loop 兩種並發模型並存對照(framer 本身在優先級,見上)
 
+executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接成一張圖:
+[`docs/async-runtime-anatomy.md`](docs/async-runtime-anatomy.md),
+互動版 [`docs/artifacts/async_runtime.html`](docs/artifacts/async_runtime.html)。
+
 (commit 歷史仍按難度分 stage,`git log --oneline --reverse` 是照 stage 走的另一種讀法;
 上面的順序是把 stage 順序按面試優先級重排過的版本。)
 
@@ -68,7 +73,8 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 
 ## 互動教材
 
-`docs/artifacts/` 有 17 份互動教材,每個模組一份——瀏覽器直接開,無需 build:
+`docs/artifacts/` 有 18 份互動教材——17 份每個模組一份,加一份跨模組的
+async runtime 總圖(executor × reactor × proactor)——瀏覽器直接開,無需 build:
 
 ```sh
 xdg-open docs/artifacts/index.html

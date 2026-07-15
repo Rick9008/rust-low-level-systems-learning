@@ -644,6 +644,21 @@ footer a:hover { border-bottom-color: var(--accent); }
   </div>
 </section>
 
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num">總圖</span>
+    <span class="stage-title">跨模組:async runtime 解剖</span>
+    <span class="stage-sub">executor × reactor × proactor;docs/async-runtime-anatomy.md 的互動版</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="async_runtime.html">
+      <span class="name">async_runtime</span>
+      <span class="hook">誰該跑、誰該醒、誰做 IO。walk 一圈 waker 環路;<strong>忘記登記 waker</strong> → 事件被丟在地上,task 永遠 Pending。</span>
+      <span class="hits">葉子才要 thread · readiness cancel=drop,completion 不行</span>
+    </a>
+  </div>
+</section>
+
 <section>
   <h2>也可以直接跑</h2>
   <p>

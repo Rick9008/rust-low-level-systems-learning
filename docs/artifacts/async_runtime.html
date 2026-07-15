@@ -1,0 +1,701 @@
+<title>async_runtime — 誰該跑、誰該醒、誰做 IO</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.02rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+main { display: flex; flex-direction: column; gap: 3rem; }
+section { display: flex; flex-direction: column; gap: 1rem; }
+p { margin: 0; max-width: 66ch; }
+a { color: var(--accent); }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: 1.6rem;
+  line-height: 1.35;
+  margin: 0;
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.08rem;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line-soft);
+}
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+}
+pre {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+  margin: 0;
+}
+pre code { background: none; border: none; padding: 0; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+button {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.42rem 0.9rem;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-bg); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.danger { border-color: var(--danger); color: var(--danger); }
+button.danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); }
+.switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; background: var(--raised); }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.switch button[aria-pressed="true"]:hover { background: var(--accent); }
+
+.lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
+.lane {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.lane .who {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lane .state { font-family: var(--mono); font-size: 0.82rem; color: var(--ink-2); min-height: 3.4em; }
+.lane.exec.active { border-color: var(--consumer); box-shadow: 0 0 0 2px var(--consumer-bg); }
+.lane.exec.active .who { color: var(--consumer); }
+.lane.leaf.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-bg); }
+.lane.leaf.active .who { color: var(--accent); }
+.lane.react.active { border-color: var(--producer); box-shadow: 0 0 0 2px var(--producer-bg); }
+.lane.react.active .who { color: var(--producer); }
+.lane.dead { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-bg); }
+.lane.dead .who { color: var(--danger); }
+
+.log {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--raised);
+  padding: 0.7rem 0.9rem;
+  min-height: 7.5em;
+  margin: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.log li { color: var(--ink-2); }
+.log li.exec::before { content: "executor "; color: var(--consumer); }
+.log li.leaf::before { content: "future   "; color: var(--accent); }
+.log li.react::before { content: "reactor  "; color: var(--producer); }
+.log li.ok { color: var(--ok); }
+.log li.bad { color: var(--danger); }
+.log li:last-child { font-weight: 600; }
+
+.callout {
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  font-size: 0.92rem;
+  border: 1px solid;
+}
+.callout.ok { background: var(--ok-bg); border-color: var(--ok); color: var(--ink); }
+.callout.bad { background: var(--danger-bg); border-color: var(--danger); color: var(--ink); }
+.callout .tag { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.callout.ok .tag { color: var(--ok); }
+.callout.bad .tag { color: var(--danger); }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.stat .k { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.stat .v { font-family: var(--mono); font-size: 1.5rem; }
+.stat .v.hot { color: var(--danger); }
+.stat .v.cool { color: var(--ok); }
+.stat .note { font-size: 0.82rem; color: var(--ink-2); line-height: 1.5; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.rangeline { display: flex; align-items: center; gap: 0.8rem; font-family: var(--mono); font-size: 0.85rem; }
+.rangeline .val { min-width: 8ch; text-align: right; }
+
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.duo .col {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  padding: 0.8rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.duo .col h3 { font-family: var(--mono); font-size: 0.85rem; margin: 0; }
+.duo .col.readiness h3 { color: var(--consumer); }
+.duo .col.completion h3 { color: var(--producer); }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+.steps li {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  border-left: 3px solid var(--line-soft);
+  padding: 0.15rem 0 0.15rem 0.6rem;
+  color: var(--muted);
+}
+.steps li.done { color: var(--ink-2); border-left-color: var(--line); }
+.steps li.now { color: var(--ink); border-left-color: var(--accent); font-weight: 600; }
+.steps li.now.warn { border-left-color: var(--danger); }
+.buffer-badge {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  border-radius: 6px;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
+  align-self: flex-start;
+}
+.buffer-badge.mine { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.buffer-badge.gone { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.compare figure { margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.compare figcaption { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+
+table { border-collapse: collapse; font-size: 0.9rem; width: 100%; }
+th, td { border: 1px solid var(--line-soft); padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.78rem; background: var(--surface); }
+.tablewrap { overflow-x: auto; }
+
+footer { color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line-soft); padding-top: 1.2rem; }
+
+@media (max-width: 44rem) {
+  .lanes, .stats, .duo, .compare { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">concurrency-async · 跨模組總圖 · docs/async-runtime-anatomy.md 的互動版</p>
+  <h1>async_runtime — 誰該跑、誰該醒、誰做 IO</h1>
+  <p>
+    executor 管「誰該跑」,reactor / proactor 管「誰該醒」;兩邊唯一的信物是
+    <code>Waker</code>。這頁把 <code>executor</code>、<code>event_loop</code>、
+    <code>file_io_offload</code> 三個模組接成一張圖,並補上 repo 沒有實作的
+    第四塊:completion model(io_uring)。
+  </p>
+</header>
+
+<main>
+
+<!-- ═══════════ 1. waker 環路 ═══════════ -->
+<section>
+  <h2>1. 那一圈:poll → Pending → wake → 再 poll</h2>
+  <p>
+    executor 不認識 fd,reactor 不認識 task。<code>Waker</code> 由 executor 製造、
+    葉子 future 搬運、reactor 引爆。按「下一步」走完一圈;然後切到壞掉版,
+    看葉子 future <strong>忘記登記 waker</strong> 會發生什麼。
+  </p>
+  <div class="panel">
+    <div class="controls">
+      <div class="switch" role="group" aria-label="模式">
+        <button id="mode-ok" aria-pressed="true">正常版</button>
+        <button id="mode-broken" aria-pressed="false">壞掉版:忘記登記 waker</button>
+      </div>
+      <button id="loop-step">下一步 ▸</button>
+      <button id="loop-reset">重來</button>
+    </div>
+    <div class="lanes">
+      <div class="lane exec" id="lane-exec">
+        <span class="who">executor</span>
+        <span class="state" id="state-exec">run queue: [task]</span>
+      </div>
+      <div class="lane leaf" id="lane-leaf">
+        <span class="who">leaf future</span>
+        <span class="state" id="state-leaf">等著被 poll</span>
+      </div>
+      <div class="lane react" id="lane-react">
+        <span class="who">reactor</span>
+        <span class="state" id="state-react">interest table: {}</span>
+      </div>
+    </div>
+    <ol class="log" id="loop-log"><li>按「下一步」開始。</li></ol>
+    <div class="callout bad" id="loop-verdict" hidden>
+      <span class="tag">lost wakeup</span>
+      事件到了,但 interest table 是空的——沒有 waker 可引爆。executor 繼續睡,
+      task 永遠 <code>Pending</code>。這和 <code>executor</code> 模組裡
+      「park 沒有 token」的死法是同一族:<strong>喚醒沒有掛到人身上,就等於沒發生</strong>。
+    </div>
+  </div>
+  <p>
+    repo 對映:<code>executor</code> 的 <code>block_on</code> 就是左邊那格
+    (park/unpark 的 token 語意保證「wake 先於 park」不丟);
+    <code>event_loop</code> 是右邊那格的 callback 版——把 callback 換成 waker 表,
+    它就是 runtime 裡的 reactor。
+  </p>
+</section>
+
+<!-- ═══════════ 2. 成本模型 ═══════════ -->
+<section>
+  <h2>2. 成本模型:不是每個 future 一條 thread</h2>
+  <p>
+    <code>async fn</code> 疊一百層還是一個 task、一次 poll;需要 wake 來源的只有
+    最底下真正卡住的<strong>葉子等待點</strong>。真正的問題是:這一類葉子,
+    有沒有「一個東西等全部」的原語?拉桿看三種模型的 thread 數怎麼長。
+  </p>
+  <div class="panel">
+    <div class="rangeline">
+      <span>並發連線/等待數</span>
+      <input type="range" id="conn-range" min="0" max="7" step="1" value="3" aria-label="連線數">
+      <span class="val" id="conn-val">10</span>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <span class="k">thread-per-connection</span>
+        <span class="v" id="stat-tpc">10</span>
+        <span class="note">std 沒有多路等 socket 的原語,一個 blocking read 佔一條 thread。
+          面試規模無妨;規模上去 stack + context switch 吃掉你。</span>
+      </div>
+      <div class="stat">
+        <span class="k">thread-as-reactor(timer 類)</span>
+        <span class="v cool">1</span>
+        <span class="note"><code>BinaryHeap&lt;(deadline, Waker)&gt;</code> +
+          <code>Condvar::wait_timeout</code>:一條 thread 服務<strong>所有</strong>
+          Delay。純 std、45 分鐘寫得出來的真 reactor。</span>
+      </div>
+      <div class="stat">
+        <span class="k">epoll reactor(socket 類)</span>
+        <span class="v cool">1</span>
+        <span class="note">一條 thread 等 N 個 fd、O(ready) 通知。
+          epoll 買的是把左邊那格壓成 O(1)——效率條件,不是 async 的存在條件。</span>
+      </div>
+    </div>
+    <p style="font-size: 0.9rem; color: var(--ink-2);">
+      注意拉桿只影響左邊那格。而且不管葉子上面疊幾層 <code>async fn</code>、
+      <code>join!</code>、<code>select!</code>,三格數字都不動——組合 future
+      是狀態機,不是 thread。
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ 3. readiness vs completion ═══════════ -->
+<section>
+  <h2>3. Reactor vs Proactor:「可以做了」vs「做好了」</h2>
+  <p>
+    readiness(epoll):通知你 fd <em>可以</em>讀了,IO 你自己做,buffer 從沒離開你手上。
+    completion(io_uring / IOCP):你先把 buffer 交出去,kernel <em>做完</em>再通知你。
+    兩邊同步走一遍;走到一半按「drop future(取消)」,看差異在哪裡爆開。
+  </p>
+  <div class="panel">
+    <div class="controls">
+      <button id="rc-step">下一步 ▸</button>
+      <button id="rc-cancel" class="danger" disabled>在這裡 drop future(取消)</button>
+      <button id="rc-reset">重來</button>
+    </div>
+    <div class="duo">
+      <div class="col readiness">
+        <h3>readiness 葉子(epoll)</h3>
+        <span class="buffer-badge mine" id="rbuf">buffer:在你手上</span>
+        <ol class="steps" id="r-steps">
+          <li>poll:試 <code>read(fd)</code> → <code>WouldBlock</code></li>
+          <li>登記 interest(fd, waker) → <code>Pending</code></li>
+          <li>fd ready → <code>waker.wake()</code></li>
+          <li>再 poll:這次自己 <code>read</code> → <code>Ready(n)</code></li>
+        </ol>
+        <div class="callout ok" id="r-verdict" hidden>
+          <span class="tag">cancel = drop,安全</span>
+          buffer 從來沒交出去;反登記 interest 即可,頂多一次假醒。
+          Rust 的 cancel-by-drop 就是為這個模型生的。
+        </div>
+      </div>
+      <div class="col completion">
+        <h3>completion 葉子(io_uring)</h3>
+        <span class="buffer-badge mine" id="cbuf">buffer:在你手上</span>
+        <ol class="steps" id="c-steps">
+          <li>poll:組 op,<strong>把 buffer 所有權交給 kernel</strong></li>
+          <li>op 進 submission queue,submit → <code>Pending</code></li>
+          <li>kernel 做完 IO → completion queue 出現 (id, result) → <code>waker.wake()</code></li>
+          <li>再 poll:拿回 (result, buffer) → <code>Ready(n)</code></li>
+        </ol>
+        <div class="callout bad" id="c-verdict" hidden>
+          <span class="tag">cancel ≠ drop</span>
+          op 還在 kernel 手上,buffer 收不回來——直接 drop 並回收 buffer 就是
+          <strong>use-after-free</strong>。解法:owned buffer 進出(tokio-uring),
+          或 cancel 本身也是一個要等完成的 op。
+        </div>
+      </div>
+    </div>
+    <p style="font-size: 0.9rem; color: var(--ink-2);" id="rc-hint">
+      executor 兩邊完全同一顆:還是 run queue + poll + Waker。變的是葉子的合約,
+      以及「誰該醒」那張表存什麼(interest table vs in-flight op table)。
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ 4. 兩種 event loop ═══════════ -->
+<section>
+  <h2>4. 兩種「誰該醒」的迴圈,並排看</h2>
+  <div class="compare">
+    <figure>
+      <figcaption>reactor event loop(epoll)——interest table:fd → waker</figcaption>
+      <pre><code>loop {
+    let n = epoll_wait(&mut events);
+    for ev in &events[..n] {
+        let waker = interest[ev.fd];
+        waker.wake();          // 「可以做了」
+    }                          // read 由醒來的 task 自己補
+}</code></pre>
+    </figure>
+    <figure>
+      <figcaption>completion event loop(io_uring)——in-flight table:op id → (waker, buffer)</figcaption>
+      <pre><code>loop {
+    submit(&mut sq);           // 批次送出
+    let n = wait_cqe(&mut cq);
+    for cqe in &cq[..n] {
+        let (waker, buf) = inflight.remove(cqe.id);
+        deliver(cqe.result, buf);
+        waker.wake();          // 「做好了」
+    }
+}</code></pre>
+    </figure>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th></th><th>reactor(readiness)</th><th>proactor(completion)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>表存什麼</td><td>fd → 誰想被叫醒</td><td>op id → 誰在等 + 它的 buffer</td></tr>
+        <tr><td>syscall 節奏</td><td>每個 ready fd 醒來後各補一次 read</td><td>submit 一批、收割一批,syscall 數與操作數脫鉤</td></tr>
+        <tr><td>regular file</td><td>無效——永遠 ready(<code>file_io_offload</code> 的主題)</td><td>有效——真 async file IO</td></tr>
+        <tr><td>取消</td><td>drop 即可,頂多假醒</td><td>要 owned buffer 或 cancel op</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    順帶對齊:tokio 今天 = executor(work-stealing)+ readiness reactor(mio → epoll);
+    io_uring 生態(tokio-uring、glommio、monoio)是 completion driver,多半改走
+    thread-per-core——buffer 綁在 op 上之後,task 亂跑核心的代價變高。
+    executor 的<em>合約</em>不變,但最優<em>策略</em>被 IO 模型牽動。
+  </p>
+</section>
+
+</main>
+
+<footer>
+  文字版:<code>docs/async-runtime-anatomy.md</code> ·
+  相關互動教材:<a href="executor.html">executor</a> ·
+  <a href="event_loop.html">event_loop</a> ·
+  <a href="file_io_offload.html">file_io_offload</a><br>
+  CoderPad 實戰(2026-07-15 實測):mini runtime(block_on + Waker + Delay)可考;
+  timer reactor 純 std 寫得出來;raw syscall 綁定連得上但 45 分鐘手搓 epoll loop
+  是壞賭注;async IO 題直接上 tokio。
+</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── 1. waker 環路 stepper ── */
+  var okSteps = [
+    { lane: "exec",  log: "run queue 取出 task,poll(task, cx)——cx 帶著這個 task 的 Waker",
+      exec: "poll(task, cx)", leaf: "被 poll 中", react: "interest table: {}" },
+    { lane: "leaf",  log: "葉子試 read(fd)——nonblocking,立刻回 WouldBlock",
+      exec: "等 poll 結果", leaf: "read(fd) → WouldBlock", react: "interest table: {}" },
+    { lane: "leaf",  log: "把 waker.clone() 連同 (fd, READABLE) 登記進 reactor",
+      exec: "等 poll 結果", leaf: "register(fd, waker)", react: "interest table: {fd → waker}" },
+    { lane: "exec",  log: "future 回 Pending——task 掛起,不佔 thread",
+      exec: "task 掛起;run queue: []", leaf: "Pending", react: "interest table: {fd → waker}" },
+    { lane: "exec",  log: "run queue 空 → executor park(),整條 thread 睡覺,0% CPU",
+      exec: "park() 💤", leaf: "Pending", react: "epoll_wait ⋯(卡住等事件)" },
+    { lane: "react", log: "對端資料到了:fd ready,epoll_wait 回來",
+      exec: "park() 💤", leaf: "Pending", react: "epoll_wait → [fd READABLE]" },
+    { lane: "react", log: "查 interest table:fd → waker。waker.wake()!",
+      exec: "unpark!run queue: [task]", leaf: "Pending", react: "wake(task 的 waker)" },
+    { lane: "exec",  log: "executor 醒來再 poll——葉子這次 read 成功 → Ready(n) ✓", ok: true,
+      exec: "poll(task) → Ready ✓", leaf: "read(fd) → n bytes", react: "interest table: {}" }
+  ];
+  var brokenSteps = [
+    okSteps[0],
+    okSteps[1],
+    { lane: "leaf",  log: "(忘了登記 waker——什麼都沒告訴 reactor)", warn: true,
+      exec: "等 poll 結果", leaf: "⋯(沒有 register)", react: "interest table: {}" },
+    { lane: "exec",  log: "future 回 Pending——task 掛起",
+      exec: "task 掛起;run queue: []", leaf: "Pending", react: "interest table: {}" },
+    { lane: "exec",  log: "run queue 空 → executor park()",
+      exec: "park() 💤", leaf: "Pending", react: "epoll_wait ⋯(卡住等事件)" },
+    { lane: "react", log: "對端資料到了:fd ready,epoll_wait 回來",
+      exec: "park() 💤", leaf: "Pending", react: "epoll_wait → [fd READABLE]" },
+    { lane: "react", log: "查 interest table:空。事件被丟在地上", warn: true,
+      exec: "park() 💤", leaf: "Pending", react: "沒有 waker 可呼叫" },
+    { lane: "exec",  log: "沒有人 wake → executor 睡死,task 永遠 Pending ✗", warn: true, dead: true,
+      exec: "park() 💤(永遠)", leaf: "Pending(永遠)", react: "interest table: {}" }
+  ];
+
+  var broken = false, idx = -1;
+  var laneEls = {
+    exec: document.getElementById("lane-exec"),
+    leaf: document.getElementById("lane-leaf"),
+    react: document.getElementById("lane-react")
+  };
+  var stateEls = {
+    exec: document.getElementById("state-exec"),
+    leaf: document.getElementById("state-leaf"),
+    react: document.getElementById("state-react")
+  };
+  var logEl = document.getElementById("loop-log");
+  var verdictEl = document.getElementById("loop-verdict");
+  var stepBtn = document.getElementById("loop-step");
+
+  function loopReset() {
+    idx = -1;
+    logEl.innerHTML = "<li>按「下一步」開始。</li>";
+    verdictEl.hidden = true;
+    stepBtn.disabled = false;
+    Object.keys(laneEls).forEach(function (k) {
+      laneEls[k].classList.remove("active", "dead");
+    });
+    stateEls.exec.textContent = "run queue: [task]";
+    stateEls.leaf.textContent = "等著被 poll";
+    stateEls.react.textContent = "interest table: {}";
+  }
+
+  function loopStep() {
+    var steps = broken ? brokenSteps : okSteps;
+    if (idx + 1 >= steps.length) return;
+    idx += 1;
+    if (idx === 0) logEl.innerHTML = "";
+    var s = steps[idx];
+    Object.keys(laneEls).forEach(function (k) {
+      laneEls[k].classList.toggle("active", k === s.lane);
+      stateEls[k].textContent = s[k];
+    });
+    var li = document.createElement("li");
+    li.className = s.lane + (s.warn ? " bad" : "") + (s.ok ? " ok" : "");
+    li.textContent = s.log;
+    logEl.appendChild(li);
+    if (s.dead) {
+      Object.keys(laneEls).forEach(function (k) { laneEls[k].classList.add("dead"); });
+      verdictEl.hidden = false;
+    }
+    if (idx + 1 >= steps.length) stepBtn.disabled = true;
+  }
+
+  document.getElementById("loop-step").addEventListener("click", loopStep);
+  document.getElementById("loop-reset").addEventListener("click", loopReset);
+  document.getElementById("mode-ok").addEventListener("click", function () {
+    broken = false;
+    this.setAttribute("aria-pressed", "true");
+    document.getElementById("mode-broken").setAttribute("aria-pressed", "false");
+    loopReset();
+  });
+  document.getElementById("mode-broken").addEventListener("click", function () {
+    broken = true;
+    this.setAttribute("aria-pressed", "true");
+    document.getElementById("mode-ok").setAttribute("aria-pressed", "false");
+    loopReset();
+  });
+
+  /* ── 2. 成本模型 ── */
+  var CONNS = [1, 2, 5, 10, 50, 100, 1000, 10000];
+  var connRange = document.getElementById("conn-range");
+  var connVal = document.getElementById("conn-val");
+  var statTpc = document.getElementById("stat-tpc");
+  function renderConns() {
+    var n = CONNS[Number(connRange.value)];
+    connVal.textContent = n.toLocaleString("en-US");
+    statTpc.textContent = n.toLocaleString("en-US");
+    statTpc.classList.toggle("hot", n >= 1000);
+  }
+  connRange.addEventListener("input", renderConns);
+  renderConns();
+
+  /* ── 3. readiness vs completion ── */
+  var rcIdx = -1;
+  var rSteps = document.querySelectorAll("#r-steps li");
+  var cSteps = document.querySelectorAll("#c-steps li");
+  var rcStepBtn = document.getElementById("rc-step");
+  var rcCancelBtn = document.getElementById("rc-cancel");
+  var rBuf = document.getElementById("rbuf");
+  var cBuf = document.getElementById("cbuf");
+  var rVerdict = document.getElementById("r-verdict");
+  var cVerdict = document.getElementById("c-verdict");
+
+  function rcRender() {
+    [rSteps, cSteps].forEach(function (list) {
+      list.forEach(function (li, i) {
+        li.classList.toggle("done", i < rcIdx);
+        li.classList.toggle("now", i === rcIdx);
+      });
+    });
+    // completion 端第 0 步之後 buffer 就不在你手上;拿回來要等最後一步
+    var gone = rcIdx >= 0 && rcIdx < 3;
+    cBuf.textContent = gone ? "buffer:在 kernel 手上" : "buffer:在你手上";
+    cBuf.classList.toggle("gone", gone);
+    cBuf.classList.toggle("mine", !gone);
+    // 掛起中才能取消:登記/提交之後、完成之前
+    rcCancelBtn.disabled = rcIdx !== 1;
+    rcStepBtn.disabled = rcIdx >= 3;
+  }
+  function rcReset() {
+    rcIdx = -1;
+    rVerdict.hidden = true;
+    cVerdict.hidden = true;
+    rcRender();
+  }
+  NodeList.prototype.forEach = NodeList.prototype.forEach || Array.prototype.forEach;
+  rcStepBtn.addEventListener("click", function () {
+    if (rcIdx < 3) { rcIdx += 1; rcRender(); }
+  });
+  rcCancelBtn.addEventListener("click", function () {
+    rVerdict.hidden = false;
+    cVerdict.hidden = false;
+    rcStepBtn.disabled = true;
+    rcCancelBtn.disabled = true;
+  });
+  document.getElementById("rc-reset").addEventListener("click", rcReset);
+  rcRender();
+})();
+</script>
