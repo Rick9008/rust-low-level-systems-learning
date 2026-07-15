@@ -45,6 +45,8 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 次優先(CoderPad 做得了、一般面試常見,但非 TPS 核心考點,時間有限就往後排):
 `graph`(BFS / DFS / Kahn's topo / Dijkstra)、`trie`、`tree`。
 
+優先級練完 → `rehearsals/` 計時彩排(見下方「rehearsals 使用法」)。
+
 ### 【deep-dive 材料 — 不會考,讀懂即可】
 
 原因如上:CoderPad 無 libc,epoll 在面試環境做不了。讀到「能把機制講清楚」為止,
@@ -177,6 +179,24 @@ cargo test -p challenges -- --include-ignored   # 同樣以 #[ignore] 保持 wor
 範圍註記:`hw_bridge` challenge 聚焦 **`try_decode` + `FrameReader`**(45 分鐘可寫完的核心),
 server/client 用 reference 版接起來當整合測試 harness;`tcp_echo` challenge 同理,
 epoll 綁定已提供,只從頭寫 accept/read/write 迴圈。
+
+## rehearsals 使用法(計時彩排)
+
+`rehearsals/` 是三題計時彩排,模擬 CoderPad 條件(單檔、std-only、edition 2021;
+見 [`docs/coderpad-constraints.md`](docs/coderpad-constraints.md))。
+題目在 [`rehearsals/README.md`](rehearsals/README.md),面試 prompt 風格、不給提示。
+
+1. 計時 45 分鐘一題。實作與**你自己寫的測試**都放 `src/<name>.rs` 同一個檔案
+   (`#[cfg(test)] mod tests` 在底部)——CoderPad 就是全部擠一個 buffer。
+2. **先在紙上 dry-run boundary,再跑測試**(Run 按鈕紀律,字面意思)。
+3. 自己的測試轉綠後,才跑參考測試對照:
+
+   ```sh
+   cargo test -p rehearsals --test <name>_test -- --include-ignored
+   ```
+
+   參考測試含刻意建構的 boundary case(預設 `#[ignore]` 保持 workspace 綠)。
+   對照重點:**你的測試漏了哪一類邊界**,下次動手前要先想到它。
 
 ## loom 是怎麼做出來的
 
