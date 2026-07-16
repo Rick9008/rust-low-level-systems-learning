@@ -1,12 +1,13 @@
 # rehearsals —— 計時彩排(模擬 CoderPad 條件)
 
-八題計時彩排。題目是面試 prompt 風格:只給場景、contract、規模,**不給任何做法提示**。
+九題計時彩排。題目是面試 prompt 風格:只給場景、contract、規模,**不給任何做法提示**。
 環境約束照 [`docs/coderpad-constraints.md`](../docs/coderpad-constraints.md)。
-題 a–c、e–h 只准 std;題 d 用 tokio(pad 實測清單有)。
+題 d 用 tokio(pad 實測清單有);其餘只准 std。
 
 定位:**題 a–d 是主菜**,全程 45 分鐘照 protocol 跑。**題 e–h 對應題型預測的
 Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → 口述 arc 與 trade-off
 ——想全程寫也照 protocol 跑,骨架與參考測試都在。
+**題 e2(fd_registry)是 JD 點名的 sleeper**,值得完整 45 分鐘跑一次。
 
 ## 規則
 
@@ -86,6 +87,7 @@ window、capacity、heap)。
 | "concurrently" / "health checks" / "no external libraries" | b(Q2) | 幾條 thread?shutdown 語意? |
 | "byte stream" / "protocol" / "frames" | c(Q3) | len 含不含 header?max frame size? |
 | "event id" / "handlers" / "thousands of signals" | e(Q4) | **id 密集還是稀疏?** |
+| "fd" / "handle recycling" / "stale event" / "connections come and go" | e2(Q4 進階) | **fd 會回收嗎?unregister 後佇列裡的舊 event 怎麼辦?** |
 | "can't store them all" / "aggregate" / "windows" | f(Q5) | window 多大?timestamp 會亂序嗎? |
 | "producers block when full" | g(Q6) | capacity?close 語意? |
 | "periodic" / "interval" / "what runs next" | h(Q7) | 幾個 timer?精度? |
@@ -194,6 +196,29 @@ API 簽名在 `src/tokio_frame_server.rs`。
 - 「dispatch 中途 unregister」為什麼在 Rust 裡特別麻煩?這份 API 用什麼方式繞開?
 
 API 簽名在 `src/event_registry.rs`。
+
+## 題目 e2:fd_registry(Q4 進階——JD 點名的 "event registry")
+
+event loop 用 OS 的 readiness 介面同時等上萬條連線;事件發生時 kernel
+每次只還你一個 u64。你要一個 registry:連線建立時登記(fd 是 kernel 給的
+小整數),事件回來時用那個 u64 以 O(1) 找回連線狀態,連線關閉時移除。
+注意:fd 關閉後 kernel 會把**同一個號碼**發給新連線,而事件佇列裡可能
+還躺著舊連線的事件。高 churn(連線頻繁來去)。
+
+需求:
+- `register(fd, state) -> Token`:登記;token 要能塞進 u64(`to_raw` /
+  `from_raw` 往返)——kernel 只給你這麼大的座位。
+- `get / get_mut(token)`:O(1) 找回 state;**過期 token(fd 已回收再登記)
+  必須回 `None`**,且不得影響現任住戶。
+- `unregister(token) -> Option<T>`:移除並取回;過期 token 是 no-op。
+- 全部操作 O(1);幾萬個 fd。
+
+【clarify points——動手前先自答】
+- fd 密集還是稀疏?這決定 HashMap 還是直接 index,trade-off 是什麼。
+- 「舊事件 dispatch 到新住戶」的具體時序是什麼?你的結構用哪個欄位擋住它?
+- token 憑什麼塞得進一個 u64?
+
+API 簽名在 `src/fd_registry.rs`。
 
 ## 題目 f:telemetry_aggregator(Q5)
 

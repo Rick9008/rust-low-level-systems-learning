@@ -20,6 +20,7 @@
 
 pub mod bounded_queue;
 pub mod dsu;
+pub mod fd_registry;
 pub mod graph;
 pub mod hw_bridge;
 pub mod iter_mutate;

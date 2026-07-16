@@ -9,6 +9,7 @@
 
 pub mod bounded_channel;
 pub mod event_registry;
+pub mod fd_registry;
 pub mod frame_parser_heartbeat;
 pub mod pool_graceful_shutdown;
 pub mod ring_drop_oldest;
