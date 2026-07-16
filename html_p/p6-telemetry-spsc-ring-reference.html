@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telemetry Ingestion Pipeline · SPSC Bounded Ring (std-only)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  /* Gruvbox Material dark 配色（accent = Material 調；background = gruvbox dark ramp） */
+  --bg-dim:#1b1b1b; --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#504945; --bg4:#45403d;
+  --fg:#d4be98; --fg-dim:#928374; --fg2:#ddc7a1;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box}
+html,body{
+  -webkit-text-size-adjust:100%;
+  margin:0; padding:0;
+  background:var(--bg-dim); color:var(--fg);
+  font-family:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size:15px; line-height:1.65;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:20px 16px 80px}
+header h1{font-size:20px; margin:0 0 4px; color:var(--yellow); font-weight:700}
+header .sub{color:var(--fg-dim); font-size:13px; margin-bottom:6px}
+.badge{display:inline-block; font-size:11px; padding:2px 8px; border-radius:4px; margin:2px 4px 2px 0;
+  background:var(--bg2); border:1px solid var(--bg3); color:var(--aqua)}
+.badge.ok{color:var(--green); border-color:var(--green)}
+
+/* ---- tabs ---- */
+.tabs{display:flex; flex-wrap:wrap; gap:6px; margin:16px 0 18px; border-bottom:1px solid var(--bg3); padding-bottom:10px}
+.tab-btn{
+  cursor:pointer; font-family:inherit; font-size:13px; padding:7px 12px; border-radius:6px;
+  background:var(--bg1); color:var(--fg-dim); border:1px solid var(--bg3); transition:.12s;
+}
+.tab-btn:hover{color:var(--fg)}
+.tab-btn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow)}
+.panel{display:none; animation:fade .18s ease}
+.panel.active{display:block}
+@keyframes fade{from{opacity:0; transform:translateY(4px)}to{opacity:1; transform:none}}
+
+h2{font-size:16px; color:var(--orange); border-left:3px solid var(--orange); padding-left:10px; margin:26px 0 12px}
+h3{font-size:14px; color:var(--aqua); margin:20px 0 8px}
+p{margin:8px 0}
+code.inl{background:var(--bg2); padding:1px 6px; border-radius:4px; color:var(--fg2); font-size:13px}
+.dim{color:var(--fg-dim)}
+.jump{cursor:pointer; color:var(--blue); border-bottom:1px dotted var(--blue)}
+.jump:hover{color:var(--aqua); border-color:var(--aqua)}
+.chips{margin:14px 0}
+.chip{cursor:pointer; display:inline-block; font-size:12px; padding:5px 11px; margin:3px 6px 3px 0; border-radius:14px;
+  background:var(--bg1); border:1px solid var(--bg3); color:var(--blue)}
+.chip:hover{border-color:var(--blue); color:var(--aqua)}
+
+/* ---- cards ---- */
+.card{background:var(--bg0); border:1px solid var(--bg3); border-radius:8px; padding:14px 16px; margin:12px 0}
+.card.naive{border-left:3px solid var(--red)}
+.card.fix{border-left:3px solid var(--green)}
+.card.note{border-left:3px solid var(--blue); background:var(--bg1)}
+.card.warn{border-left:3px solid var(--yellow); background:var(--bg1)}
+.tag{font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase}
+.tag.red{color:var(--red)} .tag.green{color:var(--green)} .tag.blue{color:var(--blue)} .tag.yellow{color:var(--yellow)}
+
+ul{margin:8px 0; padding-left:22px} li{margin:5px 0}
+
+/* ---- code ---- */
+pre{
+  -webkit-text-size-adjust:100%;
+  background:var(--bg-dim); border:1px solid var(--bg3); border-radius:8px;
+  padding:14px 16px; overflow-x:auto; font-size:12.5px; line-height:1.55; margin:12px 0;
+}
+pre code{white-space:pre; font-family:inherit; color:var(--fg2)}
+/* syntax highlight tokens (Gruvbox Material) */
+.c-com{color:var(--fg-dim); font-style:italic}
+.c-str{color:var(--green)}
+.c-kw{color:var(--red)}
+.c-ty{color:var(--yellow)}
+.c-fn{color:var(--blue)}
+.c-mac{color:var(--orange)}
+.c-num{color:var(--purple)}
+.c-attr{color:var(--aqua)}
+.codelabel{font-size:11px; color:var(--fg-dim); margin:14px 0 -6px}
+
+/* ---- table ---- */
+table{border-collapse:collapse; width:100%; margin:12px 0; font-size:12.5px}
+th,td{border:1px solid var(--bg3); padding:7px 9px; text-align:left; vertical-align:top}
+th{background:var(--bg2); color:var(--yellow); font-weight:600}
+td code{color:var(--aqua)}
+.ord-relaxed{color:var(--fg-dim)} .ord-acq{color:var(--blue)} .ord-rel{color:var(--purple)}
+
+/* ---- architecture svg ---- */
+.persp-bar{display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 4px}
+.persp-btn{cursor:pointer; font-family:inherit; font-size:12px; padding:6px 12px; border-radius:6px;
+  background:var(--bg1); border:1px solid var(--bg3); color:var(--fg-dim)}
+.persp-btn.active{color:var(--bg-dim); font-weight:700}
+.persp-btn[data-persp="flow"].active{background:var(--blue); border-color:var(--blue)}
+.persp-btn[data-persp="thread"].active{background:var(--green); border-color:var(--green)}
+.persp-btn[data-persp="bp"].active{background:var(--yellow); border-color:var(--yellow)}
+#arch svg{width:100%; height:auto; background:var(--bg0); border:1px solid var(--bg3); border-radius:8px}
+.box{fill:var(--bg1); stroke:var(--bg3); stroke-width:1.5}
+.box-ring{fill:var(--bg2); stroke:var(--aqua)}
+.box-worker{fill:var(--bg2); stroke:var(--blue)}
+.box-agg{fill:var(--bg2); stroke:var(--purple)}
+.box-pool{fill:none; stroke:var(--bg3); stroke-dasharray:4 3}
+.svgt{fill:var(--fg2); font-size:12px; font-family:'JetBrains Mono',monospace}
+.svgt.sm{font-size:10px; fill:var(--fg-dim)}
+.svgt.hd{fill:var(--yellow); font-weight:700}
+.arrow{stroke:var(--fg-dim); stroke-width:1.5; fill:none; marker-end:url(#ah)}
+/* annotation layers */
+.anno{opacity:0; transition:opacity .2s}
+#arch.persp-flow .anno-flow{opacity:1}
+#arch.persp-thread .anno-thread{opacity:1}
+#arch.persp-bp .anno-bp{opacity:1}
+.anno-flow text{fill:var(--blue)} .anno-thread text{fill:var(--green)} .anno-bp text{fill:var(--yellow)}
+.anno rect{fill:var(--bg0); opacity:.85}
+
+/* ---- stepper ---- */
+.stepper{background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:16px; margin:14px 0}
+.ring-row{display:flex; justify-content:center; gap:10px; margin:6px 0}
+.slot{width:64px; height:64px; border:2px solid var(--bg3); border-radius:8px; display:flex; align-items:center;
+  justify-content:center; font-size:22px; font-weight:700; background:var(--bg1); color:var(--fg-dim); position:relative; transition:.15s}
+.slot.filled{background:var(--bg3); color:var(--green); border-color:var(--green)}
+.slot.sacrificed{border-color:var(--yellow); border-style:dashed}
+.slot.sacrificed::after{content:'犧牲'; position:absolute; bottom:-16px; font-size:9px; color:var(--yellow); font-weight:400}
+.slot .idx{position:absolute; top:-16px; font-size:10px; color:var(--fg-dim); font-weight:400}
+.marker-row{display:flex; justify-content:center; gap:10px; height:20px}
+.mk{width:64px; text-align:center; font-size:11px; font-weight:700}
+.mk.h{color:var(--aqua)} .mk.t{color:var(--orange)}
+.step-note{margin-top:18px; padding:12px 14px; border-radius:8px; background:var(--bg1); border-left:3px solid var(--fg-dim); font-size:13px; min-height:52px}
+.step-note.k-full{border-color:var(--red)} .step-note.k-wrap{border-color:var(--orange)} .step-note.k-empty{border-color:var(--aqua)}
+.ctrl{display:flex; align-items:center; gap:10px; justify-content:center; margin-top:14px; flex-wrap:wrap}
+.ctrl button{cursor:pointer; font-family:inherit; font-size:13px; padding:7px 16px; border-radius:6px;
+  background:var(--bg2); border:1px solid var(--bg3); color:var(--fg)}
+.ctrl button:hover{border-color:var(--yellow); color:var(--yellow)}
+.ctrl button:disabled{opacity:.35; cursor:not-allowed}
+.counter{font-size:12px; color:var(--fg-dim); min-width:70px; text-align:center}
+.dots{display:flex; gap:5px; justify-content:center; margin-top:12px; flex-wrap:wrap}
+.dot{width:9px; height:9px; border-radius:50%; background:var(--bg3); cursor:pointer}
+.dot.active{background:var(--yellow)}
+
+/* ---- backpressure grid ---- */
+.bp-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:12px 0}
+.bp-card{background:var(--bg0); border:1px solid var(--bg3); border-radius:8px; padding:0; overflow:hidden}
+.bp-head{padding:9px 14px; font-weight:700; font-size:14px; color:var(--bg-dim)}
+.bp-card.block .bp-head{background:var(--red)}
+.bp-card.old .bp-head{background:var(--aqua)}
+.bp-card.new .bp-head{background:var(--green)}
+.bp-body{padding:10px 14px; font-size:12.5px}
+.bp-body .lbl{color:var(--fg-dim); font-size:11px; margin-top:8px}
+
+/* ---- follow-up ---- */
+details{background:var(--bg0); border:1px solid var(--bg3); border-radius:8px; margin:10px 0; padding:0}
+details summary{cursor:pointer; padding:12px 14px; font-size:13.5px; color:var(--fg2); font-weight:500; list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'▸ '; color:var(--orange)}
+details[open] summary::before{content:'▾ '}
+details[open] summary{color:var(--yellow); border-bottom:1px solid var(--bg3)}
+.deep{padding:4px 16px 14px}
+.lvl{margin:12px 0; padding-left:14px; border-left:2px solid var(--bg3)}
+.lvl .qn{color:var(--aqua); font-weight:600; font-size:12.5px}
+.lvl.l2{margin-left:14px} .lvl.l3{margin-left:28px}
+
+/* ---- open questions ---- */
+.oq{background:var(--bg0); border:1px solid var(--bg3); border-radius:8px; padding:14px 16px; margin:10px 0; display:flex; gap:12px}
+.oq .num{color:var(--purple); font-weight:700; font-size:18px; min-width:26px}
+.oq .q{font-size:13.5px}
+.oq .probe{color:var(--fg-dim); font-size:11.5px; margin-top:4px}
+.footer{margin-top:40px; color:var(--fg-dim); font-size:11px; text-align:center; border-top:1px solid var(--bg3); padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Telemetry Ingestion Pipeline · SPSC Bounded Ring</h1>
+  <div class="sub">AI 伺服器機櫃觀測層 · 每秒海量 signal · 記憶體受限 · std-only（no external crate）· Rust <strong>edition 2024</strong></div>
+  <span class="badge ok">✓ rustc 1.91.1 / edition 2024 編譯通過</span>
+  <span class="badge ok">✓ single-thread oracles pass</span>
+  <span class="badge ok">✓ 2M-elem 雙執行緒 FIFO stress pass</span>
+  <span class="badge ok">✓ rust_2024_compatibility 遷移 lint 零輸出</span>
+  <span class="badge">std-only</span>
+  <span class="badge" style="color:var(--fg-dim)">CoderPad = 1.92.0 · 見 ② 工具鏈卡</span>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="p-arch">① 架構圖</button>
+  <button class="tab-btn" data-tab="p-derive">② 概念推導</button>
+  <button class="tab-btn" data-tab="p-step">③ 互動 Stepper</button>
+  <button class="tab-btn" data-tab="p-bp">④ Backpressure 三策略</button>
+  <button class="tab-btn" data-tab="p-mem">⑤ 記憶體帳</button>
+  <button class="tab-btn" data-tab="p-follow">⑥ 面試追問（3 層）</button>
+  <button class="tab-btn" data-tab="p-open">⑦ 開放設計追問</button>
+</nav>
+
+<!-- ============ PANEL 1: ARCHITECTURE ============ -->
+<section class="panel active" id="p-arch">
+  <h2>整體架構：per-source ring → worker pool → aggregation → downstream</h2>
+  <p>每個硬體 source 前掛一顆<strong>獨立的 bounded ring</strong>：<em>單一 producer thread</em>（該 source 的取樣/中斷處理）寫，<em>單一 worker</em> 讀 —— 這就是 SPSC，是整條 pipeline 最熱、最需要 lock-free 的邊界。ring 內部（<code class="inl">head/tail</code>、full/empty 區分、memory ordering）在 <span class="jump" data-jump="p-derive">② 概念推導</span> 展開；這裡先建立責任切分與 channel 協定的全局圖。</p>
+
+  <div class="persp-bar">
+    <button class="persp-btn active" data-persp="flow">資料流視角</button>
+    <button class="persp-btn" data-persp="thread">執行緒責任視角</button>
+    <button class="persp-btn" data-persp="bp">Backpressure 視角</button>
+  </div>
+
+  <div id="arch" class="persp-flow">
+    <svg viewBox="0 0 960 360" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#928374"/>
+        </marker>
+      </defs>
+
+      <!-- sources -->
+      <rect class="box" x="18" y="35"  width="108" height="46" rx="6"/>
+      <rect class="box" x="18" y="150" width="108" height="46" rx="6"/>
+      <rect class="box" x="18" y="265" width="108" height="46" rx="6"/>
+      <text class="svgt" x="72" y="63"  text-anchor="middle">Source 1</text>
+      <text class="svgt" x="72" y="178" text-anchor="middle">Source 2</text>
+      <text class="svgt" x="72" y="293" text-anchor="middle">Source N</text>
+      <text class="svgt sm" x="72" y="232" text-anchor="middle">⋮</text>
+
+      <!-- rings -->
+      <rect class="box box-ring" x="172" y="35"  width="140" height="46" rx="6"/>
+      <rect class="box box-ring" x="172" y="150" width="140" height="46" rx="6"/>
+      <rect class="box box-ring" x="172" y="265" width="140" height="46" rx="6"/>
+      <text class="svgt" x="242" y="55"  text-anchor="middle">Ring 1</text>
+      <text class="svgt sm" x="242" y="70"  text-anchor="middle">SPSC · bounded</text>
+      <text class="svgt" x="242" y="170" text-anchor="middle">Ring 2</text>
+      <text class="svgt sm" x="242" y="185" text-anchor="middle">SPSC · bounded</text>
+      <text class="svgt" x="242" y="285" text-anchor="middle">Ring N</text>
+      <text class="svgt sm" x="242" y="300" text-anchor="middle">SPSC · bounded</text>
+
+      <!-- worker pool -->
+      <rect class="box box-pool" x="392" y="30" width="168" height="286" rx="8"/>
+      <text class="svgt hd" x="476" y="24" text-anchor="middle">Worker Pool</text>
+      <rect class="box box-worker" x="408" y="55"  width="136" height="52" rx="6"/>
+      <rect class="box box-worker" x="408" y="135" width="136" height="52" rx="6"/>
+      <rect class="box box-worker" x="408" y="240" width="136" height="52" rx="6"/>
+      <text class="svgt" x="476" y="86"  text-anchor="middle">worker 0</text>
+      <text class="svgt" x="476" y="166" text-anchor="middle">worker 1</text>
+      <text class="svgt" x="476" y="271" text-anchor="middle">worker M</text>
+      <text class="svgt sm" x="476" y="216" text-anchor="middle">⋮</text>
+
+      <!-- aggregator -->
+      <rect class="box box-agg" x="636" y="112" width="130" height="120" rx="8"/>
+      <text class="svgt" x="701" y="164" text-anchor="middle">Aggregator</text>
+      <text class="svgt sm" x="701" y="182" text-anchor="middle">windowed</text>
+      <text class="svgt sm" x="701" y="197" text-anchor="middle">count/sum/min/max</text>
+
+      <!-- downstream -->
+      <rect class="box" x="828" y="132" width="118" height="80" rx="8"/>
+      <text class="svgt" x="887" y="168" text-anchor="middle">Downstream</text>
+      <text class="svgt sm" x="887" y="185" text-anchor="middle">sink / flush</text>
+
+      <!-- base arrows -->
+      <path class="arrow" d="M126,58  L170,58"/>
+      <path class="arrow" d="M126,173 L170,173"/>
+      <path class="arrow" d="M126,288 L170,288"/>
+      <path class="arrow" d="M312,58  C360,58 360,90 390,90"/>
+      <path class="arrow" d="M312,173 L390,168"/>
+      <path class="arrow" d="M312,288 C360,288 360,262 390,262"/>
+      <path class="arrow" d="M560,171 L634,171"/>
+      <path class="arrow" d="M766,172 L826,172"/>
+
+      <!-- flow annotations -->
+      <g class="anno anno-flow">
+        <text class="svgt" x="148" y="46" text-anchor="middle">Signal</text>
+        <text class="svgt sm" x="148" y="118" text-anchor="middle">{ts,src,metric,val}</text>
+        <text class="svgt" x="352" y="120" text-anchor="middle">pop</text>
+        <text class="svgt" x="597" y="150" text-anchor="middle">partial</text>
+        <text class="svgt sm" x="597" y="164" text-anchor="middle">aggregate</text>
+        <text class="svgt" x="796" y="160" text-anchor="middle">batch</text>
+      </g>
+      <!-- thread annotations -->
+      <g class="anno anno-thread">
+        <text class="svgt sm" x="72" y="24" text-anchor="middle">1 producer / source</text>
+        <text class="svgt" x="242" y="122" text-anchor="middle">SPSC 邊界</text>
+        <text class="svgt sm" x="352" y="118" text-anchor="middle">worker owns</text>
+        <text class="svgt sm" x="352" y="131" text-anchor="middle">a shard of rings</text>
+        <text class="svgt" x="597" y="150" text-anchor="middle">MPSC</text>
+        <text class="svgt sm" x="597" y="164" text-anchor="middle">std::sync::mpsc</text>
+        <text class="svgt sm" x="701" y="228" text-anchor="middle">1 aggregator thread</text>
+        <text class="svgt sm" x="796" y="160" text-anchor="middle">batched flush</text>
+      </g>
+      <!-- backpressure annotations -->
+      <g class="anno anno-bp">
+        <text class="svgt sm" x="242" y="122" text-anchor="middle">full → drop/block</text>
+        <text class="svgt sm" x="242" y="237" text-anchor="middle">full → drop/block</text>
+        <text class="svgt sm" x="597" y="150" text-anchor="middle">bounded MPSC</text>
+        <text class="svgt sm" x="597" y="164" text-anchor="middle">→ block on send</text>
+        <text class="svgt sm" x="476" y="308" text-anchor="middle">backpressure 在每個 bounded 邊界</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="card note">
+    <span class="tag blue">CHANNEL 協定</span>
+    <ul>
+      <li><strong>Source → Ring</strong>：SPSC。producer 只呼叫 <code class="inl">try_push</code>，滿了拿回 <code class="inl">Err(value)</code> 自行決定 backpressure。ring 是唯一同步點，無鎖。</li>
+      <li><strong>Ring → Worker</strong>：worker 只呼叫 <code class="inl">try_pop</code>。設計選擇：靜態 shard（worker 固定負責一組 ring，無競爭但可能負載不均）vs 全域 work queue（均衡但取 ring 有協調成本）。</li>
+      <li><strong>Worker → Aggregator</strong>：MPSC（多 worker 產、單 aggregator 收）。std-only 用 <code class="inl">std::sync::mpsc</code>；要 bounded backpressure 用 <code class="inl">sync_channel(k)</code>，滿了 <code class="inl">send</code> 阻塞。</li>
+      <li><strong>Aggregator → Downstream</strong>：單消費者，批次 flush。時間窗聚合把每秒海量 signal 摺疊成 per-(source,metric,window) 的 chunk。</li>
+    </ul>
+  </div>
+
+  <div class="chips">
+    <span class="chip" data-jump="p-derive">→ ring 內部怎麼推導的</span>
+    <span class="chip" data-jump="p-bp">→ 三種 backpressure 差在哪</span>
+    <span class="chip" data-jump="p-mem">→ 為何一定要聚合（記憶體帳）</span>
+  </div>
+</section>
+
+<!-- ============ PANEL 2: DERIVATION ============ -->
+<section class="panel" id="p-derive">
+  <h2>從 naive 一路推到 lock-free SPSC ring</h2>
+  <p class="dim">規則：狀態變數（<code class="inl">head</code>/<code class="inl">tail</code>/犧牲一格/atomic ordering）不憑空出現，每個都由前一步的失敗模式逼出來。</p>
+
+  <div class="card naive">
+    <span class="tag red">NAIVE</span>
+    <p>最笨但先能跑：<code class="inl">Vec&lt;Signal&gt;</code> 當佇列，<code class="inl">push_back</code> / <code class="inl">remove(0)</code>。</p>
+  </div>
+  <div class="card">
+    <span class="tag red">失敗模式</span>
+    <ul>
+      <li><strong>無界成長</strong>：signal 連續流入、消費端只要短暫落後，<code class="inl">Vec</code> 無上限膨脹 → 記憶體受限情境直接 OOM。</li>
+      <li><strong>front 移除 O(n)</strong>：<code class="inl">remove(0)</code> 要搬移整段,每秒海量 signal 下爆掉。</li>
+      <li><strong>非執行緒安全</strong>：producer / consumer 併發存取同一 <code class="inl">Vec</code> = data race。</li>
+    </ul>
+  </div>
+  <div class="card fix">
+    <span class="tag green">修法 1：固定大小 + 環狀重用 index → 引入 head / tail</span>
+    <p>配一塊固定容量的 slot 陣列（記憶體上界確定）。用兩個 index 環狀繞行重用空間：<code class="inl">tail</code> = 下一個要<strong>寫</strong>的位置（只有 producer 動），<code class="inl">head</code> = 下一個要<strong>讀</strong>的位置（只有 consumer 動）。前進即 <code class="inl">(i + 1) % cap</code>。</p>
+  </div>
+  <div class="card">
+    <span class="tag red">新的失敗模式：full / empty 撞名</span>
+    <p><code class="inl">head == tail</code> 同時可能代表「空」與「滿」（繞一圈回到原點）—— 無法區分。</p>
+  </div>
+  <div class="card fix">
+    <span class="tag green">修法 2：犧牲一格 → usable = cap − 1</span>
+    <p>刻意讓 buffer 永不寫到「會使 <code class="inl">tail</code> 追上 <code class="inl">head</code>」的那一格。於是：<code class="inl">head == tail</code> ⇒ 空；<code class="inl">(tail + 1) % cap == head</code> ⇒ 滿。代價是損失一格容量（<code class="inl">usable = cap − 1</code>）。</p>
+    <p class="dim">為何不用一個 <code class="inl">count</code> 取代犧牲一格？—— 因為 <code class="inl">count</code> 兩端都要改，會變成雙寫者競爭點，破壞「各自只寫自己的 index」這個讓後面 ordering 能放鬆的關鍵性質。詳見 <span class="jump" data-jump="p-follow">⑥ 追問</span>。</p>
+  </div>
+  <div class="card fix">
+    <span class="tag green">修法 3：跨執行緒 → head/tail 原子化 + memory ordering</span>
+    <p>producer / consumer 在不同 thread，<code class="inl">head</code>/<code class="inl">tail</code> 必須是 <code class="inl">AtomicUsize</code>。ordering 不是背下來的 —— 由「誰要 observe 誰的哪個動作」逐條推出：</p>
+
+    <table>
+      <thead><tr><th>位置</th><th>Ordering</th><th>synchronizes-with 邊</th><th>為什麼</th></tr></thead>
+      <tbody>
+        <tr><td><code>try_push</code>: <code>tail.load</code></td><td class="ord-relaxed">Relaxed</td><td>—</td><td>producer 是 <code>tail</code> 唯一寫者,讀自己不需同步</td></tr>
+        <tr><td><code>try_push</code>: <code>head.load</code>（full 判定）</td><td class="ord-acq">Acquire</td><td>配 <code>try_pop</code> 的 <code>head.store(Release)</code></td><td>觀察到 <code>head</code> 前進（slot 已釋放）時,須連帶看到 consumer 對該 slot 的讀取已完成 → 覆寫前 read-before-write 成立</td></tr>
+        <tr><td><code>try_push</code>: <code>tail.store</code>（publish）</td><td class="ord-rel">Release</td><td>配 <code>try_pop</code> 的 <code>tail.load(Acquire)</code></td><td>發布:slot 寫入 happens-before consumer 看到新 <code>tail</code></td></tr>
+        <tr><td><code>try_pop</code>: <code>head.load</code></td><td class="ord-relaxed">Relaxed</td><td>—</td><td>consumer 是 <code>head</code> 唯一寫者</td></tr>
+        <tr><td><code>try_pop</code>: <code>tail.load</code>（empty 判定）</td><td class="ord-acq">Acquire</td><td>配 <code>try_push</code> 的 <code>tail.store(Release)</code></td><td>觀察到新 <code>tail</code> → 連帶看到 producer 的 slot 寫入,讀出的才是有效資料</td></tr>
+        <tr><td><code>try_pop</code>: <code>head.store</code>（publish）</td><td class="ord-rel">Release</td><td>配 <code>try_push</code> 的 <code>head.load(Acquire)</code></td><td>發布 slot 已釋放,producer 才可安全覆寫</td></tr>
+      </tbody>
+    </table>
+
+    <div class="card note" style="margin-top:10px">
+      <span class="tag blue">方法論</span>
+      <p>先全部寫 <code class="inl">SeqCst</code> 讓它正確,再逐個 relax 成 <code class="inl">Acquire</code>/<code class="inl">Release</code> —— 每 relax 一處,要能講出那條 synchronizes-with 邊（哪個 Release-store 配哪個 Acquire-load）。講不出來的就留 <code class="inl">SeqCst</code>。這題逼出的核心 happens-before：<strong>producer 覆寫某格之前,必須先 observe consumer 已讀完那格</strong>（走 <code class="inl">head</code> 的 Release→Acquire）。</p>
+    </div>
+  </div>
+
+  <div class="card note">
+    <span class="tag blue">工具鏈 / edition 2024 稽核</span>
+    <p><strong>此檔以 <code class="inl">--edition 2024</code> 驗證。</strong>整份 impl 對 2024 的破壞面 = <strong>零</strong>：以 edition 2021 編譯並開 <code class="inl">-W rust_2024_compatibility</code> 遷移 lint,輸出為空;以 edition 2024 編譯並把 <code class="inl">-D unsafe_op_in_unsafe_fn -D static_mut_refs</code> 拉到 deny,亦零輸出。意思是這顆 ring 從 2021 搬到 2024 <strong>一個字都不用改</strong>。</p>
+    <p class="dim">驗證邊界（誠實交代）:實測工具鏈是 <strong>rustc 1.91.1</strong>(本機 apt 上限;官方 dist server 不可達,取不到 1.92)。CoderPad 回報 <strong>1.92.0 (2024 Edition)</strong>,這一版差<strong>未實測</strong>。可支撐的推論(非實測):本檔用到的 std API(<code class="inl">UnsafeCell</code>/<code class="inl">MaybeUninit</code>/<code class="inl">AtomicUsize</code>/<code class="inl">Ordering</code>)在 1.75 與 1.91 兩端皆編譯通過 —— 跨 16 個發行版穩定,1.91→1.92 若破裂會違反 Rust 的 stability 保證。</p>
+    <p><strong>2024 的兩個 gotcha(實測,嚴重度不同 —— 手刻 drill 會咬到):</strong></p>
+    <ul>
+      <li><code class="inl">gen</code> 成為 <strong>保留字 → hard error</strong>（<span class="dim">error: expected identifier, found reserved keyword `gen`</span>）。arena + generation-tagged index 的自然命名正中此雷 —— 用 <code class="inl">generation</code> / <code class="inl">g</code>。</li>
+      <li><code class="inl">unsafe_op_in_unsafe_fn</code>:<code class="inl">unsafe fn</code> 內的 unsafe 操作需自帶 <code class="inl">unsafe {}</code> —— 2024 是 <strong>warning</strong>(E0133),<strong>不是 error</strong>(2021 則完全靜默)。本檔沒有 <code class="inl">unsafe fn</code>(只有 <code class="inl">unsafe impl</code> 與安全函式內的 <code class="inl">unsafe {}</code> 區塊),所以不觸發;但你一寫 <code class="inl">pub unsafe fn get_unchecked(..)</code> 就會跳。</li>
+    </ul>
+  </div>
+
+  <p class="codelabel">reference 實作（此字串即編譯通過的字串）</p>
+  <pre><code data-code="src-impl"></code></pre>
+
+  <p class="codelabel">single-thread oracles（<code class="inl">cargo test</code> 先擋明顯錯：空、滿到 cap−1、跨 wrap 的 FIFO）</p>
+  <pre><code data-code="src-oracles"></code></pre>
+
+  <div class="card warn">
+    <span class="tag yellow">TSO 陷阱（重要）</span>
+    <p>另有一支 2M 元素的雙執行緒 FIFO stress（producer 推 <code class="inl">0..N</code>、consumer 斷言收到序列 == <code class="inl">0..N</code>）已通過。但 <strong>x86 是 TSO（total store order）</strong>：就算把該 <code class="inl">Release</code> 誤寫成 <code class="inl">Relaxed</code>,在 x86 上照樣過 —— 這條測試抓不到 ordering 錯誤,它只證邏輯（wrap / full-empty / 無 torn read）。要真的模型檢查 ordering,離線用 <code class="inl">loom</code>（dev-dependency,不進 solution、不算 std-only 違規);面試現場則用嘴把那條 synchronizes-with 邊講出來。</p>
+  </div>
+
+  <div class="chips">
+    <span class="chip" data-jump="p-step">→ 用 stepper 走一遍 wrap 與 full/empty</span>
+    <span class="chip" data-jump="p-bp">→ Err(value) 交還後,三種 backpressure</span>
+  </div>
+</section>
+
+<!-- ============ PANEL 3: STEPPER ============ -->
+<section class="panel" id="p-step">
+  <h2>互動 Stepper：cap = 4（usable = 3）走完 fill → full → wrap → empty</h2>
+  <p class="dim"><span style="color:var(--orange)">▲T</span> = tail（下一個要寫的位置）· <span style="color:var(--aqua)">▲H</span> = head（下一個要讀的位置）· 黃色虛線格 = 當前被犧牲的那一格（會隨環移動）。</p>
+
+  <div class="stepper">
+    <div class="marker-row" id="tail-row"></div>
+    <div class="ring-row" id="ring-row"></div>
+    <div class="marker-row" id="head-row"></div>
+    <div class="step-note" id="step-note"></div>
+    <div class="ctrl">
+      <button id="btn-reset">⟲ reset</button>
+      <button id="btn-prev">‹ prev</button>
+      <span class="counter" id="counter"></span>
+      <button id="btn-next">next ›</button>
+    </div>
+    <div class="dots" id="dots"></div>
+  </div>
+
+  <div class="card note">
+    <span class="tag blue">看這幾步</span>
+    <ul>
+      <li><strong>step 3→4</strong>:只存進 3 個就滿了,<code class="inl">buf[3]</code> 空著 —— 這就是「犧牲一格」的實體。</li>
+      <li><strong>step 6</strong>:<code class="inl">tail</code> 3→0 繞回,off-by-one 高風險點（<code class="inl">% cap</code> 忘了寫就爆這裡）。</li>
+      <li><strong>step 10</strong>:<code class="inl">head</code> 3→0 繞回後 <code class="inl">head == tail</code>,回到 empty。full 與 empty 都靠這條判定 + 犧牲一格區分。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ PANEL 4: BACKPRESSURE ============ -->
+<section class="panel" id="p-bp">
+  <h2>Backpressure 三策略：滿了怎麼辦</h2>
+  <p>此 ring 的 <code class="inl">try_push</code> 滿了回 <code class="inl">Err(value)</code>,把 value 交還呼叫方 —— <strong>策略的分岔點在呼叫方</strong>,不在資料結構裡。預設行為（呼叫方丟棄 <code class="inl">Err</code> 的 value）就是 drop-newest。</p>
+
+  <div class="bp-grid">
+    <div class="bp-card block">
+      <div class="bp-head">block</div>
+      <div class="bp-body">
+        <div>producer 等到有空間才寫。</div>
+        <div class="lbl">適合訊號</div>
+        <div>不可丟失的關鍵事件:fatal error、狀態轉換 audit、config 變更。</div>
+        <div class="lbl">代價 / 失敗模式</div>
+        <div>producer 是硬體取樣或中斷處理時,阻塞會回壓到硬體層 —— 丟中斷、取樣抖動。telemetry 主幹通常<strong>不能</strong>接受。</div>
+      </div>
+    </div>
+    <div class="bp-card old">
+      <div class="bp-head">drop-oldest</div>
+      <div class="bp-body">
+        <div>覆蓋最舊的,保留最新。</div>
+        <div class="lbl">適合訊號</div>
+        <div>只關心「當前值」的 gauge:溫度、風扇轉速、瞬時功耗 —— 舊值本來就會被新值取代。<strong>telemetry 最常見。</strong></div>
+        <div class="lbl">代價 / 失敗模式</div>
+        <div>歷史出洞,下游算 rate / 積分會有斷點。<strong>且在嚴格 SPSC 裡不是免費的 —— 見下方 TRAP。</strong></div>
+      </div>
+    </div>
+    <div class="bp-card new">
+      <div class="bp-head">drop-newest</div>
+      <div class="bp-body">
+        <div>丟掉正要進來的,保住已在佇列的連續舊窗。</div>
+        <div class="lbl">適合訊號</div>
+        <div>已有足夠樣本、要保住一段完整連續歷史做 replay / 對齊時間窗的取樣型訊號。</div>
+        <div class="lbl">代價 / 失敗模式</div>
+        <div>最新訊號遺失,偵測突發尖峰會慢。此 ring 的天然預設。</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>block / drop-newest:呼叫方直接分岔（sound）</h3>
+  <pre><code data-code="src-bp-newest"></code></pre>
+  <pre><code data-code="src-bp-block"></code></pre>
+
+  <h3>drop-oldest 在嚴格 SPSC 是個陷阱（naive → 失敗 → 修法）</h3>
+  <div class="card naive">
+    <span class="tag red">NAIVE（誘人但錯）</span>
+    <p>直覺:滿了就 producer 自己 pop 掉最舊的再 push。</p>
+    <pre><code data-code="src-bp-trap"></code></pre>
+  </div>
+  <div class="card">
+    <span class="tag red">失敗模式:破壞 SPSC 單消費者不變式</span>
+    <ul>
+      <li><code class="inl">try_pop</code> 是 <strong>consumer 專屬</strong>。producer 也呼叫它,現在 <code class="inl">head</code> 有<strong>兩個寫者</strong> —— 而「<code class="inl">head.load</code> 用 <code class="inl">Relaxed</code>」的前提正是「我是唯一寫者」,此前提被打破。</li>
+      <li>producer 與 consumer 可能對<strong>同一格</strong>做 <code class="inl">assume_init_read</code> → 同一個 <code class="inl">T</code> 被 move 兩次 = 讀到已移出的記憶體 + 潛在 double-drop = <strong>UB</strong>;元素遺失或重複。</li>
+      <li>x86 上快測可能「看起來會動」（TSO + 運氣掩蓋),更危險。</li>
+    </ul>
+  </div>
+  <div class="card fix">
+    <span class="tag green">修法</span>
+    <ul>
+      <li><strong>換結構</strong>:gauge 類要 drop-oldest,改用 overwriting ring / seqlock 風格的單 producer 覆寫環,消費端拿「最新快照」並容忍中間值遺失。契約不同(不再是精確 FIFO queue),但正好符合 gauge 語意。</li>
+      <li><strong>或把決策移到 consumer 端</strong>:唯一的 consumer 在自己落後時主動丟舊,維持單寫者。</li>
+      <li><strong>或加 CAS 版 head</strong>:讓 <code class="inl">head</code> 兩端都能 CAS 推進 —— 但這就多了同步成本、不再是那個乾淨的 SPSC,退化成一般 MPSC-ish 結構。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ PANEL 5: MEMORY LEDGER ============ -->
+<section class="panel" id="p-mem">
+  <h2>記憶體帳:存整條 raw queue vs 聚合成 chunk</h2>
+  <p class="dim">給量級估算的算式,不追精確數字。重點是哪個維度隨什麼線性成長。</p>
+
+  <div class="card naive">
+    <span class="tag red">A. 存 raw signal</span>
+    <p>一筆 <code class="inl">Signal</code> ≈ <code class="inl">{ ts:u64, source_id:u32, metric_id:u16, value:f64 }</code> → 連 padding 約 <strong>s ≈ 24 B</strong>。</p>
+    <p>要留 <code class="inl">T</code> 秒、每 source 每秒 <code class="inl">M</code> 筆、<code class="inl">N</code> 個 source:</p>
+    <pre><code data-code="mem-raw"></code></pre>
+    <p>量級代入 <code class="inl">N=1e3, M=1e3, T=10, s=24</code> → <strong>≈ 2.4×10¹¹ B ≈ 240 GB</strong>。爆。</p>
+  </div>
+
+  <div class="card fix">
+    <span class="tag green">B. 聚合成時間窗 chunk</span>
+    <p>每個 <code class="inl">(source, metric, window)</code> 存一筆聚合 ≈ <code class="inl">{ win_start:u64, source_id, metric_id, count:u32, sum/min/max:f64 }</code> → 約 <strong>a ≈ 40 B</strong>。數量 = source × metric × 保留窗數,<strong>與 signal rate M 解耦</strong>:</p>
+    <pre><code data-code="mem-agg"></code></pre>
+    <p>量級代入 <code class="inl">N=1e3, K=50, W=60, a=40</code> → <strong>≈ 1.2×10⁸ B ≈ 120 MB</strong>。</p>
+  </div>
+
+  <div class="card note">
+    <span class="tag blue">核心 lever</span>
+    <p>raw 版的記憶體 = <code class="inl">N·M·T·s</code>,<code class="inl">M</code>（每秒筆數）直接乘進去,還跟保留時間 <code class="inl">T</code> 相乘 —— 兩個會爆的維度。聚合版把 <code class="inl">M</code> 這個維度<strong>摺進 count/sum</strong>:海量 signal 只是讓 <code class="inl">count</code> 變大,不讓 record 數量變多。省下的量級 ≈ <code class="inl">M·T / (K·W/M... )</code> 概念上是「用固定大小的 aggregate 吃掉可變的 signal rate」。這就是記憶體受限 telemetry 一定要在 worker/aggregator 早聚合、ring 只當短期緩衝的理由 —— ring 存的是「還沒被聚合的 in-flight 幾百毫秒」,不是整段歷史。</p>
+  </div>
+</section>
+
+<!-- ============ PANEL 6: FOLLOW-UP ============ -->
+<section class="panel" id="p-follow">
+  <h2>常見面試追問（每條至少 3 層深）</h2>
+  <p class="dim">這些是「有答案」的 escalation —— 對照 L4 modal = medium + follow-up。結尾 <span class="jump" data-jump="p-open">⑦ 開放設計</span> 才是留白給你口頭練的。</p>
+
+  <details>
+    <summary>Q1:為什麼犧牲一格?用一個 count 不行嗎?</summary>
+    <div class="deep">
+      <div class="lvl"><span class="qn">L1</span> — count 需要一個「兩端都改」的變數(push +1、pop −1)。SPSC 的紅利是「各自只寫自己的 index」,才能把 load 放鬆到 Relaxed。count 一引入,這性質就沒了。</div>
+      <div class="lvl l2"><span class="qn">L2:那 count 用 atomic RMW 不就好?</span> — 兩端都做 <code class="inl">fetch_add</code>/<code class="inl">fetch_sub</code>,同一條 cache line 在兩顆 core 間 ping-pong = 真競爭,比兩個各自 Release 的單寫 index 慢;且 count 語意下判 full/empty 要小心跨越邊界的可見性。</div>
+      <div class="lvl l3"><span class="qn">L3:cache line 你剛提到 —— 那 head/tail 呢?</span> — <code class="inl">head</code> 與 <code class="inl">tail</code> 若落在同一 cache line,producer 寫 <code class="inl">tail</code>、consumer 寫 <code class="inl">head</code> 會 false sharing,互相打掉對方的 line。修:各自 <code class="inl">#[repr(align(64))]</code> 塞到不同 line。std-only 沒有 <code class="inl">crossbeam::CachePadded</code>,要手刻一個 align wrapper struct。<span class="dim">（unverified:實際 padding 大小該對齊到目標平台 cache line,常見 64 B 但非普世;面試講「典型 64,量測為準」。）</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q2:多 source,你怎麼把 worker 分配到 rings?</summary>
+    <div class="deep">
+      <div class="lvl"><span class="qn">L1</span> — 兩種:(a) 靜態 shard,每 worker 固定負責一組 ring,零競爭但負載不均;(b) 全域 work queue,任 worker 取任一 ring,均衡但取 ring 有協調成本(且要避免兩 worker 同時 pop 同一 ring,否則又破壞 SPSC)。</div>
+      <div class="lvl l2"><span class="qn">L2:靜態 shard 下,單一 source 突然爆量?</span> — 那顆 ring 先觸發自己的 backpressure(drop-oldest),把過載<strong>隔離在該 source</strong>,不會直接拖垮別人的 ring。但負責它的 worker 被灌爆,delay 會傳到<strong>同 shard 的其他 source</strong>。修:hot source 動態 re-shard,或給它更大的 ring + 專屬 worker。</div>
+      <div class="lvl l3"><span class="qn">L3:怎麼偵測 hot source?</span> — 監控每顆 ring 的 drop counter(單調累積)與 depth 高水位。drop rate 突增 = 該 source 過載的直接訊號;depth 只是輔助(見 Q3)。</div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q3:消費端落後,你用什麼指標觀測?</summary>
+    <div class="deep">
+      <div class="lvl"><span class="qn">L1</span> — export 每顆 ring 的 <code class="inl">len()</code>(depth)、drop counter、per-worker 處理延遲、端到端 latency(signal ts → aggregate flush ts)。</div>
+      <div class="lvl l2"><span class="qn">L2:depth 抖動很大怎麼辦?</span> — 別看瞬時值,看<strong>窗內高水位</strong>(max depth over window)與 p99 depth。瞬時 depth 取樣會漏掉短 burst。</div>
+      <div class="lvl l3"><span class="qn">L3:如果 drop 一直發生、但 depth 取樣看起來不高?</span> — 表示 burst 的時間尺度<strong>短於你的 depth 取樣間隔</strong>:塞爆又被消化,取樣點之間看不到。此時 <strong>drop counter(單調)才是真訊號</strong>,depth 只能當輔助。這正是「觀測指標選錯會給假陰性」的典型。</div>
+    </div>
+  </details>
+</section>
+
+<!-- ============ PANEL 7: OPEN DESIGN ============ -->
+<section class="panel" id="p-open">
+  <h2>開放設計追問（只列問題,留給你口頭作答）</h2>
+  <p class="dim">沒有標準答案。當面試 warm-up:對每題講 2–3 個 trade-off 分岔 + 各自失敗模式,講 Big-O、先 naive 再 iterate、講完自己 dry-run 一次。</p>
+
+  <div class="oq"><div class="num">1</div><div><div class="q">aggregation 的<strong>時間窗怎麼選</strong>?固定窗 / 滑動窗 / 對齊 wall-clock 的差別在哪?窗太小 vs 太大各自付什麼代價?</div><div class="probe">probe:overhead ↔ 延遲、對齊、late-arriving signal 落到哪個窗</div></div></div>
+
+  <div class="oq"><div class="num">2</div><div><div class="q"><strong>單一 source 爆量,如何不拖垮全局</strong>?隔離邊界畫在哪?per-source quota、動態資源、admission control 怎麼取捨?</div><div class="probe">probe:blast radius、fair share、hot source 的動態重配</div></div></div>
+
+  <div class="oq"><div class="num">3</div><div><div class="q"><strong>消費端落後的觀測指標</strong>該用哪個當主訊號 —— depth 高水位、drop counter、還是端到端 latency?為什麼單看其一會被騙?</div><div class="probe">probe:取樣尺度 vs burst 尺度、單調 vs 瞬時、alert 設哪個</div></div></div>
+
+  <div class="oq"><div class="num">4</div><div><div class="q"><strong>graceful shutdown 時 in-flight 資料去向</strong>?drain 到底還是丟棄?producer 先停還是 consumer 先停?半滿的 ring 怎麼收尾才不會 deadlock 或漏資料?</div><div class="probe">probe:停機順序、drain 逾時、最後一個窗要不要 flush partial</div></div></div>
+
+  <div class="oq"><div class="num">5</div><div><div class="q"><strong>如何驗證這條 pipeline 的並發正確性</strong>?stress + sanitizer 的侷限是什麼?TSO 假陰性怎麼破?loom / 形式化各能覆蓋到哪、覆蓋不到哪?</div><div class="probe">probe:x86 TSO 掩蓋 ordering bug、loom 狀態爆炸、什麼證得了 / 證不了</div></div></div>
+</section>
+
+<div class="footer">reference tier · 手刻練習請回到 drill(<code>todo!()</code> 骨架)· 7/24 timed capstone 才把這些 primitive 組成整條 pipeline</div>
+</div>
+
+<!-- ===== verified code (byte-identical; injected as textContent, no manual escaping) ===== -->
+<script type="text/plain" id="src-impl">use std::cell::UnsafeCell;
+use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+pub struct SpscRing<T> {
+    buf: Box<[UnsafeCell<MaybeUninit<T>>]>,
+    cap: usize,        // buf.len(); usable = cap - 1（犧牲一格區分 full/empty）
+    head: AtomicUsize, // read index;  只有 consumer 寫
+    tail: AtomicUsize, // write index; 只有 producer 寫
+}
+
+// SAFETY: SPSC 契約 —— 同時最多一個 thread 呼叫 try_push、一個呼叫 try_pop。
+// tail 的 Release-store 配 consumer 的 Acquire-load 建立 happens-before（資料先於發布可見）；
+// head 的 Release-store 配 producer 的 Acquire-load 建立 happens-before（讀完先於覆寫）。
+// Send 對 T: Send 自動成立（所有欄位皆 Send）；只有 Sync 要手動，因 UnsafeCell 恆 !Sync。
+unsafe impl<T: Send> Sync for SpscRing<T> {}
+
+impl<T> SpscRing<T> {
+    pub fn new(cap: usize) -> Self {
+        assert!(cap >= 2, "need >= 2 slots; one is sacrificed to distinguish full/empty");
+        let mut v = Vec::with_capacity(cap);
+        for _ in 0..cap {
+            v.push(UnsafeCell::new(MaybeUninit::uninit()));
+        }
+        Self { buf: v.into_boxed_slice(), cap, head: AtomicUsize::new(0), tail: AtomicUsize::new(0) }
+    }
+
+    /// Producer 端。滿了回 Err(value)，把 value 交還呼叫方 —— backpressure 策略在呼叫方分岔。
+    pub fn try_push(&self, value: T) -> Result<(), T> {
+        let tail = self.tail.load(Ordering::Relaxed);      // 讀自己寫的 index，免同步
+        let next = (tail + 1) % self.cap;                  // wrap
+        if next == self.head.load(Ordering::Acquire) {     // full：須 observe consumer 釋放
+            return Err(value);
+        }
+        // 尚未 publish，此刻 producer 對 buf[tail] 有獨佔存取
+        unsafe { (*self.buf[tail].get()).write(value); }
+        self.tail.store(next, Ordering::Release);          // publish 這次 write
+        Ok(())
+    }
+
+    /// Consumer 端。空了回 None。
+    pub fn try_pop(&self) -> Option<T> {
+        let head = self.head.load(Ordering::Relaxed);      // 讀自己寫的 index，免同步
+        if head == self.tail.load(Ordering::Acquire) {     // empty：須 observe producer 發布
+            return None;
+        }
+        // producer 已 publish 這格，獨佔讀取
+        let value = unsafe { (*self.buf[head].get()).assume_init_read() };
+        let next = (head + 1) % self.cap;                  // wrap
+        self.head.store(next, Ordering::Release);          // publish 這格已釋放
+        Some(value)
+    }
+
+    /// 診斷用：當前元素數。並發下為 best-effort snapshot，非同步原語。
+    pub fn len(&self) -> usize {
+        let tail = self.tail.load(Ordering::Acquire);
+        let head = self.head.load(Ordering::Acquire);
+        (tail + self.cap - head) % self.cap
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl<T> Drop for SpscRing<T> {
+    fn drop(&mut self) {
+        // 排掉殘留的已初始化元素避免 leak。&mut self 獨佔，單執行緒。
+        while self.try_pop().is_some() {}
+    }
+}</script>
+
+<script type="text/plain" id="src-oracles">#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_then_single() {
+        let r = SpscRing::<u32>::new(4);
+        assert_eq!(r.try_pop(), None);
+        assert_eq!(r.try_push(7), Ok(()));
+        assert_eq!(r.try_pop(), Some(7));
+        assert_eq!(r.try_pop(), None);
+    }
+
+    #[test]
+    fn fills_to_usable_minus_one() {
+        let r = SpscRing::<u32>::new(4); // cap 4, usable 3
+        assert_eq!(r.try_push(1), Ok(()));
+        assert_eq!(r.try_push(2), Ok(()));
+        assert_eq!(r.try_push(3), Ok(()));
+        assert_eq!(r.try_push(4), Err(4)); // 滿：一格被犧牲
+        assert_eq!(r.len(), 3);
+    }
+
+    #[test]
+    fn fifo_across_wrap() {
+        let r = SpscRing::<u32>::new(4); // usable 3
+        assert_eq!(r.try_push(1), Ok(()));
+        assert_eq!(r.try_push(2), Ok(()));
+        assert_eq!(r.try_pop(), Some(1));
+        assert_eq!(r.try_push(3), Ok(()));
+        assert_eq!(r.try_push(4), Ok(())); // tail wrap 3 -> 0
+        assert_eq!(r.try_push(5), Err(5)); // full again
+        assert_eq!(r.try_pop(), Some(2));
+        assert_eq!(r.try_pop(), Some(3));
+        assert_eq!(r.try_pop(), Some(4)); // head wrap 3 -> 0
+        assert_eq!(r.try_pop(), None);
+    }
+}</script>
+
+<script type="text/plain" id="src-bp-newest">// drop-newest：滿了直接丟新的（此 ring 的預設 —— Err 交還 value，呼叫方丟棄）
+let _ = ring.try_push(sig);</script>
+
+<script type="text/plain" id="src-bp-block">// block：自旋等到有空間（生產環境改 park / exponential backoff，勿裸 spin 燒核）
+let mut sig = sig;
+while let Err(v) = ring.try_push(sig) {
+    sig = v;
+    std::hint::spin_loop();
+}</script>
+
+<script type="text/plain" id="src-bp-trap">// ⚠️ TRAP：producer 呼叫 try_pop evict 最舊 —— 破壞 SPSC！
+if ring.try_push(sig).is_err() {
+    let _ = ring.try_pop();      // ← try_pop 是 consumer 專屬
+    let _ = ring.try_push(sig);
+}
+// 現在 producer 與 consumer 同時進 try_pop：兩者可能對同一格做 assume_init_read
+//   → 同一個 T 被 move 兩次 = 讀到已移出的記憶體 = UB；元素遺失 / 重複。
+//   head 的「單一寫者」不變式（那正是 Relaxed 讀自己 index 的前提）被打破。</script>
+
+<script type="text/plain" id="mem-raw">cap ≈ M · T                       // 每 source 要緩衝的筆數
+mem_raw ≈ N · cap · s
+        = N · (M · T) · s          // M 直接乘進去，還與 T 相乘 → 兩個爆炸維度</script>
+
+<script type="text/plain" id="mem-agg">records ≈ N · K · W                // source × metric × 保留窗數（與 M 無關）
+mem_agg ≈ N · K · W · a            // M 被摺進每筆的 count/sum，不進 record 數量</script>
+
+<!-- ===== app logic ===== -->
+<script>
+(function(){
+  "use strict";
+
+  // ---- self-contained Rust highlighter (presentation only; source bytes live in the
+  //      <script type="text/plain"> blocks and are never mutated). A left-to-right lexer
+  //      so keywords inside comments/strings are NOT highlighted. ----
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var KW = new Set(['pub','fn','let','mut','struct','impl','unsafe','for','in','if','else','return',
+    'while','loop','match','mod','use','as','move','const','static','where','trait','enum','self',
+    'Self','crate','super','ref','dyn','break','continue','type']);
+  var PRIM = new Set(['usize','isize','u8','u16','u32','u64','u128','i8','i16','i32','i64','i128',
+    'f32','f64','bool','char','str']);
+  function hlRust(code){
+    var out='', i=0, n=code.length;
+    while(i<n){
+      var c=code[i], j;
+      if(c==='/' && code[i+1]==='/'){                       // line comment
+        j=i; while(j<n && code[j]!=='\n') j++;
+        out+='<span class="c-com">'+esc(code.slice(i,j))+'</span>'; i=j; continue;
+      }
+      if(c==='"'){                                          // string literal
+        j=i+1; while(j<n && code[j]!=='"'){ if(code[j]==='\\') j++; j++; }
+        j++; if(j>n) j=n;
+        out+='<span class="c-str">'+esc(code.slice(i,j))+'</span>'; i=j; continue;
+      }
+      if(c==='#' && code[i+1]==='['){                       // attribute #[...]
+        j=i+2; var d=1; while(j<n && d>0){ if(code[j]==='[')d++; else if(code[j]===']')d--; j++; }
+        out+='<span class="c-attr">'+esc(code.slice(i,j))+'</span>'; i=j; continue;
+      }
+      if(c>='0' && c<='9'){                                 // number
+        j=i; while(j<n && /[0-9_a-fxA-FX]/.test(code[j])) j++;
+        out+='<span class="c-num">'+esc(code.slice(i,j))+'</span>'; i=j; continue;
+      }
+      if(/[A-Za-z_]/.test(c)){                              // identifier
+        j=i; while(j<n && /[A-Za-z0-9_]/.test(code[j])) j++;
+        var w=code.slice(i,j), cls=null;
+        if(code[j]==='!'){ out+='<span class="c-mac">'+esc(w)+'!</span>'; i=j+1; continue; }
+        if(KW.has(w)) cls='c-kw';
+        else if(PRIM.has(w)) cls='c-ty';
+        else if(/^[A-Z]/.test(w)) cls='c-ty';               // CamelCase type / variant / generic
+        else if(code[j]==='(') cls='c-fn';
+        out += cls ? '<span class="'+cls+'">'+esc(w)+'</span>' : esc(w);
+        i=j; continue;
+      }
+      out += esc(c); i++;                                   // punctuation / CJK / symbols
+    }
+    return out;
+  }
+  document.querySelectorAll('code[data-code]').forEach(function(el){
+    var src = document.getElementById(el.getAttribute('data-code'));
+    if (src) el.innerHTML = hlRust(src.textContent.replace(/^\n/, ''));
+  });
+
+  // ---- tab activation (no <a href>, delegated) ----
+  function activateTab(id){
+    document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id === id); });
+    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === id); });
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  // ---- architecture perspective ----
+  function setPersp(mode){
+    var arch = document.getElementById('arch');
+    arch.className = 'persp-' + mode;
+    document.querySelectorAll('.persp-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-persp') === mode); });
+  }
+
+  // ---- single delegated click handler ----
+  document.addEventListener('click', function(e){
+    var tab = e.target.closest('[data-tab]');
+    if (tab){ activateTab(tab.getAttribute('data-tab')); return; }
+    var jump = e.target.closest('[data-jump]');
+    if (jump){ activateTab(jump.getAttribute('data-jump')); return; }
+    var persp = e.target.closest('[data-persp]');
+    if (persp){ setPersp(persp.getAttribute('data-persp')); return; }
+  });
+
+  // ============ STEPPER ============
+  var CAP = 4;
+  // each step: buf (values|null), head, tail, note, kind (''|full|wrap|empty), sac (sacrificed slot idx|null)
+  var STEPS = [
+    { buf:[null,null,null,null], head:0, tail:0, kind:'empty', sac:null,
+      note:'初始。head == tail == 0 → 空。此判定靠「犧牲一格」與 full 區分。' },
+    { buf:['A',null,null,null], head:0, tail:1, kind:'', sac:null,
+      note:'push A：寫 buf[0]=A，tail 0→1（(0+1)%4）。' },
+    { buf:['A','B',null,null], head:0, tail:2, kind:'', sac:null,
+      note:'push B：寫 buf[1]=B，tail 1→2。' },
+    { buf:['A','B','C',null], head:0, tail:3, kind:'full', sac:3,
+      note:'push C：寫 buf[2]=C，tail 2→3。現在 next=(3+1)%4=0==head → 已滿。只存了 3 個，buf[3] 是被犧牲的一格。' },
+    { buf:['A','B','C',null], head:0, tail:3, kind:'full', sac:3,
+      note:'push D → next=0==head，回 Err(D)。usable = cap−1 = 3，這就是犧牲一格的代價與用途。' },
+    { buf:[null,'B','C',null], head:1, tail:3, kind:'', sac:null,
+      note:'pop → 讀 buf[0]=A，head 0→1。slot 0 釋放。回 Some(A)。' },
+    { buf:[null,'B','C','D'], head:1, tail:0, kind:'wrap', sac:null,
+      note:'push D：寫 buf[3]=D，tail 3→0（WRAP！）。off-by-one 高風險點 —— (3+1)%4 忘了 %cap 就爆這裡。' },
+    { buf:[null,'B','C','D'], head:1, tail:0, kind:'full', sac:0,
+      note:'push E → next=(0+1)%4=1==head，回 Err(E)。又滿；現在被犧牲的是 slot 0。犧牲的洞會隨環移動。' },
+    { buf:[null,null,'C','D'], head:2, tail:0, kind:'', sac:null,
+      note:'pop → 讀 buf[1]=B，head 1→2。回 Some(B)。' },
+    { buf:[null,null,null,'D'], head:3, tail:0, kind:'', sac:null,
+      note:'pop → 讀 buf[2]=C，head 2→3。回 Some(C)。' },
+    { buf:[null,null,null,null], head:0, tail:0, kind:'wrap', sac:null,
+      note:'pop → 讀 buf[3]=D，head 3→0（WRAP！）。現在 head == tail → 回到 empty。回 Some(D)。' },
+    { buf:[null,null,null,null], head:0, tail:0, kind:'empty', sac:null,
+      note:'pop → head == tail，回 None。full 與 empty 都靠這條判定，靠犧牲一格區分。' }
+  ];
+  var cur = 0;
+
+  var ringRow = document.getElementById('ring-row');
+  var tailRow = document.getElementById('tail-row');
+  var headRow = document.getElementById('head-row');
+  var noteEl  = document.getElementById('step-note');
+  var counter = document.getElementById('counter');
+  var dotsEl  = document.getElementById('dots');
+  var btnPrev = document.getElementById('btn-prev');
+  var btnNext = document.getElementById('btn-next');
+  var btnReset= document.getElementById('btn-reset');
+
+  // build static slot / marker / dot skeleton
+  for (var i=0;i<CAP;i++){
+    var slot = document.createElement('div'); slot.className='slot';
+    slot.innerHTML = '<span class="idx">'+i+'</span><span class="val"></span>';
+    ringRow.appendChild(slot);
+    var t = document.createElement('div'); t.className='mk t'; tailRow.appendChild(t);
+    var h = document.createElement('div'); h.className='mk h'; headRow.appendChild(h);
+  }
+  STEPS.forEach(function(_,i){
+    var d = document.createElement('div'); d.className='dot'; d.setAttribute('data-dot', i);
+    dotsEl.appendChild(d);
+  });
+
+  function render(){
+    var s = STEPS[cur];
+    var slots = ringRow.children;
+    for (var i=0;i<CAP;i++){
+      var slot = slots[i];
+      var v = s.buf[i];
+      slot.querySelector('.val').textContent = (v===null ? '·' : v);
+      slot.classList.toggle('filled', v!==null);
+      slot.classList.toggle('sacrificed', s.sac===i);
+      tailRow.children[i].textContent = (s.tail===i ? '▲T' : '');
+      headRow.children[i].textContent = (s.head===i ? '▲H' : '');
+    }
+    noteEl.textContent = s.note;
+    noteEl.className = 'step-note' + (s.kind ? ' k-'+s.kind : '');
+    counter.textContent = 'step ' + cur + ' / ' + (STEPS.length-1);
+    Array.prototype.forEach.call(dotsEl.children, function(d,i){ d.classList.toggle('active', i===cur); });
+    btnPrev.disabled = (cur===0);
+    btnNext.disabled = (cur===STEPS.length-1);
+  }
+
+  btnPrev.addEventListener('click', function(){ if(cur>0){cur--; render();} });
+  btnNext.addEventListener('click', function(){ if(cur<STEPS.length-1){cur++; render();} });
+  btnReset.addEventListener('click', function(){ cur=0; render(); });
+  dotsEl.addEventListener('click', function(e){
+    var d = e.target.closest('[data-dot]'); if(d){ cur = parseInt(d.getAttribute('data-dot'),10); render(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

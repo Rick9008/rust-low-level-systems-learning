@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hw_bridge — Binary-Protocol HW/SW Bridge (std-only)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+:root{
+  --bg0:#282828; --bg0h:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg:#d4be98; --fg-dim:#a89984; --grey:#928374; --grey2:#7c6f64;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box;}
+html,body{
+  -webkit-text-size-adjust:100%;
+  margin:0; padding:0;
+  background:var(--bg0); color:var(--fg);
+  font-family:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size:15px; line-height:1.65;
+}
+.wrap{max-width:1000px; margin:0 auto; padding:0 16px 120px;}
+
+/* ---- top bar / tabs ---- */
+header{
+  position:sticky; top:0; z-index:50;
+  background:var(--bg0h); border-bottom:1px solid var(--bg4);
+  padding:12px 0 0;
+}
+.hrow{max-width:1000px; margin:0 auto; padding:0 16px;}
+.title{font-size:16px; font-weight:700; color:var(--yellow); letter-spacing:.3px;}
+.title small{color:var(--grey); font-weight:400; font-size:12px; display:block; margin-top:2px;}
+nav.tabs{
+  max-width:1000px; margin:10px auto 0; padding:0 8px;
+  display:flex; gap:4px; overflow-x:auto; -webkit-text-size-adjust:100%;
+  scrollbar-width:thin; scrollbar-color:var(--bg4) transparent;
+}
+nav.tabs::-webkit-scrollbar{height:6px;}
+nav.tabs::-webkit-scrollbar-thumb{background:var(--bg4); border-radius:3px;}
+.tab-btn{
+  flex:0 0 auto; cursor:pointer; user-select:none;
+  background:transparent; color:var(--fg-dim);
+  border:none; border-bottom:2px solid transparent;
+  padding:8px 12px; font-family:inherit; font-size:13px; white-space:nowrap;
+  transition:color .12s, border-color .12s;
+}
+.tab-btn:hover{color:var(--fg);}
+.tab-btn.active{color:var(--yellow); border-bottom-color:var(--yellow);}
+
+/* ---- panels ---- */
+.panel{display:none; padding-top:22px;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+
+h2{color:var(--aqua); font-size:19px; margin:6px 0 4px; border-left:3px solid var(--aqua); padding-left:10px;}
+h3{color:var(--blue); font-size:15px; margin:26px 0 8px;}
+h4{color:var(--orange); font-size:14px; margin:18px 0 6px;}
+p{margin:8px 0;}
+.lead{color:var(--fg-dim); font-size:14px; margin-bottom:18px;}
+strong{color:var(--yellow); font-weight:700;}
+em{color:var(--purple); font-style:normal;}
+code.inl{background:var(--bg1); color:var(--aqua); padding:1px 5px; border-radius:3px; font-size:.92em;}
+a.jump, .jump{color:var(--blue); cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;}
+.jump:hover{color:var(--yellow);}
+
+/* ---- cards ---- */
+.card{background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:14px 16px; margin:14px 0;}
+.card.naive{border-left:3px solid var(--grey);}
+.card.fail{border-left:3px solid var(--red);}
+.card.fix{border-left:3px solid var(--green);}
+.card.note{border-left:3px solid var(--blue); background:var(--bg0h);}
+.card.warn{border-left:3px solid var(--orange); background:var(--bg0h);}
+.tag{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; margin-bottom:6px; letter-spacing:.5px;}
+.tag.n{background:var(--bg3); color:var(--fg-dim);}
+.tag.f{background:#3a2626; color:var(--red);}
+.tag.x{background:#26331f; color:var(--green);}
+.tag.b{background:#1f2c33; color:var(--blue);}
+.tag.w{background:#33291a; color:var(--orange);}
+
+pre{
+  -webkit-text-size-adjust:100%;
+  background:var(--bg0h); border:1px solid var(--bg3); border-radius:8px;
+  padding:14px 16px; overflow-x:auto; margin:12px 0;
+  font-size:13px; line-height:1.5; color:var(--fg); white-space:pre;
+}
+pre.code{tab-size:4;}
+.c-comment{color:var(--grey); font-style:italic;}
+.c-string{color:var(--green);}
+.c-num{color:var(--purple);}
+.c-macro{color:var(--blue);}
+.c-attr{color:var(--aqua);}
+.c-kw{color:var(--red);}
+.c-enumk{color:var(--orange);}
+.c-type{color:var(--yellow);}
+.c-life{color:var(--orange); font-style:italic;}
+.filename{font-size:12px; color:var(--grey); margin:16px 0 -4px; padding-left:4px;}
+.filename b{color:var(--aqua); font-weight:500;}
+
+ul{margin:8px 0; padding-left:22px;}
+li{margin:4px 0;}
+.kbd{background:var(--bg2); border:1px solid var(--bg4); border-radius:4px; padding:1px 6px; font-size:12px; color:var(--fg-dim);}
+
+/* ---- wire frame diagram (figure 1) ---- */
+.wire{display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:16px 0; overflow-x:auto;}
+.wfield{border:1px solid var(--bg4); border-right:none; padding:10px 12px; text-align:center; min-width:70px; position:relative;}
+.wfield:last-child{border-right:1px solid var(--bg4);}
+.wfield .wf-name{font-size:12px; font-weight:700; display:block;}
+.wfield .wf-sz{font-size:11px; color:var(--grey); display:block; margin-top:3px;}
+.wf-len{background:#1f2c33; color:var(--blue);}
+.wf-op{background:#33291a; color:var(--orange);}
+.wf-pl{background:#26331f; color:var(--green); flex:1; min-width:120px;}
+.brace{text-align:center; color:var(--yellow); font-size:12px; margin-top:4px;}
+
+/* ---- byte stepper (figure 2) ---- */
+.stepper{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:16px; margin:16px 0;}
+.sc-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+.sc-btn{cursor:pointer; background:var(--bg2); color:var(--fg-dim); border:1px solid var(--bg4);
+  border-radius:6px; padding:6px 11px; font-family:inherit; font-size:12px;}
+.sc-btn.active{background:var(--bg4); color:var(--yellow); border-color:var(--yellow);}
+.byterow{display:flex; flex-wrap:wrap; gap:3px; margin:10px 0 6px; min-height:52px; align-items:flex-end;}
+.byte{display:flex; flex-direction:column; align-items:center; min-width:34px;}
+.byte .idx{font-size:10px; color:var(--grey2); margin-bottom:2px;}
+.byte .val{border:1px solid var(--bg4); border-radius:4px; padding:5px 0; width:34px; text-align:center;
+  font-size:12px; font-weight:700; background:var(--bg0h);}
+.b-len .val{background:#1f2c33; color:var(--blue); border-color:var(--blue);}
+.b-op .val{background:#33291a; color:var(--orange); border-color:var(--orange);}
+.b-pl .val{background:#26331f; color:var(--green); border-color:var(--green);}
+.b-next .val{background:var(--bg2); color:var(--grey); border-style:dashed;}
+.b-consumed .val{opacity:.34; text-decoration:line-through;}
+.empty-buf{color:var(--grey); font-size:12px; font-style:italic; padding:14px 0;}
+.step-action{font-size:13px; margin:6px 0 2px; color:var(--fg);}
+.step-action b{color:var(--yellow);}
+.decode-box{border-radius:6px; padding:9px 12px; margin:8px 0; font-size:12.5px; line-height:1.55;}
+.decode-wait{background:#3a2626; border:1px solid var(--red); color:var(--fg);}
+.decode-emit{background:#26331f; border:1px solid var(--green); color:var(--fg);}
+.decode-info{background:var(--bg0h); border:1px solid var(--bg4); color:var(--fg-dim);}
+.emitted{margin-top:10px; font-size:12px;}
+.emitted .ehead{color:var(--grey); margin-bottom:4px;}
+.eframe{background:var(--bg0h); border:1px solid var(--green); border-radius:5px; padding:4px 9px; margin:3px 0; color:var(--green); display:inline-block;}
+.controls{display:flex; gap:8px; align-items:center; margin-top:14px; flex-wrap:wrap;}
+.ctl{cursor:pointer; background:var(--bg3); color:var(--fg); border:1px solid var(--bg4);
+  border-radius:6px; padding:7px 14px; font-family:inherit; font-size:13px;}
+.ctl:hover{background:var(--bg4);}
+.ctl:disabled{opacity:.4; cursor:not-allowed;}
+.ctl.prim{background:var(--green); color:var(--bg0h); border-color:var(--green); font-weight:700;}
+.progress{color:var(--grey); font-size:12px; margin-left:auto;}
+
+/* ---- side-by-side concurrency (figure 3) ---- */
+.twocol{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0;}
+@media(max-width:720px){.twocol{grid-template-columns:1fr;}}
+.model{background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:14px; font-size:12.5px;}
+.model.a{border-top:3px solid var(--green);}
+.model.b{border-top:3px solid var(--orange);}
+.model h4{margin-top:0;}
+.flowbox{background:var(--bg0h); border:1px solid var(--bg4); border-radius:6px; padding:8px 10px; margin:6px 0; font-size:12px;}
+.flowbox b{color:var(--aqua);}
+.arrow{text-align:center; color:var(--grey); font-size:14px; margin:2px 0;}
+.badge{display:inline-block; font-size:11px; padding:2px 7px; border-radius:4px; margin:2px 3px 2px 0;}
+.badge.good{background:#26331f; color:var(--green);}
+.badge.bad{background:#3a2626; color:var(--red);}
+.badge.neu{background:var(--bg3); color:var(--fg-dim);}
+
+/* ---- client roundtrip (figure 4) ---- */
+.seq{display:grid; grid-template-columns:1fr 1fr; gap:0; margin:16px 0; background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; overflow:hidden;}
+.seq .col-head{padding:8px; text-align:center; font-weight:700; font-size:13px; background:var(--bg0h); border-bottom:1px solid var(--bg3);}
+.seq .col-head.c{color:var(--blue);}
+.seq .col-head.s{color:var(--orange);}
+.seqrow{grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr; align-items:center; border-bottom:1px dashed var(--bg3); min-height:44px;}
+.seqrow:last-child{border-bottom:none;}
+.seqcell{padding:8px 12px; font-size:12px;}
+.seqcell.act{color:var(--fg);}
+.msg-r{grid-column:1 / -1; text-align:center; color:var(--green); font-size:12px; padding:6px;}
+.msg-r.req{color:var(--blue);}
+
+/* ---- 45-min stepper ---- */
+.m45{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:16px; margin:16px 0;}
+.m45-timeline{display:flex; gap:3px; margin-bottom:14px;}
+.m45-seg{flex:1; height:6px; border-radius:3px; background:var(--bg3);}
+.m45-seg.done{background:var(--green);}
+.m45-seg.cur{background:var(--yellow);}
+.m45-step h4{margin-top:0; display:flex; align-items:center; gap:10px;}
+.m45-time{font-size:11px; color:var(--bg0h); background:var(--yellow); padding:2px 8px; border-radius:10px; font-weight:700;}
+.m45-cut{margin-top:10px; font-size:12px; padding:8px 10px; border-radius:6px; background:var(--bg0h); border:1px solid var(--bg4);}
+.m45-cut b{color:var(--red);}
+.m45-demo{margin-top:8px; font-size:12px; padding:8px 10px; border-radius:6px; background:#26331f; border:1px solid var(--green);}
+.m45-demo b{color:var(--green);}
+
+/* ---- follow-up tree ---- */
+.fu{margin:14px 0;}
+.fu-q{background:var(--bg1); border:1px solid var(--bg3); border-left:3px solid var(--purple); border-radius:6px; padding:11px 14px; margin:8px 0;}
+.fu-l1{margin-left:0;}
+.fu-l2{margin-left:22px; border-left-color:var(--blue);}
+.fu-l3{margin-left:44px; border-left-color:var(--aqua);}
+.fu-lv{font-size:11px; font-weight:700; letter-spacing:.5px; margin-bottom:4px;}
+.fu-l1 .fu-lv{color:var(--purple);}
+.fu-l2 .fu-lv{color:var(--blue);}
+.fu-l3 .fu-lv{color:var(--aqua);}
+.fu-a{color:var(--fg-dim); font-size:12.5px; margin-top:6px;}
+.fu-a b{color:var(--yellow);}
+
+/* ---- tradeoff table ---- */
+table{width:100%; border-collapse:collapse; margin:14px 0; font-size:12.5px;}
+th,td{border:1px solid var(--bg3); padding:8px 10px; text-align:left; vertical-align:top;}
+th{background:var(--bg0h); color:var(--aqua); font-weight:700;}
+td b{color:var(--yellow);}
+
+/* ---- quiz ---- */
+details{background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:12px 16px; margin:12px 0;}
+details[open]{border-color:var(--bg4);}
+summary{cursor:pointer; color:var(--fg); font-weight:500; font-size:14px; list-style:none;}
+summary::-webkit-details-marker{display:none;}
+summary::before{content:'▸ '; color:var(--yellow);}
+details[open] summary::before{content:'▾ ';}
+.ans{margin-top:12px; padding-top:12px; border-top:1px dashed var(--bg4); color:var(--fg-dim); font-size:13px;}
+.ans b{color:var(--green);}
+.q-num{color:var(--purple); font-weight:700;}
+
+.divider{height:1px; background:var(--bg3); margin:26px 0;}
+.mono-note{font-size:11px; color:var(--grey); margin-top:4px;}
+.unverified{color:var(--orange); font-size:11px; font-style:italic;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div class="title">hw_bridge — 橋接軟硬體的 binary-protocol server/client
+      <small>std-only · edition 2021 · rustc 1.75 編譯 + 測試通過 · 45 分鐘白板增量順序</small>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="p-overview">總覽</button>
+    <button class="tab-btn" data-tab="p-wire">① Wire Format</button>
+    <button class="tab-btn" data-tab="p-framing">② Framing 狀態機</button>
+    <button class="tab-btn" data-tab="p-server">③ Server 並發</button>
+    <button class="tab-btn" data-tab="p-client">④ Client 往返</button>
+    <button class="tab-btn" data-tab="p-async">⑤ async / Future</button>
+    <button class="tab-btn" data-tab="p-epoll">⑥ epoll</button>
+    <button class="tab-btn" data-tab="p-45min">45 分鐘順序</button>
+    <button class="tab-btn" data-tab="p-followup">追問</button>
+    <button class="tab-btn" data-tab="p-quiz">Self-Quiz</button>
+  </nav>
+</header>
+
+<div class="wrap">
+
+<!-- ================= OVERVIEW ================= -->
+<section class="panel active" id="p-overview">
+  <h2>題目與心智模型</h2>
+  <p class="lead">寫一個 server 模擬硬體控制器,回應 <code class="inl">READ_SENSOR</code> / <code class="inl">SET_FAN</code> 之類命令;client 用 <strong>binary 協定</strong>呼叫。核心不是演算法,是兩件事:<em>通訊協定怎麼定</em> 與 <em>thread/task 責任怎麼切</em>。</p>
+
+  <div class="card note">
+    <span class="tag b">一句話地基</span>
+    <p><strong>TCP 是 byte stream,不是 message queue。</strong>你 <code class="inl">write()</code> 一個「命令」,對方 <code class="inl">read()</code> 拿到的可能是半個、剛好一個、或一個半命令。所以你得自己在 byte stream 上劃出 message 邊界 —— 這叫 <strong>framing</strong>。本教材用 <strong>length-prefix framing</strong>。</p>
+  </div>
+
+  <h3>四張圖 = 四個責任邊界</h3>
+  <ul>
+    <li><span class="jump" data-jump="p-wire">① Wire Format</span> — 一個 frame 的 byte 佈局,對應 <code class="inl">protocol.rs</code>(<code class="inl">encode</code> / <code class="inl">try_decode</code>)。off-by-one 最愛的地方。</li>
+    <li><span class="jump" data-jump="p-framing">② Framing 狀態機</span> — <code class="inl">FrameReader</code>:把 byte stream 切回 frame。<strong>整題的肉</strong>,互動 stepper 在這。</li>
+    <li><span class="jump" data-jump="p-server">③ Server 並發模型</span> — thread-per-conn vs event-loop,兩種責任切法並排。45 分鐘該選哪個。</li>
+    <li><span class="jump" data-jump="p-client">④ Client 往返</span> — 一來一回;順帶點出 async 版靠 request-id → pending map。</li>
+    <li><span class="jump" data-jump="p-async">⑤ async / Future</span> — 同一套 protocol/framer 換 <code class="inl">async fn</code>;附一個 std-only 手寫 <code class="inl">block_on</code> executor(tokio 藏起來的那半,= 你 Etched 挑戰 #2)。</li>
+  </ul>
+
+  <h3>五根面試執行支柱(Etched prep doc 的評分錨點)</h3>
+  <table>
+    <tr><th>#</th><th>Pillar</th><th>本題怎麼落地</th></tr>
+    <tr><td>1</td><td><b>Clarify & Communicate</b></td><td>先問:哪些命令?sync/async?幾個 client?scale?→ <span class="jump" data-jump="p-45min">step 1</span></td></tr>
+    <tr><td>2</td><td><b>Abstract the Noise</b></td><td>硬體行為藏在 <code class="inl">trait HwController</code> 後面,network 碼永不直接模擬 ADC → <span class="jump" data-jump="p-server">handler stub</span></td></tr>
+    <tr><td>3</td><td><b>Start Simple, Iterate</b></td><td>naive 一來一回先跑通(能 demo)→ 再補 framing → 再多 client → <span class="jump" data-jump="p-45min">45 分鐘 stepper</span></td></tr>
+    <tr><td>4</td><td><b>Talk Trade-offs</b></td><td>明講 Big-O + thread-per-conn vs event loop + binary vs text + length-prefix vs delimiter</td></tr>
+    <tr><td>5</td><td><b>Dry-Run Before You Run</b></td><td>partial-read / 跨 frame 邊界 手動 trace 一遍(圖② stepper 就是這件事的視覺版)。<span class="unverified">← 你 R1 掉分的那根軸,唯一必須真的手練的</span></td></tr>
+  </table>
+
+  <div class="card warn">
+    <span class="tag w">std-only 註記</span>
+    <ul>
+      <li>編碼:<code class="inl">u32::to_be_bytes</code> / <code class="inl">u32::from_be_bytes</code>(網路序 = big-endian)。無 serde。</li>
+      <li>socket:<code class="inl">std::net::{TcpListener, TcpStream}</code>。</li>
+      <li>nonblocking:<code class="inl">stream.set_nonblocking(true)</code> 有;epoll 沒有 <em>safe</em> wrapper —— <code class="inl">epoll_wait</code> / <code class="inl">EPOLLIN</code> / <code class="inl">EPOLLOUT</code> 要 <code class="inl">libc</code> FFI。event-loop 我給兩版:<strong>busy-poll 近似</strong>(<span class="jump" data-jump="p-server">③(b)</span>,純 std)與 <strong>真 epoll</strong>(<span class="jump" data-jump="p-epoll">⑥</span>,手刻 <code class="inl">extern "C"</code>,libc 本來就被 link → 仍是 std-only、零 crate,已端到端測通)。面試被問 std-only 能不能用 epoll,答案是「能,自己宣告 syscall」。</li>
+    </ul>
+  </div>
+
+  <div class="card note">
+    <span class="tag b">repo 對照</span>
+    <p>本教材各頁對應你三層 repo 的檔案:<code class="inl">protocol.rs</code>、<code class="inl">framer.rs</code>、<code class="inl">handler.rs</code>、<code class="inl">server_threaded.rs</code>、<code class="inl">server_evented.rs</code>、<code class="inl">client.rs</code>。教材是 reference tier;真正練是把 <code class="inl">framer.rs</code> 的 <code class="inl">FrameReader::feed</code>/<code class="inl">next_frame</code> 挖空自己冷寫,再 diff。</p>
+  </div>
+</section>
+
+<!-- ================= WIRE FORMAT ================= -->
+<section class="panel" id="p-wire">
+  <h2>① Wire Format — 一個 frame 長怎樣</h2>
+
+  <h3>推導:naive → 失敗 → 修</h3>
+  <div class="card naive">
+    <span class="tag n">NAIVE</span>
+    <p>「命令就直接送啊」:client 送 <code class="inl">[opcode][payload]</code>,server <code class="inl">read()</code> 出來解析。</p>
+  </div>
+  <div class="card fail">
+    <span class="tag f">失敗模式</span>
+    <p>server <code class="inl">read()</code> 回傳的 byte 數是<strong>任意的</strong>(受 MTU、Nagle、對方 write 節奏影響)。沒有邊界資訊時:</p>
+    <ul>
+      <li>兩個命令黏在一起 → server 不知道第一個到哪結束。</li>
+      <li>一個命令被切兩半 → server 拿到半個 <code class="inl">payload</code>,不知道還要等多少。</li>
+    </ul>
+    <p>根因:<strong>TCP 沒有 message 邊界</strong>。你送的「一次 write」和對方「一次 read」沒有一對一關係。</p>
+  </div>
+  <div class="card fix">
+    <span class="tag x">修法:length-prefix framing</span>
+    <p>在每個 message 前面加一個固定寬度的長度欄位。reader 先讀長度,就<strong>精確</strong>知道還要收多少 byte 才是一個完整 message。</p>
+  </div>
+
+  <h3>佈局圖</h3>
+  <div class="wire">
+    <div class="wfield wf-len"><span class="wf-name">len</span><span class="wf-sz">u32, big-endian<br>4 bytes</span></div>
+    <div class="wfield wf-op"><span class="wf-name">opcode</span><span class="wf-sz">u8<br>1 byte</span></div>
+    <div class="wfield wf-pl"><span class="wf-name">payload</span><span class="wf-sz">len − 1 bytes</span></div>
+  </div>
+  <div class="brace">└─ len 計算的範圍(opcode + payload)─┘　　　len <strong>不含自己</strong>那 4 bytes</div>
+
+  <div class="card warn" style="margin-top:20px;">
+    <span class="tag w">off-by-one 熱區(這格最容易錯)</span>
+    <ul>
+      <li><code class="inl">len</code> = <code class="inl">1 + payload.len()</code>(含 opcode,不含 len 欄位)。</li>
+      <li>整個 frame 在線上的長度 = <code class="inl">4 + len</code>(那 <code class="inl">+4</code> 就是 len 欄位本身)。這個 <code class="inl">+4</code> 忘記加 = 經典 bug。</li>
+      <li>解出來:<code class="inl">opcode = buf[4]</code>,<code class="inl">payload = buf[5..4+len]</code>。<code class="inl">5 = 4(len) + 1(opcode)</code>。</li>
+    </ul>
+  </div>
+
+  <h3>設計選擇要在面試講出來</h3>
+  <table>
+    <tr><th>決定</th><th>選了什麼</th><th>理由 / 代價</th></tr>
+    <tr><td>len 寬度</td><td><b>u32</b></td><td>單 frame 上限 4 GiB;u16 省 2 bytes 但封頂 64 KiB。多數協定 u32。</td></tr>
+    <tr><td>len 含不含自己</td><td><b>不含</b>(只算 opcode+payload)</td><td>兩種都行,但要一致;混用就是 bug。decode 端 <code class="inl">total = 4 + len</code>。</td></tr>
+    <tr><td>byte order</td><td><b>big-endian</b></td><td>= 網路序,跨平台無歧義。std <code class="inl">to_be_bytes</code> 直接給。</td></tr>
+    <tr><td>DoS 上限</td><td><b>MAX_FRAME_LEN</b> = 64 KiB</td><td>拒絕宣稱超大 len 的惡意 frame,避免無限配置。</td></tr>
+  </table>
+
+  <p class="filename"><b>protocol.rs</b> — encode / try_decode(以下為實際編譯過的原文)</p>
+  <pre class="code" data-code="protocol"></pre>
+  <p class="mono-note">※ <code class="inl">try_decode</code> 回傳三態:<code class="inl">Ok(Some((frame, consumed)))</code> 完整 / <code class="inl">Ok(None)</code> 還不夠等下次 / <code class="inl">Err(_)</code> 協定違規丟連線。<code class="inl">consumed</code> 是這個 frame 在 buffer 裡吃掉幾 byte,交給 <span class="jump" data-jump="p-framing"><code class="inl">FrameReader</code></span> 決定 drain 多少。</p>
+</section>
+
+<!-- ================= FRAMING ================= -->
+<section class="panel" id="p-framing">
+  <h2>② Framing 狀態機 — 把 byte stream 切回 frame</h2>
+
+  <h3>先在推導卡建立狀態,再看動畫</h3>
+  <div class="card naive">
+    <span class="tag n">NAIVE</span>
+    <pre style="margin:6px 0;">let n = stream.read(&amp;mut buf)?;
+let frame = decode(&amp;buf[..n]);   // 假設「一次 read == 剛好一個 frame」</pre>
+  </div>
+  <div class="card fail">
+    <span class="tag f">失敗模式(兩個方向都會爆)</span>
+    <ul>
+      <li><strong>收太少</strong>:<code class="inl">read</code> 給了 4 byte,但 frame 需要 6 → <code class="inl">decode</code> 這一次不能產出,得記住已收的、等下次。</li>
+      <li><strong>收太多</strong>:<code class="inl">read</code> 給了 12 byte = 兩個 frame → 一次 <code class="inl">decode</code> 只處理得了第一個,剩下的不能丟。</li>
+    </ul>
+  </div>
+  <div class="card fix">
+    <span class="tag x">修法:三個狀態變數,一個 parse loop</span>
+    <p>引入 <code class="inl">FrameReader</code>,內部維護:</p>
+    <ul>
+      <li><code class="inl">buf: Vec&lt;u8&gt;</code> — <strong>累積 buffer</strong>。<code class="inl">feed()</code> 把新讀到的 byte 追加進來。</li>
+      <li><code class="inl">consumed</code> — <code class="inl">try_decode</code> 每切出一個 frame 回報「吃掉幾 byte」,<code class="inl">drain(0..consumed)</code> 把它們移除。</li>
+      <li><strong>remainder</strong> — drain 之後留在 buffer 前端的殘量,等下次 <code class="inl">feed</code> 或直接進下一輪 <code class="inl">next_frame</code>。</li>
+    </ul>
+    <p><strong>parse loop</strong>:<code class="inl">feed</code> 之後,<code class="inl">while let Some(frame) = reader.next_frame()? { handle(frame) }</code> —— 一直 pull 到 <code class="inl">None</code>(不夠一個完整 frame)為止。</p>
+  </div>
+
+  <h3>互動 stepper:三種 feed 情況</h3>
+  <p class="lead">用 <code class="inl">READ_SENSOR</code> frame <code class="inl">[00 00 00 02 | 01 | 00]</code>(len=2, opcode=0x01, payload=[0x00],共 6 bytes)。按情況切換,一步步看 buffer 與 offset,把 off-by-one 點看見。</p>
+
+  <div class="stepper" id="fr-stepper">
+    <div class="sc-tabs">
+      <button class="sc-btn active" data-fr="scA">情況 A:半個 frame(feed 兩次才湊齊)</button>
+      <button class="sc-btn" data-fr="scB">情況 B:一次 feed 夾兩個 frame</button>
+      <button class="sc-btn" data-fr="scC">情況 C:剛好一個</button>
+    </div>
+    <div class="step-action" id="fr-action"></div>
+    <div class="byterow" id="fr-bytes"></div>
+    <div id="fr-decode"></div>
+    <div class="emitted" id="fr-emitted"></div>
+    <div class="controls">
+      <button class="ctl" data-fr="prev" id="fr-prev">‹ 上一步</button>
+      <button class="ctl prim" data-fr="next" id="fr-next">下一步 ›</button>
+      <button class="ctl" data-fr="reset">重置</button>
+      <span class="progress" id="fr-prog"></span>
+    </div>
+  </div>
+
+  <div class="card warn">
+    <span class="tag w">stepper 裡三個 off-by-one 點</span>
+    <ul>
+      <li><code class="inl">total = 4 + len</code>:情況 A 第 2 步就卡在這 —— 讀到 <code class="inl">len=2</code> 但需要 <code class="inl">4+2=6</code>,現有 4,回 <code class="inl">None</code>。忘了 <code class="inl">+4</code> 會誤判成「夠了」然後越界讀。</li>
+      <li><code class="inl">buf[5..total]</code>:payload 從 index 5 開始(不是 4)。少 1 = 把 opcode 當 payload 第一 byte。</li>
+      <li><code class="inl">drain(0..consumed)</code>:drain <code class="inl">total</code> 而非 <code class="inl">len</code>。drain 少了 4,下一輪會把上一個 frame 的 len 欄位殘骸當新 frame 的開頭。</li>
+    </ul>
+  </div>
+
+  <p class="filename"><b>framer.rs</b> — FrameReader(feed / next_frame / buffered)</p>
+  <pre class="code" data-code="framer"></pre>
+
+  <div class="card note">
+    <span class="tag b">效能誠實話(interviewer 會追)</span>
+    <p><code class="inl">drain(0..consumed)</code> 每次把殘量往前搬 = O(remainder)。一個 burst 下反覆搬可退化到 O(n²)。面試講得出「知道這點,先求對;要快就換 read-offset 游標 / ring buffer」= 正分。詳見 <span class="jump" data-jump="p-followup">追問 chain 2</span>。</p>
+  </div>
+</section>
+
+<!-- ================= SERVER ================= -->
+<section class="panel" id="p-server">
+  <h2>③ Server 並發模型 — 兩種責任切法</h2>
+  <p class="lead">§3.10 的 45 分鐘 tradeoff。兩個 server 共用同一個 command handler trait(硬體行為 stub);差別只在「誰負責推進哪條連線」。</p>
+
+  <h4>共用:command handler trait(pillar 2 — abstract the noise)</h4>
+  <p class="filename"><b>handler.rs</b> — HwController + MockHw stub</p>
+  <pre class="code" data-code="handler"></pre>
+
+  <div class="twocol">
+    <div class="model a">
+      <h4>(a) thread-per-conn</h4>
+      <div class="flowbox"><b>TcpListener</b> · <code class="inl">incoming()</code></div>
+      <div class="arrow">│ 每次 accept</div>
+      <div class="flowbox">↳ <b>thread::spawn</b><br>　blocking <code class="inl">read</code> loop<br>　一個 <b>FrameReader</b><br>　<code class="inl">write_all</code> 回應</div>
+      <div class="arrow">…每條連線各一條 thread</div>
+      <div style="margin-top:8px;">
+        <span class="badge good">簡單</span>
+        <span class="badge good">45 分鐘首選</span>
+        <span class="badge good">blocking 心智模型直覺</span>
+        <span class="badge bad">1 thread/conn 不 scale</span>
+        <span class="badge bad">C10K = 1 萬條 thread</span>
+      </div>
+      <p style="font-size:11.5px; color:var(--grey); margin-top:8px;">責任切分:<strong>每條連線 = 一個獨立 thread</strong>,各自 block 在自己的 <code class="inl">read</code> 上,互不干擾。kernel 幫你排程。</p>
+    </div>
+
+    <div class="model b">
+      <h4>(b) event-loop（概念：epoll）</h4>
+      <div class="flowbox">單執行緒 · <b>epoll_wait</b> 迴圈</div>
+      <div class="arrow">│ 回報哪些 fd ready</div>
+      <div class="flowbox">for each ready fd:<br>　per-fd <b>FrameReader</b><br>　<b>部分寫緩存 wbuf</b><br>　可寫時 <b>EPOLLOUT</b> flush</div>
+      <div class="arrow">…一條 thread 多工所有連線</div>
+      <div style="margin-top:8px;">
+        <span class="badge good">scale C10K</span>
+        <span class="badge neu">單執行緒無鎖</span>
+        <span class="badge bad">複雜度換來的</span>
+        <span class="badge bad">read/write 都要手動處理 partial</span>
+      </div>
+      <p style="font-size:11.5px; color:var(--grey); margin-top:8px;">責任切分:<strong>一條 thread 輪詢所有 fd 的 readiness</strong>。沒有 blocking,每個 socket nonblocking,狀態(FrameReader + wbuf)得自己 per-fd 存。</p>
+      <p class="unverified" style="margin-top:6px;">std 無 epoll 綁定 → 下面程式碼是 busy-poll 近似(能編譯);真 epoll 需 libc FFI。</p>
+    </div>
+  </div>
+
+  <h4>(a) 程式碼:thread-per-conn(45 分鐘先寫這個)</h4>
+  <p class="filename"><b>server_threaded.rs</b> — serve_threaded + handle_conn</p>
+  <pre class="code" data-code="threaded"></pre>
+
+  <h4>(b) 程式碼:std-only busy-poll 近似(真 epoll 需 FFI)</h4>
+  <div class="card warn">
+    <span class="tag w">為什麼是 busy-poll 而非 epoll</span>
+    <p>std 沒有 <em>safe</em> 的 <code class="inl">epoll_wait</code>。這裡把每個 socket 設 nonblocking,每圈掃過<strong>所有</strong> fd 試讀試寫 —— 正確、std-only、能跑,但每圈 O(n) CPU spin(所以結尾 <code class="inl">sleep(1ms)</code> 避免燒滿一核)。<strong>真正 scale 要把「掃所有 fd」換成 <code class="inl">epoll_wait</code> 只回報 ready 的 fd</strong>。epoll 沒有 std safe wrapper,但可以自己宣告 <code class="inl">extern "C"</code>(libc 已被 link)→ 仍是 std-only,見 <span class="jump" data-jump="p-epoll">⑥ epoll</span> 的可編譯 + 端到端測通版本。結構(per-fd FrameReader + wbuf + 部分寫)兩版一致,差的只是 readiness 通知機制。</p>
+  </div>
+  <p class="filename"><b>server_evented.rs</b> — serve_evented(busy-poll)</p>
+  <pre class="code" data-code="evented"></pre>
+
+  <div class="card note">
+    <span class="tag b">兩張圖共用的重點</span>
+    <p>不管哪個模型,<strong>每條連線都要有自己的 FrameReader</strong> —— 因為 partial frame 是 per-connection 狀態。thread-per-conn 版它是 thread 的 local 變數;event-loop 版它得存在 <code class="inl">Conn</code> struct 裡跟著 fd 走。這是「responsibility 切分」的具體落點。</p>
+  </div>
+</section>
+
+<!-- ================= CLIENT ================= -->
+<section class="panel" id="p-client">
+  <h2>④ Client 往返</h2>
+  <p class="lead"><code class="inl">connect → encode 命令 → 送出 → FrameReader 收 response → match opcode</code>。sync 版一來一回,最單純。</p>
+
+  <div class="seq">
+    <div class="col-head c">client</div>
+    <div class="col-head s">server (MockHw)</div>
+    <div class="seqrow"><div class="seqcell act">① <code class="inl">TcpStream::connect(addr)</code></div><div class="seqcell"></div></div>
+    <div class="seqrow"><div class="seqcell act">② <code class="inl">encode(READ_SENSOR, [0x00])</code></div><div class="seqcell"></div></div>
+    <div class="msg-r req">──── <code class="inl">00 00 00 02 01 00</code> ────▶</div>
+    <div class="seqrow"><div class="seqcell"></div><div class="seqcell act">③ FrameReader 收齊 → <code class="inl">handle(0x01,[0x00])</code></div></div>
+    <div class="seqrow"><div class="seqcell"></div><div class="seqcell act">④ <code class="inl">encode(SENSOR_VAL, 42u16.to_be_bytes())</code></div></div>
+    <div class="msg-r">◀──── <code class="inl">00 00 00 03 11 00 2A</code> ────</div>
+    <div class="seqrow"><div class="seqcell act">⑤ FrameReader 收 response → <code class="inl">match opcode</code></div><div class="seqcell"></div></div>
+    <div class="seqrow"><div class="seqcell act">⑥ <code class="inl">0x11 SENSOR_VAL</code> → 讀 payload = 42°C</div><div class="seqcell"></div></div>
+  </div>
+
+  <div class="card note">
+    <span class="tag b">sync 一來一回 vs async pipelined 的分水嶺</span>
+    <p>sync 版:一次一個 request,送完 <strong>block</strong> 等它的 response,天生對得上,不需要標記。</p>
+    <p>async 版(tokio 世界):同一條連線上<strong>同時</strong>丟出多個 request(pipelining),response 回來順序可能交錯 → 得在 frame 裡加 <code class="inl">request_id</code>,收到 response 用 id 去 <strong>pending map</strong>(<code class="inl">HashMap&lt;u32, oneshot::Sender&gt;</code> / Waker)找對應的等待者喚醒。這就是你 tokio 內部熟的那套 <code class="inl">Pin</code>/<code class="inl">Waker</code> 對應機制的協定層版本。std sync 版<strong>不需要</strong>,是刻意砍掉的複雜度。</p>
+  </div>
+
+  <p class="filename"><b>client.rs</b> — call(sync one-shot)</p>
+  <pre class="code" data-code="client"></pre>
+  <p class="mono-note">※ 這裡 client 只等一個 response,所以 <code class="inl">next_frame</code> pull 一次成功就 return。若要加 request-id 對應,frame 變 <code class="inl">[len][opcode][u32 req_id][payload]</code>,client 維護 <code class="inl">pending: HashMap&lt;u32, ...&gt;</code>。base 版故意不做 = <span class="jump" data-jump="p-45min">45 分鐘 step 6</span>。</p>
+</section>
+
+<!-- ================= ASYNC ================= -->
+<section class="panel" id="p-async">
+  <h2>⑤ async / Future 版</h2>
+  <p class="lead">同一套 <code class="inl">protocol</code> + <code class="inl">FrameReader</code> + handler,把 I/O 邊界換成 <code class="inl">async fn</code> + <code class="inl">.await</code>。std-only 下這代表:<strong>你得自己寫 executor</strong> —— 這就是 tokio 藏起來的那半。</p>
+
+  <div class="card note">
+    <span class="tag b">先分清三層</span>
+    <ul>
+      <li><code class="inl">async fn</code> / <code class="inl">Future</code> / <code class="inl">.await</code> / <code class="inl">Waker</code> —— <strong>語法與 trait,std 有</strong>(<code class="inl">std::future</code>、<code class="inl">std::task</code>)。</li>
+      <li><strong>executor</strong>(誰 poll future 到完成)—— <strong>std 沒有</strong>。要自己寫 <code class="inl">block_on</code>。</li>
+      <li><strong>reactor</strong>(誰在 fd ready 時 <code class="inl">wake</code> 對應的 task)—— <strong>std 沒有</strong>,需 epoll = libc FFI。這是 async socket server 的另一半。</li>
+    </ul>
+    <p>tokio = executor + reactor + async <code class="inl">TcpStream</code> 三個一起給你。std-only 面試:executor 可手寫展示,reactor 講到 epoll 就 clarify(同 <span class="jump" data-jump="p-server">圖③(b)</span> 的灰區)。</p>
+  </div>
+
+  <h3>推導:naive → 失敗 → 修</h3>
+  <div class="card naive">
+    <span class="tag n">NAIVE</span>
+    <p>「呼叫 async fn 就會跑吧」:<code class="inl">let responses = serve_one(stream, ctrl);</code></p>
+  </div>
+  <div class="card fail">
+    <span class="tag f">失敗模式</span>
+    <p><code class="inl">serve_one(...)</code> 回傳的是一個 <strong>惰性的 Future</strong> —— 什麼都還沒發生。<code class="inl">Future</code> 不會自己跑;沒有人 <code class="inl">poll</code> 它,程式碼一行都不會執行。<code class="inl">.await</code> 只在「已經被某個 executor 驅動」的 Future 裡才有意義。</p>
+  </div>
+  <div class="card fix">
+    <span class="tag x">修法:executor(poll 迴圈)+ Waker(何時 re-poll)</span>
+    <ul>
+      <li><strong>executor</strong>:一個迴圈,不斷 <code class="inl">future.poll(&amp;mut cx)</code>。<code class="inl">Poll::Ready(v)</code> → 完成,回傳 <code class="inl">v</code>;<code class="inl">Poll::Pending</code> → 還沒好,先讓出(park)。</li>
+      <li><strong>Waker</strong>:傳給 <code class="inl">poll</code> 的 <code class="inl">Context</code> 裡。future 回 <code class="inl">Pending</code> 前把 waker 存起來;等條件滿足時呼叫 <code class="inl">waker.wake()</code> = 「請 re-poll 我」。executor 收到 wake 就重跑一輪 poll。</li>
+      <li><strong>token 語意(關鍵)</strong>:wake 可能發生在 executor 還沒 park 之前 → park 必須先檢查「有沒有待處理的 wake token」,有就不 park。掉了這個 token = 永久卡死。</li>
+    </ul>
+  </div>
+
+  <h3>互動 stepper:block_on 驅動 <code class="inl">async { yield_once().await; yield_once().await; 7 }</code></h3>
+  <p class="lead">看 executor 的 poll / wait 迴圈與 Signal token 怎麼互動。<code class="inl">YieldOnce</code> 每次回 <code class="inl">Pending</code> 前先 <code class="inl">wake_by_ref()</code>(自我喚醒,模擬 reactor 通知),把 <strong>wake-before-park</strong> 演出來。</p>
+
+  <div class="stepper" id="ex-stepper">
+    <div class="step-action" id="ex-action"></div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;">
+      <div class="flowbox" style="flex:1; min-width:180px;">future 位置:<b id="ex-fut"></b></div>
+      <div class="flowbox" style="flex:0 0 auto;">Signal token:<b id="ex-tok"></b></div>
+    </div>
+    <div id="ex-decode"></div>
+    <div class="controls">
+      <button class="ctl" data-ex="prev" id="ex-prev">‹ 上一步</button>
+      <button class="ctl prim" data-ex="next" id="ex-next">下一步 ›</button>
+      <button class="ctl" data-ex="reset">重置</button>
+      <span class="progress" id="ex-prog"></span>
+    </div>
+  </div>
+
+  <div class="card warn">
+    <span class="tag w">token 掉了會怎樣</span>
+    <p>若 <code class="inl">wait()</code> 沒有「先檢查 token 再決定 park」,而是無腦 park:當 <code class="inl">wake</code> 在 executor 進 <code class="inl">wait()</code> <strong>之前</strong>就發生(這裡 <code class="inl">YieldOnce</code> 正是在回 <code class="inl">Pending</code> 前 wake),park 會等一個<strong>已經來過、不會再來</strong>的通知 → 永久卡死。本 <code class="inl">Signal</code> 用 <code class="inl">Mutex&lt;bool&gt;</code> 存 token、<code class="inl">wait()</code> 先驗 token,正解。這是你 Etched 挑戰 #2「wake-before-park token semantics」的核心。</p>
+  </div>
+
+  <h4>executor 的三方關係</h4>
+  <div class="twocol">
+    <div class="model a" style="border-top-color:var(--blue);">
+      <h4 style="color:var(--blue);">有的(std-only 手寫)</h4>
+      <div class="flowbox"><b>block_on</b> — poll 迴圈</div>
+      <div class="arrow">⇅ poll / Pending</div>
+      <div class="flowbox"><b>Future</b>(async fn 生成的狀態機)</div>
+      <div class="arrow">⇅ Pending 前存 Waker · wake() 請求 re-poll</div>
+      <div class="flowbox"><b>Waker → Signal</b>(token + Condvar park/unpark)</div>
+      <p style="font-size:11.5px; color:var(--grey); margin-top:8px;">閉環完整:future 自我 wake(或 timer / 另一 thread wake)。</p>
+    </div>
+    <div class="model b">
+      <h4>缺的(需 FFI)</h4>
+      <div class="flowbox" style="border-style:dashed; color:var(--grey);"><b>reactor</b> — epoll_wait</div>
+      <div class="arrow">✗ std 無綁定</div>
+      <div class="flowbox" style="border-style:dashed; color:var(--grey);">fd ready → 找到對應 task 的 Waker → wake()</div>
+      <p style="font-size:11.5px; color:var(--grey); margin-top:8px;">真 async socket 靠這個:task park 後,<strong>只有 fd 可讀時</strong>才被 reactor 喚醒,不 spin。本教材 transport 用 in-memory,future 自我 wake(等於 spin)。但 reactor 本身 std-only 刻得出來 —— 見 <span class="jump" data-jump="p-epoll">⑥ epoll</span>;接進 executor 只差一張 Waker↔fd 對應表。</p>
+    </div>
+  </div>
+
+  <h4>程式碼:mini executor(block_on / Wake / Signal / YieldOnce)</h4>
+  <p class="filename"><b>async_exec.rs</b> — std-only,rustc 1.75 測試通過</p>
+  <pre class="code" data-code="async-exec"></pre>
+
+  <h4>程式碼:server 邏輯改寫成一個 async fn</h4>
+  <div class="card note">
+    <span class="tag b">跟 sync 版差在哪</span>
+    <p><code class="inl">FrameReader</code> + parse loop + handler <strong>完全一樣</strong>。唯一差別是 I/O 邊界:sync 版 <code class="inl">stream.read()</code> 會 block;async 版 <code class="inl">incoming.next().await</code> 在真 reactor 下會<strong>park 這個 task</strong>,讓出 thread 給別的連線,fd 可讀時才回來。這裡 transport 是 in-memory(pre-loaded chunks),所以 <code class="inl">.await</code> 立刻 Ready —— 但它標出了真 socket 會 park 的位置。</p>
+  </div>
+  <p class="filename"><b>async_server.rs</b> — serve_one(ChunkStream + NextChunk)</p>
+  <pre class="code" data-code="async-server"></pre>
+  <p class="mono-note">※ 測試(未列於此)以「跨 chunk 邊界切割」的 f1/f2 餵進去,<code class="inl">block_on(serve_one(...))</code> 正確切出兩個 frame、回兩個 response —— 證明 async fn 版的 framing 邏輯與 sync 版等價。</p>
+
+  <h3>追問(async 專屬,≥3 層)</h3>
+  <div class="fu">
+    <div class="fu-q fu-l1"><div class="fu-lv">L1</div>你的 <code class="inl">block_on</code> 收到 <code class="inl">Pending</code> 就 <code class="inl">signal.wait()</code>。<code class="inl">YieldOnce</code> 在回 Pending 前就 wake 了,wait 會卡住嗎?
+      <div class="fu-a"><b>答:</b>不會。<code class="inl">wake</code> 先把 token 設 true;<code class="inl">wait()</code> 進來看到 token=true → 不 park,消費 token 直接返回。這正是要處理的 wake-before-park。</div>
+    </div>
+    <div class="fu-q fu-l2"><div class="fu-lv">L2</div>這個 <code class="inl">block_on</code> 只跑一個 future。要同時跑多個 task(真 runtime)差在哪?
+      <div class="fu-a"><b>答:</b>需要一個 <strong>task queue</strong> 與「每個 task 各自的 Waker」。Waker 的 <code class="inl">wake()</code> 不再只是 unpark 一條 thread,而是把該 task 的 id 推回 ready queue;executor 迴圈從 queue 取 ready task 來 poll。單 future 版沒有排程,只有一個 future 一路 poll。</div>
+    </div>
+    <div class="fu-q fu-l3"><div class="fu-lv">L3</div>多 task 下,一個 <code class="inl">.await</code> 在 socket 上,是誰、什麼時候呼叫那個 task 的 <code class="inl">wake()</code>?
+      <div class="fu-a"><b>答:</b>reactor。task poll 到 socket 未就緒 → 把自己的 Waker 註冊到 reactor(對應那個 fd 的 <code class="inl">EPOLLIN</code>)→ 回 Pending。reactor 的 <code class="inl">epoll_wait</code> 醒來發現該 fd 可讀 → 查表拿到 Waker → <code class="inl">wake()</code> → task 回 ready queue。這一整套 std 沒有,是 tokio 的核心;std-only 只能 in-memory 或 busy-poll 近似。</div>
+    </div>
+  </div>
+
+  <div class="card warn">
+    <span class="tag w">面試取捨話術</span>
+    <p><strong>什麼時候提 async?</strong> 被問到「怎麼 scale」時。sync thread-per-conn 簡單但 1 thread/conn;async(單 reactor thread + 多 task)是 event-loop 的 ergonomic 版 —— 但 std-only 下你得手寫 executor + reactor(epoll FFI),45 分鐘寫不完。所以:<strong>白板寫 sync,async 當口頭 scale 答案 + 秀你懂 executor/reactor 分工</strong>。request-id → <span class="jump" data-jump="p-client">pending map</span>(圖④)就是 async 版在一條連線上多工的那層。</p>
+  </div>
+</section>
+
+<!-- ================= EPOLL ================= -->
+<section class="panel" id="p-epoll">
+  <h2>⑥ epoll — 真正的 reactor(std-only 也做得到)</h2>
+  <p class="lead">前面說「std 沒 epoll,只能 busy-poll 近似」講太滿。精確版:<strong>std 沒有 <em>safe</em> 的 epoll wrapper,但 Rust runtime 本來就 link 了 libc</strong>,所以自己宣告那三個 syscall 的 <code class="inl">extern "C"</code>,只用 std + 一個 unsafe extern block 就摸到真 reactor,<strong>零外部 crate</strong>。下面這份是實際編譯 + 端到端跑通的。</p>
+
+  <div class="card note">
+    <span class="tag b">epoll 解決什麼</span>
+    <p><strong>readiness notification</strong>:你把一堆 fd 註冊給 kernel,<code class="inl">epoll_wait</code> 阻塞著,一旦有 fd 就緒就<strong>只回報就緒的那些</strong>。相對 busy-poll「每圈掃全部 fd」= O(n),epoll 是 O(ready)。這就是 event-loop 從「能跑」變「scale C10K」的關鍵。</p>
+  </div>
+
+  <h3>推導:naive(busy-poll)→ 失敗 → 修</h3>
+  <div class="card naive">
+    <span class="tag n">NAIVE</span>
+    <p><span class="jump" data-jump="p-server">圖③(b) 的 busy-poll 版</span>:每圈把所有 fd 設 nonblocking,逐個試讀試寫,<code class="inl">WouldBlock</code> 就跳過,結尾 <code class="inl">sleep(1ms)</code>。</p>
+  </div>
+  <div class="card fail">
+    <span class="tag f">失敗模式</span>
+    <ul>
+      <li>每圈 O(n):1 萬條連線只有 1 條有資料,你還是掃了 1 萬次。</li>
+      <li>CPU 空轉:沒事也要醒來掃 + sleep,浪費週期、增加延遲抖動。</li>
+      <li>sleep 是延遲與 CPU 的兩難:睡短 = 燒 CPU,睡長 = 反應慢。</li>
+    </ul>
+  </div>
+  <div class="card fix">
+    <span class="tag x">修法:讓 kernel 幫你盯</span>
+    <p>把 fd 註冊進一個 epoll instance,<code class="inl">epoll_wait</code> 睡到有事才醒,且<strong>直接告訴你哪些 fd 就緒</strong>。沒事 = 0 CPU;有事 = 只處理就緒的。O(ready)。</p>
+  </div>
+
+  <h3>三個 syscall</h3>
+  <table>
+    <tr><th>syscall</th><th>做什麼</th><th>本教材用法</th></tr>
+    <tr><td><code class="inl">epoll_create1(0)</code></td><td>建一個 epoll instance,回傳 <code class="inl">epfd</code></td><td>server 啟動時建一次</td></tr>
+    <tr><td><code class="inl">epoll_ctl(epfd, op, fd, ev)</code></td><td>對 epfd 增/刪/改一個 fd 的關注事件。<code class="inl">op</code> = <code class="inl">ADD</code>/<code class="inl">DEL</code>/<code class="inl">MOD</code></td><td>accept 新連線 → ADD;有待寫 → MOD 加 EPOLLOUT;斷線 → DEL</td></tr>
+    <tr><td><code class="inl">epoll_wait(epfd, buf, max, timeout)</code></td><td>阻塞到有 fd 就緒,把就緒事件填進 <code class="inl">buf</code>,回傳數量 <code class="inl">n</code>。<code class="inl">timeout=-1</code> = 無限等</td><td>主迴圈的心臟;回來後只跑 <code class="inl">buf[0..n]</code></td></tr>
+  </table>
+
+  <div class="card warn">
+    <span class="tag w">ABI 眉角:<code class="inl">epoll_event</code> 在 x86 是 packed</span>
+    <p><code class="inl">struct epoll_event</code> = <code class="inl">events</code>(u32)後面直接接 <code class="inl">data</code>(union,取 u64),<strong>x86 上 <code class="inl">__attribute__((packed))</code></strong> → <strong>12 bytes</strong>(無 padding)。忘了 <code class="inl">#[repr(C, packed)]</code> → 自然對齊變 <strong>16 bytes</strong>(data 前面塞 4 bytes padding)→ kernel 照 12-byte 佈局讀 → 讀到垃圾、fd 全錯。<span class="unverified">本機實測(x86_64):packed 12 / unpacked 16。</span>非 x86 有些 arch 不 packed;<code class="inl">libc</code> crate 幫你分 arch,手刻就得自己認 target。存取 packed 欄位只能<strong>整份 copy 出來再讀</strong>(不能取 <code class="inl">&amp;field</code> 參照,會 misaligned)——所以 code 裡是 <code class="inl">let slot = events[i];</code> 先 copy。</p>
+  </div>
+
+  <h3>Level-triggered vs Edge-triggered</h3>
+  <div class="twocol">
+    <div class="model a">
+      <h4>Level-triggered(預設,本教材用)</h4>
+      <p style="font-size:12.5px;">只要條件成立(還有資料可讀 / 還可寫),<strong>每次 <code class="inl">epoll_wait</code> 都會回報</strong>。沒 drain 完沒關係,下次還會叫你。</p>
+      <div style="margin-top:6px;"><span class="badge good">簡單、不易漏資料</span><span class="badge bad">高頻下 wakeup 較多</span></div>
+    </div>
+    <div class="model b">
+      <h4>Edge-triggered(<code class="inl">EPOLLET</code>)</h4>
+      <p style="font-size:12.5px;"><strong>只在「狀態轉變」時通知一次</strong>(新資料到)。沒把 buffer <code class="inl">read</code> 到 <code class="inl">WouldBlock</code> 就停 → 剩下的資料<strong>不會再觸發</strong> → 卡死。必配 nonblocking + drain loop。</p>
+      <div style="margin-top:6px;"><span class="badge good">wakeup 最少、最省</span><span class="badge bad">忘了 drain 就漏 / 死鎖</span></div>
+    </div>
+  </div>
+  <p class="mono-note">※ 本 <code class="inl">serve_epoll</code> 是 LT,但 read/write 仍 drain 到 <code class="inl">WouldBlock</code>(好習慣,高負載下也需要)。所以切成 ET 也安全 —— 但一般人會在 ET 上踩漏 drain 的坑。</p>
+
+  <h3>互動 stepper:epoll_wait 只回就緒的 fd</h3>
+  <p class="lead">註冊三個 fd:<code class="inl">listener(3)</code>、<code class="inl">connA(5)</code>、<code class="inl">connB(6)</code>。看 epoll 怎麼只回報就緒者,並把 partial frame 跨 cycle 的狀態(存在 per-fd FrameReader)演出來。</p>
+  <div class="stepper" id="ep-stepper">
+    <div class="step-action" id="ep-action"></div>
+    <div class="byterow" id="ep-fds" style="min-height:0; gap:8px;"></div>
+    <div id="ep-decode"></div>
+    <div class="controls">
+      <button class="ctl" data-ep="prev" id="ep-prev">‹ 上一步</button>
+      <button class="ctl prim" data-ep="next" id="ep-next">下一步 ›</button>
+      <button class="ctl" data-ep="reset">重置</button>
+      <span class="progress" id="ep-prog"></span>
+    </div>
+  </div>
+
+  <h4>program flow</h4>
+  <div class="flowbox"><b>epoll_create1</b> → epfd</div>
+  <div class="arrow">↓ epoll_ctl(ADD, listener, EPOLLIN)</div>
+  <div class="flowbox">loop:&nbsp; <b>epoll_wait</b>(阻塞)→ 回 [ready fds]</div>
+  <div class="arrow">↓ for each ready fd</div>
+  <div class="flowbox">listener? → accept + <b>epoll_ctl(ADD)</b> 新 fd<br>conn fd(EPOLLIN)? → read → FrameReader → handle → wbuf<br>寫不完? → <b>epoll_ctl(MOD, +EPOLLOUT)</b>,可寫時再 flush<br>斷線? → <b>epoll_ctl(DEL)</b> + close</div>
+
+  <h4>程式碼:serve_epoll(std-only,hand-rolled FFI,rustc 1.75 端到端測通)</h4>
+  <p class="filename"><b>server_epoll.rs</b></p>
+  <pre class="code" data-code="epoll"></pre>
+  <p class="mono-note">※ <code class="inl">extern "C"</code> 的三個符號來自 glibc,Rust binary 在 Linux 預設就 link libc → link 期自動解析,不需 <code class="inl">Cargo.toml</code> 任何依賴。這就是「std-only 也能用 epoll」的機制。</p>
+
+  <div class="card note">
+    <span class="tag b">這就是 async 缺的那半</span>
+    <p><span class="jump" data-jump="p-async">⑤ async 版</span>的 reactor 就是這個 <code class="inl">epoll_wait</code> 迴圈:task poll 到 socket 未就緒 → 把自己的 <code class="inl">Waker</code> 連同 fd 註冊進 epoll → 回 <code class="inl">Pending</code>;<code class="inl">epoll_wait</code> 因該 fd 可讀而醒 → 查表拿 Waker → <code class="inl">wake()</code> → task 回 ready queue 被 re-poll。把本頁的 <code class="inl">serve_epoll</code> + <span class="jump" data-jump="p-async"><code class="inl">block_on</code></span> 縫起來(epoll 醒來時不是直接 handle,而是 wake 對應 task),就是一個 minimal tokio。</p>
+  </div>
+
+  <h3>追問(≥3 層)</h3>
+  <div class="fu">
+    <div class="fu-q fu-l1"><div class="fu-lv">L1</div>你的 serve_epoll 是 level-triggered。改成 edge-triggered(<code class="inl">EPOLLET</code>)會有什麼坑?
+      <div class="fu-a"><b>答:</b>ET 只在「狀態轉變」通知一次。若 <code class="inl">read</code> 沒 drain 到 <code class="inl">WouldBlock</code> 就停,剩下的資料不會再觸發 → 那條連線卡死。ET 下 read/write 必須 loop 到 <code class="inl">EAGAIN</code>。(我這版 LT 已經 drain-to-WouldBlock,切 ET 也安全,但這是最常見的 ET bug。)</div>
+    </div>
+    <div class="fu-q fu-l2"><div class="fu-lv">L2</div>ET 這麼容易踩,為什麼還用?
+      <div class="fu-a"><b>答:</b>減少 wakeup。LT 下只要條件成立,每次 <code class="inl">epoll_wait</code> 都回報同一個 fd;高頻小封包場景,重複 wakeup + syscall 開銷大。ET 一次轉變一次通知,配 drain loop,wakeup 次數最少。</div>
+    </div>
+    <div class="fu-q fu-l3"><div class="fu-lv">L3</div>多執行緒共用一個 epfd,同一個就緒 fd 會不會被兩條 thread 同時處理?
+      <div class="fu-a"><b>答:</b>會 —— 多 worker 對同一 epfd 各自 <code class="inl">epoll_wait</code>,同一個 ready fd 可能被多條 thread 各拿一次(thundering herd / 重複派工,還有資料競爭)。解法:<code class="inl">EPOLLONESHOT</code>(觸發後自動 disable 該 fd,處理完再 <code class="inl">MOD</code> 重新武裝),accept 場景用 <code class="inl">EPOLLEXCLUSIVE</code> 避免驚群,或每 thread 各自 epfd + <code class="inl">SO_REUSEPORT</code> 讓 kernel 分流。</div>
+    </div>
+  </div>
+
+  <div class="card warn">
+    <span class="tag w">面試取捨(pillar 4)</span>
+    <p><strong>三檔並發模型:</strong> thread-per-conn(45 分鐘首選,簡單,1 thread/conn)→ busy-poll(單執行緒但 O(n) spin,只是理解用)→ <strong>epoll(單執行緒 O(ready),真正 scale)</strong>。std-only 下 epoll 要手刻 FFI + 認 packed ABI,45 分鐘寫不完,所以<strong>白板寫 thread-per-conn,epoll 當 scale 口頭答案 + 秀你懂 readiness / LT-ET / EPOLLOUT 節流 / packed 坑</strong>。這頁證明你不是只會嘴,是真的知道怎麼刻。</p>
+  </div>
+</section>
+
+<!-- ================= 45 MIN ================= -->
+<section class="panel" id="p-45min">
+  <h2>45 分鐘增量順序</h2>
+  <p class="lead">pillar 3 落地:每一步都留下「能 demo 的東西」,肉集中在 step 4。按下一步看每階段寫什麼、能跑到哪、時間不夠先砍什麼。</p>
+
+  <div class="m45" id="m45">
+    <div class="m45-timeline" id="m45-tl"></div>
+    <div class="m45-step" id="m45-body"></div>
+    <div class="controls">
+      <button class="ctl" data-m45="prev" id="m45-prev">‹ 上一步</button>
+      <button class="ctl prim" data-m45="next" id="m45-next">下一步 ›</button>
+      <span class="progress" id="m45-prog"></span>
+    </div>
+  </div>
+
+  <div class="card fix">
+    <span class="tag x">砍的順序(被時間逼時的優先級)</span>
+    <ol style="margin:6px 0; padding-left:20px;">
+      <li>先砍 <strong>step 6</strong>(request-id、更多 opcode、graceful shutdown)。</li>
+      <li>再砍 <strong>step 5 的 event-loop 實作</strong> —— 只留 thread-per-conn(它是 5 行的增量),event loop 用嘴講當 scale 答案。</li>
+      <li>真的沒時間連 step 5 都砍,只留單 client 一來一回。</li>
+    </ol>
+    <p><strong>絕不砍的核心:</strong> step 2(wire format)+ step 3(端到端跑通)+ step 4(framing parse loop)+ 全程明講 Big-O + 至少一次 dry-run。一個<strong>能編譯、能 demo 的 naive</strong>,遠贏一個半成品的 scalable server。</p>
+  </div>
+</section>
+
+<!-- ================= FOLLOWUP ================= -->
+<section class="panel" id="p-followup">
+  <h2>常見面試追問(≥3 層深)</h2>
+  <p class="lead">L4 modal = medium 題 + follow-up。每條 chain 往下鑽三層,答案是要點不是逐字稿。</p>
+
+  <h3>Chain 1:惡意 / 畸形 frame</h3>
+  <div class="fu">
+    <div class="fu-q fu-l1"><div class="fu-lv">L1</div>對方送一個 <code class="inl">len</code> 宣稱 4 GB 的 frame,你的 <code class="inl">try_decode</code> 會怎樣?
+      <div class="fu-a"><b>答:</b>所以要 <code class="inl">MAX_FRAME_LEN</code> 上限 → 超過回 <code class="inl">Err(FrameTooLarge)</code>,caller 丟連線。沒上限的話 buffer 會為了湊「永遠湊不到」的 frame 無限長大(記憶體 DoS);且 <code class="inl">4 + len</code> 在 32-bit <code class="inl">usize</code> 上可能 overflow,上限一併擋掉。</div>
+    </div>
+    <div class="fu-q fu-l2"><div class="fu-lv">L2</div>加了上限之後,buffer 還是可能無限長大嗎?攻擊者慢慢送 sub-max frame 但永不湊齊一個。
+      <div class="fu-a"><b>答:</b>會 —— 這是 slowloris。單一 frame 有上限,但「一直餵不完整」耗住連線。需要 idle timeout / 「多久沒推進就砍」:thread 版用 <code class="inl">stream.set_read_timeout</code>;或記 per-conn 最後活動時間,超時關閉。</div>
+    </div>
+    <div class="fu-q fu-l3"><div class="fu-lv">L3</div><code class="inl">set_read_timeout</code> 在 event-loop(nonblocking)模型下有用嗎?
+      <div class="fu-a"><b>答:</b>nonblocking socket 的讀是立刻返回 <code class="inl">WouldBlock</code>,<code class="inl">SO_RCVTIMEO</code> 的語意不適用。epoll 模型要自己做:per-fd 存 last-activity timestamp,用一個 deadline 的 min-heap / timing wheel,每次 <code class="inl">epoll_wait</code> 帶 timeout 參數,醒來掃過期的 fd 關掉。</div>
+    </div>
+  </div>
+
+  <h3>Chain 2:buffer 效能</h3>
+  <div class="fu">
+    <div class="fu-q fu-l1"><div class="fu-lv">L1</div><code class="inl">drain(0..consumed)</code> 每次 O(n) 搬移,高吞吐會痛嗎?
+      <div class="fu-a"><b>答:</b>會。一個 read 夾很多小 frame 時,每 pull 一個就把殘量整段前移,burst 下可退化 O(n²)。</div>
+    </div>
+    <div class="fu-q fu-l2"><div class="fu-lv">L2</div>怎麼改?
+      <div class="fu-a"><b>答:</b>加一個 read-offset 游標:<code class="inl">try_decode(&amp;buf[start..])</code>,<code class="inl">start += consumed</code>,只在 <code class="inl">start</code> 大到一定程度才 compact(把殘量搬回頭並重置 start)。攤還 O(1)。再進一步就是 <strong>ring buffer</strong>。</div>
+    </div>
+    <div class="fu-q fu-l3"><div class="fu-lv">L3</div>ring buffer 遇到 frame 跨越 wrap 邊界,怎麼讀 len 那 4 bytes?
+      <div class="fu-a"><b>答:</b>len 欄位可能被 wrap 切成「尾端 2 bytes + 開頭 2 bytes」。要嘛先確認連續可讀 ≥ 4 再讀(不足就先 compact),要嘛用一個小 staging array 把兩段拼起來再 <code class="inl">from_be_bytes</code>。這正是 wrap-boundary off-by-one 熱區 —— 跨界時刻(不是 index 0)才會爆,random fuzz 常常打不到,要刻意造跨界測資。</div>
+    </div>
+  </div>
+
+  <h3>Chain 3:連線資源</h3>
+  <div class="fu">
+    <div class="fu-q fu-l1"><div class="fu-lv">L1</div>thread-per-conn 用 blocking read;一個 client 連上但不送資料,佔著一條 thread。一萬個這種連線?
+      <div class="fu-a"><b>答:</b>thread 耗盡 / 記憶體爆(每 thread 預設 stack ~數 MB)。這也是 slowloris 的一種。無界 <code class="inl">spawn</code> 就是攻擊面。</div>
+    </div>
+    <div class="fu-q fu-l2"><div class="fu-lv">L2</div>用有界 thread pool 呢?連線數 &gt; pool size 時新連線怎麼辦?
+      <div class="fu-a"><b>答:</b>要嘛排隊(accept 後塞 queue,backpressure)、要嘛拒絕。但 blocking-read 的 pool 有 head-of-line:一條慢連線佔住一個 worker。這正是 event loop 勝出的點 —— 慢連線只是「還沒 ready」,不佔 thread。</div>
+    </div>
+    <div class="fu-q fu-l3"><div class="fu-lv">L3</div>那 event loop 版,單執行緒會不會被一個 CPU-heavy 的 handler 卡死全部連線?
+      <div class="fu-a"><b>答:</b>會 —— 單 reactor thread 上任何 handler 阻塞(重運算、同步 I/O)就 stall 整個迴圈。解法:handler 只做輕量分派,重工作丟 worker thread pool,完成後把 response 送回 reactor 佇列(這就是 tokio 的 <code class="inl">spawn_blocking</code> 心智模型)。</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h3>Trade-off 話術(pillar 4 — 主動講,不等問)</h3>
+  <table>
+    <tr><th>軸</th><th>A</th><th>B</th><th>取捨</th></tr>
+    <tr><td><b>並發</b></td><td>thread-per-conn</td><td>event loop (epoll)</td><td>簡單易寫 vs scale C10K。45 分鐘選 A,scale 問題口頭答 B。</td></tr>
+    <tr><td><b>編碼</b></td><td>binary</td><td>text / line-based</td><td>緊湊、parse 快、payload 可含任意 byte vs 好肉眼 debug(telnet 就能敲)。HW 橋接選 binary。</td></tr>
+    <tr><td><b>framing</b></td><td>length-prefix</td><td>delimiter(如 <code class="inl">\n</code>)</td><td>length-prefix:讀一次就知長度,payload 可含任意 byte;delimiter:payload 撞到分隔符要 escape,binary 幾乎不能用。所以 binary 協定配 length-prefix。</td></tr>
+  </table>
+</section>
+
+<!-- ================= QUIZ ================= -->
+<section class="panel" id="p-quiz">
+  <h2>Self-Quiz(5 題)</h2>
+  <p class="lead">先自己答,再展開對照。答案裡點名了具體 off-by-one 點與砍留清單。</p>
+
+  <details>
+    <summary><span class="q-num">Q1.</span> 為什麼 TCP 需要 framing?length-prefix 怎麼處理「半個 frame」與「一次收到多個 frame」?</summary>
+    <div class="ans">
+      <p><b>TCP 是 byte stream,沒有 message 邊界</b> —— 一次 <code class="inl">write</code> 和一次 <code class="inl">read</code> 沒有一對一關係,對方可能一次讀到半個、剛好一個、或多個命令。所以要在 stream 上自己劃邊界。</p>
+      <p><b>length-prefix</b>:每個 frame 前面放 <code class="inl">u32 len</code>(不含自己)。decode 端維護累積 buffer:</p>
+      <ul>
+        <li><b>半個 frame</b>:讀出 <code class="inl">len</code>,算出需要 <code class="inl">total = 4 + len</code>;buffer 不足 <code class="inl">total</code> → <code class="inl">try_decode</code> 回 <code class="inl">None</code>,保留已收的、等下次 <code class="inl">feed</code>。連 4 bytes 都不夠(讀不出 len)也回 <code class="inl">None</code>。</li>
+        <li><b>多個 frame</b>:切出第一個後 <code class="inl">drain(0..total)</code>,殘量留前端,<code class="inl">while</code> 迴圈繼續 pull,直到剩餘不夠一個完整 frame 才停。</li>
+      </ul>
+      <p>關鍵是 <b>buffer + parse loop + consumed/remainder</b> 三件一起,不是單次 decode。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="q-num">Q2.</span> 45 分鐘只夠寫到 naive 一來一回,你會先砍什麼、保什麼?</summary>
+    <div class="ans">
+      <p><b>保(絕不砍):</b> ① wire format 定義(length-prefix 佈局)② <code class="inl">encode</code> + <code class="inl">FrameReader</code> 的 parse loop(處理 partial / 多 frame)③ 一次能 demo 的端到端往返 ④ 全程明講 Big-O ⑤ 至少一次 dry-run partial-read。<code class="inl">MAX_FRAME_LEN</code> 是一行 guard,便宜,可留。</p>
+      <p><b>先砍(依序):</b> request-id 對應 → event-loop 實作(只留 thread-per-conn,5 行增量)→ 多 opcode / graceful shutdown → 真的不行連多 client 都砍,只留單 client。</p>
+      <p><b>理由:</b>一個能編譯、能跑一次 <code class="inl">READ_SENSOR</code> 的 naive,遠贏一個號稱 scalable 但編不過的半成品。scale 用嘴巴講 tradeoff(圖③)拿分,不用真寫完。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="q-num">Q3.</span> <code class="inl">encode</code> 時 <code class="inl">len</code> 該不該含自己那 4 bytes?兩種設計 decode 差在哪?off-by-one 點在哪?</summary>
+    <div class="ans">
+      <p>兩種都可行,但<b>必須一致</b>;混用就是 bug。</p>
+      <ul>
+        <li><b>不含自己</b>(本教材):<code class="inl">len = 1 + payload.len()</code>,decode <code class="inl">total = 4 + len</code>,<code class="inl">payload = buf[5..total]</code>。</li>
+        <li><b>含自己</b>:<code class="inl">len = 5 + payload.len()</code>,decode <code class="inl">total = len</code>(不再 +4),<code class="inl">payload = buf[5..len]</code>。</li>
+      </ul>
+      <p><b>off-by-one 陷阱:</b>用「不含自己」的 encode 卻用「含自己」的 decode(<code class="inl">total = len</code>),會少收 4 bytes → 把下一個 frame 的前 4 bytes 當這個 frame 的尾;反之會越界。這種 bug 小測資(單 frame)常常看不出,要跨 frame 才爆。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="q-num">Q4.</span> event-loop 模型為什麼「寫」也需要 buffer 和 EPOLLOUT?blocking 模型不用?</summary>
+    <div class="ans">
+      <p><b>blocking 版:</b> <code class="inl">write_all</code> 內部迴圈直到全部寫完(kernel send buffer 滿就 block 等),呼叫回來就保證寫完,不用自己管。</p>
+      <p><b>nonblocking(event-loop)版:</b> 一次 <code class="inl">write</code> 可能只接受一部分,或回 <code class="inl">WouldBlock</code>(send buffer 滿)。你必須把<b>沒寫出去的殘量存進 per-fd <code class="inl">wbuf</code></b>,並向 epoll 註冊 <code class="inl">EPOLLOUT</code> —— 等 socket 可寫時 epoll 通知你,再 flush 殘量。沒有 wbuf 就會丟資料;沒有 EPOLLOUT 就得 busy-poll 空轉試寫(本教材 std-only 版正是這樣,靠 <code class="inl">sleep</code> 壓 CPU)。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="q-num">Q5.</span> <code class="inl">try_decode</code> 回 <code class="inl">Err(ZeroLen / FrameTooLarge)</code> 後,<code class="inl">FrameReader</code> 該怎麼辦?為什麼不能只 skip 這個 frame 繼續?</summary>
+    <div class="ans">
+      <p><b>丟連線,不 resync。</b> 協定違規代表這條 byte stream 已經 desync 或對方是惡意/有 bug 的 peer。</p>
+      <p><b>為什麼不能 skip N bytes 繼續:</b>skip 的前提是你知道這個壞 frame 有多長 —— 但「多長」正是從<b>那個已經壞掉的 <code class="inl">len</code></b> 算出來的。<code class="inl">ZeroLen</code> 根本沒有有效長度;<code class="inl">FrameTooLarge</code> 的 len 不可信。你無法確定下一個 frame 邊界在哪,任何 resync 都是猜。唯一安全動作是關連線,讓對方重連重新對齊。（若協定有 magic-byte / sync marker 才可能做 resync,但本 wire format 沒有。）</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="q-num">Q6.</span> async fn 為什麼「呼叫了卻什麼都沒發生」?executor 與 reactor 各負責什麼?std 少了哪個?</summary>
+    <div class="ans">
+      <p><b>呼叫 async fn 只回傳一個惰性 Future</b>,一行都還沒跑。Future 要被 <code class="inl">poll</code> 才會推進。</p>
+      <ul>
+        <li><b>executor</b>:一個 poll 迴圈,把 Future 驅動到 <code class="inl">Poll::Ready</code>。<code class="inl">Pending</code> 就 park,被 wake 後 re-poll。(本教材的 <code class="inl">block_on</code>。)</li>
+        <li><b>reactor</b>:在 I/O(fd)就緒時,呼叫對應 task 的 <code class="inl">Waker::wake()</code> 把它排回去 poll。(epoll。)</li>
+      </ul>
+      <p><b>std 有</b> <code class="inl">Future</code>/<code class="inl">async</code>/<code class="inl">await</code>/<code class="inl">Waker</code>(<code class="inl">std::future</code>、<code class="inl">std::task</code>),<b>但沒有 executor、也沒有 reactor</b>(reactor 需 epoll = libc FFI)。所以 std-only async 要自己寫 <code class="inl">block_on</code>,並用 in-memory transport 或 busy-poll 頂替 reactor。tokio 把兩者 + async <code class="inl">TcpStream</code> 一起給你。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="q-num">Q7.</span> <code class="inl">block_on</code> 的 <code class="inl">Signal</code> 為什麼要 token(<code class="inl">Mutex&lt;bool&gt;</code>)而不是純 park/unpark?wake 發生在 park 之前會怎樣?</summary>
+    <div class="ans">
+      <p><b>因為 wake 可能早於 park。</b> <code class="inl">YieldOnce</code> 在回 <code class="inl">Pending</code> <b>之前</b>就 <code class="inl">wake_by_ref()</code> 了;此時 executor 還沒進 <code class="inl">wait()</code>。</p>
+      <p><b>純 park(無 token):</b> executor 進 <code class="inl">wait()</code> 才開始等通知 —— 但通知<b>已經來過且不會再來</b> → 永久阻塞(死鎖)。</p>
+      <p><b>token 版:</b> <code class="inl">notify()</code> 把 <code class="inl">bool</code> 設 true(<b>持久保留</b>,即使當下沒人在等);<code class="inl">wait()</code> 進來先驗 token,true 就<b>不 park</b>、消費掉直接返回,false 才 park。這個「先檢查 token 再決定 park」就是 wake-before-park 的正確性條件,也是 Etched 挑戰 #2 的核心。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="q-num">Q8.</span> level-triggered 下 <code class="inl">wbuf</code> 空了要把 <code class="inl">EPOLLOUT</code> 取消(<code class="inl">MOD</code> 回只剩 <code class="inl">EPOLLIN</code>),不取消會怎樣?</summary>
+    <div class="ans">
+      <p><b>socket 幾乎永遠可寫。</b> LT 下只要 fd 可寫且註冊了 <code class="inl">EPOLLOUT</code>,<b>每次 <code class="inl">epoll_wait</code> 都回報它</b> → 你不斷被喚醒卻沒東西可寫 = busy loop 空轉,把單執行緒 reactor 拖垮。</p>
+      <p><b>正解:</b> 只在 <code class="inl">wbuf</code> 非空(有待寫、且上次 <code class="inl">write</code> 回了 <code class="inl">WouldBlock</code>)時才註冊 <code class="inl">EPOLLOUT</code>;flush 完就 <code class="inl">MOD</code> 回只剩 <code class="inl">EPOLLIN</code>。ET 下沒這問題(只在「不可寫→可寫」轉變時通知一次),但 ET 有 read 漏 drain 的坑 —— 兩種 triggering 各有各的節流責任。</p>
+    </div>
+  </details>
+
+  <div class="divider"></div>
+  <div class="card note">
+    <span class="tag b">下一步(這才是 digest phase 的重點)</span>
+    <p>這份是 reference tier。真正練 hw_bridge 的方式是<strong>把 <code class="inl">framer.rs</code> 挖空冷寫</strong>:給你 <code class="inl">FrameReader</code> 的骨架(欄位 + 空的 <code class="inl">feed</code>/<code class="inl">next_frame</code> 簽名 + acceptance test),你不看本頁碼手填,<code class="inl">cargo test</code> 自檢,再 diff。要那份空白挑戰 + boundary 測資,回我「<strong>cold-start framer</strong>」。</p>
+  </div>
+</section>
+
+</div><!-- /wrap -->
+
+<!-- ============ VERIFIED RUST SOURCE (injected verbatim) ============ -->
+<script type="text/plain" id="src-protocol">
+// Wire format: [u32 len (BE)][u8 opcode][payload...]
+// `len` counts opcode + payload. It does NOT count the 4-byte len field itself.
+
+pub const OP_READ_SENSOR: u8 = 0x01;
+pub const OP_SET_FAN: u8 = 0x02;
+pub const OP_OK: u8 = 0x10;
+pub const OP_SENSOR_VAL: u8 = 0x11;
+pub const OP_ERR: u8 = 0x1F;
+
+// DoS guard: reject any frame that declares a body larger than this.
+pub const MAX_FRAME_LEN: usize = 64 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Frame {
+    pub opcode: u8,
+    pub payload: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    ZeroLen,       // len == 0: no room even for an opcode
+    FrameTooLarge, // len > MAX_FRAME_LEN: refuse to buffer it
+}
+
+/// Encode one frame. Network byte order = big-endian.
+pub fn encode(opcode: u8, payload: &[u8]) -> Vec<u8> {
+    let len = (1 + payload.len()) as u32; // opcode(1) + payload
+    let mut out = Vec::with_capacity(4 + len as usize);
+    out.extend_from_slice(&len.to_be_bytes());
+    out.push(opcode);
+    out.extend_from_slice(payload);
+    out
+}
+
+/// Try to decode ONE frame from the front of `buf`.
+/// - Ok(Some((frame, consumed))): full frame present; caller drops `consumed` bytes.
+/// - Ok(None): not enough bytes yet; wait for more.
+/// - Err(_): protocol violation; caller drops the connection.
+pub fn try_decode(buf: &[u8]) -> Result<Option<(Frame, usize)>, DecodeError> {
+    if buf.len() < 4 {
+        return Ok(None); // can't even read the length prefix
+    }
+    let len = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
+    if len == 0 {
+        return Err(DecodeError::ZeroLen);
+    }
+    if len > MAX_FRAME_LEN {
+        return Err(DecodeError::FrameTooLarge);
+    }
+    let total = 4 + len; // len bounded by MAX_FRAME_LEN => no usize overflow
+    if buf.len() < total {
+        return Ok(None); // header says `total` bytes; body not fully arrived
+    }
+    let opcode = buf[4]; // index 4 = right after the 4-byte len field
+    let payload = buf[5..total].to_vec(); // 5 = 4 (len) + 1 (opcode)
+    Ok(Some((Frame { opcode, payload }, total)))
+}
+</script>
+
+<script type="text/plain" id="src-framer">
+pub struct FrameReader {
+    buf: Vec<u8>,
+}
+
+impl FrameReader {
+    pub fn new() -> Self {
+        FrameReader { buf: Vec::new() }
+    }
+
+    /// Append freshly-read bytes. One socket read may carry a partial frame,
+    /// exactly one frame, or several frames back-to-back.
+    pub fn feed(&mut self, data: &[u8]) {
+        self.buf.extend_from_slice(data);
+    }
+
+    /// Pull the next complete frame if the buffer holds one. Drains the consumed
+    /// bytes and keeps any remainder at the front for the next call.
+    pub fn next_frame(&mut self) -> Result<Option<Frame>, DecodeError> {
+        match try_decode(&self.buf)? {
+            Some((frame, consumed)) => {
+                self.buf.drain(0..consumed); // keep remainder
+                Ok(Some(frame))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub fn buffered(&self) -> usize {
+        self.buf.len()
+    }
+}
+
+impl Default for FrameReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+</script>
+
+<script type="text/plain" id="src-handler">
+// "Abstract the noise": real hardware lives behind this trait so the network
+// code never simulates an ADC directly. Both servers share it.
+
+pub trait HwController: Send + Sync {
+    fn handle(&self, opcode: u8, payload: &[u8]) -> (u8, Vec<u8>);
+}
+
+pub struct MockHw;
+
+impl HwController for MockHw {
+    fn handle(&self, opcode: u8, payload: &[u8]) -> (u8, Vec<u8>) {
+        match opcode {
+            OP_READ_SENSOR => {
+                let _sensor_id = payload.first().copied().unwrap_or(0);
+                let temp_c: u16 = 42; // pretend we read the ADC
+                (OP_SENSOR_VAL, temp_c.to_be_bytes().to_vec())
+            }
+            OP_SET_FAN => {
+                let _speed = payload.first().copied().unwrap_or(0);
+                (OP_OK, Vec::new())
+            }
+            _ => (OP_ERR, Vec::new()),
+        }
+    }
+}
+</script>
+
+<script type="text/plain" id="src-threaded">
+// Thread-per-connection: simplest thing that works. 45-min first choice.
+
+pub fn serve_threaded(addr: &str, ctrl: Arc<dyn HwController>) -> io::Result<()> {
+    let listener = TcpListener::bind(addr)?;
+    for incoming in listener.incoming() {
+        let stream = incoming?;
+        let ctrl = Arc::clone(&ctrl);
+        thread::spawn(move || {
+            if let Err(e) = handle_conn(stream, ctrl.as_ref()) {
+                eprintln!("conn error: {e}");
+            }
+        });
+    }
+    Ok(())
+}
+
+fn handle_conn(mut stream: TcpStream, ctrl: &dyn HwController) -> io::Result<()> {
+    let mut reader = FrameReader::new();
+    let mut rbuf = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut rbuf)?;
+        if n == 0 {
+            return Ok(()); // peer closed
+        }
+        reader.feed(&rbuf[..n]);
+        // Parse loop: one read may have delivered 0, 1, or many frames.
+        loop {
+            match reader.next_frame() {
+                Ok(Some(frame)) => {
+                    let (op, pl) = ctrl.handle(frame.opcode, &frame.payload);
+                    stream.write_all(&encode(op, &pl))?;
+                }
+                Ok(None) => break, // need more bytes
+                Err(e) => {
+                    eprintln!("protocol error: {e:?}");
+                    return Ok(()); // desynced/hostile stream: drop the connection
+                }
+            }
+        }
+    }
+}
+</script>
+
+<script type="text/plain" id="src-evented">
+// std-only busy-poll approximation of an event loop. Single thread multiplexes
+// all connections. NOTE: std has no epoll binding; real readiness notification
+// (epoll_wait / EPOLLIN / EPOLLOUT) needs libc FFI. Here every socket is
+// non-blocking and we sweep them all each iteration -- correct, but O(n) CPU
+// spin. Swap the sweep for epoll_wait to scale to C10K.
+
+struct Conn {
+    stream: TcpStream,
+    reader: FrameReader,
+    wbuf: Vec<u8>, // pending outbound bytes (would-block / partial-write backlog)
+}
+
+pub fn serve_evented(addr: &str, ctrl: Arc<dyn HwController>) -> io::Result<()> {
+    let listener = TcpListener::bind(addr)?;
+    listener.set_nonblocking(true)?;
+    let mut conns: Vec<Conn> = Vec::new();
+    let mut rbuf = [0u8; 4096];
+
+    loop {
+        // 1) Drain the accept queue.
+        loop {
+            match listener.accept() {
+                Ok((stream, _peer)) => {
+                    stream.set_nonblocking(true)?;
+                    conns.push(Conn {
+                        stream,
+                        reader: FrameReader::new(),
+                        wbuf: Vec::new(),
+                    });
+                }
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
+                Err(e) => return Err(e),
+            }
+        }
+
+        // 2) Service each connection: read -> parse -> queue writes -> flush.
+        let mut i = 0;
+        while i < conns.len() {
+            let mut drop_conn = false;
+
+            // --- read side ---
+            match conns[i].stream.read(&mut rbuf) {
+                Ok(0) => drop_conn = true, // peer closed
+                Ok(n) => {
+                    conns[i].reader.feed(&rbuf[..n]);
+                    loop {
+                        match conns[i].reader.next_frame() {
+                            Ok(Some(frame)) => {
+                                let (op, pl) = ctrl.handle(frame.opcode, &frame.payload);
+                                conns[i].wbuf.extend_from_slice(&encode(op, &pl));
+                            }
+                            Ok(None) => break,
+                            Err(_) => {
+                                drop_conn = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {}
+                Err(_) => drop_conn = true,
+            }
+
+            // --- write side: the EPOLLOUT analog ---
+            if !drop_conn && !conns[i].wbuf.is_empty() {
+                let conn = &mut conns[i]; // disjoint field borrows of one &mut
+                match conn.stream.write(&conn.wbuf) {
+                    Ok(0) => drop_conn = true,
+                    Ok(n) => {
+                        conn.wbuf.drain(0..n); // partial write: keep the rest
+                    }
+                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {} // retry next loop
+                    Err(_) => drop_conn = true,
+                }
+            }
+
+            if drop_conn {
+                conns.swap_remove(i); // do not advance i
+            } else {
+                i += 1;
+            }
+        }
+
+        // A real event loop blocks in epoll_wait here. std-only: yield so we
+        // don't peg a core at 100%.
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+</script>
+
+<script type="text/plain" id="src-client">
+/// Synchronous one-shot: send one command, read exactly one response.
+pub fn call(addr: &str, opcode: u8, payload: &[u8]) -> io::Result<Frame> {
+    let mut stream = TcpStream::connect(addr)?;
+    stream.write_all(&encode(opcode, payload))?;
+
+    let mut reader = FrameReader::new();
+    let mut rbuf = [0u8; 4096];
+    loop {
+        let n = stream.read(&mut rbuf)?;
+        if n == 0 {
+            return Err(io::Error::new(
+                ErrorKind::UnexpectedEof,
+                "server closed before a full frame",
+            ));
+        }
+        reader.feed(&rbuf[..n]);
+        match reader.next_frame() {
+            Ok(Some(frame)) => return Ok(frame),
+            Ok(None) => continue, // partial response; read more
+            Err(e) => return Err(io::Error::new(ErrorKind::InvalidData, format!("{e:?}"))),
+        }
+    }
+}
+</script>
+
+<script type="text/plain" id="src-async-exec">
+// std ships Future / async / await / Waker (std::future, std::task) but NO
+// executor and NO reactor. The async version has to build block_on itself.
+
+/// Park/unpark signal with token semantics: a wake that arrives BEFORE we park
+/// must not be lost. `notify` sets the flag; `wait` only blocks if it wasn't
+/// already set, then consumes it. This is the "wake-before-park" subtlety.
+struct Signal {
+    state: Mutex<bool>, // true = a wake token is pending
+    cond: Condvar,
+}
+
+impl Signal {
+    fn new() -> Self {
+        Signal {
+            state: Mutex::new(false),
+            cond: Condvar::new(),
+        }
+    }
+    fn wait(&self) {
+        let mut woken = self.state.lock().unwrap();
+        while !*woken {
+            woken = self.cond.wait(woken).unwrap();
+        }
+        *woken = false; // consume the token
+    }
+    fn notify(&self) {
+        let mut woken = self.state.lock().unwrap();
+        *woken = true; // token stays set even if nobody is parked yet
+        self.cond.notify_one();
+    }
+}
+
+impl Wake for Signal {
+    fn wake(self: Arc<Self>) {
+        self.notify();
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.notify();
+    }
+}
+
+/// Minimal single-future executor -- the piece tokio hides.
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = fut;
+    // Safety: `fut` stays on this stack frame for the whole call and is only
+    // ever touched through this pinned reference, so it never moves.
+    let mut fut = unsafe { Pin::new_unchecked(&mut fut) };
+    let signal = Arc::new(Signal::new());
+    let waker = Waker::from(Arc::clone(&signal));
+    let mut cx = Context::from_waker(&waker);
+    loop {
+        match fut.as_mut().poll(&mut cx) {
+            Poll::Ready(v) => return v,
+            Poll::Pending => signal.wait(), // park until woken; token-safe
+        }
+    }
+}
+
+/// A future that suspends exactly once, to exercise Pending -> wake -> re-poll.
+struct YieldOnce(bool);
+impl Future for YieldOnce {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            Poll::Ready(())
+        } else {
+            self.0 = true;
+            cx.waker().wake_by_ref(); // "re-poll me"; a real reactor wakes on I/O readiness
+            Poll::Pending
+        }
+    }
+}
+fn yield_once() -> YieldOnce {
+    YieldOnce(false)
+}
+</script>
+
+<script type="text/plain" id="src-async-server">
+// In-memory transport standing in for a socket. In a real async server the
+// bytes arrive from the OS and a reactor (epoll) wakes the task when the fd is
+// readable. std has no async TcpStream and no epoll, so the "reactor" here is
+// this pre-loaded queue; the `.await` marks where a real read would park.
+struct ChunkStream {
+    chunks: VecDeque<Vec<u8>>,
+}
+
+impl ChunkStream {
+    fn new(chunks: Vec<Vec<u8>>) -> Self {
+        ChunkStream {
+            chunks: chunks.into(),
+        }
+    }
+    /// Await the next chunk; None once the stream is drained (peer closed).
+    fn next(&mut self) -> NextChunk<'_> {
+        NextChunk { stream: self }
+    }
+}
+
+struct NextChunk<'a> {
+    stream: &'a mut ChunkStream,
+}
+
+impl<'a> Future for NextChunk<'a> {
+    type Output = Option<Vec<u8>>;
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Vec<u8>>> {
+        let this = self.get_mut(); // NextChunk: Unpin (holds only a &mut)
+        Poll::Ready(this.stream.chunks.pop_front())
+    }
+}
+
+/// The server logic as one async fn. Same FrameReader + handler as the sync
+/// version -- only the I/O boundary (`.await`) differs.
+async fn serve_one(mut incoming: ChunkStream, ctrl: &dyn HwController) -> Vec<Vec<u8>> {
+    let mut reader = FrameReader::new();
+    let mut responses = Vec::new();
+    while let Some(chunk) = incoming.next().await {
+        reader.feed(&chunk);
+        loop {
+            match reader.next_frame() {
+                Ok(Some(frame)) => {
+                    let (op, pl) = ctrl.handle(frame.opcode, &frame.payload);
+                    responses.push(encode(op, &pl));
+                }
+                Ok(None) => break,
+                Err(_) => return responses, // protocol violation: stop
+            }
+        }
+    }
+    responses
+}
+</script>
+
+<script type="text/plain" id="src-epoll">
+// epoll_event is __attribute__((packed)) on x86: `events`(u32) then `data`(u64)
+// with NO padding => 12 bytes. Forget `packed` and it is 16 bytes and the
+// kernel reads garbage. (On some non-x86 targets it is NOT packed; the libc
+// crate handles that per-arch. Hand-rolled => you must match your target.)
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+struct EpollEvent {
+    events: u32,
+    data: u64, // free for us: we stash the fd here to know who is ready
+}
+
+const EPOLLIN: u32 = 0x001;
+const EPOLLOUT: u32 = 0x004;
+const EPOLL_CTL_ADD: c_int = 1;
+const EPOLL_CTL_DEL: c_int = 2;
+const EPOLL_CTL_MOD: c_int = 3;
+
+extern "C" {
+    fn epoll_create1(flags: c_int) -> c_int;
+    fn epoll_ctl(epfd: c_int, op: c_int, fd: c_int, event: *mut EpollEvent) -> c_int;
+    fn epoll_wait(epfd: c_int, events: *mut EpollEvent, maxevents: c_int, timeout: c_int) -> c_int;
+}
+
+fn epoll_ctl_checked(epfd: c_int, op: c_int, fd: RawFd, events: u32) -> io::Result<()> {
+    let mut ev = EpollEvent { events, data: fd as u64 };
+    let r = unsafe { epoll_ctl(epfd, op, fd, &mut ev) };
+    if r < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+/// Single-threaded epoll reactor. Scales to C10K: epoll_wait returns ONLY the
+/// ready fds, so there is no per-iteration scan of every connection (that is the
+/// whole win over the busy-poll version). Level-triggered.
+pub fn serve_epoll(listener: TcpListener, ctrl: Arc<dyn HwController>) -> io::Result<()> {
+    listener.set_nonblocking(true)?;
+    let listen_fd = listener.as_raw_fd();
+
+    let epfd = unsafe { epoll_create1(0) };
+    if epfd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    epoll_ctl_checked(epfd, EPOLL_CTL_ADD, listen_fd, EPOLLIN)?;
+
+    let mut conns: HashMap<RawFd, Conn> = HashMap::new();
+    let mut events = [EpollEvent { events: 0, data: 0 }; 64];
+    let mut rbuf = [0u8; 4096];
+
+    loop {
+        let n = unsafe { epoll_wait(epfd, events.as_mut_ptr(), events.len() as c_int, -1) };
+        if n < 0 {
+            let e = io::Error::last_os_error();
+            if e.kind() == ErrorKind::Interrupted {
+                continue; // EINTR: just re-arm
+            }
+            return Err(e);
+        }
+
+        for i in 0..n as usize {
+            let slot = events[i]; // copy out of the packed array
+            let fd = slot.data as RawFd;
+            let ev = slot.events;
+
+            // 1) listener readable => accept everything pending.
+            if fd == listen_fd {
+                loop {
+                    match listener.accept() {
+                        Ok((stream, _peer)) => {
+                            stream.set_nonblocking(true)?;
+                            let cfd = stream.as_raw_fd();
+                            epoll_ctl_checked(epfd, EPOLL_CTL_ADD, cfd, EPOLLIN)?;
+                            conns.insert(
+                                cfd,
+                                Conn {
+                                    stream,
+                                    reader: FrameReader::new(),
+                                    wbuf: Vec::new(),
+                                },
+                            );
+                        }
+                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
+                        Err(e) => return Err(e),
+                    }
+                }
+                continue;
+            }
+
+            // 2) a connection fd is ready.
+            let mut drop_conn = false;
+            if let Some(conn) = conns.get_mut(&fd) {
+                if ev & EPOLLIN != 0 {
+                    loop {
+                        match conn.stream.read(&mut rbuf) {
+                            Ok(0) => {
+                                drop_conn = true;
+                                break;
+                            }
+                            Ok(m) => {
+                                conn.reader.feed(&rbuf[..m]);
+                                loop {
+                                    match conn.reader.next_frame() {
+                                        Ok(Some(frame)) => {
+                                            let (op, pl) = ctrl.handle(frame.opcode, &frame.payload);
+                                            conn.wbuf.extend_from_slice(&encode(op, &pl));
+                                        }
+                                        Ok(None) => break,
+                                        Err(_) => {
+                                            drop_conn = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
+                            Err(_) => {
+                                drop_conn = true;
+                                break;
+                            }
+                        }
+                        if drop_conn {
+                            break;
+                        }
+                    }
+                }
+
+                // Flush pending output (also runs when the event was EPOLLOUT).
+                if !drop_conn && !conn.wbuf.is_empty() {
+                    match conn.stream.write(&conn.wbuf) {
+                        Ok(0) => drop_conn = true,
+                        Ok(m) => {
+                            conn.wbuf.drain(0..m);
+                        }
+                        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {}
+                        Err(_) => drop_conn = true,
+                    }
+                    // Ask for EPOLLOUT ONLY while output remains, else it would
+                    // fire on every wait (a socket is almost always writable).
+                    if !drop_conn {
+                        let want = if conn.wbuf.is_empty() {
+                            EPOLLIN
+                        } else {
+                            EPOLLIN | EPOLLOUT
+                        };
+                        epoll_ctl_checked(epfd, EPOLL_CTL_MOD, fd, want)?;
+                    }
+                }
+            }
+
+            if drop_conn {
+                let _ = epoll_ctl_checked(epfd, EPOLL_CTL_DEL, fd, 0);
+                conns.remove(&fd); // dropping the TcpStream closes the fd
+            }
+        }
+    }
+}
+</script>
+
+<script>
+/* ===================== Gruvbox Rust highlighter (self-contained, fidelity-preserving) ===================== */
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+var HL_RULES = [
+  ['ws',      /\s+/y, null],
+  ['comment', /\/\*[\s\S]*?\*\/|\/\/[^\n]*/y, 'c-comment'],
+  ['string',  /"(?:\\.|[^"\\])*"/y, 'c-string'],
+  ['attr',    /#!?\[[^\]]*\]/y, 'c-attr'],
+  ['char',    /'(?:\\.|[^'\\])'/y, 'c-string'],
+  ['life',    /'[A-Za-z_][A-Za-z0-9_]*/y, 'c-life'],
+  ['num',     /0x[0-9A-Fa-f]+|\d[\d_]*(?:\.\d+)?(?:(?:u|i|f)(?:8|16|32|64|128|size))?/y, 'c-num'],
+  ['macro',   /[A-Za-z_][A-Za-z0-9_]*!/y, 'c-macro'],
+  ['word',    /[A-Za-z_][A-Za-z0-9_]*/y, null],
+  ['punct',   /[^\sA-Za-z0-9_]/y, null]
+];
+var HL_KW = new Set(['fn','let','mut','pub','struct','enum','impl','trait','for','in','loop','while','match','if','else','return','break','continue','move','as','const','use','mod','where','ref','dyn','crate','super','type','unsafe','async','await','static']);
+var HL_ENUMK = new Set(['Some','None','Ok','Err','self','Self','true','false']);
+var HL_PRIM = new Set(['u8','u16','u32','u64','u128','usize','i8','i16','i32','i64','isize','bool','str','char','f32','f64','String','Vec','Option','Result','Box','Arc','Rc','VecDeque']);
+function classifyWord(w){
+  if (HL_KW.has(w)) return 'c-kw';
+  if (HL_ENUMK.has(w)) return 'c-enumk';
+  if (HL_PRIM.has(w)) return 'c-type';
+  if (/^[A-Z]/.test(w)) return 'c-type';
+  return null;
+}
+function highlightRust(src){
+  var out='', pos=0, n=src.length, guard=0;
+  while (pos<n && guard++<500000){
+    var matched=false;
+    for (var r=0;r<HL_RULES.length;r++){
+      var re=HL_RULES[r][1]; re.lastIndex=pos; var m=re.exec(src);
+      if (m && m.index===pos && m[0].length>0){
+        var text=m[0], cls=HL_RULES[r][2], kind=HL_RULES[r][0];
+        if (kind==='word') cls=classifyWord(text);
+        out += cls ? ('<span class="'+cls+'">'+esc(text)+'</span>') : esc(text);
+        pos += text.length; matched=true; break;
+      }
+    }
+    if(!matched){ out+=esc(src[pos]); pos++; }
+  }
+  return out;
+}
+document.querySelectorAll('pre[data-code]').forEach(function(pre){
+  var s = document.getElementById('src-' + pre.getAttribute('data-code'));
+  if (s){
+    var raw = s.textContent.replace(/^\n/, '').replace(/\s+$/, '');
+    pre.innerHTML = highlightRust(raw);
+  }
+});
+
+/* ===================== tab navigation (delegated, no <a href="#">) ===================== */
+function activateTab(id){
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id === id); });
+  document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === id); });
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+document.addEventListener('click', function(e){
+  var nav = e.target.closest('[data-tab],[data-jump]');
+  if (nav){
+    var id = nav.getAttribute('data-tab') || nav.getAttribute('data-jump');
+    if (document.getElementById(id)) { activateTab(id); e.preventDefault(); return; }
+  }
+  var fr = e.target.closest('[data-fr]');
+  if (fr){ frControl(fr.getAttribute('data-fr')); e.preventDefault(); return; }
+  var m = e.target.closest('[data-m45]');
+  if (m){ m45Control(m.getAttribute('data-m45')); e.preventDefault(); return; }
+  var ex = e.target.closest('[data-ex]');
+  if (ex){ exControl(ex.getAttribute('data-ex')); e.preventDefault(); return; }
+  var ep = e.target.closest('[data-ep]');
+  if (ep){ epControl(ep.getAttribute('data-ep')); e.preventDefault(); return; }
+});
+
+/* ===================== framing stepper (figure 2) ===================== */
+// byte roles computed per step; scenarios mirror the verified Rust semantics.
+var FR = {
+  scA: {
+    name: 'A',
+    steps: [
+      { buf: [], action: 'FrameReader::new() — buffer 空,等第一次 socket read。' },
+      { buf: [0,0,0,2], action: 'feed(&data[..4]) — 這次 socket read 只拿到 <b>len 欄位</b>。', lenReadable:true },
+      { buf: [0,0,0,2], action: 'next_frame() → try_decode。', lenReadable:true,
+        decode: {type:'wait', html:'讀出 <b>len = 2</b> → 一個完整 frame 需 <b>total = 4 + 2 = 6</b> bytes;現有 <b>4</b> → 不夠,回 <code>Ok(None)</code>,停,等下次 feed。<br>← 忘了 <code>+4</code> 這裡就會誤判「6≥len=2 夠了」然後越界讀。'} },
+      { buf: [0,0,0,2,1,0], action: 'feed(&data[4..]) — 下次 read 補上 <b>opcode + payload</b>。', lenReadable:true },
+      { buf: [0,0,0,2,1,0], action: 'next_frame() → try_decode。', lenReadable:true, total:6, consumed:6,
+        decode: {type:'emit', html:'buffer=6 ≥ total=6 → 切出。<code>opcode = buf[4] = 0x01</code>;<code>payload = buf[5..6] = [0x00]</code>;<code>consumed = 6</code>。drain(0..6) → buffer 留 <b>0</b> bytes。'},
+        emit: 'Frame { opcode: 0x01 READ_SENSOR, payload: [0x00] }' },
+      { buf: [], action: 'next_frame() 再 pull → <code>None</code>,parse loop 結束,回去等下一次 socket read。' }
+    ]
+  },
+  scB: {
+    name: 'B',
+    steps: [
+      { buf: [], action: 'buffer 空。' },
+      { buf: [0,0,0,2,1,0, 0,0,0,2,2,0x50], action: '一次 socket read 收到 <b>12 bytes = 兩個 frame 黏一起</b>(TCP coalescing)。', lenReadable:true, total:6, twoFrame:true },
+      { buf: [0,0,0,2,1,0, 0,0,0,2,2,0x50], action: 'pull #1 → try_decode。', lenReadable:true, total:6, consumed:6, twoFrame:true,
+        decode: {type:'emit', html:'len=2,total=6,buffer=12 ≥ 6 → 切出 <b>F1</b>;consumed=6。drain(0..6) → buffer 還剩 <b>6</b> bytes(第二個 frame)。'},
+        emit: 'Frame { opcode: 0x01 READ_SENSOR, payload: [0x00] }' },
+      { buf: [0,0,0,2,2,0x50], action: 'pull #2 → try_decode(對「殘量」再跑一次)。', lenReadable:true, total:6, consumed:6,
+        decode: {type:'emit', html:'剩下的正好是完整 <b>F2</b>:len=2,total=6,buffer=6 ≥ 6 → 切出;consumed=6。drain → buffer 空。'},
+        emit2: 'Frame { opcode: 0x02 SET_FAN, payload: [0x50] }' },
+      { buf: [], action: 'pull #3 → <code>None</code>,loop 結束。<b>一次 read → 兩個 frame,靠 while loop 而非單次 decode。</b>' }
+    ]
+  },
+  scC: {
+    name: 'C',
+    steps: [
+      { buf: [], action: 'buffer 空。' },
+      { buf: [0,0,0,2,1,0], action: 'socket read 剛好給一個完整 frame(6 bytes)。', lenReadable:true, total:6 },
+      { buf: [0,0,0,2,1,0], action: 'next_frame() → try_decode。', lenReadable:true, total:6, consumed:6,
+        decode: {type:'emit', html:'len=2,total=6,buffer=6 → 切出;consumed=6;drain → 空。'},
+        emit: 'Frame { opcode: 0x01 READ_SENSOR, payload: [0x00] }' },
+      { buf: [], action: 'pull → <code>None</code>,loop 結束。最單純的一格。' }
+    ]
+  }
+};
+var frCur = 'scA', frIdx = 0;
+var frEmittedLog = []; // cumulative emitted frames for current scenario run
+
+function hex(b){ return b.toString(16).toUpperCase().padStart(2,'0'); }
+
+function frRender(){
+  var sc = FR[frCur];
+  var st = sc.steps[frIdx];
+
+  // rebuild cumulative emitted list up to current step
+  frEmittedLog = [];
+  for (var k = 0; k <= frIdx; k++){
+    if (sc.steps[k].emit) frEmittedLog.push(sc.steps[k].emit);
+    if (sc.steps[k].emit2) frEmittedLog.push(sc.steps[k].emit2);
+  }
+
+  document.getElementById('fr-action').innerHTML = st.action;
+
+  // bytes
+  var row = document.getElementById('fr-bytes');
+  if (!st.buf.length){
+    row.innerHTML = '<div class="empty-buf">buffer = [] (0 bytes)</div>';
+  } else {
+    var html = '';
+    for (var i = 0; i < st.buf.length; i++){
+      var cls = 'byte';
+      if (st.lenReadable && i < 4) cls += ' b-len';
+      else if (i === 4) cls += ' b-op';
+      else if (st.total && i >= 5 && i < st.total) cls += ' b-pl';
+      else if (st.twoFrame && st.total && i >= st.total) cls += ' b-next';
+      else if (i >= 5) cls += ' b-pl';
+      if (st.consumed && i < st.consumed) cls += ' b-consumed';
+      html += '<div class="'+cls+'"><span class="idx">'+i+'</span><span class="val">'+hex(st.buf[i])+'</span></div>';
+    }
+    row.innerHTML = html;
+  }
+
+  // decode box
+  var dc = document.getElementById('fr-decode');
+  if (st.decode){
+    var dcls = st.decode.type === 'wait' ? 'decode-wait' : (st.decode.type === 'emit' ? 'decode-emit' : 'decode-info');
+    dc.innerHTML = '<div class="decode-box '+dcls+'">'+st.decode.html+'</div>';
+  } else dc.innerHTML = '';
+
+  // emitted
+  var em = document.getElementById('fr-emitted');
+  if (frEmittedLog.length){
+    var e = '<div class="ehead">已切出的 frame(handler 收到的):</div>';
+    frEmittedLog.forEach(function(f){ e += '<div class="eframe">'+f+'</div><br>'; });
+    em.innerHTML = e;
+  } else em.innerHTML = '';
+
+  document.getElementById('fr-prog').textContent = '步驟 ' + (frIdx+1) + ' / ' + sc.steps.length;
+  document.getElementById('fr-prev').disabled = (frIdx === 0);
+  document.getElementById('fr-next').disabled = (frIdx === sc.steps.length - 1);
+}
+
+function frControl(cmd){
+  var sc = FR[frCur];
+  if (cmd === 'next'){ if (frIdx < sc.steps.length-1) frIdx++; }
+  else if (cmd === 'prev'){ if (frIdx > 0) frIdx--; }
+  else if (cmd === 'reset'){ frIdx = 0; }
+  else if (cmd === 'scA' || cmd === 'scB' || cmd === 'scC'){
+    frCur = cmd; frIdx = 0;
+    document.querySelectorAll('#fr-stepper .sc-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-fr') === cmd);
+    });
+  }
+  frRender();
+}
+
+/* ===================== 45-min stepper ===================== */
+var M45 = [
+  { t:'0–3 min', h:'① Clarify(不寫碼)',
+    body:'問清楚再動手(pillar 1):哪些命令(READ_SENSOR / SET_FAN…)?一來一回還是 pipelined async?幾個 client?要 scale 到多少連線?錯誤怎麼回?這些答案直接決定後面砍什麼。',
+    demo:'釐清 scope,把面試官的隱含假設攤開。', cut:'永不砍 —— 少了它整個設計方向可能錯。' },
+  { t:'3–6 min', h:'② 紙上定 wire format',
+    body:'一句話 + 佈局圖:<code>[u32 len(BE)][u8 opcode][payload]</code>,len 不含自己,big-endian = 網路序。當場畫給面試官看。',
+    demo:'協定地基定案,後面 encode/decode 都靠它。', cut:'永不砍 —— 這是整題的地基。' },
+  { t:'6–18 min', h:'③ naive 端到端跑通',
+    body:'單 client、blocking、一來一回、先假設「一次 read = 一個完整 frame」。寫 <code>encode</code> + 極簡 decode + 單連線 server + <code>call()</code> client。目標:<b>先有能 demo 的東西</b>。',
+    demo:'能跑通一次 READ_SENSOR → 拿到 SENSOR_VAL。手上有活的系統了。', cut:'保 —— 「能 demo 的 naive」是底線。' },
+  { t:'18–30 min', h:'④ 補 framing 邊界(肉在這)',
+    body:'拿掉「一次 read = 一個 frame」假設 → 引入 <code>FrameReader</code>(buffer + parse loop),處理 partial read 與 buffer 內多個 frame。這是最容易出 off-by-one 的地方(圖②),留最多時間、當場 dry-run 一個 partial-read case。',
+    demo:'server 現在能吃任意切割的 byte stream。這格 = 整題最能展現實力的地方。', cut:'保 —— 這是題目真正在考的核心。' },
+  { t:'30–40 min', h:'⑤ iterate:多 client',
+    body:'thread-per-conn(圖③a)最快跑通:accept loop + <code>thread::spawn</code> + 每連線一個 FrameReader。被追問 scale → 講 event loop(圖③b)當口頭答案,不一定寫完。',
+    demo:'多個 client 同時連線各自往返。', cut:'時間不夠先砍 event-loop 實作,只留 thread-per-conn(5 行增量);再不夠連多 client 都砍。' },
+  { t:'40–45+ min', h:'⑥ 有時間才做',
+    body:'request-id 對應(async pipelining)、更多 opcode、graceful shutdown、若 MAX_FRAME_LEN 還沒加就補一行 guard。',
+    demo:'加分項,不是底線。', cut:'第一個砍 —— 純粹是 nice-to-have。' }
+];
+var m45Idx = 0;
+
+function m45Render(){
+  var tl = document.getElementById('m45-tl'), h = '';
+  for (var i = 0; i < M45.length; i++){
+    var c = 'm45-seg';
+    if (i < m45Idx) c += ' done'; else if (i === m45Idx) c += ' cur';
+    h += '<div class="'+c+'"></div>';
+  }
+  tl.innerHTML = h;
+
+  var s = M45[m45Idx];
+  document.getElementById('m45-body').innerHTML =
+    '<h4>'+s.h+' <span class="m45-time">'+s.t+'</span></h4>' +
+    '<p>'+s.body+'</p>' +
+    '<div class="m45-demo"><b>能 demo:</b> '+s.demo+'</div>' +
+    '<div class="m45-cut"><b>時間不夠?</b> '+s.cut+'</div>';
+
+  document.getElementById('m45-prog').textContent = 'step ' + (m45Idx+1) + ' / ' + M45.length;
+  document.getElementById('m45-prev').disabled = (m45Idx === 0);
+  document.getElementById('m45-next').disabled = (m45Idx === M45.length - 1);
+}
+
+function m45Control(cmd){
+  if (cmd === 'next'){ if (m45Idx < M45.length-1) m45Idx++; }
+  else if (cmd === 'prev'){ if (m45Idx > 0) m45Idx--; }
+  m45Render();
+}
+
+/* ===================== executor stepper (async tab) ===================== */
+var EX = [
+  { action: 'block_on 設定:pin future,用 <b>Signal(token=false)</b> 建 Waker,包成 Context,進 poll 迴圈。',
+    fut:'未開始', tok:'false',
+    decode:{type:'info', html:'準備好 <code>Context { waker }</code>,waker.wake() 會走到 Signal.notify()。'} },
+  { action: 'poll #1 → future 執行到第一個 <code>yield_once().await</code>。',
+    fut:'第 1 個 .await', tok:'true',
+    decode:{type:'wait', html:'<code>YieldOnce::poll</code>:第一次(self.0=false)→ 設 self.0=true,呼叫 <code>cx.waker().wake_by_ref()</code> → Signal.notify() 把 <b>token 設 true</b> → 回 <code>Poll::Pending</code>。'} },
+  { action: 'block_on 收到 Pending → 呼叫 <code>signal.wait()</code>。',
+    fut:'第 1 個 .await(暫停)', tok:'false',
+    decode:{type:'info', html:'<code>wait()</code>:進來先看 token = <b>true</b> → <b>不 park</b>,消費 token(→ false),立刻返回迴圈。<br>← wake 發生在 park <b>之前</b>,token 保住通知,沒卡死。'} },
+  { action: 'poll #2 → future 從第一個 await 之後續跑,抵達第二個 <code>yield_once().await</code>。',
+    fut:'第 2 個 .await', tok:'true',
+    decode:{type:'wait', html:'又一個新的 <code>YieldOnce</code>,回 <code>Pending</code> 前 <code>wake_by_ref()</code> → <b>token = true</b>。'} },
+  { action: 'Pending → <code>wait()</code>:token = true → 不 park,消費,回迴圈。',
+    fut:'第 2 個 .await(暫停)', tok:'false',
+    decode:{type:'info', html:'與 S3 相同的 token-safe park。'} },
+  { action: 'poll #3 → 兩個 .await 都過了 → 執行 <code>7u32</code> → <code>Poll::Ready(7)</code>。',
+    fut:'完成 → 7', tok:'false',
+    decode:{type:'emit', html:'block_on 返回 <b>7</b>。全程 3 次 poll、0 次真正阻塞(因為 future 自我 wake)。<br>真 socket 下 S2/S4 會<b>真的 park</b>,直到 reactor 因 fd 可讀而 wake —— 那半 std 沒有。'} }
+];
+var exIdx = 0;
+function exRender(){
+  var st = EX[exIdx];
+  document.getElementById('ex-action').innerHTML = st.action;
+  document.getElementById('ex-fut').textContent = st.fut;
+  var tokEl = document.getElementById('ex-tok');
+  tokEl.textContent = st.tok;
+  tokEl.style.color = (st.tok === 'true') ? 'var(--orange)' : 'var(--grey)';
+  var dc = document.getElementById('ex-decode');
+  if (st.decode){
+    var cls = st.decode.type === 'wait' ? 'decode-wait' : (st.decode.type === 'emit' ? 'decode-emit' : 'decode-info');
+    dc.innerHTML = '<div class="decode-box '+cls+'">'+st.decode.html+'</div>';
+  } else dc.innerHTML = '';
+  document.getElementById('ex-prog').textContent = '步驟 ' + (exIdx+1) + ' / ' + EX.length;
+  document.getElementById('ex-prev').disabled = (exIdx === 0);
+  document.getElementById('ex-next').disabled = (exIdx === EX.length - 1);
+}
+function exControl(cmd){
+  if (cmd === 'next'){ if (exIdx < EX.length-1) exIdx++; }
+  else if (cmd === 'prev'){ if (exIdx > 0) exIdx--; }
+  else if (cmd === 'reset'){ exIdx = 0; }
+  exRender();
+}
+
+/* ===================== epoll stepper (epoll tab) ===================== */
+var EP = [
+  { action: 'epoll_ctl(ADD) 三個 fd,全註冊 EPOLLIN。<code>epoll_wait</code> 阻塞。',
+    fds: [
+      {fd:3, label:'listener', events:'EPOLLIN', state:'idle'},
+      {fd:5, label:'connA', events:'EPOLLIN', state:'idle'},
+      {fd:6, label:'connB', events:'EPOLLIN', state:'idle'}
+    ],
+    decode:{type:'info', html:'busy-poll 版此刻會空轉掃 3 個 fd + sleep;epoll 版<b>睡著,0 CPU</b>。'} },
+  { action: 'connA 送資料 → kernel 標 fd5 ready → <code>epoll_wait</code> 返回 <b>[fd5], n=1</b>。',
+    fds: [
+      {fd:3, label:'listener', events:'EPOLLIN', state:'idle'},
+      {fd:5, label:'connA', events:'EPOLLIN', state:'ready'},
+      {fd:6, label:'connB', events:'EPOLLIN', state:'idle'}
+    ],
+    decode:{type:'emit', html:'只回報就緒的 <b>fd5</b>。fd3、fd6 沒動 → <b>不返回</b>。這就是 vs busy-poll 的差:拿到的直接是 ready 集合,不必掃全部 → O(ready)。'} },
+  { action: '處理 fd5:read → FrameReader 收齊一個 frame → handle → wbuf 有 response → 一次 write 完 → wbuf 空,維持 EPOLLIN。回 <code>epoll_wait</code>。',
+    fds: [
+      {fd:3, label:'listener', events:'EPOLLIN', state:'idle'},
+      {fd:5, label:'connA', events:'EPOLLIN', state:'idle'},
+      {fd:6, label:'connB', events:'EPOLLIN', state:'idle'}
+    ],
+    decode:{type:'info', html:'response 小,write 一次寫完 → <b>不需要 EPOLLOUT</b>。若寫不完才 <code>MOD</code> 加 EPOLLOUT,可寫時再 flush。'} },
+  { action: '<code>epoll_wait</code> 阻塞。connB 送「半個 frame」+ 一個新 client connect → kernel 標 fd6(可讀)與 fd3(listener 可讀)→ 返回 <b>[fd3, fd6], n=2</b>。',
+    fds: [
+      {fd:3, label:'listener', events:'EPOLLIN', state:'ready'},
+      {fd:5, label:'connA', events:'EPOLLIN', state:'idle'},
+      {fd:6, label:'connB', events:'EPOLLIN', state:'ready'}
+    ],
+    decode:{type:'emit', html:'兩個 fd 同時就緒 → 一次 <code>epoll_wait</code> 拿到 [fd3, fd6],逐一處理。'} },
+  { action: 'fd3=listener → accept → 新連線 fd7,epoll_ctl(ADD, EPOLLIN)。fd6=connB → read → try_decode → <code>None</code>(只有半個)→ 停。',
+    fds: [
+      {fd:3, label:'listener', events:'EPOLLIN', state:'idle'},
+      {fd:5, label:'connA', events:'EPOLLIN', state:'idle'},
+      {fd:6, label:'connB', events:'EPOLLIN', state:'idle', note:'半個 frame 留在 FrameReader'},
+      {fd:7, label:'connD', events:'EPOLLIN', state:'new'}
+    ],
+    decode:{type:'wait', html:'fd6 這輪沒湊齊一個完整 frame → <code>next_frame</code> 回 None → 不回應,等下次資料。<b>partial frame 的狀態存在 per-fd 的 FrameReader,跨 epoll cycle 保留。</b>'} },
+  { action: 'connB 送剩下半個 → fd6 ready → 返回 [fd6] → read → 這次湊齊 → handle → respond。',
+    fds: [
+      {fd:3, label:'listener', events:'EPOLLIN', state:'idle'},
+      {fd:5, label:'connA', events:'EPOLLIN', state:'idle'},
+      {fd:6, label:'connB', events:'EPOLLIN', state:'ready'},
+      {fd:7, label:'connD', events:'EPOLLIN', state:'idle'}
+    ],
+    decode:{type:'emit', html:'跨兩個 epoll cycle 的 frame 現在完整 → 切出、handle、寫回。<b>per-fd FrameReader 保住了中間狀態</b> —— 這是 epoll 版一定要 per-fd 存 reader 的原因。'} }
+];
+var epIdx = 0;
+function epRender(){
+  var st = EP[epIdx];
+  document.getElementById('ep-action').innerHTML = st.action;
+  var row = document.getElementById('ep-fds');
+  var html = '';
+  st.fds.forEach(function(f){
+    var border = f.state==='ready' ? 'var(--green)' : (f.state==='new' ? 'var(--orange)' : 'var(--bg4)');
+    var col = f.state==='ready' ? 'var(--green)' : (f.state==='new' ? 'var(--orange)' : 'var(--fg-dim)');
+    var badge = f.state==='ready' ? ' ◀ ready' : (f.state==='new' ? ' ◀ new' : '');
+    html += '<div class="flowbox" style="flex:0 0 auto; margin:0; border-color:'+border+'; color:'+col+';">'
+          + '<b>fd'+f.fd+'</b> '+f.label+' <span style="color:var(--grey); font-size:11px;">['+f.events+']</span>'
+          + '<span style="font-size:11px; color:'+col+';">'+badge+'</span>'
+          + (f.note ? '<div style="font-size:11px; color:var(--orange);">'+f.note+'</div>' : '')
+          + '</div>';
+  });
+  row.innerHTML = html;
+  var dc = document.getElementById('ep-decode');
+  if (st.decode){
+    var cls = st.decode.type==='wait'?'decode-wait':(st.decode.type==='emit'?'decode-emit':'decode-info');
+    dc.innerHTML = '<div class="decode-box '+cls+'">'+st.decode.html+'</div>';
+  } else dc.innerHTML='';
+  document.getElementById('ep-prog').textContent = '步驟 '+(epIdx+1)+' / '+EP.length;
+  document.getElementById('ep-prev').disabled = (epIdx===0);
+  document.getElementById('ep-next').disabled = (epIdx===EP.length-1);
+}
+function epControl(cmd){
+  if (cmd==='next'){ if (epIdx<EP.length-1) epIdx++; }
+  else if (cmd==='prev'){ if (epIdx>0) epIdx--; }
+  else if (cmd==='reset'){ epIdx=0; }
+  epRender();
+}
+
+/* ===================== init ===================== */
+frRender();
+m45Render();
+exRender();
+epRender();
+</script>
+</body>
+</html>

@@ -46,7 +46,12 @@ SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
 
 ## v8 對齊(2026-07-16 晚定,常駐規則)
 
-- **P 編號已廢**:白天讀 = 當天模組的 artifacts(7/16 = ring_buffer + iter_mutate)。
+- **P 編號已廢**(排程上),但 `html_p/` 的內容照用——它們有 repo 教材沒有的
+  「面試追問鏈(≥3 層)+ Self-quiz」形式,當天讀完 artifact 後翻對應篇的
+  追問鏈自測。日子對映:7/16→p7(ring 節)|7/17→p1(atomic/SPSC)|
+  7/18→p2(executor)|7/20→p3(epoll)|7/22→p8(hw_bridge)|
+  7/24→p6(telemetry,已排)|**7/25 口述底稿→p5-thread-safe-spectrum +
+  rust-five-axis(這兩份 repo 沒有對應物,光譜與 Send/Sync 推導表只住在這)**。
 - **7/16 產出欄**:drills/ring_buffer 綠 ✓|卡#1|drills/iter_mutate 綠|
   手寫 wrap trace 拍照|aggregator 延伸綠(**含「未來 ts 清 window」case**,
   規格照 rehearsals 題目 f 的 contract,寫在 ring_buffer 同檔)。

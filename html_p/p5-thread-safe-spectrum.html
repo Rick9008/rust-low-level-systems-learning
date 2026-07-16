@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>把 X 變 thread-safe:完整決策光譜</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#504945; --bg4:#665c54;
+  --bgcode:#1d2021; --fg:#d4be98; --fgdim:#a89984; --gray:#928374;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+html,body{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+*{ box-sizing:border-box; }
+body{
+  margin:0; background:var(--bg0); color:var(--fg);
+  font-family:var(--mono); font-size:15px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{ max-width:1120px; margin:0 auto; padding:22px 18px 90px; }
+a,.link{ color:var(--blue); }
+b,strong{ color:var(--yellow); font-weight:700; }
+code{ font-family:var(--mono); }
+h1{ font-size:23px; margin:0 0 4px; color:var(--fg); letter-spacing:.2px; }
+h2{ font-size:19px; margin:30px 0 12px; color:var(--green); border-left:4px solid var(--green); padding-left:10px; }
+h3{ font-size:16px; margin:22px 0 8px; color:var(--aqua); }
+h4{ font-size:14.5px; margin:16px 0 6px; color:var(--yellow); }
+p{ margin:9px 0; }
+.sub{ color:var(--fgdim); font-size:13px; }
+hr{ border:none; border-top:1px solid var(--bg3); margin:22px 0; }
+
+/* ---- header ---- */
+.hdr{ border:1px solid var(--bg3); border-radius:12px; padding:16px 18px;
+  background:linear-gradient(180deg,var(--bg1),var(--bg0)); }
+.anchor{ margin-top:12px; background:var(--bg2); border-left:4px solid var(--orange);
+  border-radius:8px; padding:12px 14px; color:var(--fg); font-size:15px; }
+.anchor .q{ color:var(--orange); font-weight:700; }
+
+/* ---- tab bar ---- */
+#tabbar{ position:sticky; top:0; z-index:20; display:flex; gap:6px; overflow-x:auto;
+  padding:10px 2px; margin:14px -2px 6px; background:var(--bg0);
+  border-bottom:1px solid var(--bg3); scrollbar-width:thin; }
+#tabbar::-webkit-scrollbar{ height:6px; }
+#tabbar::-webkit-scrollbar-thumb{ background:var(--bg3); border-radius:3px; }
+.tab{ flex:0 0 auto; cursor:pointer; border:1px solid var(--bg3); background:var(--bg1);
+  color:var(--fgdim); padding:7px 13px; border-radius:8px; font-family:var(--mono);
+  font-size:13.5px; white-space:nowrap; transition:.12s; }
+.tab:hover{ color:var(--fg); border-color:var(--bg4); }
+.tab.current{ background:var(--bg3); color:var(--yellow); border-color:var(--yellow); font-weight:700; }
+
+/* ---- panels ---- */
+.tab-panel{ display:none; animation:fade .18s ease; }
+.tab-panel.active{ display:block; }
+@keyframes fade{ from{opacity:.25; transform:translateY(3px);} to{opacity:1; transform:none;} }
+
+/* ---- cards ---- */
+.card{ background:var(--bg1); border:1px solid var(--bg3); border-left:4px solid var(--bg4);
+  border-radius:10px; padding:14px 16px; margin:14px 0; }
+.card.accent-red{ border-left-color:var(--red); }
+.card.accent-org{ border-left-color:var(--orange); }
+.card.accent-yel{ border-left-color:var(--yellow); }
+.card.accent-grn{ border-left-color:var(--green); }
+.card.accent-aqua{ border-left-color:var(--aqua); }
+.card.accent-blue{ border-left-color:var(--blue); }
+.card.accent-pur{ border-left-color:var(--purple); }
+.pain{ color:var(--red); }
+.gain{ color:var(--green); }
+.cost{ color:var(--orange); }
+.tagrow{ margin:6px 0; }
+.tag{ display:inline-block; font-size:11.5px; padding:2px 8px; border-radius:20px;
+  border:1px solid var(--bg4); color:var(--fgdim); margin:2px 4px 2px 0; }
+.tag.g{ color:var(--green); border-color:var(--green); }
+.tag.o{ color:var(--orange); border-color:var(--orange); }
+.tag.b{ color:var(--blue); border-color:var(--blue); }
+.tag.p{ color:var(--purple); border-color:var(--purple); }
+.tag.r{ color:var(--red); border-color:var(--red); }
+.uv{ color:var(--purple); font-style:italic; font-size:12.5px; }
+.note{ background:var(--bg2); border-radius:8px; padding:10px 12px; margin:10px 0; font-size:13.5px; color:var(--fgdim); }
+.note b{ color:var(--yellow); }
+
+/* ---- code ---- */
+pre{ -webkit-text-size-adjust:100%; text-size-adjust:100%; overflow-x:auto;
+  background:var(--bgcode); border:1px solid var(--bg3); border-radius:9px;
+  padding:13px 14px; margin:10px 0; font-size:13px; line-height:1.55; }
+pre code{ white-space:pre; }
+pre::-webkit-scrollbar{ height:8px; }
+pre::-webkit-scrollbar-thumb{ background:var(--bg3); border-radius:4px; }
+.codecap{ font-size:12px; color:var(--gray); margin:12px 0 -4px; }
+.t-kw{ color:var(--red); } .t-type{ color:var(--yellow); } .t-fn{ color:var(--blue); }
+.t-str{ color:var(--green); } .t-num{ color:var(--purple); }
+.t-cmt{ color:var(--gray); font-style:italic; } .t-macro{ color:var(--aqua); }
+.t-attr{ color:var(--orange); } .t-life{ color:var(--orange); }
+
+/* ---- overview glance ---- */
+.glance{ display:block; margin:6px 0; }
+.grow{ display:flex; align-items:flex-start; gap:10px; cursor:pointer; padding:9px 11px;
+  border:1px solid var(--bg3); border-radius:9px; margin:7px 0; background:var(--bg1); transition:.12s; }
+.grow:hover{ border-color:var(--yellow); background:var(--bg2); }
+.gn{ flex:0 0 26px; height:26px; border-radius:6px; background:var(--bg3); color:var(--yellow);
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; }
+.gt{ flex:1; }
+.gt .nm{ color:var(--fg); font-weight:700; }
+.gt .ds{ color:var(--fgdim); font-size:12.5px; }
+.gg{ flex:0 0 auto; align-self:center; font-size:11px; color:var(--aqua);
+  border:1px solid var(--bg4); border-radius:20px; padding:2px 8px; }
+
+/* ---- decision flow ---- */
+.flow{ position:relative; margin:14px 0 4px; padding-left:6px; }
+.station{ position:relative; border:1px solid var(--bg3); border-radius:11px; margin:0 0 14px;
+  background:var(--bg1); overflow:hidden; }
+.station::before{ content:""; position:absolute; left:-0px; top:50%; }
+.st-head{ display:flex; align-items:center; gap:11px; padding:12px 14px; cursor:pointer; }
+.st-head:hover{ background:var(--bg2); }
+.st-idx{ flex:0 0 30px; height:30px; border-radius:7px; display:flex; align-items:center;
+  justify-content:center; font-weight:700; background:var(--bg3); color:var(--orange); }
+.st-name{ flex:1; }
+.st-name .n{ color:var(--fg); font-weight:700; font-size:15px; }
+.st-name .g{ color:var(--aqua); font-size:12px; }
+.st-caret{ flex:0 0 auto; color:var(--gray); transition:transform .15s; font-size:13px; }
+.station.open .st-caret{ transform:rotate(90deg); color:var(--yellow); }
+.st-card{ display:none; padding:0 14px 14px; }
+.station.open .st-card{ display:block; }
+.arrow{ text-align:center; color:var(--bg4); font-size:15px; margin:-8px 0 6px; }
+.tr{ display:grid; grid-template-columns:96px 1fr; gap:4px 12px; padding:5px 0;
+  border-top:1px solid var(--bg2); font-size:13.5px; }
+.tr .k{ color:var(--blue); }
+.tr.dont .k{ color:var(--red); }
+.tr.dont .v{ color:var(--fg); }
+
+/* ---- mapping ---- */
+.mapcard{ background:var(--bg1); border:1px solid var(--bg3); border-left:4px solid var(--aqua);
+  border-radius:10px; padding:13px 15px; margin:13px 0; }
+.mapcard h3{ margin:0 0 4px; color:var(--fg); font-size:15.5px; }
+.mapcard .stn{ display:inline-block; font-size:12px; color:var(--bg0); background:var(--aqua);
+  border-radius:6px; padding:2px 9px; font-weight:700; margin-bottom:6px; }
+.mapcard .stn.warn{ background:var(--orange); }
+.mapcard .stn.two{ background:var(--yellow); }
+.why{ font-size:13.5px; margin:6px 0; }
+.trap{ font-size:13px; color:var(--fgdim); }
+.trap b{ color:var(--red); }
+
+/* ---- watershed compare ---- */
+.cmp{ border:1px solid var(--bg3); border-radius:10px; overflow:hidden; margin:12px 0; }
+.cmp .row{ display:grid; grid-template-columns:120px 1fr 1fr; }
+.cmp .row>div{ padding:9px 11px; border-top:1px solid var(--bg2); font-size:13px; }
+.cmp .row:first-child>div{ border-top:none; }
+.cmp .h{ background:var(--bg2); font-weight:700; }
+.cmp .h.left{ color:var(--fgdim); }
+.cmp .h.a{ color:var(--blue); }
+.cmp .h.b{ color:var(--green); }
+.cmp .row>div:first-child{ color:var(--yellow); background:var(--bg1); }
+@media(max-width:640px){
+  .cmp .row{ grid-template-columns:1fr; }
+  .cmp .row>div{ border-top:1px solid var(--bg2); }
+  .cmp .row>div:first-child{ color:var(--yellow); font-weight:700; }
+}
+
+/* ---- stepper ---- */
+.controls{ display:flex; gap:8px; margin:12px 0; flex-wrap:wrap; }
+.btn{ cursor:pointer; border:1px solid var(--bg4); background:var(--bg2); color:var(--fg);
+  font-family:var(--mono); font-size:13.5px; padding:8px 16px; border-radius:8px; transition:.12s; }
+.btn:hover:not(:disabled){ border-color:var(--yellow); color:var(--yellow); }
+.btn:disabled{ opacity:.35; cursor:not-allowed; }
+.btn.reset{ margin-left:auto; }
+#stepper-view{ background:var(--bg1); border:1px solid var(--bg3); border-radius:11px; padding:15px 16px; }
+.stepmeta{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.stepno{ font-size:12px; color:var(--gray); }
+.rz{ font-size:12.5px; font-weight:700; padding:2px 10px; border-radius:20px; border:1px solid var(--bg4); margin-left:auto; }
+.rz-push{ color:var(--green); border-color:var(--green); }
+.rz-pop{ color:var(--blue); border-color:var(--blue); }
+.rz-full{ color:var(--red); border-color:var(--red); }
+.rz-empty{ color:var(--orange); border-color:var(--orange); }
+.rz-init{ color:var(--fgdim); }
+.stepdesc{ font-size:15px; color:var(--fg); margin:4px 0 12px; }
+.ringrow{ display:flex; gap:6px; overflow-x:auto; padding:4px 0 6px; }
+.ringcell{ flex:0 0 60px; height:78px; border:1px solid var(--bg4); border-radius:9px;
+  background:var(--bg2); display:flex; flex-direction:column; align-items:center;
+  justify-content:space-between; padding:5px 0 3px; transition:.15s; }
+.ringcell.empty{ background:var(--bg0); border-style:dashed; }
+.ringcell.wrote{ border-color:var(--green); box-shadow:0 0 0 2px rgba(169,182,101,.25); }
+.ringcell.readm{ border-color:var(--blue); box-shadow:0 0 0 2px rgba(125,174,163,.25); }
+.ringidx{ font-size:11px; color:var(--gray); }
+.ringval{ font-size:19px; font-weight:700; color:var(--yellow); }
+.ringcell.empty .ringval{ color:var(--bg4); }
+.ringptr{ height:16px; display:flex; gap:3px; }
+.ph{ color:var(--bg0); background:var(--green); border-radius:4px; font-size:11px; font-weight:700; padding:0 5px; }
+.pt{ color:var(--bg0); background:var(--blue); border-radius:4px; font-size:11px; font-weight:700; padding:0 5px; }
+.stephdt{ font-size:13.5px; color:var(--fgdim); margin:8px 0; }
+.stephdt b{ color:var(--fg); }
+.stepcode{ margin:8px 0 !important; }
+.stepnote{ font-size:13px; color:var(--aqua); background:var(--bg2); border-radius:8px; padding:9px 11px; }
+.legend{ font-size:12px; color:var(--gray); margin:8px 0; }
+.legend .ph,.legend .pt{ vertical-align:middle; }
+
+/* ---- follow-up chains ---- */
+.chain{ border:1px solid var(--bg3); border-radius:10px; padding:6px 14px 14px; margin:14px 0; background:var(--bg1); }
+.chain .ct{ color:var(--purple); font-weight:700; margin:10px 0 2px; }
+.layer{ margin:10px 0 10px 0; padding-left:14px; border-left:2px solid var(--bg4); }
+.layer.l1{ border-left-color:var(--blue); }
+.layer.l2{ border-left-color:var(--green); }
+.layer.l3{ border-left-color:var(--yellow); }
+.layer.l4{ border-left-color:var(--orange); }
+.layer .qq{ color:var(--fg); font-weight:700; font-size:13.5px; }
+.layer .qq::before{ content:"↳ 追問 "; color:var(--gray); font-weight:400; }
+.layer.l1 .qq::before{ content:"面試官 "; }
+.layer .aa{ font-size:13.5px; color:var(--fgdim); margin-top:3px; }
+.layer .aa b{ color:var(--yellow); }
+
+/* ---- quiz ---- */
+details{ border:1px solid var(--bg3); border-radius:10px; margin:12px 0; background:var(--bg1); overflow:hidden; }
+details[open]{ border-color:var(--bg4); }
+summary{ cursor:pointer; padding:13px 15px; font-weight:700; color:var(--fg); font-size:14.5px; list-style:none; }
+summary::-webkit-details-marker{ display:none; }
+summary::before{ content:"Q "; color:var(--purple); }
+details[open] summary{ border-bottom:1px solid var(--bg3); color:var(--yellow); }
+.ans{ padding:12px 15px; font-size:13.5px; color:var(--fgdim); }
+.ans b{ color:var(--green); }
+.ans .st{ color:var(--aqua); }
+
+.noscript{ background:var(--red); color:#1d2021; padding:10px 14px; border-radius:8px; font-weight:700; }
+.foot{ margin-top:26px; color:var(--gray); font-size:12px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap" id="top">
+
+<div class="hdr">
+  <h1>把 X 變 thread-safe:完整決策光譜</h1>
+  <div class="sub">std-only(禁外部 crate)· Rust edition 2024 · 由簡到繁,重點是「何時停在哪一站」</div>
+  <div class="anchor">
+    <span class="q">錨:</span>面試被問「怎麼把它變 thread-safe」,<b>沿光譜由簡到繁走一遍就是最強答案</b>;
+    一開口就跳 lock-free 顯得沒判斷 —— 你要展示的是「知道每一站的成本、也知道在哪一站停下來剛好夠」。
+  </div>
+</div>
+
+<noscript><p class="noscript">這份教材的程式碼高亮與互動 stepper 需要 JavaScript。請開啟 JS 後重新整理。</p></noscript>
+
+<div id="tabbar">
+  <button class="tab" data-tab="overview">總覽</button>
+  <button class="tab" data-tab="derive">① 推導</button>
+  <button class="tab" data-tab="spectrum">② 決策光譜</button>
+  <button class="tab" data-tab="map">資料結構對映</button>
+  <button class="tab" data-tab="watershed">關鍵分水嶺</button>
+  <button class="tab" data-tab="stepper">SPSC Stepper</button>
+  <button class="tab" data-tab="followup">③ 面試追問</button>
+  <button class="tab" data-tab="quiz">④ Self-Quiz</button>
+</div>
+
+<!-- ==================== OVERVIEW ==================== -->
+<section id="panel-overview" class="tab-panel active">
+  <h2>怎麼用這份</h2>
+  <div class="card accent-yel">
+    <p>1. 先讀 <b data-jump="derive" class="link" style="cursor:pointer">① 推導</b>:從一把大鎖開始,每一站都是「上一站的失敗模式逼出來的修法」。狀態變數都在這裡建立,後面 stepper 不會憑空冒出新符號。</p>
+    <p>2. <b data-jump="spectrum" class="link" style="cursor:pointer">② 決策光譜</b> 是可點開的 tradeoff 速查(讀 / 寫 / reclamation / 場景 / 何時「不要」)。</p>
+    <p>3. 面試臨場:把 <b data-jump="map" class="link" style="cursor:pointer">資料結構對映</b> 當 cheat sheet,先講預設站位再講為什麼。</p>
+  </div>
+
+  <div class="note">
+    <b>核心心法:</b>停在「能滿足需求的最高站」。往下走每一站,都是拿<b>通用性 / 實作簡單度</b>換<b>更少的 blocking</b>。
+    沒有需求逼你下去,就別下去 —— 一把 <code>Mutex</code> 正確又零負擔,常常就是對的答案。
+  </div>
+
+  <h2>光譜一覽(點任一站跳到 tradeoff 卡)</h2>
+  <div class="glance">
+    <div class="grow" data-jump="spectrum"><div class="gn">0</div><div class="gt"><div class="nm">coarse Mutex&lt;T&gt;</div><div class="ds">整份包一把鎖;讀寫都排他</div></div><div class="gg">blocking</div></div>
+    <div class="grow" data-jump="spectrum"><div class="gn">1</div><div class="gt"><div class="nm">sharded lock</div><div class="ds">切 N 片各一把鎖;分散 contention</div></div><div class="gg">blocking</div></div>
+    <div class="grow" data-jump="spectrum"><div class="gn">2</div><div class="gt"><div class="nm">RwLock</div><div class="ds">多讀並行 / 單寫排他</div></div><div class="gg">blocking</div></div>
+    <div class="grow" data-jump="spectrum"><div class="gn">3</div><div class="gt"><div class="nm">RCU / ArcSwap 模式</div><div class="ds">離線建整份新版,原子換 Arc 指標</div></div><div class="gg">近 lock-free 讀</div></div>
+    <div class="grow" data-jump="spectrum"><div class="gn">4</div><div class="gt"><div class="nm">seqlock</div><div class="ds">seq 奇偶 + retry;零 alloc 的小 POD 快照</div></div><div class="gg">lock-free 讀</div></div>
+    <div class="grow" data-jump="spectrum"><div class="gn">5</div><div class="gt"><div class="nm">lock-free (CAS)</div><div class="ds">compare-exchange 迴圈;系統層級 progress</div></div><div class="gg">lock-free</div></div>
+    <div class="grow" data-jump="spectrum"><div class="gn">6</div><div class="gt"><div class="nm">wait-free (SPSC)</div><div class="ds">單 owner per index,免 CAS,有界步數</div></div><div class="gg">wait-free</div></div>
+  </div>
+</section>
+
+<!-- ==================== DERIVE ==================== -->
+<section id="panel-derive" class="tab-panel">
+  <h2>① 概念推導:naive → 失敗模式 → 修法(一路往下走)</h2>
+  <p class="sub">以下所有片段共用這組 <code>use</code>,而且是<b>一起編譯通過的</b>(rustc 1.91.1 · <b>edition 2024</b> · <code>-D warnings</code> 零警告 · std-only)。省略 import 只是為了版面,不是佔位。</p>
+  <pre class="code"><code data-code="shared_use"></code></pre>
+
+  <div class="note">
+    <b>edition 2024 唯一打到這份教材的變更:temporary 的 drop scope。</b>
+    同一顆 rustc 1.91.1、只換 <code>--edition</code> 實測:<br>
+    ① <code>if let Some(x) = m.lock().unwrap()…</code> 的 guard,在 <code>else</code> 區塊裡:2021 <span class="pain">仍持有</span>(再 lock 就<b>自我死鎖</b>),2024 <span class="gain">已 drop</span>。這顆經典地雷 2024 幫你拆了。<br>
+    ② tail expression 的 temporary vs 區域變數 drop 順序:2021 是 <code>local → temp</code>,2024 反過來 <code>temp → local</code> —— tail 位置的 guard 在 2024 <b>更早釋放</b>。<br>
+    對本頁片段無影響(<code>rust_2024_compatibility</code> lint 掃 2021 原始碼<b>零 diagnostic</b>),但臨場在 pad 上寫 <code>if let</code> + <code>Mutex</code> 時,2021 的直覺會誤判。
+  </div>
+
+  <div class="card accent-red">
+    <h3>站 0 · coarse <code>Mutex&lt;T&gt;</code>(起點)</h3>
+    <p><span class="pain">◆ 作法</span>:最直接 —— 整個結構包一把鎖,任何存取都拿排他鎖。永遠正確、實作零負擔。</p>
+    <pre class="code"><code data-code="coarse"></code></pre>
+    <p><span class="cost">◆ 代價</span>:讀不能並行;一把鎖是單一 contention 點;臨界區一長就把所有 thread 串行化。</p>
+    <p><b>→ 什麼時候不夠:</b>讀多,或存取其實分佈在不同 key 上 —— 一把鎖白白吃掉並行度。<b>把鎖切開。</b></p>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="card accent-org">
+    <h3>站 1 · sharded lock</h3>
+    <p><span class="pain">◆ 上一站痛點</span>:單點 contention。</p>
+    <p><span class="gain">◆ 修法</span>:依 hash 把資料切成 N 個 shard,各自一把鎖;單 key 操作只鎖一把。這就是 <b>DashMap 原理</b>(每 shard 一把 RwLock)。</p>
+    <pre class="code"><code data-code="sharded"></code></pre>
+    <p><span class="cost">◆ 代價 / 新陷阱</span>:跨 shard 的原子操作要鎖多把 —— <b>必須按固定 shard 索引順序</b>。兩個方向相反的操作 <code>(2,5)</code> 與 <code>(5,2)</code> 若各自照給定順序鎖,就互等成 <b>AB/BA 死鎖</b>;正規化成「小索引先鎖」才安全。</p>
+    <p><b>→ 什麼時候不夠:</b>就算切了 shard,單 shard 內「讀」仍互斥。若讀遠多於寫 → <b>讓讀彼此並行。</b></p>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="card accent-yel">
+    <h3>站 2 · <code>RwLock</code></h3>
+    <p><span class="pain">◆ 上一站痛點</span>:讀仍互斥。</p>
+    <p><span class="gain">◆ 修法</span>:讀寫鎖 —— 多讀並行 <i>或</i> 單寫排他。讀爆多時吞吐大增,而且寫是 <b>in-place 修改、不需複製</b>。</p>
+    <pre class="code"><code data-code="rwlock"></code></pre>
+    <p><span class="cost">◆ 代價</span>:寫時阻擋<b>所有</b>讀;reader 仍要對共享鎖字做 atomic RMW(超高讀速下鎖字本身變 cache 熱點);且可能 <b>writer starvation</b>。</p>
+    <p class="uv">unverified:std <code>RwLock</code> 的 fairness 契約上是 unspecified;目前 Linux 的 futex 實作傾向 write-preferring,但這是實作細節、不保證跨平台。面試講「契約未定、read-preferring 會餓死 writer」是安全說法。</p>
+    <p><b>→ 什麼時候不夠:</b>寫罕見、但一寫就擋光所有讀,又想 reader <b>永不被擋</b> → 別讓 reader 碰鎖,<b>改成換整份指標。</b></p>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="card accent-grn">
+    <h3>站 3 · RCU / ArcSwap 模式(std:原子換 Arc 指標)</h3>
+    <p><span class="pain">◆ 上一站痛點</span>:writer 會擋 reader。</p>
+    <p><span class="gain">◆ 修法</span>:資料放 <code>Arc&lt;T&gt;</code> 後面。更新時<b>離線</b>建整份新 <code>T</code>,原子換指標;reader 只 <code>load</code> 當前 <code>Arc</code>(bump refcount)後<b>無鎖</b>讀 snapshot。</p>
+    <pre class="code"><code data-code="arcswap"></code></pre>
+    <p><span class="cost">◆ 代價</span>:每寫要複製 / 重建整份 → 一個新 <code>Arc</code>;舊版要等<b>最後一個 reader drop</b> 才回收(期間新舊並存)。</p>
+    <div class="note"><b>std-only 的誠實邊界:</b>真正 lock-free 讀是 <code>arc-swap</code> crate 用類 hazard-pointer 機制達成的(本次禁 crate)。std 只能用 <code>RwLock&lt;Arc&lt;T&gt;&gt;</code> / <code>Mutex&lt;Arc&lt;T&gt;&gt;</code> 逼近 —— 鎖只包「clone/swap 指標」這 O(1) 臨界區,所以<b>不是 wait-free,但臨界區極短</b>。想要 std 下真 lock-free,得自己 <code>AtomicPtr</code> + reclamation scheme(hazard pointer / epoch)—— <b>那才是難點</b>,不是換指標本身。</div>
+    <p><b>→ 什麼時候不夠:</b>資料小、read-mostly、又不想每次 <b>alloc</b> 一份 <code>Arc</code> → 換零配置的 seqlock。</p>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="card accent-aqua">
+    <h3>站 4 · seqlock</h3>
+    <p><span class="pain">◆ 上一站痛點</span>:ArcSwap 每寫 alloc 一份。</p>
+    <p><span class="gain">◆ 修法</span>:一個 sequence 計數。writer 寫前把 <code>seq</code> 變<b>奇</b>、寫完變<b>偶</b>;reader 讀 <code>seq</code> → 讀資料 → 再讀 <code>seq</code>,兩次不同或為奇就 retry。零配置、零 alloc、reader 從不阻塞 writer。</p>
+    <pre class="code"><code data-code="seqlock"></code></pre>
+    <p><span class="cost">◆ 代價</span>:writer 進行中,reader 要 spin/retry;資料必須<b>小且 trivially copyable</b>。</p>
+    <p class="uv">Rust 特有坑:讀期間若寫,對非原子資料的讀是 <b>data race(UB)</b>。這裡刻意把 payload 存成 <code>AtomicU64</code> 來規避 —— 一般 <code>T: Copy</code> 版本在 Rust 記憶體模型下不 sound。unverified:精確最小 fence 佈局仍是微妙題目,production 版需仔細 review。</p>
+    <p><b>→ 什麼時候不夠:</b>需要在共享結構上<b>並發做結構性修改</b>(不只是換快照)而無法接受鎖 → lock-free CAS。</p>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="card accent-blue">
+    <h3>站 5 · lock-free (CAS)</h3>
+    <p><span class="pain">◆ 上一站痛點</span>:前面要嘛鎖、要嘛只能整份換;想無鎖做細粒度修改。</p>
+    <p><span class="gain">◆ 修法</span>:compare-exchange 迴圈 —— 讀當前值、算新值、CAS;失敗代表別人先改了,拿最新值重試。系統層級保證<b>總有人前進</b>。</p>
+    <pre class="code"><code data-code="cas"></code></pre>
+    <p><span class="cost">◆ 代價</span>:對<b>特定 thread</b> 沒有 progress 保證(高競爭下可能長時間空轉);而<b>指標型</b>結構(stack/queue)真正的難題是 <b>reclamation</b> —— 何時能安全 <code>free</code> 一個節點(ABA、use-after-free),要靠 hazard pointer / epoch。上面 running-max 沒有指標,所以沒這問題,是純 CAS 迴圈骨架。</p>
+    <p><b>→ 什麼時候不夠:</b>若場景恰是 <b>1 producer + 1 consumer</b>,可以更省 —— 連 CAS 都不用,拿到每 thread 有界步數的 wait-free。</p>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="card accent-grn">
+    <h3>站 6 · wait-free (SPSC ring)</h3>
+    <p><span class="pain">◆ 上一站痛點</span>:CAS 迴圈在競爭下會重試,沒有「有界步數」保證。</p>
+    <p><span class="gain">◆ 修法</span>:限定單 producer + 單 consumer。producer 獨佔 <code>head</code>、consumer 獨佔 <code>tail</code>;<b>每個 index 只有一個 writer</b>,免 CAS。publish 用 release-store,對面用 acquire-load 建立 happens-before。</p>
+
+    <h4>先把 stepper 會用到的狀態講清楚(之後 stepper 直接用這些,不新增符號)</h4>
+    <div class="note">
+      • <b>head</b> = producer 下一個要寫的 slot;<b>tail</b> = consumer 下一個要讀的 slot。<br>
+      • 用「犧牲一格」區分空 / 滿:<b>empty ⇔ head == tail</b>;<b>full ⇔ (head+1)%N == tail</b>。因此有效容量是 <b>N−1</b>(拿一格換「空≠滿」可判定)。<br>
+      • producer 判滿要 <b>acquire-load tail</b>(看見 consumer 的進度);寫完 <b>release-store head</b> 把資料寫入「發佈」出去。<br>
+      • consumer 判空要 <b>acquire-load head</b>(看見 producer 的發佈);讀完 <b>release-store tail</b> 把 slot 還回去。<br>
+      • 同步邊界是 index 的 <b>release-store → acquire-load</b>,它把「非原子的資料寫」ordered 在「資料讀」之前。
+    </div>
+
+    <pre class="code"><code data-code="spsc"></code></pre>
+    <p><span class="cost">◆ 代價</span>:只支援 1:1。要多方 → <b>Vyukov bounded MPMC</b>(per-slot sequence number + CAS,處理生產者亂序完成留下的洞)。這是光譜終點。</p>
+    <p><b>去 <span class="link" data-jump="stepper" style="cursor:pointer">SPSC Stepper</span> 逐步看 head/tail 前進、判空判滿、與 wrap。</b></p>
+  </div>
+</section>
+
+<!-- ==================== SPECTRUM (interactive) ==================== -->
+<section id="panel-spectrum" class="tab-panel">
+  <h2>② 決策光譜(點任一站展開 tradeoff)</h2>
+  <p class="sub">每張卡:讀行為 / 寫行為 / reclamation / 適用場景 / 一句「何時<b>不要</b>用它」。由上往下 = 拿通用性換更少 blocking。</p>
+  <div class="flow">
+
+    <div class="station" id="station-s0">
+      <div class="st-head" data-station="s0"><div class="st-idx">0</div>
+        <div class="st-name"><div class="n">coarse Mutex&lt;T&gt;</div><div class="g">保證:互斥 · blocking</div></div>
+        <div class="st-caret">▶</div></div>
+      <div class="st-card" id="card-s0">
+        <div class="tr"><div class="k">讀行為</div><div class="v">拿排他鎖(讀也互斥,零讀並行)</div></div>
+        <div class="tr"><div class="k">寫行為</div><div class="v">拿排他鎖</div></div>
+        <div class="tr"><div class="k">reclamation</div><div class="v">無特別問題(RAII guard,drop 即解鎖)</div></div>
+        <div class="tr"><div class="k">場景</div><div class="v">寫佔比不低、結構小,或「正確性優先於吞吐」的第一版</div></div>
+        <div class="tr dont"><div class="k">何時不要</div><div class="v">讀遠多於寫,或臨界區很長 —— 會把所有 thread 串行化</div></div>
+      </div>
+    </div>
+    <div class="arrow">▼</div>
+
+    <div class="station" id="station-s1">
+      <div class="st-head" data-station="s1"><div class="st-idx">1</div>
+        <div class="st-name"><div class="n">sharded lock</div><div class="g">保證:互斥(分片)· blocking</div></div>
+        <div class="st-caret">▶</div></div>
+      <div class="st-card" id="card-s1">
+        <div class="tr"><div class="k">讀行為</div><div class="v">鎖該 key 所屬 shard;跨 shard 的讀彼此不擋</div></div>
+        <div class="tr"><div class="k">寫行為</div><div class="v">鎖該 shard;跨 shard 操作需按固定順序鎖多把</div></div>
+        <div class="tr"><div class="k">reclamation</div><div class="v">同 Mutex</div></div>
+        <div class="tr"><div class="k">場景</div><div class="v">key 空間大、分佈均勻、單 key 操作為主(並發 HashMap)</div></div>
+        <div class="tr dont"><div class="k">何時不要</div><div class="v">熱點集中單一 key(分片無效),或大量跨 shard 原子操作(鎖序複雜、退化)</div></div>
+      </div>
+    </div>
+    <div class="arrow">▼</div>
+
+    <div class="station" id="station-s2">
+      <div class="st-head" data-station="s2"><div class="st-idx">2</div>
+        <div class="st-name"><div class="n">RwLock</div><div class="g">保證:多讀 xor 單寫 · blocking</div></div>
+        <div class="st-caret">▶</div></div>
+      <div class="st-card" id="card-s2">
+        <div class="tr"><div class="k">讀行為</div><div class="v">多讀並行(共享讀鎖)</div></div>
+        <div class="tr"><div class="k">寫行為</div><div class="v">單寫排他,阻擋所有讀;可 in-place 改,不需複製</div></div>
+        <div class="tr"><div class="k">reclamation</div><div class="v">同 Mutex</div></div>
+        <div class="tr"><div class="k">場景</div><div class="v">讀遠多於寫,且寫是<b>就地修改</b>(不想每次整份複製)</div></div>
+        <div class="tr dont"><div class="k">何時不要</div><div class="v">寫頻繁(reader 被反覆打斷),或需 writer 絕不被餓死而 std 不保證 fairness<span class="uv">(unverified 實作細節)</span></div></div>
+      </div>
+    </div>
+    <div class="arrow">▼</div>
+
+    <div class="station" id="station-s3">
+      <div class="st-head" data-station="s3"><div class="st-idx">3</div>
+        <div class="st-name"><div class="n">RCU / ArcSwap 模式</div><div class="g">保證:reader 拿 snapshot · 近 lock-free 讀</div></div>
+        <div class="st-caret">▶</div></div>
+      <div class="st-card" id="card-s3">
+        <div class="tr"><div class="k">讀行為</div><div class="v">load 當前 Arc(crate 版近 wait-free;std 版短鎖只做 refcount bump),之後無鎖讀 snapshot</div></div>
+        <div class="tr"><div class="k">寫行為</div><div class="v">離線建整份新版 → 原子換指標;<b>writer 不擋 reader</b></div></div>
+        <div class="tr"><div class="k">reclamation</div><div class="v">舊版在最後一個 reader drop 其 Arc 後回收(期間新舊並存)</div></div>
+        <div class="tr"><div class="k">場景</div><div class="v">read-mostly + 寫罕見/整批替換 + 複製成本可接受(config、routing table、feature flags)</div></div>
+        <div class="tr dont"><div class="k">何時不要</div><div class="v">寫頻繁且結構大 —— 每寫整份複製太貴,退回 RwLock 就地改</div></div>
+      </div>
+    </div>
+    <div class="arrow">▼</div>
+
+    <div class="station" id="station-s4">
+      <div class="st-head" data-station="s4"><div class="st-idx">4</div>
+        <div class="st-name"><div class="n">seqlock</div><div class="g">保證:reader 不阻塞 writer · lock-free 讀(可 retry)</div></div>
+        <div class="st-caret">▶</div></div>
+      <div class="st-card" id="card-s4">
+        <div class="tr"><div class="k">讀行為</div><div class="v">讀 seq → 讀資料 → 讀 seq,不一致就 retry;從不阻塞 writer</div></div>
+        <div class="tr"><div class="k">寫行為</div><div class="v">單寫,seq 奇→寫→seq 偶;writer 不被 reader 擋</div></div>
+        <div class="tr"><div class="k">reclamation</div><div class="v">無配置、無指標,<b>零 alloc</b></div></div>
+        <div class="tr"><div class="k">場景</div><div class="v">小型 POD、read-mostly、寫罕見,且讀可容忍 retry(一組 config 數值快照)</div></div>
+        <div class="tr dont"><div class="k">何時不要</div><div class="v">資料大 / 含非 Copy 欄位,或寫頻繁(reader 一直重試);ordering 細節微妙<span class="uv">(unverified)</span></div></div>
+      </div>
+    </div>
+    <div class="arrow">▼</div>
+
+    <div class="station" id="station-s5">
+      <div class="st-head" data-station="s5"><div class="st-idx">5</div>
+        <div class="st-name"><div class="n">lock-free (CAS)</div><div class="g">保證:系統層級 progress</div></div>
+        <div class="st-caret">▶</div></div>
+      <div class="st-card" id="card-s5">
+        <div class="tr"><div class="k">讀行為</div><div class="v">通常 load;實際隨結構設計</div></div>
+        <div class="tr"><div class="k">寫行為</div><div class="v">compare-exchange 迴圈,失敗重試;總有人前進</div></div>
+        <div class="tr"><div class="k">reclamation</div><div class="v"><b>核心難題</b>:指標型結構的 ABA / use-after-free → hazard pointers / epoch</div></div>
+        <div class="tr"><div class="k">場景</div><div class="v">需並發結構性修改、不能接受鎖的阻塞,且願意處理 reclamation</div></div>
+        <div class="tr dont"><div class="k">何時不要</div><div class="v">能用更高站(RwLock/ArcSwap)滿足時別跳下來;單 thread 重試可能長時間空轉</div></div>
+      </div>
+    </div>
+    <div class="arrow">▼</div>
+
+    <div class="station" id="station-s6">
+      <div class="st-head" data-station="s6"><div class="st-idx">6</div>
+        <div class="st-name"><div class="n">wait-free (SPSC)</div><div class="g">保證:每 thread 有界步數</div></div>
+        <div class="st-caret">▶</div></div>
+      <div class="st-card" id="card-s6">
+        <div class="tr"><div class="k">讀行為</div><div class="v">consumer:acquire-load head 判空 → 讀 slot → release-store tail</div></div>
+        <div class="tr"><div class="k">寫行為</div><div class="v">producer:acquire-load tail 判滿 → 寫 slot → release-store head</div></div>
+        <div class="tr"><div class="k">reclamation</div><div class="v">單一 owner per index,<b>無 CAS、無 ABA</b></div></div>
+        <div class="tr"><div class="k">場景</div><div class="v">嚴格 1 producer + 1 consumer 的高吞吐管線</div></div>
+        <div class="tr dont"><div class="k">何時不要</div><div class="v">多 producer 或多 consumer → 需 Vyukov bounded MPMC(per-slot seq + CAS)</div></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================== MAP ==================== -->
+<section id="panel-map" class="tab-panel">
+  <h2>資料結構 → 光譜站位對映</h2>
+  <p class="sub">每個給「若要 thread-safe 的<b>預設站位</b> + 為什麼 + 陷阱」。面試先報站位,再講理由。</p>
+
+  <div class="mapcard">
+    <h3>HashMap</h3>
+    <span class="stn">站 1 · sharded lock</span>
+    <p class="why"><b>為什麼:</b>單 key 操作只鎖一個 shard,把 contention 分散到 N 把鎖(DashMap 原理:每 shard 一把 RwLock)。</p>
+    <p class="trap"><b>陷阱:</b>跨 shard 的原子操作(如兩 key 間搬移)必須按<b>固定 shard 索引順序</b>鎖兩把,否則 <code>(2,5)</code> / <code>(5,2)</code> 互等成 AB/BA 死鎖。</p>
+  </div>
+
+  <div class="mapcard">
+    <h3>config / feature flags</h3>
+    <span class="stn">站 3 · ArcSwap(換整份 Arc)</span>
+    <p class="why"><b>為什麼:</b>read-mostly、整批替換、複製便宜;reader 拿 snapshot 幾乎不阻塞(std 版短鎖只做 clone),讀路徑接近 wait-free。</p>
+    <p class="trap"><b>陷阱:</b>每次更新 alloc 一份新 <code>Arc</code>;若 flags 變大又頻繁改 → 考慮 RwLock。</p>
+  </div>
+
+  <div class="mapcard">
+    <h3>routing table(讀爆多、偶爾整批換)</h3>
+    <span class="stn two">站 3 · ArcSwap;寫也頻繁 → 站 2 RwLock</span>
+    <p class="why"><b>為什麼:</b>分水嶺 = <b>寫頻率 × 複製成本</b>。整批換 + 讀為主 → 換指標最省(reader 全不擋);頻繁對大表<b>就地</b>小改 → 每次整份複製太貴,改用 RwLock。</p>
+    <p class="trap"><b>陷阱:</b>別把「偶爾整批換」跟「頻繁小改」混為一談 —— 前者選 ArcSwap、後者選 RwLock,選錯就是要嘛複製爆炸、要嘛 reader 被擋。</p>
+  </div>
+
+  <div class="mapcard">
+    <h3>counter / metrics</h3>
+    <span class="stn">relaxed atomic(不需要鎖)</span>
+    <p class="why"><b>為什麼:</b><code>AtomicU64::fetch_add(.., Relaxed)</code>。只需要「計數本身原子」,不需要用它去 order 其他記憶體,relaxed 足矣、也最快。</p>
+    <p class="trap"><b>陷阱:</b>若這計數<b>gates 其他資料</b>(例如當 sequence 去發佈一塊 buffer),relaxed 不夠 —— 那條 happens-before 要 Release/Acquire。</p>
+  </div>
+
+  <div class="mapcard">
+    <h3>queue</h3>
+    <span class="stn">SPSC → 站 6;MPMC → Vyukov bounded</span>
+    <p class="why"><b>為什麼:</b>SPSC 每個 index 只有單一 owner,兩個 atomic index + acquire/release 就好,免 CAS(wait-free)。多方競爭則需 <b>per-slot sequence number</b> 做握手,處理生產者<b>亂序完成</b>留下的洞 —— 這是 Vyukov bounded MPMC 的核心。</p>
+    <p class="trap"><b>陷阱:</b>把 SPSC 直接加第二個 producer 會壞:兩個 producer 對同一 <code>head</code> 各自 store 會覆寫;必須改成 CAS 搶 slot + per-slot seq。</p>
+  </div>
+
+  <div class="mapcard" style="border-left-color:var(--red)">
+    <h3>LRU cache(全場最難)</h3>
+    <span class="stn warn">難點:讀即寫 → RwLock 幫助有限</span>
+    <p class="why"><b>為什麼難:</b>命中(get)也要把該 entry <b>移到 recency list 頭</b> —— 讀其實是寫。於是每個 get 都得拿 <b>write lock</b>,<code>RwLock</code> 退化成 <code>Mutex</code>,零讀並行。</p>
+    <p class="trap"><b>做法:</b>(a) <b>sharded LRU</b> —— 按 key 切片,各片自帶 LRU + 鎖,把 contention 切開(單片內 get 仍排他,但整體吞吐上去);(b) <b>近似策略</b> —— <b>CLOCK / second-chance</b>:命中只設一個 reference bit(relaxed store,<b>完全不動 list</b>),時鐘手掃描時看 bit 決定淘汰;或 <b>sampled-LRU</b>(抽 K 個挑最舊)。<b>拿「嚴格 recency」換並發。</b></p>
+  </div>
+
+  <div class="mapcard">
+    <h3>小 POD 快照(一組 config 數值,read-mostly,不想 alloc)</h3>
+    <span class="stn">站 4 · seqlock</span>
+    <p class="why"><b>為什麼:</b>零配置、零 alloc、reader 不阻塞 writer;代價是讀可能 retry、且資料須小且 trivially copyable。比 ArcSwap 省掉每次的 <code>Arc</code> alloc。</p>
+    <p class="trap"><b>陷阱:</b>Rust 下要把 payload 做成 atomic 以避免 data-race UB;含指標/非 Copy 欄位就別用 seqlock。</p>
+  </div>
+</section>
+
+<!-- ==================== WATERSHED ==================== -->
+<section id="panel-watershed" class="tab-panel">
+  <h2>關鍵分水嶺</h2>
+
+  <h3>A · read-mostly:<code>RwLock</code> vs「原子換整份 <code>Arc</code>」</h3>
+  <p>分水嶺一句話:<b>寫頻率 × 複製成本</b>。ArcSwap 每寫要 rebuild 整份;寫罕見 / 整批換 / 複製便宜 → ArcSwap 讓 reader 全不擋。寫頻繁 or 結構大 → RwLock 就地改、省掉複製,即使會擋 reader。</p>
+  <div class="cmp">
+    <div class="row"><div class="h left"></div><div class="h a">RwLock&lt;T&gt;</div><div class="h b">RwLock&lt;Arc&lt;T&gt;&gt; / ArcSwap</div></div>
+    <div class="row"><div>reader 被 writer 擋?</div><div>寫進行時全擋</div><div>從不被擋(續用舊版)</div></div>
+    <div class="row"><div>writer 等 reader?</div><div>要等所有 reader 放鎖</div><div>離線建版、原子換,不等</div></div>
+    <div class="row"><div>每次寫成本</div><div>in-place O(Δ)</div><div>整份 rebuild O(n) + 一次 alloc</div></div>
+    <div class="row"><div>記憶體</div><div>單份</div><div>新舊並存,到舊 reader drop</div></div>
+    <div class="row"><div>適用</div><div>寫頻繁 / 大結構就地改</div><div>寫罕見 / 整批換 / 複製便宜</div></div>
+  </div>
+
+  <h3>B · writer starvation</h3>
+  <p>read-preferring 的 <code>RwLock</code> 下,只要 reader 源源不絕,writer 可能<b>永遠</b>拿不到鎖。std 的 <code>RwLock</code> <b>不保證</b> fairness。</p>
+  <p class="uv">unverified:目前 Linux 的 std 實作傾向 write-preferring(能緩解),但契約上 unspecified、不保證跨平台。</p>
+  <p><b>緩解:</b>用 write-preferring 鎖;或直接改 <b>ArcSwap</b> —— writer 離線建版、原子換,根本不等 reader,結構上消除 starvation。</p>
+
+  <h3>C · LRU 的「讀即寫」為何讓 <code>RwLock</code> 失效</h3>
+  <p>LRU 命中要把 entry splice 到 list 頭 = 改動<b>共享的 recency 結構</b> = 需要 write lock。於是<b>每個 get 都排他</b>,<code>RwLock</code> 的「多讀並行」完全用不到 —— 退化成 <code>Mutex</code>,讀吞吐歸零。</p>
+  <div class="note">
+    <b>怎麼辦(照成本由輕到重):</b><br>
+    1. <b>CLOCK / second-chance</b>:命中只設 reference bit(一個 relaxed store,不動 list),淘汰時時鐘手掃 bit。把「改順序」變「設一個 bit」,讀路徑不再需要排他 —— 恢復讀並行。<br>
+    2. <b>sampled-LRU</b>:不維護嚴格順序,淘汰時抽樣 K 個挑最舊<span class="uv">(近似策略;Redis 的 LRU 即近似取樣,unverified 其確切參數)</span>。<br>
+    3. <b>sharded LRU</b>:切片分散 contention(單片內 get 仍排他,但把熱點打散)。<br>
+    共同代價:用<b>嚴格 recency 的精確度</b>換<b>並發</b>。
+  </div>
+</section>
+
+<!-- ==================== STEPPER ==================== -->
+<section id="panel-stepper" class="tab-panel">
+  <h2>SPSC ring 互動 Stepper</h2>
+  <p class="sub">狀態(head/tail、empty/full、release-store/acquire-load)已在 <b class="link" data-jump="derive" style="cursor:pointer">① 推導</b> 站 6 建立。這裡 N=6、容量 N−1=5,逐步跑一段 push/pop:會經過<b>填滿 → 判滿 Err → wrap → 排空 → 判空 None</b>。</p>
+  <div class="legend">圖例:<span class="ph">H</span> = head(producer 下一個要寫)&nbsp;·&nbsp;<span class="pt">T</span> = tail(consumer 下一個要讀)&nbsp;·&nbsp;綠框 = 本步寫入的 slot&nbsp;·&nbsp;藍框 = 本步讀出的 slot&nbsp;·&nbsp;虛線格 = 邏輯上空</p>
+  <div class="controls">
+    <button class="btn" id="btn-prev" data-step="prev">‹ 上一步</button>
+    <button class="btn" id="btn-next" data-step="next">下一步 ›</button>
+    <button class="btn reset" data-step="reset">⟲ 重置</button>
+  </div>
+  <div id="stepper-view"></div>
+  <div class="note" style="margin-top:14px">
+    <b>看這段要抓的三件事:</b>
+    ① 判滿 <code>(head+1)%N==tail</code> 為什麼容量是 N−1(留一格才能區分空/滿);
+    ② <b>wrap</b> 時 <code>head</code> 從 5 回到 0,index 是環狀、資料不搬;
+    ③ 每次 push 的 <b>release-store head</b> 與每次 pop 的 <b>acquire-load head</b> 配成 happens-before,才保證 consumer 讀到的是 producer 已寫好的資料。
+  </div>
+</section>
+
+<!-- ==================== FOLLOW-UP ==================== -->
+<section id="panel-followup" class="tab-panel">
+  <h2>③ 常見面試追問(逐層加深)</h2>
+
+  <div class="chain">
+    <div class="ct">鏈 1 · read-mostly 一路被逼下去</div>
+    <div class="layer l1"><div class="qq">你說 read-mostly 用 RwLock。如果 writer 被餓死怎麼辦?</div>
+      <div class="aa">std <code>RwLock</code> fairness 未定,read-preferring 會餓死 writer。<b>選項:</b>換 write-preferring 鎖;或改 ArcSwap —— writer 離線建版、原子換,不等 reader,結構上消除 starvation。</div></div>
+    <div class="layer l2"><div class="qq">改 ArcSwap 要每寫複製整份。routing table 有 100 萬條、每秒更新一萬次,現在呢?</div>
+      <div class="aa">越過分水嶺了:<b>複製成本 × 寫頻率</b> 太高。退回 <b>RwLock 就地改</b>;或 <b>sharded</b> 把寫打散;或<b>批次化</b>更新攤平頻率;std-only 下沒有便宜的 persistent 結構做 structural sharing。</div></div>
+    <div class="layer l3"><div class="qq">選 sharded RwLock。但客戶要跨兩個 shard 的原子交易,怎麼避免死鎖、成本多少?</div>
+      <div class="aa">把涉及的 shard 按<b>固定全域順序</b>(如索引升冪)鎖起來,消除 AB/BA 循環。成本:交易路徑會 serialize 在較大 shard 上、失去部分並行,且多把鎖的<b>鎖序正確性</b>本身是 bug 溫床;若跨 shard 交易很多,單一 coarse 鎖或 2PL 反而更好維護。</div></div>
+    <div class="layer l4"><div class="qq">如果交易要涉及不定數量的 shard 呢?</div>
+      <div class="aa">先<b>收集</b>所有涉及 shard 索引、<b>排序去重</b>,再依序上鎖(等同對「鎖集合」定義全序)。注意持鎖數上升會拉高 contention 與 deadlock 面積;可設上限、或退化為粗鎖臨界區。</div></div>
+  </div>
+
+  <div class="chain">
+    <div class="ct">鏈 2 · LRU 的讀即寫</div>
+    <div class="layer l1"><div class="qq">幫我把 LRU cache 變 thread-safe。</div>
+      <div class="aa">第一版 <code>Mutex&lt;LinkedHashMap&gt;</code>:正確、簡單。</div></div>
+    <div class="layer l2"><div class="qq">get 是熱路徑、想要讀並行,用 RwLock?</div>
+      <div class="aa">不行 —— get 命中要 splice 到 list 頭 = 改共享結構 = 需 write lock,於是每個 get 都排他,<b>RwLock 退化成 Mutex</b>。</div></div>
+    <div class="layer l3"><div class="qq">那怎麼拿到真正的讀並行?</div>
+      <div class="aa"><b>sharded LRU</b>(切 contention)或<b>近似</b>:<b>CLOCK</b> 命中只設 reference bit(不動 list)、<b>sampled-LRU</b> 抽樣淘汰。用嚴格 recency 換並發。</div></div>
+    <div class="layer l4"><div class="qq">CLOCK 的 reference bit 在命中時也是共享寫,不還是 contention?</div>
+      <div class="aa">是一個 <b>relaxed store 到 per-entry 的位元組</b>,不動 list、不上鎖,遠比「持鎖 splice」便宜。若很多 entry 的 bit 擠在同一 cache line 會 <b>false sharing</b> → padding 或接受;整體仍是壓倒性改善。</div></div>
+  </div>
+
+  <div class="chain">
+    <div class="ct">鏈 3 · SPSC → MPMC</div>
+    <div class="layer l1"><div class="qq">你的 SPSC ring,擴成多 producer。</div>
+      <div class="aa">會壞:<code>head</code> 變競爭點,兩個 producer 各自 <code>store</code> 同一 slot 會覆寫。</div></div>
+    <div class="layer l2"><div class="qq">那怎麼做?</div>
+      <div class="aa">producer 用 <b>CAS 搶</b> <code>head</code> 佔一個 slot、再寫、再發佈。但問題來了:<b>後搶到的 producer 可能先寫完</b>,在序列上留下一個 consumer 不能跨過去的洞。</div></div>
+    <div class="layer l3"><div class="qq">Vyukov bounded MPMC 怎麼處理這個洞?</div>
+      <div class="aa">每個 slot 帶一個 <b>sequence number</b>:producer CAS 位置後寫資料、把 <code>slot.seq</code> 設成「就緒」標記;consumer 靠 <code>slot.seq</code> 判斷自己那格是否就緒,天然處理亂序完成。等於把「兩個全域 index」升級成 <b>per-slot 握手</b>。</div></div>
+  </div>
+
+  <div class="chain">
+    <div class="ct">鏈 4 · memory ordering</div>
+    <div class="layer l1"><div class="qq">SPSC 發佈用 Release、對面 index load 用 Acquire。為什麼不全 Relaxed?</div>
+      <div class="aa">Relaxed 只保證 index 本身原子,不建立資料寫/讀的 happens-before;consumer 可能在 producer 的<b>資料寫可見之前</b>就讀那格 → 讀到 garbage/torn。</div></div>
+    <div class="layer l2"><div class="qq">為什麼 Acquire 掛在<b>對面 index</b>(consumer acquire head),不是掛在資料上?</div>
+      <div class="aa">資料本身非原子,無法承載 ordering。同步邊是 <b>index-store(Release) → index-load(Acquire)</b>;這條邊<b>遞移地</b>把「非原子資料寫」ordered 在「資料讀」之前。index 是那把「可攜帶 happens-before」的把手。</div></div>
+    <div class="layer l3"><div class="qq">x86 上 load 本來就是 acquire、store 本來就是 release,那 <code>Ordering</code> 還有差嗎?</div>
+      <div class="aa">有 —— <code>Ordering</code> 也約束<b>編譯器</b>的重排,不只 CPU。Relaxed 允許編譯器把資料存取<b>搬到</b> index 操作的另一側,即使 x86 runtime 不會那樣重排。為了可攜性 + 擋編譯器重排,標註仍必要。</div></div>
+  </div>
+</section>
+
+<!-- ==================== QUIZ ==================== -->
+<section id="panel-quiz" class="tab-panel">
+  <h2>④ Self-Quiz(答案摺疊)</h2>
+
+  <details>
+    <summary>read-mostly 的 feature flags 該選光譜哪一站?分水嶺是什麼?</summary>
+    <div class="ans">
+      <p>站 <span class="st">3 · ArcSwap 模式</span>(原子換整份 <code>Arc&lt;Flags&gt;</code>)。flags 小、更新罕見且<b>整批替換</b>,換指標讓 reader 拿 snapshot 幾乎不阻塞(std 版短鎖只做 clone)。</p>
+      <p><b>分水嶺 = 寫頻率 × 複製成本</b>(對照 RwLock)。只要「寫罕見 + 整批換 + 複製便宜」成立,ArcSwap 勝(reader 全不擋、無 writer starvation)。若 flags 變大<b>且</b>改成頻繁<b>就地</b>小改,rebuild 成本 × 頻率過線 → 改 <code>RwLock</code> 就地改。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>LRU 為什麼不能簡單套 <code>RwLock</code>?你會怎麼辦?</summary>
+    <div class="ans">
+      <p><b>為什麼失效:</b>命中(get)要把 entry 移到 recency list 頭 —— <b>讀其實是寫</b>。於是每個 get 都需 write lock,<code>RwLock</code> 退化成 <code>Mutex</code>,多讀並行完全用不到、讀吞吐歸零。</p>
+      <p><b>做法:</b>① <span class="st">CLOCK / second-chance</span> —— 命中只設 reference bit(relaxed store,不動 list),淘汰時時鐘手掃 bit;讀路徑不再排他。② <span class="st">sampled-LRU</span> —— 抽 K 個挑最舊,不維護嚴格順序。③ <span class="st">sharded LRU</span> —— 切片分散 contention。共同代價:用嚴格 recency 精確度換並發。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>counter / metrics 用 <code>Relaxed</code> atomic 為什麼夠?什麼時候會不夠?</summary>
+    <div class="ans">
+      <p><b>夠:</b>你只需要「計數本身是原子的」,不需要用這個計數去 order 其他記憶體的可見性。<code>fetch_add(.., Relaxed)</code> 保證不掉更新,也最省。</p>
+      <p><b>不夠:</b>當這個原子<b>gates 其他資料</b>時 —— 例如把它當 sequence/flag 去「發佈」一塊剛寫好的 buffer,讀方靠它判斷 buffer 就緒。這時需要 <b>Release(寫方)/ Acquire(讀方)</b> 建立 happens-before,否則讀方可能看到 flag 已設、buffer 卻還沒寫完。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>同樣是 read-mostly 的小 config,seqlock 與 ArcSwap 怎麼選?</summary>
+    <div class="ans">
+      <p><b>seqlock(站 4):</b>當你在意<b>零 alloc</b>、資料<b>小且 trivially copyable</b>、且讀可容忍 retry。省掉 ArcSwap 每次更新的 <code>Arc</code> alloc。代價:writer 進行中 reader 要 spin;含非 Copy/指標欄位不能用;Rust 下 payload 要做成 atomic 以避免 data-race UB。</p>
+      <p><b>ArcSwap(站 3):</b>當你要 reader <b>從不 retry</b>、或資料含非 Copy 欄位、或想要一個乾淨的 snapshot 生命週期。代價:每寫 alloc + rebuild、新舊並存到舊 reader drop。</p>
+      <p>一句話:<b>要零 alloc、能忍 retry → seqlock;要 reader 永不重試、資料非平凡 → ArcSwap。</b></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>sharded map 跨 shard 原子操作怎麼避免死鎖?若兩操作分別鎖 shard (2,5) 與 (5,2) 會怎樣?</summary>
+    <div class="ans">
+      <p><b>避免:</b>對涉及的 shard 一律按<b>固定全域順序</b>(如索引升冪)上鎖。兩個操作都會「先鎖 2、再鎖 5」,不存在循環等待。</p>
+      <p><b>(2,5) 與 (5,2):</b>若不正規化、各自照給定順序鎖 —— 操作 X 持 2 等 5、操作 Y 持 5 等 2,就是教科書 <b>AB/BA 死鎖</b>。修法就是上面的「排序後再上鎖」,把鎖獲取定義成一個全序。多於兩個 shard 時:先收集索引 → 排序去重 → 依序鎖。</p>
+    </div>
+  </details>
+</section>
+
+<div class="foot">std-only · Rust <b>edition 2024</b> · 全部 Rust 片段一起 rustc 1.91.1 編譯(<code>-D warnings</code> 零警告)+ 斷言通過。<br>CoderPad 實測環境為 1.92.0;此處驗到 1.91.1(容器可取得的最接近版本),本頁未使用任何 1.92 才有的 API。<br>ordering / seqlock fence 的精確性標為 unverified,production 需再 review。</div>
+
+</div>
+<script>
+"use strict";
+
+/* ---------------- Rust code snippets (verified to compile together: rustc 1.91.1, edition 2024, -D warnings) ---------------- */
+const CODE = {
+shared_use:
+`use std::cell::UnsafeCell;
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::mem::MaybeUninit;
+use std::sync::atomic::{fence, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, RwLock};`,
+
+coarse:
+`struct CoarseMap<K, V> { inner: Mutex<HashMap<K, V>> }
+
+impl<K: Hash + Eq, V> CoarseMap<K, V> {
+    fn new() -> Self { Self { inner: Mutex::new(HashMap::new()) } }
+
+    fn insert(&self, k: K, v: V) {
+        self.inner.lock().unwrap().insert(k, v);
+    }
+    fn get_cloned(&self, k: &K) -> Option<V> where V: Clone {
+        self.inner.lock().unwrap().get(k).cloned()
+    }
+}`,
+
+sharded:
+`struct ShardedMap<K, V> { shards: Vec<Mutex<HashMap<K, V>>> }
+
+impl<K: Hash + Eq, V> ShardedMap<K, V> {
+    fn new(n: usize) -> Self {
+        let mut shards = Vec::with_capacity(n);
+        for _ in 0..n { shards.push(Mutex::new(HashMap::new())); }
+        Self { shards }
+    }
+    fn shard_idx(&self, key: &K) -> usize {
+        let mut h = DefaultHasher::new();
+        key.hash(&mut h);
+        (h.finish() as usize) % self.shards.len()
+    }
+    fn insert(&self, key: K, val: V) {
+        let i = self.shard_idx(&key);
+        self.shards[i].lock().unwrap().insert(key, val);
+    }
+    fn get_cloned(&self, key: &K) -> Option<V> where V: Clone {
+        let i = self.shard_idx(key);
+        self.shards[i].lock().unwrap().get(key).cloned()   // only ONE shard is locked
+    }
+
+    // cross-shard atomic move: lock BOTH shards in ascending index order.
+    fn move_value(&self, from: &K, to: K) {
+        let i = self.shard_idx(from);
+        let j = self.shard_idx(&to);
+        if i == j {
+            let mut g = self.shards[i].lock().unwrap();
+            if let Some(v) = g.remove(from) { g.insert(to, v); }
+            return;
+        }
+        let (lo, hi) = if i < j { (i, j) } else { (j, i) };
+        let mut g_lo = self.shards[lo].lock().unwrap();   // lower index first
+        let mut g_hi = self.shards[hi].lock().unwrap();   // then higher: no AB/BA cycle
+        let taken = if i == lo { g_lo.remove(from) } else { g_hi.remove(from) };
+        if let Some(v) = taken {
+            if j == lo { g_lo.insert(to, v); } else { g_hi.insert(to, v); }
+        }
+    }
+}`,
+
+rwlock:
+`struct RwMap<K, V> { inner: RwLock<HashMap<K, V>> }
+
+impl<K: Hash + Eq, V> RwMap<K, V> {
+    fn new() -> Self { Self { inner: RwLock::new(HashMap::new()) } }
+
+    // many readers concurrently...
+    fn get_cloned(&self, k: &K) -> Option<V> where V: Clone {
+        self.inner.read().unwrap().get(k).cloned()
+    }
+    // ...but a writer excludes every reader for the whole in-place mutation.
+    fn insert(&self, k: K, v: V) {
+        self.inner.write().unwrap().insert(k, v);
+    }
+}`,
+
+arcswap:
+`#[derive(Debug)]
+struct Config { timeout_ms: u64, retries: u32, endpoint: String }
+
+struct ConfigHandle { inner: RwLock<Arc<Config>> }
+
+impl ConfigHandle {
+    fn new(cfg: Config) -> Self { Self { inner: RwLock::new(Arc::new(cfg)) } }
+
+    // READ: hold the lock only long enough to bump a refcount, then read the
+    // snapshot with no lock held. (The arc-swap crate makes this fully lock-free;
+    // std-only, the critical section is one Arc::clone.)
+    fn load(&self) -> Arc<Config> {
+        Arc::clone(&self.inner.read().unwrap())
+    }
+
+    // WRITE: build the whole new Config off to the side, then swap the pointer.
+    // In-flight readers keep using the old Arc; it is freed when the last one drops.
+    fn store(&self, cfg: Config) {
+        *self.inner.write().unwrap() = Arc::new(cfg);
+    }
+}`,
+
+seqlock:
+`// single-writer seqlock over a small POD payload.
+// payload is stored as atomics on purpose: a T: Copy non-atomic seqlock has a
+// data race between the reader's load and the writer's store, which is UB under
+// Rust's memory model. atomics make the racy read well-defined.
+struct SeqLock { seq: AtomicU64, a: AtomicU64, b: AtomicU64 }
+
+impl SeqLock {
+    const fn new(a: u64, b: u64) -> Self {
+        Self { seq: AtomicU64::new(0), a: AtomicU64::new(a), b: AtomicU64::new(b) }
+    }
+
+    fn write(&self, a: u64, b: u64) {
+        let s = self.seq.load(Ordering::Relaxed);
+        self.seq.store(s.wrapping_add(1), Ordering::Relaxed); // odd = write in progress
+        fence(Ordering::Release);
+        self.a.store(a, Ordering::Relaxed);
+        self.b.store(b, Ordering::Relaxed);
+        self.seq.store(s.wrapping_add(2), Ordering::Release); // even = published
+    }
+
+    fn read(&self) -> (u64, u64) {
+        loop {
+            let s1 = self.seq.load(Ordering::Acquire);
+            if s1 & 1 != 0 { std::hint::spin_loop(); continue; } // writer mid-flight
+            let a = self.a.load(Ordering::Relaxed);
+            let b = self.b.load(Ordering::Relaxed);
+            fence(Ordering::Acquire);
+            let s2 = self.seq.load(Ordering::Relaxed);
+            if s1 == s2 { return (a, b); } // seq unchanged => consistent snapshot
+            std::hint::spin_loop();        // torn read: retry
+        }
+    }
+}`,
+
+cas:
+`// lock-free "update running max" via a compare-exchange loop.
+// no reclamation problem here (no pointers) — this is the pure CAS-retry shape.
+fn update_max(cell: &AtomicU64, candidate: u64) {
+    let mut cur = cell.load(Ordering::Relaxed);
+    while candidate > cur {
+        match cell.compare_exchange_weak(
+            cur, candidate, Ordering::Release, Ordering::Relaxed,
+        ) {
+            Ok(_)       => break,      // we won the race
+            Err(actual) => cur = actual, // someone moved it; observe latest and retry
+        }
+    }
+}`,
+
+spsc:
+`struct Spsc<T, const N: usize> {
+    buf: [UnsafeCell<MaybeUninit<T>>; N],
+    head: AtomicUsize, // producer owns: next slot to write
+    tail: AtomicUsize, // consumer owns: next slot to read
+}
+
+// safe because producer and consumer only ever touch disjoint slots,
+// and each index has exactly one writer.
+unsafe impl<T: Send, const N: usize> Sync for Spsc<T, N> {}
+
+impl<T, const N: usize> Spsc<T, N> {
+    fn new() -> Self {
+        Self {
+            buf: std::array::from_fn(|_| UnsafeCell::new(MaybeUninit::uninit())),
+            head: AtomicUsize::new(0),
+            tail: AtomicUsize::new(0),
+        }
+    }
+
+    // PRODUCER thread only
+    fn push(&self, val: T) -> Result<(), T> {
+        let head = self.head.load(Ordering::Relaxed);   // I own head: Relaxed is fine
+        let next = (head + 1) % N;
+        if next == self.tail.load(Ordering::Acquire) {  // acquire the consumer's progress
+            return Err(val);                            // full: capacity is N - 1
+        }
+        unsafe { (*self.buf[head].get()).write(val); }  // non-atomic data write
+        self.head.store(next, Ordering::Release);       // release-publish that write
+        Ok(())
+    }
+
+    // CONSUMER thread only
+    fn pop(&self) -> Option<T> {
+        let tail = self.tail.load(Ordering::Relaxed);   // I own tail
+        if tail == self.head.load(Ordering::Acquire) {  // acquire the producer's publish
+            return None;                                // empty
+        }
+        let val = unsafe { (*self.buf[tail].get()).as_ptr().read() };
+        self.tail.store((tail + 1) % N, Ordering::Release); // hand the slot back
+        Some(val)
+    }
+}
+
+impl<T, const N: usize> Drop for Spsc<T, N> {
+    fn drop(&mut self) {
+        let mut tail = *self.tail.get_mut();
+        let head = *self.head.get_mut();
+        while tail != head { // drop the elements still live in [tail, head)
+            unsafe { std::ptr::drop_in_place((*self.buf[tail].get()).as_mut_ptr()); }
+            tail = (tail + 1) % N;
+        }
+    }
+}`
+};
+
+/* ---------------- minimal Rust syntax highlighter (self-contained, no CDN) ---------------- */
+const RUST_KW = new Set(["as","async","await","break","const","continue","crate","dyn","else",
+  "enum","extern","false","fn","for","if","impl","in","let","loop","match","mod","move","mut",
+  "pub","ref","return","self","Self","static","struct","super","trait","true","type","unsafe",
+  "use","where","while"]);
+const RUST_TY = new Set(["u8","u16","u32","u64","u128","usize","i8","i16","i32","i64","i128",
+  "isize","f32","f64","bool","char","str","String","Vec","Option","Result","Arc","Rc","Box",
+  "HashMap","BTreeMap","Mutex","RwLock","RwLockReadGuard","MutexGuard","AtomicU64","AtomicUsize",
+  "AtomicPtr","AtomicBool","Ordering","UnsafeCell","MaybeUninit","DefaultHasher","Hash","Hasher",
+  "Eq","Clone","Copy","Send","Sync","Debug","Some","None","Ok","Err"]);
+
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function highlightRust(src){
+  let i = 0, n = src.length, out = "";
+  const idStart = c => /[A-Za-z_]/.test(c);
+  const idPart  = c => /[A-Za-z0-9_]/.test(c);
+  while(i < n){
+    const c = src[i];
+    if(/\s/.test(c)){ let j=i+1; while(j<n && /\s/.test(src[j])) j++; out+=esc(src.slice(i,j)); i=j; continue; }
+    if(c==="/" && src[i+1]==="/"){ let j=i+2; while(j<n && src[j]!=="\n") j++; out+='<span class="t-cmt">'+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+    if(c==="/" && src[i+1]==="*"){ let j=i+2; while(j<n && !(src[j]==="*"&&src[j+1]==="/")) j++; j=Math.min(n,j+2); out+='<span class="t-cmt">'+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+    if(c==='"'){ let j=i+1; while(j<n && src[j]!=='"'){ if(src[j]==="\\") j++; j++; } j=Math.min(n,j+1); out+='<span class="t-str">'+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+    if(c==="'"){
+      if(idStart(src[i+1])){
+        let j=i+1; while(j<n && idPart(src[j])) j++;
+        if(src[j]==="'"){ j++; out+='<span class="t-str">'+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+        out+='<span class="t-life">'+esc(src.slice(i,j))+"</span>"; i=j; continue;
+      } else {
+        let j=i+1; if(src[j]==="\\") j++; j++; if(src[j]==="'") j++; out+='<span class="t-str">'+esc(src.slice(i,j))+"</span>"; i=j; continue;
+      }
+    }
+    if(/[0-9]/.test(c)){ let j=i+1; while(j<n && /[0-9_a-fA-FxXoObB.]/.test(src[j])) j++; out+='<span class="t-num">'+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+    if(c==="#" && src[i+1]==="["){ let j=i+2, d=1; while(j<n && d>0){ if(src[j]==="[")d++; else if(src[j]==="]")d--; j++; } out+='<span class="t-attr">'+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+    if(idStart(c)){
+      let j=i+1; while(j<n && idPart(src[j])) j++;
+      const word = src.slice(i,j);
+      if(src[j]==="!"){ out+='<span class="t-macro">'+esc(word)+"!</span>"; i=j+1; continue; }
+      let cls=null;
+      if(RUST_KW.has(word)) cls="t-kw";
+      else if(RUST_TY.has(word)) cls="t-type";
+      else if(/^[A-Z]/.test(word)) cls="t-type";
+      else { let k=j; while(k<n && /[ \t]/.test(src[k])) k++; if(src[k]==="(") cls="t-fn"; }
+      out += cls ? '<span class="'+cls+'">'+esc(word)+"</span>" : esc(word);
+      i=j; continue;
+    }
+    out += esc(c); i++;
+  }
+  return out;
+}
+
+/* ---------------- tabs / jumps / station toggles (single delegated handler) ---------------- */
+function activateTab(id){
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === "panel-"+id));
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("current", b.getAttribute("data-tab") === id));
+  const bar = document.getElementById("tabbar");
+  const btn = bar && bar.querySelector('[data-tab="'+id+'"]');
+  if(btn && btn.scrollIntoView) btn.scrollIntoView({inline:"center", block:"nearest", behavior:"smooth"});
+}
+function toggleStation(id){
+  const card = document.getElementById("card-"+id);
+  const st = document.getElementById("station-"+id);
+  if(card) card.classList.toggle("open");
+  if(st) st.classList.toggle("open");
+}
+
+document.addEventListener("click", (e) => {
+  const tabBtn = e.target.closest("[data-tab]");
+  if(tabBtn){ activateTab(tabBtn.getAttribute("data-tab")); return; }
+  const jump = e.target.closest("[data-jump]");
+  if(jump){ activateTab(jump.getAttribute("data-jump")); const top=document.getElementById("top"); if(top&&top.scrollIntoView) top.scrollIntoView({behavior:"smooth"}); return; }
+  const st = e.target.closest("[data-station]");
+  if(st){ toggleStation(st.getAttribute("data-station")); return; }
+  const step = e.target.closest("[data-step]");
+  if(step){ stepAction(step.getAttribute("data-step")); return; }
+});
+
+/* ---------------- SPSC stepper: simulate an op script, render each frame ---------------- */
+const RING_N = 6;
+const OPS = [
+  {t:"P",v:"A"},{t:"P",v:"B"},{t:"P",v:"C"},{t:"P",v:"D"},{t:"P",v:"E"},
+  {t:"P",v:"F"},           // full -> Err
+  {t:"C"},                 // pop A
+  {t:"P",v:"G"},           // wraps: slot 5, head -> 0
+  {t:"C"},{t:"C"},{t:"C"},{t:"C"},{t:"C"}, // drain B C D E G
+  {t:"C"}                  // empty -> None
+];
+let STEPS = [];
+let stepIdx = 0;
+
+function simulate(ops, N){
+  let head=0, tail=0;
+  const cells = new Array(N).fill(null);
+  const frames = [];
+  frames.push({
+    desc:"初始狀態:ring 為空。",
+    code:"head = 0, tail = 0",
+    cells:cells.slice(), head, tail,
+    check:"empty check → tail == head → true",
+    result:"—", kind:"init", mark:{}
+  });
+  for(const op of ops){
+    if(op.t==="P"){
+      const next=(head+1)%N;
+      if(next===tail){
+        frames.push({
+          desc:"P：push("+op.v+") 前先判滿。",
+          code:"(head+1)%"+N+" == tail  →  "+next+" == "+tail,
+          cells:cells.slice(), head, tail,
+          check:"full → 回傳 Err("+op.v+")，不覆寫任何 slot",
+          result:"Err("+op.v+")", kind:"full", mark:{head:true,tail:true}
+        });
+      } else {
+        const w=head; cells[w]=op.v; head=next;
+        const wrapped = next < w; // head rolled N-1 -> 0
+        frames.push({
+          desc:"P：push("+op.v+")。"+(wrapped?" ← head wrap":""),
+          code:"buf["+w+"] = "+op.v+";  head.store("+head+", Release)",
+          cells:cells.slice(), head, tail,
+          check:(wrapped
+            ? "wrap:寫 slot["+w+"] 後 head 由 "+w+" 環繞回 0(index 取模、資料不搬);再 release-store 發佈"
+            : "release-store head：把 slot["+w+"] 的資料寫入「發佈」給 consumer"),
+          result:"Ok", kind:"push", mark:{wrote:w, head:true}
+        });
+      }
+    } else {
+      if(tail===head){
+        frames.push({
+          desc:"C：pop 前先判空。",
+          code:"tail == head  →  "+tail+" == "+head,
+          cells:cells.slice(), head, tail,
+          check:"empty → 回傳 None",
+          result:"None", kind:"empty", mark:{head:true,tail:true}
+        });
+      } else {
+        const r=tail; const val=cells[r]; cells[r]=null; tail=(tail+1)%N;
+        frames.push({
+          desc:"C：pop()。",
+          code:"acquire-load head;  val = buf["+r+"];  tail.store("+tail+", Release)",
+          cells:cells.slice(), head, tail,
+          check:"acquire-load head 建立 happens-before：先看見 producer 的資料寫入，才讀 slot["+r+"]",
+          result:"Some("+val+")", kind:"pop", mark:{read:r, tail:true}
+        });
+      }
+    }
+  }
+  return frames;
+}
+
+function cellClass(idx, f){
+  let cls = "ringcell";
+  if(f.cells[idx] === null) cls += " empty";
+  if(f.mark && f.mark.wrote === idx) cls += " wrote";
+  if(f.mark && f.mark.read === idx) cls += " readm";
+  return cls;
+}
+
+function renderStep(){
+  const f = STEPS[stepIdx];
+  const host = document.getElementById("stepper-view");
+  if(!host || !f) return;
+  let ring = '<div class="ringrow">';
+  for(let k=0;k<RING_N;k++){
+    ring += '<div class="'+cellClass(k,f)+'">'
+          + '<div class="ringidx">'+k+'</div>'
+          + '<div class="ringval">'+(f.cells[k]===null?'·':f.cells[k])+'</div>'
+          + '<div class="ringptr">'
+          + (k===f.head?'<span class="ph">H</span>':'')
+          + (k===f.tail?'<span class="pt">T</span>':'')
+          + '</div></div>';
+  }
+  ring += '</div>';
+
+  const badge = '<span class="rz rz-'+f.kind+'">'+f.result+'</span>';
+  const progress = (stepIdx)+' / '+(STEPS.length-1);
+
+  host.innerHTML =
+      '<div class="stepmeta"><span class="stepno">step '+progress+'</span>'+badge+'</div>'
+    + '<div class="stepdesc">'+f.desc+'</div>'
+    + ring
+    + '<div class="stephdt">head = <b>'+f.head+'</b> &nbsp;·&nbsp; tail = <b>'+f.tail+'</b> &nbsp;·&nbsp; 容量 = N−1 = '+(RING_N-1)+'</div>'
+    + '<pre class="stepcode"><code>'+esc(f.code)+'</code></pre>'
+    + '<div class="stepnote">'+f.check+'</div>';
+
+  const prev=document.getElementById("btn-prev");
+  const next=document.getElementById("btn-next");
+  if(prev) prev.disabled = (stepIdx===0);
+  if(next) next.disabled = (stepIdx===STEPS.length-1);
+}
+function stepAction(a){
+  if(a==="next" && stepIdx<STEPS.length-1) stepIdx++;
+  else if(a==="prev" && stepIdx>0) stepIdx--;
+  else if(a==="reset") stepIdx=0;
+  renderStep();
+}
+
+/* ---------------- boot ---------------- */
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("pre code[data-code]").forEach(el => {
+    const key = el.getAttribute("data-code");
+    if(CODE[key] != null) el.innerHTML = highlightRust(CODE[key]);
+  });
+  STEPS = simulate(OPS, RING_N);
+  stepIdx = 0;
+  renderStep();
+  activateTab("overview");
+});
+
+</script>
+</body>
+</html>

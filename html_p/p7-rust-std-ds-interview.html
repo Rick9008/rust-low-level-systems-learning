@@ -1,0 +1,2237 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rust std-only 資料結構 · 面試教材</title>
+<style>
+:root{
+  --bg0:#282828; --bgdim:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d;
+  --fg0:#d4be98; --fgdim:#a89984; --grey:#928374;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+html,body{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+*{box-sizing:border-box;}
+body{
+  margin:0;background:var(--bg0);color:var(--fg0);
+  font-family:var(--mono);font-size:15px;line-height:1.7;
+}
+a{color:var(--blue);}
+h1,h2,h3,h4{font-weight:700;line-height:1.3;}
+h1{font-size:1.5rem;color:var(--yellow);margin:0 0 .2rem;}
+h2{font-size:1.2rem;color:var(--aqua);border-bottom:1px solid var(--bg2);padding-bottom:.35rem;margin:2.2rem 0 1rem;}
+h3{font-size:1rem;color:var(--orange);margin:1.6rem 0 .6rem;}
+h4{font-size:.92rem;color:var(--blue);margin:1.1rem 0 .4rem;}
+.wrap{max-width:940px;margin:0 auto;padding:0 16px 80px;}
+
+/* ---- top bar / tabs ---- */
+header{position:sticky;top:0;z-index:50;background:var(--bgdim);border-bottom:1px solid var(--bg2);}
+.head-inner{max-width:940px;margin:0 auto;padding:10px 16px 0;}
+.eyebrow{font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--grey);}
+.tabs{display:flex;gap:4px;overflow-x:auto;padding:10px 0 0;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+.tab-btn{
+  flex:0 0 auto;background:transparent;border:none;border-bottom:2px solid transparent;
+  color:var(--fgdim);font-family:var(--mono);font-size:.82rem;font-weight:600;
+  padding:8px 12px;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s;
+}
+.tab-btn:hover{color:var(--fg0);}
+.tab-btn.active{color:var(--yellow);border-bottom-color:var(--yellow);}
+.tab-btn:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;border-radius:3px;}
+
+/* ---- panels ---- */
+.panel{display:none;}
+.panel.active{display:block;animation:fade .2s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+/* ---- cards ---- */
+.card{background:var(--bg1);border:1px solid var(--bg2);border-radius:8px;padding:14px 16px;margin:12px 0;}
+.card.tight{padding:10px 14px;}
+.lead{border-left:3px solid var(--yellow);background:var(--bg1);border-radius:0 8px 8px 0;padding:12px 16px;margin:10px 0;}
+.lead .scene{color:var(--fgdim);font-size:.9rem;margin-top:.4rem;}
+.naive{border-left:3px solid var(--grey);}
+.fail{border-left:3px solid var(--red);}
+.fix{border-left:3px solid var(--green);}
+.callout-t{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-bottom:.3rem;display:block;}
+.naive .callout-t{color:var(--grey);}
+.fail .callout-t{color:var(--red);}
+.fix .callout-t{color:var(--green);}
+.badge{display:inline-block;font-size:.7rem;padding:1px 7px;border-radius:10px;font-weight:700;vertical-align:middle;}
+.b-time{background:rgba(125,174,163,.16);color:var(--blue);}
+.b-space{background:rgba(211,134,155,.16);color:var(--purple);}
+.b-amort{background:rgba(216,166,87,.16);color:var(--yellow);}
+kbd,code.inl{background:var(--bgdim);border:1px solid var(--bg2);border-radius:4px;padding:1px 5px;font-family:var(--mono);font-size:.86em;color:var(--aqua);}
+.stance{border-left:3px solid var(--orange);background:rgba(231,138,78,.06);border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0;}
+.stance .callout-t{color:var(--orange);}
+
+/* ---- xref (no anchors) ---- */
+.xref{color:var(--blue);cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;}
+.xref:hover{color:var(--aqua);}
+.xref:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:3px;}
+
+/* ---- code ---- */
+pre.code{
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+  background:var(--bgdim);border:1px solid var(--bg2);border-radius:8px;
+  padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.6;margin:12px 0;
+  scrollbar-width:thin;
+}
+pre.code::-webkit-scrollbar{height:8px;}
+pre.code::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:4px;}
+pre.diagram{
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+  background:var(--bgdim);border:1px dashed var(--bg3);border-radius:8px;
+  padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5;
+  color:var(--fgdim);margin:12px 0;white-space:pre;
+}
+pre.diagram::-webkit-scrollbar{height:8px;}
+pre.diagram::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:4px;}
+.tok-comment{color:var(--grey);font-style:italic;}
+.tok-string,.tok-char,.tok-byte{color:var(--green);}
+.tok-lifetime{color:var(--blue);}
+.tok-attr{color:var(--aqua);}
+.tok-number{color:var(--purple);}
+.tok-bool{color:var(--purple);}
+.tok-macro{color:var(--aqua);}
+.tok-keyword{color:var(--red);}
+.tok-type{color:var(--yellow);}
+.codecap{font-size:.74rem;color:var(--grey);margin:-4px 0 8px;}
+
+/* ---- stepper ---- */
+.stepper{background:var(--bg1);border:1px solid var(--bg2);border-radius:10px;padding:14px;margin:14px 0;}
+.stepper-view{background:var(--bgdim);border-radius:8px;padding:14px;overflow-x:auto;min-height:120px;scrollbar-width:thin;}
+.stepper-desc{font-size:.88rem;color:var(--fg0);margin:12px 4px 4px;min-height:2.4em;}
+.stepper-desc b{color:var(--yellow);font-weight:700;}
+.stepper-bar{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.sbtn{background:var(--bg2);border:1px solid var(--bg3);color:var(--fg0);font-family:var(--mono);
+  font-size:.82rem;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer;transition:background .12s;}
+.sbtn:hover:not(:disabled){background:var(--bg3);}
+.sbtn:disabled{opacity:.35;cursor:not-allowed;}
+.sbtn:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.stepper-count{font-size:.78rem;color:var(--grey);margin:0 4px;}
+
+/* ---- generic viz bits ---- */
+.slotrow{display:flex;gap:6px;flex-wrap:wrap;}
+.slot{position:relative;width:52px;height:52px;border:1.5px solid var(--bg3);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;background:var(--bg1);}
+.slot .idx{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:.62rem;color:var(--grey);font-weight:600;}
+.slot.filled{background:rgba(169,182,101,.14);border-color:var(--green);color:var(--green);}
+.slot.empty{color:var(--bg3);}
+.slot .mk{position:absolute;font-size:.6rem;font-weight:800;padding:0 3px;border-radius:3px;}
+.mk-h{bottom:-16px;left:2px;color:var(--blue);}
+.mk-t{bottom:-16px;right:2px;color:var(--orange);}
+.slot.hl{box-shadow:0 0 0 2px var(--yellow);}
+.metarow{display:flex;gap:16px;flex-wrap:wrap;margin-top:22px;font-size:.82rem;}
+.metarow .k{color:var(--grey);}
+.metarow .v{color:var(--fg0);font-weight:700;}
+.statebadge{display:inline-block;font-size:.72rem;font-weight:800;padding:2px 9px;border-radius:10px;}
+.st-full{background:rgba(234,105,98,.18);color:var(--red);}
+.st-empty{background:rgba(146,131,116,.18);color:var(--grey);}
+.st-ok{background:rgba(169,182,101,.16);color:var(--green);}
+
+table.mini{border-collapse:collapse;font-size:.8rem;margin:4px 0;}
+table.mini th,table.mini td{border:1px solid var(--bg3);padding:4px 9px;text-align:center;}
+table.mini th{background:var(--bg2);color:var(--fgdim);font-weight:600;}
+table.mini td.hl{background:rgba(216,166,87,.16);}
+table.mini td.freeslot{color:var(--grey);opacity:.5;}
+.node-box{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:46px;padding:6px 8px;border:1.5px solid var(--bg3);border-radius:6px;background:var(--bg1);font-weight:700;}
+.node-box .sub{font-size:.6rem;color:var(--grey);font-weight:600;margin-top:1px;}
+.chain{display:flex;align-items:center;gap:2px;flex-wrap:wrap;}
+.arrow{color:var(--grey);font-size:1rem;padding:0 2px;}
+.chain .mru{border-color:var(--green);}
+.chain .lru{border-color:var(--red);}
+.nb-hl{box-shadow:0 0 0 2px var(--yellow);}
+.evicted{color:var(--red);font-size:.82rem;margin-top:8px;font-weight:600;}
+.legend-line{display:flex;gap:14px;flex-wrap:wrap;font-size:.74rem;color:var(--fgdim);margin-top:10px;}
+.legend-line span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+.lg-cur::before{background:var(--orange);}
+.lg-queue::before{background:var(--blue);}
+.lg-done::before{background:var(--green);}
+.lg-none::before{background:var(--bg3);}
+
+svg.viz{display:block;max-width:100%;height:auto;}
+svg.viz text{font-family:var(--mono);}
+.arrrow{stroke:var(--grey);stroke-width:1.4;marker-end:url(#ah);}
+
+/* ---- quiz ---- */
+details.quiz{background:var(--bg1);border:1px solid var(--bg2);border-radius:8px;padding:0;margin:8px 0;overflow:hidden;}
+details.quiz>summary{cursor:pointer;padding:11px 14px;font-weight:600;font-size:.9rem;color:var(--fg0);list-style:none;}
+details.quiz>summary::-webkit-details-marker{display:none;}
+details.quiz>summary::before{content:"Q ";color:var(--yellow);font-weight:800;}
+details.quiz[open]>summary{border-bottom:1px solid var(--bg2);color:var(--yellow);}
+details.quiz .ans{padding:12px 14px;font-size:.88rem;color:var(--fgdim);}
+details.quiz .ans b{color:var(--green);}
+details.quiz>summary:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;}
+
+/* ---- cheat table ---- */
+table.cheat{width:100%;border-collapse:collapse;font-size:.84rem;margin:12px 0;}
+table.cheat th,table.cheat td{border:1px solid var(--bg2);padding:9px 11px;text-align:left;vertical-align:top;}
+table.cheat th{background:var(--bg2);color:var(--aqua);font-weight:700;position:sticky;top:0;}
+table.cheat td:first-child{color:var(--yellow);font-weight:700;white-space:nowrap;}
+table.cheat .avoid{color:var(--red);}
+.tablewrap{overflow-x:auto;-webkit-text-size-adjust:100%;}
+
+ul.tight{margin:.4rem 0;padding-left:1.3rem;}
+ul.tight li{margin:.28rem 0;}
+.fu{counter-reset:none;}
+.fu-l1{border-left:3px solid var(--aqua);padding:8px 14px;margin:10px 0 6px;background:var(--bg1);border-radius:0 8px 8px 0;}
+.fu-l2{border-left:3px solid var(--blue);padding:6px 14px;margin:4px 0 4px 16px;background:var(--bg1);border-radius:0 8px 8px 0;}
+.fu-l3{border-left:3px solid var(--purple);padding:6px 14px;margin:4px 0 8px 32px;background:var(--bg1);border-radius:0 8px 8px 0;}
+.fu-q{font-weight:700;color:var(--fg0);}
+.fu-l1 .fu-q::before{content:"L1 · ";color:var(--aqua);font-size:.8em;}
+.fu-l2 .fu-q::before{content:"L2 · ";color:var(--blue);font-size:.8em;}
+.fu-l3 .fu-q::before{content:"L3 · ";color:var(--purple);font-size:.8em;}
+.muted{color:var(--grey);}
+.unv{color:var(--orange);font-weight:700;font-size:.78rem;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation:none!important;transition:none!important;}
+}
+@media (max-width:560px){
+  body{font-size:14px;}
+  .slot{width:44px;height:44px;}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="eyebrow">Rust std-only · low-level systems 面試</div>
+    <nav class="tabs" id="tabs" aria-label="章節">
+      <button class="tab-btn active" data-jump="intro">總覽</button>
+      <button class="tab-btn" data-jump="ring">Ring Buffer</button>
+      <button class="tab-btn" data-jump="lru">LRU Cache</button>
+      <button class="tab-btn" data-jump="dsu">DSU</button>
+      <button class="tab-btn" data-jump="graph">Graph</button>
+      <button class="tab-btn" data-jump="trie">Trie</button>
+      <button class="tab-btn" data-jump="tree">Tree</button>
+      <button class="tab-btn" data-jump="timer">Timer Queue</button>
+      <button class="tab-btn" data-jump="epollasync">epoll + async</button>
+      <button class="tab-btn" data-jump="cheat">速查表</button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ================= INTRO ================= -->
+<section class="panel active" id="intro">
+  <h1>七個「面試真的會用」的資料結構 — 全部 std-only</h1>
+  <p class="muted">Rust <b style="color:var(--fg0)">edition 2024</b>(對齊 CoderPad 的 Rust 1.92 / 2024),禁外部 crate(無 tokio / crossbeam / rayon)。重點是 <b style="color:var(--fg0)">Rust 特有的實作取捨</b>(何時 index-based、何時 <code class="inl">Rc&lt;RefCell&gt;</code>、何時 <code class="inl">unsafe</code>),不是複述演算法。每個結構另附 <b style="color:var(--fg0)">thread-safe 版</b>(lock 與 lock-free 兩條路),最後一個分頁把 timer + <b style="color:var(--fg0)">epoll reactor + executor + future</b> 接成一個真會 park/wake 的 async runtime 骨架(全手寫 extern,零 crate)。</p>
+
+  <div class="lead">
+    <span class="callout-t">怎麼用這份東西</span>
+    這是 <b>spec,不是讀物</b>。每個結構請蓋住代碼區,只看 stepper 的狀態演化,<b>冷手寫一次</b>(cargo test 自檢),再 diff 對照。面試是 live coding,沒有 Claude Code —— 讀十遍不如手寫一遍。stepper 存在的目的是讓每個狀態變數<b>被推導出來</b>,而不是憑空出現。
+  </div>
+
+  <div class="card">
+    <span class="callout-t" style="color:var(--aqua)">本檔紀律</span>
+    <ul class="tight">
+      <li>所有 Rust 代碼<b style="color:var(--green)">實際編過</b>(<code class="inl">rustc 1.91.1 --edition 2024</code>,零 error 零 <code class="inl">unsafe_op</code> warning);HTML 裡每個 code block <b>再抽出重編一次</b>確認無手殘 typo。<span class="unv">unverified</span>:面試環境是 1.92,我這裡拿不到 1.92 的 toolchain,故以 1.91 驗證 —— 兩者都是 edition-2024 編譯器,本檔未用任何 1.92-only API,差異應為零,但這句是推論不是實測。LRU 對 brute-force、DSU 對 BFS、SPSC 對跨執行緒 FIFO 交叉驗證。<b>併發結構</b>(blocking queue / MPMC / MPSC / concurrent timer)以 4~8 執行緒 exact-set 壓測 + valgrind memcheck(無 UAF / uninit);<b>epoll reactor</b> 實測會 park + 被跨執行緒喚醒 + async 讀到 byte。無 <code class="inl">// 省略</code> 佔位。</li>
+      <li>狀態變數(head/tail、prev/next index、parent/rank…)先在靜態推導卡建立,再進 stepper 動畫。</li>
+      <li>不確定的事實標 <span class="unv">unverified</span>,不捏造 API / 版本 / 簽名。</li>
+    </ul>
+  </div>
+
+  <div class="card tight">
+    <span class="callout-t" style="color:var(--blue)">五條執行支柱(Etched prep doc 的評分錨,mock 時自我對照)</span>
+    <ul class="tight">
+      <li><b style="color:var(--fg0)">Clarify &amp; Communicate</b> — 先問清楚 constraint,再動手。</li>
+      <li><b style="color:var(--fg0)">Abstract the Noise</b> — 次要關注用 trait / 簡單 API stub 掉。</li>
+      <li><b style="color:var(--fg0)">Start Simple Then Iterate</b> — 先寫 naive-that-works,再優化(= naive→lever 弧)。</li>
+      <li><b style="color:var(--fg0)">Talk Through Trade-offs</b> — 明講 Big-O = massive green flag。</li>
+      <li><b style="color:var(--fg0)">Dry-Run Before You Run</b> — 自己抓出 bug 比一次寫對更強的訊號。這條是你 R1 的失分軸,唯一非練不可。</li>
+    </ul>
+  </div>
+
+  <h3>Naive → Predicate → Lever(貫穿每節)</h3>
+  <div class="card tight muted" style="font-size:.86rem">
+    naive = 最笨但正確的擺法 → 它撞到的失敗模式(O(n) 該 O(1)、或 borrow checker 打架)→ 修法(對的容器 / index 技巧)。每個結構的 ② 都照這條弧。
+  </div>
+
+  <h3>Edition 2024 差異(pad 就是 2024,以下全部實測過)</h3>
+  <div class="card">
+    <span class="callout-t">會擋你編譯的(hard error)</span>
+    <div class="tablewrap">
+    <table class="mini" style="width:100%">
+      <tr><th>寫法</th><th>2021</th><th>2024</th><th>對你的關聯</th></tr>
+      <tr><td><code class="inl">extern "C" { .. }</code></td><td>OK</td><td class="avoid">error: extern blocks must be unsafe</td><td>手寫 epoll / 任何 FFI → 改 <code class="inl">unsafe extern "C"</code></td></tr>
+      <tr><td><code class="inl">let gen = ..;</code></td><td>OK</td><td class="avoid">error: reserved keyword <code class="inl">gen</code></td><td><b>arena generation-tagged index</b> 的自然命名正好撞名 → 用 <code class="inl">generation</code> / <code class="inl">g</code></td></tr>
+      <tr><td><code class="inl">&amp;mut SOME_STATIC_MUT</code></td><td>OK</td><td class="avoid">error: creating a mutable reference to mutable static</td><td>全域可變狀態 → 改 <code class="inl">AtomicX</code> / <code class="inl">OnceLock</code> / <code class="inl">addr_of_mut!</code></td></tr>
+    </table>
+    </div>
+  </div>
+  <div class="card">
+    <span class="callout-t" style="color:var(--yellow)">會 warning 的:<code class="inl">unsafe fn</code> 的 body 不再是隱式 unsafe block</span>
+    2024 起 <code class="inl">unsafe_op_in_unsafe_fn</code> 預設開啟。<code class="inl">unsafe fn</code> 只宣告「<b>caller</b> 要負的義務」;函式內每個 unsafe 操作還是要自己包 <code class="inl">unsafe { }</code>,宣告「<b>我</b>檢查過了」。兩件事在 2021 被混為一談,這正是這個 lint 存在的理由。本檔的 <span class="xref" data-jump="ring" role="link" tabindex="0">MPSC <code class="inl">pop</code></span> 與 <span class="xref" data-jump="epollasync" role="link" tabindex="0">waker vtable</span> 已照此改寫(<code class="inl">/// # Safety</code> 寫契約、body 內 <code class="inl">unsafe {}</code> 寫理由)。
+  </div>
+  <div class="card fail">
+    <span class="callout-t">最陰的:不報錯、只默默改 drop 時機</span>
+    <ul class="tight">
+      <li><b><code class="inl">if let</code> 的 scrutinee 暫存值</b>:2024 在進 <code class="inl">else</code> <b>之前</b>就 drop,2021 是整個 <code class="inl">if let</code> 結束才 drop。實測輸出:2021 = <code class="inl">else-branch</code> → <code class="inl">[temp dropped]</code>;2024 = <code class="inl">[temp dropped]</code> → <code class="inl">else-branch</code>。<b>影響</b>:<code class="inl">if let Some(x) = m.lock().unwrap().take() { .. } else { /* 2024 這裡鎖已放,2021 還握著 */ }</code> —— 2024 少一類自我死鎖。</li>
+      <li><b>tail expression 的暫存值 vs locals</b>:2024 暫存值先 drop、locals 後;2021 相反。實測:2021 = <code class="inl">[drop local]</code> → <code class="inl">[drop tail-temp]</code>;2024 = <code class="inl">[drop tail-temp]</code> → <code class="inl">[drop local]</code>。<b>影響</b>:函式尾端 <code class="inl">m.lock().unwrap().get(k).cloned()</code> 這種寫法,解鎖順序相對於區域變數的 guard <b>反轉了</b>。</li>
+    </ul>
+    這兩條編譯器不會吭聲。若你在 pad 上把舊 repo 的段落貼過來,這是唯一「編得過但行為不同」的類別。
+  </div>
+</section>
+
+<!-- ================= RING BUFFER ================= -->
+<section class="panel" id="ring">
+  <h1>Ring Buffer(bounded)</h1>
+
+  <div class="lead">
+    <span class="callout-t">用途</span>
+    固定容量的 FIFO,producer 寫、consumer 讀,不做動態配置。
+    <div class="scene">Systems 場景:packet / telemetry stream 的 staging buffer。NIC 或 agent 把 sample 塞進環,下游批次抽走。容量固定 = 記憶體可預測、無 GC pause、cache 熱。</div>
+  </div>
+
+  <h2>① 概念推導</h2>
+  <div class="card naive">
+    <span class="callout-t">Naive</span>
+    <code class="inl">VecDeque</code> 直接當環用,或自己開 <code class="inl">Vec</code> + 一個 <code class="inl">head</code> 索引 + 一個 <code class="inl">count</code> 欄位,索引用 <code class="inl">% cap</code> 繞回。
+  </div>
+  <div class="card fail">
+    <span class="callout-t">失敗模式</span>
+    兩個問題疊起來:<br>
+    (1) <b>滿/空判別</b>:若只有 <code class="inl">head</code>/<code class="inl">tail</code> 兩個「物理索引」,<code class="inl">head == tail</code> 同時代表「空」與「滿」—— 無法區分。傳統補救是犧牲一格(留一個永遠不填)或多存一個 <code class="inl">count</code>。<br>
+    (2) <b>共享 count 在並發下要 RMW</b>:一旦搬到 SPSC(單 producer 單 consumer 跨執行緒),那個共享 <code class="inl">count</code> 每次都要 atomic fetch_add/sub,兩端互相競爭 —— 破壞 lock-free 的意義。
+  </div>
+  <div class="card fix">
+    <span class="callout-t">修法</span>
+    <b>單調遞增計數器 + power-of-2 mask</b>。<code class="inl">head</code>/<code class="inl">tail</code> 是「邏輯計數器」,持續累加、永不取模;只在<b>索引 storage 時</b>才 <code class="inl">& mask</code>(cap 是 2 的次方 → <code class="inl">x &amp; (cap-1) == x % cap</code>)。於是:
+    <ul class="tight">
+      <li><code class="inl">len = tail.wrapping_sub(head)</code> —— 因為真實筆數恆 ≤ cap,模 2⁶⁴ 的減法剛好等於筆數。</li>
+      <li>空 = <code class="inl">head == tail</code>;滿 = <code class="inl">len == cap</code>。<b>不浪費任何一格</b>,也不需要 count 欄位。</li>
+      <li>SPSC 下 <code class="inl">head</code> 只有 consumer 寫、<code class="inl">tail</code> 只有 producer 寫 → 各自 single-writer,免 RMW(見追問)。</li>
+    </ul>
+  </div>
+
+  <h2>② Rust 實作要點</h2>
+  <ul class="tight">
+    <li><b>容器</b>:<code class="inl">Vec&lt;Option&lt;T&gt;&gt;</code>(單執行緒版)。<code class="inl">Option</code> 讓 <code class="inl">pop</code> 能 <code class="inl">.take()</code> 把值搬出、留 <code class="inl">None</code>,move-out 乾淨且無 <code class="inl">unsafe</code>。</li>
+    <li><b>為什麼不用 <code class="inl">VecDeque</code></b>:它會在容量滿時<b>重新配置成長</b> —— bounded 環的重點正是不成長。你要的是「滿了就拒絕/覆寫」,不是自動擴容。</li>
+    <li><b>ownership 陷阱</b>:別存 <code class="inl">Vec&lt;T&gt;</code> 然後想「就地覆寫」—— move-out 一個已初始化的 <code class="inl">T</code> 需要 <code class="inl">mem::replace</code> 或 <code class="inl">Option</code>。用 <code class="inl">Option</code> 最省事。</li>
+  </ul>
+  <pre class="code"><script type="text/plain" class="rust-src">// Bounded ring buffer: monotonic head/tail + power-of-2 mask
+pub struct RingBuffer<T> {
+    buf: Vec<Option<T>>,
+    mask: usize,
+    head: usize, // read cursor (never masked in storage)
+    tail: usize, // write cursor
+}
+impl<T> RingBuffer<T> {
+    pub fn with_capacity_pow2(cap: usize) -> Self {
+        assert!(cap.is_power_of_two(), "capacity must be power of two");
+        let mut buf = Vec::with_capacity(cap);
+        buf.resize_with(cap, || None);
+        Self { buf, mask: cap - 1, head: 0, tail: 0 }
+    }
+    #[inline] pub fn len(&self) -> usize { self.tail.wrapping_sub(self.head) }
+    #[inline] pub fn is_empty(&self) -> bool { self.head == self.tail }
+    #[inline] pub fn is_full(&self) -> bool { self.len() == self.buf.len() }
+
+    pub fn push(&mut self, v: T) -> Result<(), T> {
+        if self.is_full() { return Err(v); }
+        let i = self.tail & self.mask;
+        self.buf[i] = Some(v);
+        self.tail = self.tail.wrapping_add(1);
+        Ok(())
+    }
+    // drop-oldest variant: overwrite when full, return what was dropped
+    pub fn push_overwrite(&mut self, v: T) -> Option<T> {
+        let dropped = if self.is_full() { self.pop() } else { None };
+        let i = self.tail & self.mask;
+        self.buf[i] = Some(v);
+        self.tail = self.tail.wrapping_add(1);
+        dropped
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        if self.is_empty() { return None; }
+        let i = self.head & self.mask;
+        let v = self.buf[i].take();
+        self.head = self.head.wrapping_add(1);
+        v
+    }
+}</script></pre>
+
+  <h2>③ 複雜度</h2>
+  <ul class="tight">
+    <li><span class="badge b-time">time</span> push / pop / len / is_full 全 <b>O(1) worst-case</b>(無攤還、無成長)。</li>
+    <li><span class="badge b-space">space</span> <b>O(cap)</b> 固定;無隱藏配置。</li>
+  </ul>
+
+  <h2>④ 互動 stepper</h2>
+  <p class="muted" style="font-size:.86rem">cap=4。看 <span style="color:var(--orange)">tail</span> 與 <span style="color:var(--blue)">head</span> 如何持續累加、只在索引時 <code class="inl">&amp; mask</code> 繞回;注意「滿」時兩個 marker 指向同一格 —— 這正是為什麼需要計數器而非物理索引。</p>
+  <div class="stepper" id="step-ring"></div>
+
+  <h2>⑤ 面試追問</h2>
+  <div class="fu">
+    <div class="fu-l1"><div class="fu-q">滿了要 block 還是 drop-oldest?</div>
+      看語意。command / control queue → block(命令不能掉)。telemetry / packet capture → drop-oldest(新資料較有價值,backpressure 會拖垮 producer)。</div>
+    <div class="stance"><span class="callout-t">我的立場</span>telemetry 串流我一律 <b>drop-oldest + 計數丟棄量</b>(exported 成 metric),而不是 block。因為 monitoring pipeline 阻塞會反噬被監控的 hot path;寧可掉舊 sample,也要留下「掉了幾筆」的可觀測性。</div>
+    <div class="fu-l2"><div class="fu-q">drop-oldest 在 SPSC 下怎麼不 race?</div>
+      單執行緒直接 <code class="inl">pop</code> 再 <code class="inl">push</code>(如上)。但 SPSC 下 producer <b>不能</b>改 <code class="inl">head</code> —— 那是 consumer 的 single-writer 領地。所以 producer 端的 drop-oldest 只能「覆寫 tail 指到的舊格 + 推進 tail」,讓 consumer 自己發現 gap;或乾脆改成 bounded <code class="inl">try_push</code> 回報 full,把丟棄決策上交。</div>
+    <div class="fu-l3"><div class="fu-q">那 MPMC 呢?兩個 atomic index 還夠嗎?</div>
+      不夠。多 producer / 多 consumer 下,單靠兩個 index 無法界定「這格到底被誰佔了」。要 <b>per-slot sequence number</b>(Vyukov MPMC queue)或直接上鎖。這也是為什麼 std 不提供 lock-free MPMC —— crossbeam 用的是 epoch-based reclamation + 每格 seq counter,遠比兩個 index 複雜。</div>
+  </div>
+
+  <h3>為什麼 SPSC 只需兩個 atomic index(附可編譯 unsafe 版)</h3>
+  <p class="muted" style="font-size:.86rem">關鍵是 <b>single-writer per index</b>:producer 只 store <code class="inl">tail</code>、consumer 只 store <code class="inl">head</code>。既然每個 index 只有一個 writer,就<b>不需要 RMW(fetch_add)</b>,只要 plain load + store 配 acquire/release。<code class="inl">Release</code> store 把 payload「發佈」在 index bump 之前;對端 <code class="inl">Acquire</code> load 保證看到 index 時 payload 已可見(承你的 memory-ordering 筆記:release 發佈、acquire 觀測)。跨執行緒共享 buffer 這件事本身逼你用 <code class="inl">UnsafeCell</code> + <code class="inl">unsafe</code> —— 這是「何時 unsafe」的標準時機:safe <code class="inl">Vec</code> 無法被兩條 thread 同時 <code class="inl">&amp;mut</code>。</p>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::cell::UnsafeCell;
+use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+struct Spsc<T> {
+    buf: Box<[UnsafeCell<MaybeUninit<T>>]>,
+    mask: usize,
+    head: AtomicUsize, // ONLY the consumer stores here
+    tail: AtomicUsize, // ONLY the producer stores here
+}
+// Safe under SPSC discipline + the acquire/release pairing below.
+unsafe impl<T: Send> Sync for Spsc<T> {}
+
+pub struct Producer<T> { inner: Arc<Spsc<T>> }
+pub struct Consumer<T> { inner: Arc<Spsc<T>> }
+unsafe impl<T: Send> Send for Producer<T> {}
+unsafe impl<T: Send> Send for Consumer<T> {}
+
+pub fn channel<T>(cap: usize) -> (Producer<T>, Consumer<T>) {
+    assert!(cap.is_power_of_two());
+    let mut v = Vec::with_capacity(cap);
+    for _ in 0..cap { v.push(UnsafeCell::new(MaybeUninit::uninit())); }
+    let inner = Arc::new(Spsc {
+        buf: v.into_boxed_slice(),
+        mask: cap - 1,
+        head: AtomicUsize::new(0),
+        tail: AtomicUsize::new(0),
+    });
+    (Producer { inner: inner.clone() }, Consumer { inner })
+}
+impl<T> Producer<T> {
+    pub fn push(&self, v: T) -> Result<(), T> {
+        let s = &*self.inner;
+        let tail = s.tail.load(Ordering::Relaxed);   // sole writer of tail
+        let head = s.head.load(Ordering::Acquire);   // observe consumer's freed slots
+        if tail.wrapping_sub(head) == s.buf.len() { return Err(v); } // full
+        let slot = s.buf[tail & s.mask].get();
+        unsafe { (*slot).write(v); }                 // fill payload
+        s.tail.store(tail.wrapping_add(1), Ordering::Release); // publish AFTER write
+        Ok(())
+    }
+}
+impl<T> Consumer<T> {
+    pub fn pop(&self) -> Option<T> {
+        let s = &*self.inner;
+        let head = s.head.load(Ordering::Relaxed);   // sole writer of head
+        let tail = s.tail.load(Ordering::Acquire);   // observe producer's publish
+        if head == tail { return None; }             // empty
+        let slot = s.buf[head & s.mask].get();
+        let v = unsafe { std::ptr::read((*slot).as_ptr()) }; // move T out
+        s.head.store(head.wrapping_add(1), Ordering::Release);
+        Some(v)
+    }
+}</script></pre>
+  <p class="codecap">注:為求簡短,此版未實作 <code class="inl">Drop</code> 去 drain 未消費的 <code class="inl">T</code>(會 leak)。production 版要在 <code class="inl">Drop</code> 把剩餘元素讀出丟棄。已跨執行緒驗證 10k 筆 FIFO 保序。</p>
+
+  <h2>⑥ Thread-safe 階梯:lock → SPSC → MPSC → MPMC</h2>
+  <div class="card tight">
+    <span class="callout-t" style="color:var(--aqua)">選型軸</span>
+    <ul class="tight">
+      <li><b>幾個 writer / 幾個 reader</b> 決定機制:1↔1 → SPSC(兩個 atomic index);多寫多讀 → 每格 sequence(MPMC)或鎖。</li>
+      <li><b>要不要 block</b>:worker 沒事做要睡 → Condvar;純交遞、caller 自己 spin/retry → lock-free。</li>
+      <li>下面把 SPSC(上一節)延伸成完整階梯。</li>
+    </ul>
+  </div>
+
+  <h3>A. Lock 版:Mutex + Condvar bounded blocking queue</h3>
+  <p class="muted" style="font-size:.86rem">這是 <b>thread pool 的 work queue primitive</b>。兩個 condvar:<code class="inl">not_full</code>(producer 滿了就睡)、<code class="inl">not_empty</code>(consumer 空了就睡)。backpressure 天然落在 <code class="inl">not_full</code>。</p>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::sync::{Mutex, Condvar};
+use std::collections::VecDeque;
+
+// Bounded blocking queue = thread-pool work queue primitive.
+pub struct BlockingQueue<T> {
+    inner: Mutex<VecDeque<T>>,
+    not_empty: Condvar, // consumers park here
+    not_full: Condvar,  // producers park here
+    cap: usize,
+}
+impl<T> BlockingQueue<T> {
+    pub fn new(cap: usize) -> Self {
+        assert!(cap > 0);
+        Self { inner: Mutex::new(VecDeque::with_capacity(cap)),
+               not_empty: Condvar::new(), not_full: Condvar::new(), cap }
+    }
+    pub fn push(&self, v: T) {
+        let mut q = self.inner.lock().unwrap();
+        // WHILE, not IF: guards spurious wakeup AND the race where another
+        // producer refilled the slot between our wake and lock reacquire.
+        while q.len() == self.cap {
+            q = self.not_full.wait(q).unwrap();
+        }
+        q.push_back(v);
+        drop(q);                       // unlock BEFORE notify (avoid hurry-up-and-wait)
+        self.not_empty.notify_one();
+    }
+    pub fn pop(&self) -> T {
+        let mut q = self.inner.lock().unwrap();
+        while q.is_empty() {
+            q = self.not_empty.wait(q).unwrap();
+        }
+        let v = q.pop_front().unwrap();
+        drop(q);
+        self.not_full.notify_one();
+        v
+    }
+}</script></pre>
+  <div class="card fail tight">
+    <span class="callout-t">最常見的兩個 bug</span>
+    <ul class="tight">
+      <li><b>用 <code class="inl">if</code> 而非 <code class="inl">while</code></b>:condvar 有 <b>spurious wakeup</b>(無人 notify 也可能醒),且醒來到重拿鎖之間別的 thread 可能已把 slot 搶走 → 條件要<b>重驗</b>。<code class="inl">if</code> 會在假設不成立時繼續往下 push/pop → 破表或 panic。</li>
+      <li><b>只用一個 condvar</b>:producer 和 consumer 共用一個 condvar + <code class="inl">notify_one</code> 時,可能喚醒「錯的那一邊」(notify 了另一個 producer 而非等待的 consumer)→ <b>lost wakeup</b> / 死鎖。分兩個 condvar(或用 <code class="inl">notify_all</code>,較浪費)。</li>
+    </ul>
+  </div>
+
+  <h3>B. Lock-free bounded MPMC(Vyukov per-slot sequence)</h3>
+  <p class="muted" style="font-size:.86rem">多 producer 多 consumer、bounded、無鎖。核心:<b>每格帶一個 sequence number</b>,把「這格輪到誰寫/誰讀」編碼進 seq,取代鎖。這也是回答「兩個 atomic index 為何不夠 MPMC」的正解。<span class="unv">unverified</span>:此設計一般歸給 Dmitry Vyukov(我沒逐字核對原始出處,但這是廣泛流傳的版本)。</p>
+  <div class="card tight">
+    <span class="callout-t" style="color:var(--blue)">seq 生命週期(cap 格,格 <code class="inl">i</code> 初始 seq = <code class="inl">i</code>)</span>
+    <table class="mini" style="width:100%;margin-top:6px">
+      <tr><th>時刻</th><th>格 i 的 seq</th><th>意義</th></tr>
+      <tr><td>初始(第 0 圈)</td><td><code class="inl">i</code></td><td>producer 在 pos=i 時,<code class="inl">seq==pos</code> → 可寫</td></tr>
+      <tr><td>producer 寫完</td><td><code class="inl">i+1</code></td><td>consumer 在 pos=i 時,<code class="inl">seq==pos+1</code> → 可讀</td></tr>
+      <tr><td>consumer 讀完</td><td><code class="inl">i+cap</code></td><td>下一圈 producer(pos=i+cap)<code class="inl">seq==pos</code> → 可寫</td></tr>
+    </table>
+    <div class="muted" style="font-size:.8rem;margin-top:6px"><code class="inl">diff = seq − pos</code>:<b>0</b> = 輪到你,先 CAS 搶 ticket 再動手;<b>&lt;0</b> = 落後一圈 = 滿/空;<b>&gt;0</b> = 別人先搶了,reload。</div>
+  </div>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::sync::atomic::{AtomicUsize, Ordering};
+use std::cell::UnsafeCell;
+use std::mem::MaybeUninit;
+
+struct Slot<T> { seq: AtomicUsize, val: UnsafeCell<MaybeUninit<T>> }
+pub struct MpmcQueue<T> {
+    buf: Box<[Slot<T>]>,
+    mask: usize,
+    enq: AtomicUsize, // producer ticket
+    deq: AtomicUsize, // consumer ticket
+}
+unsafe impl<T: Send> Sync for MpmcQueue<T> {}
+unsafe impl<T: Send> Send for MpmcQueue<T> {}
+impl<T> MpmcQueue<T> {
+    pub fn new(cap: usize) -> Self {
+        assert!(cap.is_power_of_two());
+        let buf = (0..cap).map(|i| Slot { seq: AtomicUsize::new(i),
+                                          val: UnsafeCell::new(MaybeUninit::uninit()) })
+                          .collect::<Vec<_>>().into_boxed_slice();
+        Self { buf, mask: cap - 1, enq: AtomicUsize::new(0), deq: AtomicUsize::new(0) }
+    }
+    pub fn push(&self, val: T) -> Result<(), T> {
+        let mut pos = self.enq.load(Ordering::Relaxed);
+        loop {
+            let cell = &self.buf[pos & self.mask];
+            let seq = cell.seq.load(Ordering::Acquire);
+            let diff = seq as isize - pos as isize;
+            if diff == 0 {
+                match self.enq.compare_exchange_weak(pos, pos + 1,
+                        Ordering::Relaxed, Ordering::Relaxed) {
+                    Ok(_) => {
+                        unsafe { (*cell.val.get()).write(val); }
+                        cell.seq.store(pos + 1, Ordering::Release); // publish payload
+                        return Ok(());
+                    }
+                    Err(actual) => pos = actual,
+                }
+            } else if diff < 0 { return Err(val); }        // full
+            else { pos = self.enq.load(Ordering::Relaxed); } // stale, reload
+        }
+    }
+    pub fn pop(&self) -> Option<T> {
+        let mut pos = self.deq.load(Ordering::Relaxed);
+        loop {
+            let cell = &self.buf[pos & self.mask];
+            let seq = cell.seq.load(Ordering::Acquire);
+            let diff = seq as isize - (pos + 1) as isize;
+            if diff == 0 {
+                match self.deq.compare_exchange_weak(pos, pos + 1,
+                        Ordering::Relaxed, Ordering::Relaxed) {
+                    Ok(_) => {
+                        let val = unsafe { (*cell.val.get()).assume_init_read() };
+                        cell.seq.store(pos + self.mask + 1, Ordering::Release); // free for next lap
+                        return Some(val);
+                    }
+                    Err(actual) => pos = actual,
+                }
+            } else if diff < 0 { return None; }             // empty
+            else { pos = self.deq.load(Ordering::Relaxed); }
+        }
+    }
+}</script></pre>
+  <p class="codecap">已驗證:4 producer / 4 consumer 各推 disjoint id 範圍共 8 萬筆,exact-set 比對 0 重複 0 遺失(×3);valgrind memcheck 無 uninit read / 無 UAF。</p>
+
+  <h3>C. Lock-free unbounded MPSC(Vyukov intrusive,XCHG)</h3>
+  <p class="muted" style="font-size:.86rem">多 producer 單 consumer、unbounded、linked-list。producer 端是 <b>wait-free</b>:一個 <code class="inl">head.swap()</code>(XCHG)就掛上節點。這是跟 MPMC array 完全不同的技巧,值得單獨會。跨執行緒共享 raw node → 必須 <code class="inl">unsafe</code> + 手動 <code class="inl">Box::into_raw</code>/<code class="inl">from_raw</code>,是「何時 unsafe」的又一標準場景。</p>
+  <div class="card fail tight">
+    <span class="callout-t">關鍵陷阱:the gap</span>
+    <code class="inl">head.swap(n)</code> 之後、<code class="inl">(*prev).next.store(n)</code> 之前有一個<b>瞬間視窗</b>:新節點已是 head 但還沒被前一個節點的 <code class="inl">next</code> 連上。此時 consumer 走到尾端會看到 <code class="inl">next == null</code> 而暫時判定「空」,即使其實有個 push 正在進行。演算法用 stub 節點 + 「<code class="inl">tail != head</code> 就回 <code class="inl">None</code> 稍後重試」處理這個 transient(它是 linearizable 的,只是有這個 window)。面試講得出這個 gap = 深度訊號。
+  </div>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::sync::atomic::{AtomicPtr, Ordering};
+use std::cell::UnsafeCell;
+use std::ptr;
+
+// Vyukov intrusive MPSC queue (unbounded, linked-list).
+// Producers are wait-free: a single XCHG on `head`. Consumer is single-threaded.
+struct Node<T> {
+    next: AtomicPtr<Node<T>>,
+    value: Option<T>,
+}
+impl<T> Node<T> {
+    fn alloc(value: Option<T>) -> *mut Node<T> {
+        Box::into_raw(Box::new(Node { next: AtomicPtr::new(ptr::null_mut()), value }))
+    }
+}
+pub struct MpscQueue<T> {
+    head: AtomicPtr<Node<T>>,       // producer end
+    tail: UnsafeCell<*mut Node<T>>, // consumer end (single consumer)
+    stub: *mut Node<T>,
+}
+unsafe impl<T: Send> Send for MpscQueue<T> {}
+unsafe impl<T: Send> Sync for MpscQueue<T> {}
+
+impl<T> MpscQueue<T> {
+    pub fn new() -> Self {
+        let stub = Node::alloc(None);
+        Self { head: AtomicPtr::new(stub), tail: UnsafeCell::new(stub), stub }
+    }
+    // wait-free for any number of producers
+    pub fn push(&self, value: T) {
+        let n = Node::alloc(Some(value));
+        let prev = self.head.swap(n, Ordering::AcqRel); // linearization point
+        // (transient gap here: list momentarily "broken" until the store lands)
+        unsafe { (*prev).next.store(n, Ordering::Release); }
+    }
+    /// # Safety
+    /// Exactly one thread may call `pop` at a time (single-consumer contract).
+    pub unsafe fn pop(&self) -> Option<T> {
+        // Edition 2024: an `unsafe fn` body is NO LONGER an implicit unsafe block.
+        // The `unsafe fn` marker states the caller's obligation; this `unsafe {}`
+        // states that WE checked the operations inside. They are separate claims.
+        // SAFETY: the single-consumer contract gives us exclusive access to `tail`.
+        // Every pointer below came from Box::into_raw and is still live: only pop
+        // frees nodes, and only one thread pops.
+        unsafe {
+            let mut tail = *self.tail.get();
+            let mut next = (*tail).next.load(Ordering::Acquire);
+            if tail == self.stub {
+                if next.is_null() { return None; } // empty
+                *self.tail.get() = next;           // skip stub (do NOT free it)
+                tail = next;
+                next = (*tail).next.load(Ordering::Acquire);
+            }
+            if !next.is_null() {
+                *self.tail.get() = next;
+                let boxed = Box::from_raw(tail);    // free node, move value out
+                return boxed.value;
+            }
+            // tail is the last node; is a producer mid-push?
+            let head = self.head.load(Ordering::Acquire);
+            if tail != head { return None; }        // producer in the gap; retry later
+            // single element with no successor: re-thread stub to make progress
+            (*self.stub).next.store(ptr::null_mut(), Ordering::Relaxed);
+            let prev = self.head.swap(self.stub, Ordering::AcqRel);
+            (*prev).next.store(self.stub, Ordering::Release);
+            next = (*tail).next.load(Ordering::Acquire);
+            if !next.is_null() {
+                *self.tail.get() = next;
+                let boxed = Box::from_raw(tail);
+                return boxed.value;
+            }
+            None
+        }
+    }
+}
+impl<T> Drop for MpscQueue<T> {
+    fn drop(&mut self) {
+        unsafe { while self.pop().is_some() {} drop(Box::from_raw(self.stub)); }
+    }
+}</script></pre>
+  <p class="codecap">已驗證:8 producer / 1 consumer × 5 萬筆 disjoint id,exact-set 0 重複 0 遺失(×5);memcheck 無 UAF(節點回收正確)。</p>
+
+  <div class="card">
+    <span class="callout-t" style="color:var(--yellow)">階梯決策</span>
+    <div class="tablewrap">
+    <table class="mini" style="width:100%">
+      <tr><th>需求</th><th>用哪個</th><th>為什麼</th></tr>
+      <tr><td>1 writer ↔ 1 reader,無鎖</td><td>SPSC(兩 atomic index)</td><td>single-writer per index,免 RMW</td></tr>
+      <tr><td>多 writer,1 reader,unbounded</td><td>MPSC intrusive(XCHG)</td><td>producer wait-free,單一 swap</td></tr>
+      <tr><td>多 writer 多 reader,bounded</td><td>MPMC(per-slot seq)</td><td>seq 界定所有權,取代鎖</td></tr>
+      <tr><td>worker 需要睡/被喚醒</td><td>Mutex + Condvar</td><td>lock-free 不 block;要 park 就用 condvar</td></tr>
+    </table>
+    </div>
+  </div>
+  <div class="stance"><span class="callout-t">我的立場</span>Etched 這種 HW/telemetry 場景我<b>優先 bounded</b>(MPMC 或 SPSC),而不是 unbounded MPSC。理由:硬體介面的記憶體必須可預測,unbounded 佇列在 producer 爆量時會無限吃記憶體,把 backpressure 問題藏起來直到 OOM。bounded + 明確的 full 處理(drop 或 block)讓壓力可見。intrusive MPSC 我留給「producer 絕不能被 block、且量真的無界」的場景。</div>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>為什麼 <code class="inl">head</code>/<code class="inl">tail</code> 用單調遞增而非取模儲存,能同時解決「滿/空判別」與「不浪費一格」?</summary>
+    <div class="ans">物理索引版 <code class="inl">head == tail</code> 有二義性(空或滿),只能靠犧牲一格或 count 欄位化解。單調計數器讓 <code class="inl">tail - head</code>(wrapping)<b>直接等於真實筆數</b>(因筆數恆 ≤ cap),於是空 = 相等、滿 = 差 == cap,兩者可區分且不需犧牲格子。索引 storage 時才 <code class="inl">&amp; mask</code> 繞回。</div></details>
+  <details class="quiz"><summary>為什麼 SPSC 不需要 <code class="inl">fetch_add</code>,但 MPMC 需要更多機制?</summary>
+    <div class="ans"><b>single-writer per index</b>:SPSC 中每個 index 只有一個 writer,<code class="inl">load</code> 後可安全 <code class="inl">store</code>(無他人插隊),故不需 atomic RMW。MPMC 中多個 producer 競爭同一 <code class="inl">tail</code>,必須 RMW 或 per-slot sequence number 來界定所有權,否則兩個 producer 會搶到同格。</div></details>
+  <details class="quiz"><summary>producer 端 <code class="inl">tail.store(.., Release)</code> 換成 <code class="inl">Relaxed</code> 會怎樣?</summary>
+    <div class="ans">consumer 可能看到 <code class="inl">tail</code> 已 bump,卻讀到<b>尚未寫入的 payload</b>(store 重排到 payload write 之前),讀到未初始化記憶體 = UB。<code class="inl">Release</code>↔<code class="inl">Acquire</code> 建立 happens-before:對端看到新 <code class="inl">tail</code> 時,保證也看到那之前的 payload write。</div></details>
+  <details class="quiz"><summary>blocking queue 的 <code class="inl">while q.is_empty()</code> 改成 <code class="inl">if</code>,構造一個會出錯的 interleaving。</summary>
+    <div class="ans">兩個 consumer 都在 <code class="inl">not_empty</code> 上睡。producer push 一筆、<code class="inl">notify_one</code>... 但 condvar 允許 <b>spurious wakeup</b>,兩個 consumer 可能都醒。用 <code class="inl">if</code>:consumer A 醒→拿鎖→<code class="inl">pop_front</code> 取走唯一元素;consumer B 醒→拿鎖→<code class="inl">if</code> 已跳過→直接 <code class="inl">pop_front().unwrap()</code> 對<b>空 queue</b> → panic。<code class="inl">while</code> 會讓 B 重驗 <code class="inl">is_empty()</code> 為真 → 繼續睡。</div></details>
+  <details class="quiz"><summary>MPMC 的 <code class="inl">push</code> 若把 <code class="inl">cell.seq.store(pos+1, Release)</code> 改成 <code class="inl">Relaxed</code>,會發生什麼?</summary>
+    <div class="ans">consumer 的 <code class="inl">seq.load(Acquire)</code> 看到 <code class="inl">pos+1</code> 就認為「payload 已寫好可讀」,但 <code class="inl">Relaxed</code> store 讓「寫 payload」與「更新 seq」可被重排 → consumer 可能讀到<b>尚未寫入的格子</b>(uninit memory)= UB。<code class="inl">Release</code> store ↔ consumer 的 <code class="inl">Acquire</code> load 建立 happens-before:看到新 seq 保證看到 payload。這與 SPSC 的 tail 發佈是同一個道理。</div></details>
+</section>
+
+<!-- ================= LRU ================= -->
+<section class="panel" id="lru">
+  <h1>LRU Cache(O(1) get / put)</h1>
+
+  <div class="lead">
+    <span class="callout-t">用途</span>
+    固定容量 cache,滿了淘汰「最久沒被存取」者;get 與 put 都要 O(1)。
+    <div class="scene">Systems 場景:機櫃管理 metadata cache(node → 最近狀態)、telemetry 的 hot-series cache。熱資料留住、冷資料自動退場,記憶體有界。</div>
+  </div>
+
+  <h2>① 概念推導</h2>
+  <div class="card naive">
+    <span class="callout-t">Naive</span>
+    <code class="inl">HashMap&lt;K, V&gt;</code> 存值 + <code class="inl">VecDeque&lt;K&gt;</code> 記 recency 順序(隊尾 = MRU)。get 命中就把該 key「移到隊尾」。
+  </div>
+  <div class="card fail">
+    <span class="callout-t">失敗模式</span>
+    「把中間某個 key 移到隊尾」在 <code class="inl">VecDeque</code> 是 <b>O(n)</b>:先線性掃描找到它(O(n)),再從中間移除(O(n) 搬移)。每次 get 都 O(n) → 整個 cache 退化。淘汰時找 LRU 是 O(1)(隊首),但<b>promote 才是致命傷</b>。
+  </div>
+  <div class="card fix">
+    <span class="callout-t">修法</span>
+    <b>HashMap + O(1) 可摘除的雙向鏈表</b>。鏈表給「O(1) 從任意位置摘掉再插到頭」,HashMap 給「O(1) 由 key 定位到節點」。Rust 特有取捨:雙向鏈表<b>不要</b>用 <code class="inl">Rc&lt;RefCell&gt;</code>(prev 要 Weak、每次存取 runtime borrow、節點散落 heap),改用 <b>index-based slab</b>:
+    <ul class="tight">
+      <li>所有節點放進一個 <code class="inl">Vec&lt;Node&gt;</code>(arena/slab),<code class="inl">prev</code>/<code class="inl">next</code> 是 <code class="inl">Option&lt;usize&gt;</code> 索引而非指標。</li>
+      <li><code class="inl">map: HashMap&lt;K, usize&gt;</code> 存 key → slot index。</li>
+      <li><code class="inl">head</code>(MRU)/<code class="inl">tail</code>(LRU)是 <code class="inl">Option&lt;usize&gt;</code>;淘汰打 <code class="inl">tail</code>,存取後 push 到 <code class="inl">head</code>。</li>
+      <li>被淘汰的 slot 進 <code class="inl">free</code> vec 回收重用 —— 避免 <code class="inl">Vec</code> 無限成長。</li>
+    </ul>
+  </div>
+
+  <h2>② Rust 實作要點</h2>
+  <ul class="tight">
+    <li><b>為什麼 index 而非指標</b>:雙向鏈表在 safe Rust 幾乎無法直接寫 —— 節點 A 的 <code class="inl">next</code> 指 B、B 的 <code class="inl">prev</code> 指 A,是<b>互相別名的可變指標</b>,borrow checker 直接拒絕。index 把「指標」變成 <code class="inl">usize</code>,不觸發 borrow checker,所有 mutation 都經 <code class="inl">self.nodes[i]</code> 走。</li>
+    <li><b>ownership 陷阱:key 存兩份</b>。<code class="inl">HashMap&lt;K, usize&gt;</code> 內部持有 key;淘汰時我們從 <code class="inl">tail</code> 節點<b>反查它的 key</b> 才能從 map 移除 → node 也得存一份 key。故 <code class="inl">K: Clone</code>。這是無法避免的(HashMap 本來就擁有 key 的所有權)。</li>
+    <li><b>borrow checker 通關技巧</b>:<code class="inl">get</code> 先把 <code class="inl">map.get(k)</code> 的 <code class="inl">&amp;usize</code> copy 成 <code class="inl">usize</code>(<code class="inl">let i = *self.map.get(k)?;</code>),借用立刻結束,後面才能自由 <code class="inl">&amp;mut self</code>。回傳 <code class="inl">&amp;V</code> 綁在 <code class="inl">&amp;mut self</code> 生命週期上,合法。</li>
+  </ul>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::collections::HashMap;
+use std::hash::Hash;
+
+struct Node<K, V> {
+    key: K,
+    val: V,
+    prev: Option<usize>,
+    next: Option<usize>,
+}
+pub struct LruCache<K, V> {
+    map: HashMap<K, usize>, // key -> slot index in `nodes`
+    nodes: Vec<Node<K, V>>, // slab arena
+    free: Vec<usize>,       // recycled slots
+    head: Option<usize>,    // MRU end
+    tail: Option<usize>,    // LRU end
+    cap: usize,
+}
+impl<K: Hash + Eq + Clone, V> LruCache<K, V> {
+    pub fn new(cap: usize) -> Self {
+        assert!(cap > 0);
+        Self { map: HashMap::new(), nodes: Vec::new(), free: Vec::new(),
+               head: None, tail: None, cap }
+    }
+    fn detach(&mut self, i: usize) {
+        let (p, n) = (self.nodes[i].prev, self.nodes[i].next);
+        match p { Some(p) => self.nodes[p].next = n, None => self.head = n }
+        match n { Some(n) => self.nodes[n].prev = p, None => self.tail = p }
+        self.nodes[i].prev = None;
+        self.nodes[i].next = None;
+    }
+    fn push_front(&mut self, i: usize) {
+        self.nodes[i].prev = None;
+        self.nodes[i].next = self.head;
+        if let Some(h) = self.head { self.nodes[h].prev = Some(i); }
+        self.head = Some(i);
+        if self.tail.is_none() { self.tail = Some(i); }
+    }
+    pub fn get(&mut self, k: &K) -> Option<&V> {
+        let i = *self.map.get(k)?;   // copy index out, borrow ends
+        self.detach(i);
+        self.push_front(i);
+        Some(&self.nodes[i].val)
+    }
+    pub fn put(&mut self, k: K, v: V) {
+        if let Some(&i) = self.map.get(&k) {         // update existing
+            self.nodes[i].val = v;
+            self.detach(i);
+            self.push_front(i);
+            return;
+        }
+        if self.map.len() == self.cap {              // evict LRU (tail)
+            if let Some(t) = self.tail {
+                self.detach(t);
+                let old = self.nodes[t].key.clone();
+                self.map.remove(&old);
+                self.free.push(t);                   // recycle slot
+            }
+        }
+        let idx = match self.free.pop() {            // reuse or grow
+            Some(f) => { self.nodes[f] = Node { key: k.clone(), val: v, prev: None, next: None }; f }
+            None => { self.nodes.push(Node { key: k.clone(), val: v, prev: None, next: None }); self.nodes.len() - 1 }
+        };
+        self.map.insert(k, idx);
+        self.push_front(idx);
+    }
+}</script></pre>
+  <p class="codecap">已對 brute-force LRU(<code class="inl">Vec&lt;K&gt;</code> 順序 + retain)在 cap 1–5、各 20k 隨機 ops 下交叉驗證通過。</p>
+
+  <h2>③ 複雜度</h2>
+  <ul class="tight">
+    <li><span class="badge b-time">time</span> get / put <b>O(1) 期望</b>(HashMap 命中 O(1) 期望 + detach/push_front 各 O(1) worst)。</li>
+    <li><span class="badge b-space">space</span> <b>O(cap)</b>;slot 靠 free-list 回收,<code class="inl">nodes</code> 長度最終穩定在 cap。</li>
+    <li>對照 naive:<span class="badge b-time">time</span> get O(n)、put O(n) —— 就是 <code class="inl">VecDeque</code> 中段移除的線性成本。</li>
+  </ul>
+
+  <h2>④ 互動 stepper</h2>
+  <p class="muted" style="font-size:.86rem">cap=3。同時看三個視圖:<b>map</b>(key→slot)、<b>slab</b>(Vec 節點的 prev/next 索引)、<b>邏輯鏈</b>(<span style="color:var(--green)">MRU 頭</span>→<span style="color:var(--red)">LRU 尾</span>)。留意 put(4) 淘汰後,被釋放的 slot <b>立刻被 free-list 重用</b>。</p>
+  <div class="stepper" id="step-lru"></div>
+
+  <h2>⑤ 面試追問</h2>
+  <div class="fu">
+    <div class="fu-l1"><div class="fu-q">為什麼不直接用 <code class="inl">Rc&lt;RefCell&gt;</code> 寫雙向鏈表?</div>
+      能寫,但三個代價:<code class="inl">prev</code> 要用 <code class="inl">Weak</code>(否則 prev↔next 形成 Rc cycle → leak);每次存取要 <code class="inl">borrow()</code>/<code class="inl">borrow_mut()</code>,違反借用規則會 <b>runtime panic</b>(不是編譯期擋);節點散在 heap → cache miss。index 版三者全免,代價只是「index 可能失效」(而失效有 free-list 管理就穩)。</div>
+    <div class="stance"><span class="callout-t">我的立場</span>面試寫 LRU 我<b>一律 index-based slab</b>。<code class="inl">Rc&lt;RefCell&gt;</code> 只在「節點會被 cache 外部共享持有、生命週期不齊」時才用 —— LRU 節點的所有權完全在 cache 內,沒有外部共享需求,用 Rc 是拿 runtime borrow check + cycle 風險換零好處。</div>
+    <div class="fu-l2"><div class="fu-q">並發下「讀即寫」(get 也改動 LRU 順序)怎麼辦?</div>
+      <code class="inl">RwLock</code> 沒用 —— 因為 get 也要<b>寫</b>(把節點移到 head)。選項:(a) 全域 <code class="inl">Mutex</code>,簡單但 get 也被序列化;(b) <b>sharded LRU</b>:N 個獨立 shard 各自 <code class="inl">Mutex</code>,key hash 分流,降低競爭;(c) <b>近似 LRU</b>:用 atomic access-bit / CLOCK 或 sampled eviction,避免每次 get 都改鏈表。</div>
+    <div class="stance"><span class="callout-t">我的立場</span>高 QPS telemetry cache 我<b>不維護精確 LRU order</b>,改用 CLOCK / sampled(近似)。理由:精確 recency 的價值遠低於「每次 get 都要抓寫鎖去改鏈表」的競爭成本;近似 LRU 命中率通常只差幾個百分點,卻換來讀路徑幾乎無鎖。</div>
+    <div class="fu-l3"><div class="fu-q">sharded LRU 的淘汰精度問題?</div>
+      分 shard 後,淘汰是<b>各 shard 內</b>的 LRU,不是全域 LRU —— 可能淘汰掉「全域看還算熱」的 key。實務上 shard 數不要太多(競爭與精度的權衡),且 key 分佈要夠均勻,否則某 shard 過載會提早淘汰熱 key。這是「用一致性換並發度」的典型取捨。</div>
+  </div>
+
+  <h2>⑥ Thread-safe 版</h2>
+  <div class="card fail">
+    <span class="callout-t">先破一個常見反射:RwLock 救不了 LRU</span>
+    直覺是「讀多寫少 → 包 <code class="inl">RwLock</code> 讓讀並行」。<b>沒用</b>——因為 true LRU 的 <code class="inl">get</code> 本身是<b>寫</b>(要把命中節點提到 MRU、改鏈表指標)。既然每次讀都要改結構,就拿不到 read lock 的並行性,<code class="inl">RwLock</code> 退化成 <code class="inl">Mutex</code> 還多付一層開銷。
+  </div>
+  <div class="card">
+    <span class="callout-t" style="color:var(--yellow)">三條實際路線</span>
+    <ul class="tight">
+      <li><b>全域 <code class="inl">Mutex&lt;LruCache&gt;</code></b>:最簡單、正確,但所有 get/put 序列化 → 高 QPS 下鎖競爭成瓶頸。</li>
+      <li><b>Sharded</b>(下方 code):N 個獨立 <code class="inl">Mutex&lt;LruCache&gt;</code>,key hash 分流。競爭降 N 倍。代價:淘汰是 per-shard LRU,非全域。</li>
+      <li><b>近似 LRU</b>(CLOCK / sampled):read 只翻一個 atomic reference bit(可在 read lock 下做),或像 Redis 抽 N 個 key 挑最舊。放棄精確 recency 換讀路徑幾乎無鎖。</li>
+    </ul>
+  </div>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::sync::Mutex;
+use std::hash::{Hash, Hasher, BuildHasher};
+use std::collections::hash_map::RandomState;
+
+// Sharded LRU: N independent Mutex<LruCache> shards; key hashed to a shard.
+// TRADE-OFF: eviction is per-shard LRU, NOT global. A globally-warm key can be
+// evicted if its shard runs hot. Buys concurrency, loses global recency precision.
+pub struct ShardedLru<K, V> {
+    shards: Vec<Mutex<LruCache<K, V>>>, // LruCache from the section above
+    hasher: RandomState,
+    mask: usize,
+}
+impl<K: Hash + Eq + Clone, V: Clone> ShardedLru<K, V> {
+    pub fn new(num_shards_pow2: usize, cap_per_shard: usize) -> Self {
+        assert!(num_shards_pow2.is_power_of_two());
+        let shards = (0..num_shards_pow2)
+            .map(|_| Mutex::new(LruCache::new(cap_per_shard))).collect();
+        Self { shards, hasher: RandomState::new(), mask: num_shards_pow2 - 1 }
+    }
+    fn shard_of(&self, k: &K) -> usize {
+        let mut h = self.hasher.build_hasher();
+        k.hash(&mut h);
+        (h.finish() as usize) & self.mask
+    }
+    // Must return an OWNED V (clone): the MutexGuard drops at end of fn, so a
+    // returned &V would dangle. This is a real cost of putting LRU behind a lock.
+    pub fn get(&self, k: &K) -> Option<V> {
+        self.shards[self.shard_of(k)].lock().unwrap().get(k).cloned()
+    }
+    pub fn put(&self, k: K, v: V) {
+        let i = self.shard_of(&k);
+        self.shards[i].lock().unwrap().put(k, v);
+    }
+}</script></pre>
+  <p class="codecap">已驗證:8 執行緒併發 get/put,每個 key 讀回值與寫入一致(包裝於前述已驗證的 index-based LruCache 之上)。</p>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>為什麼 naive 的 <code class="inl">HashMap + VecDeque</code> get 是 O(n),而雙向鏈表版是 O(1)?</summary>
+    <div class="ans">get 命中要把該 key promote 成 MRU。<code class="inl">VecDeque</code> 中該 key 在中間,<b>定位</b>要 O(n) 線性掃、<b>移除</b>要 O(n) 搬移。雙向鏈表配 HashMap:map 直接 O(1) 給出節點索引,<code class="inl">detach</code> 只改該節點前後鄰的兩個指標(O(1)),<code class="inl">push_front</code> 也 O(1)。</div></details>
+  <details class="quiz"><summary>為什麼 <code class="inl">K</code> 必須 <code class="inl">Clone</code>?能不能只存一份 key?</summary>
+    <div class="ans">淘汰時我們手上只有 <code class="inl">tail</code> 的 <b>slot index</b>,要從 <code class="inl">map</code> 移除就得知道那個 slot 對應哪個 key → node 必須存 key。而 <code class="inl">HashMap&lt;K, _&gt;</code> 本來就擁有一份 key。兩處都需要 key,故無法只存一份,<code class="inl">K: Clone</code> 不可避免(除非改成 <code class="inl">Rc&lt;K&gt;</code> 共享,但那又引入 Rc 開銷)。</div></details>
+  <details class="quiz"><summary>如果拿掉 <code class="inl">free</code> vec、淘汰後不回收 slot,會有什麼後果?</summary>
+    <div class="ans"><code class="inl">nodes</code> 會<b>無限成長</b>:每次淘汰留下一個死 slot,新插入又 <code class="inl">push</code> 一個 → 記憶體隨 put 次數線性膨脹,失去 bounded 的意義。free-list 讓死 slot 被重用,<code class="inl">nodes.len()</code> 穩定在 cap 附近。</div></details>
+  <details class="quiz"><summary><code class="inl">get</code> 裡若寫成 <code class="inl">let i = self.map.get(k)?;</code>(不 deref copy)會怎樣?</summary>
+    <div class="ans"><code class="inl">i</code> 是 <code class="inl">&amp;usize</code>,對 <code class="inl">self.map</code> 的<b>不可變借用還活著</b>;接著 <code class="inl">self.detach(i)</code> 需要 <code class="inl">&amp;mut self</code> → 與活著的不可變借用衝突,編譯失敗。<code class="inl">let i = *self.map.get(k)?;</code> 把 <code class="inl">usize</code>(Copy)拷出來,借用即結束,後續才能 <code class="inl">&amp;mut self</code>。</div></details>
+</section>
+
+<!-- ================= DSU ================= -->
+<section class="panel" id="dsu">
+  <h1>DSU / Union-Find</h1>
+
+  <div class="lead">
+    <span class="callout-t">用途</span>
+    動態維護「哪些元素屬於同一組」,支援 union(合併)與 find(查代表)近乎 O(1)。
+    <div class="scene">Systems 場景:叢集/連通性 —— 哪些 node 在同一 fault domain、哪些 sensor 屬同一 rack group、network partition 後誰還連得到誰。</div>
+  </div>
+
+  <h2>① 概念推導</h2>
+  <div class="card naive">
+    <span class="callout-t">Naive</span>
+    每個元素存一個 group id;union 時把一組所有元素的 id 改成另一組。或者 parent 指標形成森林,find 一路往上爬到 root。
+  </div>
+  <div class="card fail">
+    <span class="callout-t">失敗模式</span>
+    group-id 版:union 要<b>掃整組改 id</b>,O(n)。樸素 parent 森林版:若總把 A 掛到 B,可能長成一條<b>退化鏈</b>,find 變 O(n)(爬整條鏈)。連續 union 可以把樹拉成一條線。
+  </div>
+  <div class="card fix">
+    <span class="callout-t">修法(兩個 lever 疊加)</span>
+    <ul class="tight">
+      <li><b>union by rank</b>:合併時把「矮樹」掛到「高樹」下,樹高不輕易增加(只有兩棵等高才 +1)。<code class="inl">rank</code> 是樹高上界。</li>
+      <li><b>path compression</b>:find 爬到 root 後,把路徑上<b>每個節點直接指向 root</b>,下次 find 幾乎 O(1)。</li>
+    </ul>
+    兩者合用 → 攤還 <b>O(α(n))</b>(反 Ackermann,實務上 ≤ 4,視同常數)。
+  </div>
+
+  <h2>② Rust 實作要點</h2>
+  <ul class="tight">
+    <li><b>容器</b>:兩個 <code class="inl">Vec</code> —— <code class="inl">parent: Vec&lt;usize&gt;</code>、<code class="inl">rank: Vec&lt;u8&gt;</code>(樹高上界極小,<code class="inl">u8</code> 綽綽有餘)。全 index-based,天生無 ownership 問題。</li>
+    <li><b>find 用 iterative two-pass 而非遞迴</b>:遞迴版 <code class="inl">self.parent[x] = self.find(self.parent[x])</code> 在 Rust 需要小心 borrow(參數先求值再 <code class="inl">&amp;mut self</code>,two-phase borrow 能過但讀者要愣一下);iterative「先找 root、再壓平」更清楚,且無遞迴爆 stack 之虞。</li>
+    <li><b>union 回傳 <code class="inl">bool</code></b>:回報「這次是否真的合併了」(false = 本來就同組)。面試常追問「加這條邊會不會形成環」—— 就是 <code class="inl">!union(a,b)</code>。</li>
+  </ul>
+  <pre class="code"><script type="text/plain" class="rust-src">pub struct Dsu {
+    parent: Vec<usize>,
+    rank: Vec<u8>,   // upper bound on tree height
+    count: usize,    // number of disjoint sets
+}
+impl Dsu {
+    pub fn new(n: usize) -> Self {
+        Self { parent: (0..n).collect(), rank: vec![0; n], count: n }
+    }
+    // iterative two-pass find: locate root, then compress path to root
+    pub fn find(&mut self, x: usize) -> usize {
+        let mut root = x;
+        while self.parent[root] != root { root = self.parent[root]; }
+        let mut cur = x;
+        while self.parent[cur] != root {
+            let next = self.parent[cur];
+            self.parent[cur] = root; // path compression
+            cur = next;
+        }
+        root
+    }
+    pub fn union(&mut self, a: usize, b: usize) -> bool {
+        let (ra, rb) = (self.find(a), self.find(b));
+        if ra == rb { return false; }
+        let (lo, hi) = if self.rank[ra] < self.rank[rb] { (ra, rb) } else { (rb, ra) };
+        self.parent[lo] = hi;                 // attach shorter under taller
+        if self.rank[lo] == self.rank[hi] { self.rank[hi] += 1; }
+        self.count -= 1;
+        true
+    }
+    pub fn connected(&mut self, a: usize, b: usize) -> bool { self.find(a) == self.find(b) }
+    pub fn sets(&self) -> usize { self.count }
+}</script></pre>
+  <p class="codecap">已對「BFS flood 的 ground-truth 連通性」在隨機邊集下交叉驗證通過。</p>
+
+  <h2>③ 複雜度</h2>
+  <ul class="tight">
+    <li><span class="badge b-amort">amortized</span> find / union <b>O(α(n))</b>(union by rank + path compression 合用)。</li>
+    <li>只有 path compression:<span class="badge b-amort">amortized</span> O(log n);只有 union by rank:<span class="badge b-time">worst</span> O(log n)。</li>
+    <li><span class="badge b-space">space</span> <b>O(n)</b>(parent + rank 兩個 vec)。</li>
+  </ul>
+
+  <h2>④ 互動 stepper</h2>
+  <p class="muted" style="font-size:.86rem">n=6。看 union 如何依 rank 決定掛法;做 <code class="inl">find</code> 時 path compression 把路徑上的節點<b>直接拉到 root</b>(森林變扁,橘色 = 這步被改動的節點)。</p>
+  <div class="stepper" id="step-dsu"></div>
+
+  <h2>⑤ 面試追問</h2>
+  <div class="fu">
+    <div class="fu-l1"><div class="fu-q">rank 還是 size,二選一都行嗎?</div>
+      都能保證 O(α) 攤還。<code class="inl">rank</code> ≈ 樹高上界,純為平衡;<code class="inl">size</code> = 子樹節點數,額外能免費回答「這個連通塊多大」。</div>
+    <div class="stance"><span class="callout-t">我的立場</span>叢集管理場景我<b>用 size</b>,不用 rank。因為「component 大小」本身就是我要的資訊(最大 fault domain 多大、某 partition 涵蓋幾個 node),用 size 順手就有;rank 只給我平衡、不給我語意。平衡效果兩者實質等價。</div>
+    <div class="fu-l2"><div class="fu-q">path compression 的攤還怎麼論證?</div>
+      直覺:一條長度 L 的鏈,find 一次把整條壓平成「全部直指 root」,付了 O(L),但這 O(L) 的成本<b>攤到後續每個節點的下次 O(1) find</b>。單獨 path compression 給 O(log n) 攤還;配上 union by rank(保證樹一開始就矮)才降到 O(α(n))(Tarjan 的分析)。</div>
+    <div class="fu-l3"><div class="fu-q">能不能 union 後再拆分(delete / split 一條邊)?</div>
+      標準 DSU <b>不支援</b>。path compression 把中間節點直接接到 root,<b>摧毀了原本的父子歷史</b>,無法還原「拆掉某條邊後」的結構。要動態刪邊:用 link-cut tree,或 <b>offline reverse</b>(把刪邊當成「時間倒著跑的加邊」離線處理)。若只是要 undo,得放棄 path compression,改 union by rank + 變更 stack(rollback DSU),find 退回 O(log n)。這是 DSU 的硬限制,面試講得出來就是深度訊號。</div>
+  </div>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>只做 union by rank、不做 path compression,find 最差多少?反過來呢?</summary>
+    <div class="ans">只 union by rank:樹高 O(log n) → find worst O(log n)。只 path compression(總把 a 掛 b):單次可能爬長鏈,但攤還後 O(log n)。兩者合用才 O(α(n))。</div></details>
+  <details class="quiz"><summary>「加這條邊 (a,b) 會不會形成環」怎麼一行判斷?</summary>
+    <div class="ans"><code class="inl">!self.union(a, b)</code>。<code class="inl">union</code> 回傳 false 表示 a、b 本來就同組 → 再連一條邊就成環。true 表示成功合併(原本不同組,不成環)。這也是 Kruskal MST 判邊是否納入的核心。</div></details>
+  <details class="quiz"><summary>為什麼 <code class="inl">rank</code> 用 <code class="inl">u8</code> 就夠,不會 overflow?</summary>
+    <div class="ans">rank 只在「兩棵等高樹合併」時 +1,而 union by rank 保證高度為 h 的樹至少含 2ʰ 個節點。要 rank 達到 255 需要 ≥ 2²⁵⁵ 個節點,遠超任何真實輸入。<code class="inl">u8</code> 綽綽有餘,還省 cache。</div></details>
+</section>
+
+<!-- ================= GRAPH ================= -->
+<section class="panel" id="graph">
+  <h1>Graph(BFS / DFS / Topo / Dijkstra)</h1>
+
+  <div class="lead">
+    <span class="callout-t">用途</span>
+    節點 + 邊的關係網;支援遍歷、拓撲排序、最短路。
+    <div class="scene">Systems 場景:service dependency graph(啟動順序 = topo)、network topology 最短路由(Dijkstra)、資源依賴的環偵測。</div>
+  </div>
+
+  <h2>① 概念推導:表示法取捨</h2>
+  <div class="card">
+    <table class="mini" style="width:100%">
+      <tr><th></th><th>adjacency list<br><code class="inl">Vec&lt;Vec&lt;usize&gt;&gt;</code></th><th>adjacency matrix<br><code class="inl">Vec&lt;Vec&lt;bool&gt;&gt;</code></th></tr>
+      <tr><td>空間</td><td class="hl">O(V + E)</td><td>O(V²)</td></tr>
+      <tr><td>遍歷 u 的鄰居</td><td class="hl">O(deg(u))</td><td>O(V)</td></tr>
+      <tr><td>查 (u,v) 是否有邊</td><td>O(deg(u))</td><td class="hl">O(1)</td></tr>
+    </table>
+  </div>
+  <div class="stance"><span class="callout-t">立場</span>真實 systems 圖(拓撲、依賴)幾乎都<b>稀疏</b>(E ≪ V²)→ 用 list。matrix 只在 V 小(≤ 幾百)、要頻繁查「任兩點有無邊」或跑 Floyd-Warshall 時才划算。稠密圖用 list 會浪費 <code class="inl">Vec</code> 的 per-node 開銷,但仍比 matrix 的 O(V²) 記憶體省。</div>
+
+  <h2>② Rust 實作要點</h2>
+  <ul class="tight">
+    <li><b>容器</b>:<code class="inl">Vec&lt;Vec&lt;usize&gt;&gt;</code>,node 用 <code class="inl">usize</code> 當 id 直接索引 —— 無 HashMap 開銷、cache 好。若 node 是任意型別,外層包一層 <code class="inl">HashMap&lt;NodeId, usize&gt;</code> 做 interning。</li>
+    <li><b>BFS/DFS 的 visited</b>:BFS 用 <code class="inl">dist: Vec&lt;i64&gt;</code>(-1 = 未訪),一個陣列兼「visited + 距離」;DFS 用 <code class="inl">Vec&lt;bool&gt;</code>。<b>iterative DFS</b>(顯式 stack)避免遞迴在深圖爆 stack。</li>
+    <li><b>Dijkstra 用 <code class="inl">BinaryHeap&lt;Reverse&lt;(u64, usize)&gt;&gt;</code></b>:<code class="inl">BinaryHeap</code> 是 max-heap,<code class="inl">Reverse</code> 反成 min-heap。std 無 decrease-key → 用 <b>lazy deletion</b>:同節點可多次入堆,pop 到過時的(<code class="inl">d &gt; dist[u]</code>)就跳過。</li>
+  </ul>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::collections::{VecDeque, BinaryHeap};
+use std::cmp::Reverse;
+
+pub struct Graph { adj: Vec<Vec<usize>> }
+impl Graph {
+    pub fn new(n: usize) -> Self { Self { adj: vec![Vec::new(); n] } }
+    pub fn add_edge(&mut self, u: usize, v: usize) { self.adj[u].push(v); }
+
+    pub fn bfs(&self, src: usize) -> Vec<i64> {
+        let n = self.adj.len();
+        let mut dist = vec![-1i64; n];        // -1 == unvisited
+        let mut q = VecDeque::new();
+        dist[src] = 0; q.push_back(src);
+        while let Some(u) = q.pop_front() {
+            for &w in &self.adj[u] {
+                if dist[w] == -1 { dist[w] = dist[u] + 1; q.push_back(w); }
+            }
+        }
+        dist
+    }
+    pub fn dfs(&self, src: usize) -> Vec<usize> {
+        let n = self.adj.len();
+        let mut seen = vec![false; n];
+        let mut order = Vec::new();
+        let mut stack = vec![src];
+        while let Some(u) = stack.pop() {
+            if seen[u] { continue; }
+            seen[u] = true; order.push(u);
+            for &w in self.adj[u].iter().rev() {  // rev => natural order
+                if !seen[w] { stack.push(w); }
+            }
+        }
+        order
+    }
+    // Kahn's topological sort; None if a cycle exists.
+    pub fn topo_kahn(&self) -> Option<Vec<usize>> {
+        let n = self.adj.len();
+        let mut indeg = vec![0usize; n];
+        for u in 0..n { for &w in &self.adj[u] { indeg[w] += 1; } }
+        let mut q: VecDeque<usize> = (0..n).filter(|&u| indeg[u] == 0).collect();
+        let mut order = Vec::with_capacity(n);
+        while let Some(u) = q.pop_front() {
+            order.push(u);
+            for &w in &self.adj[u] {
+                indeg[w] -= 1;
+                if indeg[w] == 0 { q.push_back(w); }
+            }
+        }
+        if order.len() == n { Some(order) } else { None } // short => cycle
+    }
+}
+
+pub struct WGraph { adj: Vec<Vec<(usize, u64)>> }
+impl WGraph {
+    pub fn new(n: usize) -> Self { Self { adj: vec![Vec::new(); n] } }
+    pub fn add_edge(&mut self, u: usize, v: usize, w: u64) { self.adj[u].push((v, w)); }
+
+    pub fn dijkstra(&self, src: usize) -> Vec<u64> {
+        let n = self.adj.len();
+        let mut dist = vec![u64::MAX; n];
+        let mut heap = BinaryHeap::new();
+        dist[src] = 0;
+        heap.push(Reverse((0u64, src)));
+        while let Some(Reverse((d, u))) = heap.pop() {
+            if d > dist[u] { continue; }   // stale (lazy-deletion) entry
+            for &(v, w) in &self.adj[u] {
+                let nd = d + w;
+                if nd < dist[v] { dist[v] = nd; heap.push(Reverse((nd, v))); }
+            }
+        }
+        dist
+    }
+}</script></pre>
+  <p class="codecap">BFS 距離、Kahn 拓撲(含環 → None)、Dijkstra 距離皆以硬編小圖斷言驗證。注:<code class="inl">d + w</code> 若權重極大可能 overflow u64,面試可提 <code class="inl">saturating_add</code> 防護。</p>
+
+  <h2>③ 複雜度</h2>
+  <ul class="tight">
+    <li><span class="badge b-time">time</span> BFS / DFS / Kahn 皆 <b>O(V + E)</b>;<span class="badge b-space">space</span> O(V)。</li>
+    <li><span class="badge b-time">time</span> Dijkstra <b>O(E log V)</b>(lazy heap,堆大小 O(E) 但 log E = O(log V));<span class="badge b-space">space</span> O(V + E)。</li>
+  </ul>
+
+  <h2>④ 互動 stepper(BFS)</h2>
+  <p class="muted" style="font-size:.86rem">6 節點無權圖,從 0 做 BFS。看 <code class="inl">queue</code> 與 <code class="inl">dist</code> 陣列如何一層層填;<span style="color:var(--orange)">橘 = 當前 pop</span>、<span style="color:var(--blue)">藍 = 在隊列</span>、<span style="color:var(--green)">綠 = 已完成</span>。</p>
+  <div class="stepper" id="step-graph"></div>
+
+  <h2>⑤ 面試追問</h2>
+  <div class="fu">
+    <div class="fu-l1"><div class="fu-q">稀疏 vs 稠密怎麼選表示法?(見上表)</div>
+      稀疏 → list(空間 O(V+E)、遍歷鄰居 O(deg));稠密且 V 小 → matrix(查邊 O(1))。</div>
+    <div class="fu-l2"><div class="fu-q">Dijkstra 為何要 <code class="inl">if d &gt; dist[u] { continue }</code>?</div>
+      std <code class="inl">BinaryHeap</code> 無 decrease-key,所以我們對同一節點做 <b>lazy insertion</b>:每次鬆弛都 push 新 entry,舊 entry 留在堆裡。pop 到「距離已被更新過的舊 entry」就跳過。代價是堆大小到 O(E),但總複雜度仍 O(E log V)。</div>
+    <div class="fu-l3"><div class="fu-q">用支援 decrease-key 的 Fibonacci heap 會更快嗎?</div>
+      理論 O(E + V log V) 更漂亮,但 Fibonacci heap <b>常數大、cache 極差、實作複雜</b>,實務上 binary heap + lazy deletion 幾乎<b>總是更快</b>。這是「理論最優 ≠ 實務最優」的經典案例。真要壓榨,改用 d-ary heap(d=4)改善 cache locality 比換 Fibonacci 實在。</div>
+  </div>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>Kahn's topo 如何順便偵測環?DFS 版怎麼偵測?</summary>
+    <div class="ans">Kahn:若最終 <code class="inl">order.len() &lt; n</code>,表示有節點永遠 indegree &gt; 0(卡在環裡出不來)→ 有環,回 <code class="inl">None</code>。DFS 版:用<b>三色標記</b>(白未訪/灰在遞迴堆疊上/黑已完成),遇到指向「灰」節點的邊 = back edge = 環。</div></details>
+  <details class="quiz"><summary>為什麼無權最短路用 BFS 而不是 Dijkstra?</summary>
+    <div class="ans">無權(或權全等)時,BFS 天然按「邊數」層層擴展,第一次到達某點就是最短,O(V+E)。Dijkstra 帶 heap 的 O(E log V) 在此是殺雞用牛刀 —— heap 的排序對等權圖毫無必要。</div></details>
+  <details class="quiz"><summary>DFS 用顯式 <code class="inl">stack</code> 而非遞迴,主要好處是什麼?</summary>
+    <div class="ans">避免深圖遞迴<b>爆 call stack</b>(Rust 預設 8MB thread stack,深度上萬節點的鏈就可能 overflow → abort)。顯式 stack 用 heap 上的 <code class="inl">Vec</code>,深度只受記憶體限制。代價是 pre-order 需 <code class="inl">.rev()</code> 才符合遞迴的自然順序。</div></details>
+</section>
+
+<!-- ================= TRIE ================= -->
+<section class="panel" id="trie">
+  <h1>Trie(prefix tree)</h1>
+
+  <div class="lead">
+    <span class="callout-t">用途</span>
+    字串集合,支援 O(L) 的插入 / 完整比對 / 字首查詢(L = 字串長度)。
+    <div class="scene">Systems 場景:URL / path routing(<code class="inl">/api/v1/nodes</code> 的前綴匹配)、autocomplete、command dispatch 的 prefix match。</div>
+  </div>
+
+  <h2>① 概念推導</h2>
+  <div class="card naive">
+    <span class="callout-t">Naive</span>
+    每個 <code class="inl">TrieNode</code> 用 <code class="inl">Box&lt;TrieNode&gt;</code> 遞迴持有子節點(<code class="inl">children: [Option&lt;Box&lt;TrieNode&gt;&gt;; 26]</code>)。
+  </div>
+  <div class="card fail">
+    <span class="callout-t">失敗模式</span>
+    <code class="inl">Box</code> 遞迴結構有兩個 Rust 痛點:(1) 節點<b>散落 heap</b>,走一條字串 = 一連串 pointer chasing,cache 不友善;(2) drop 是<b>遞迴的</b> —— 深 trie 的解構會遞迴呼叫,可能爆 stack。而且要在遞迴 <code class="inl">Box</code> 結構上同時持有「當前節點的 <code class="inl">&amp;mut</code>」與「往下走」,borrow checker 常打架。
+  </div>
+  <div class="card fix">
+    <span class="callout-t">修法</span>
+    <b>arena</b>:所有節點放進一個 <code class="inl">Vec&lt;TrieNode&gt;</code>(index 0 = root),children 是 <code class="inl">[Option&lt;usize&gt;; 26]</code> 索引。走訪 = 陣列索引(cache 好),配置新節點 = <code class="inl">Vec::push</code>(連續記憶體),drop = 一次釋放整個 <code class="inl">Vec</code>(非遞迴)。borrow checker 完全不參與 —— 全是 <code class="inl">usize</code>。
+  </div>
+
+  <h2>② Rust 實作要點</h2>
+  <ul class="tight">
+    <li><b>children 容器:<code class="inl">[Option&lt;usize&gt;; 26]</code></b>(限定 a–z)。<code class="inl">[None; 26]</code> 能直接初始化因為 <code class="inl">Option&lt;usize&gt;</code> 是 <code class="inl">Copy</code>。直接索引 <code class="inl">(b - b'a')</code> → O(1) 無 hash。</li>
+    <li><b>用 <code class="inl">bytes()</code> 而非 <code class="inl">chars()</code></b>:限定 ASCII a–z 時 <code class="inl">word.bytes()</code> 直接給 <code class="inl">u8</code>,<code class="inl">(b - b'a')</code> 算 index;<code class="inl">chars()</code> 給 <code class="inl">char</code>(4 bytes)還要轉換。</li>
+    <li><b>配置模式</b>:插入時「查子節點 → 沒有就 <code class="inl">push</code> 新節點、記下 index、回填 parent 的 children」。注意先取 <code class="inl">self.nodes.len()</code> 當新 index,<code class="inl">push</code> 後再回頭改 <code class="inl">self.nodes[cur].children[c]</code> —— 兩次索引不重疊,borrow OK。</li>
+  </ul>
+  <pre class="code"><script type="text/plain" class="rust-src">struct TrieNode {
+    children: [Option<usize>; 26], // fixed radix a..z
+    is_end: bool,
+}
+impl TrieNode {
+    fn new() -> Self { Self { children: [None; 26], is_end: false } }
+}
+pub struct Trie { nodes: Vec<TrieNode> } // arena; index 0 is root
+impl Trie {
+    pub fn new() -> Self { Self { nodes: vec![TrieNode::new()] } }
+    pub fn insert(&mut self, word: &str) {
+        let mut cur = 0;
+        for b in word.bytes() {
+            let c = (b - b'a') as usize; // caller guarantees lowercase a-z
+            cur = match self.nodes[cur].children[c] {
+                Some(i) => i,
+                None => {
+                    let i = self.nodes.len();
+                    self.nodes.push(TrieNode::new());
+                    self.nodes[cur].children[c] = Some(i);
+                    i
+                }
+            };
+        }
+        self.nodes[cur].is_end = true;
+    }
+    fn walk(&self, s: &str) -> Option<usize> {
+        let mut cur = 0;
+        for b in s.bytes() {
+            let c = (b - b'a') as usize;
+            match self.nodes[cur].children[c] {
+                Some(i) => cur = i,
+                None => return None,
+            }
+        }
+        Some(cur)
+    }
+    pub fn contains(&self, word: &str) -> bool {
+        self.walk(word).map_or(false, |i| self.nodes[i].is_end)
+    }
+    pub fn starts_with(&self, prefix: &str) -> bool { self.walk(prefix).is_some() }
+}</script></pre>
+  <p class="codecap">已驗證:<code class="inl">contains("app")</code> 為真而 <code class="inl">contains("ap")</code> 為假(前綴不算完整字);<code class="inl">starts_with</code> 與 <code class="inl">contains</code> 語意分離正確。</p>
+
+  <h2>③ 複雜度</h2>
+  <ul class="tight">
+    <li><span class="badge b-time">time</span> insert / contains / starts_with <b>O(L)</b>(L = 字串長度),與集合大小無關。</li>
+    <li><span class="badge b-space">space</span> 最差 <b>O(Σ N·L)</b> 個節點(N 字串各長 L,無共用),每節點固定 26 個 slot。共用前綴越多越省。</li>
+  </ul>
+
+  <h2>④ 互動 stepper</h2>
+  <p class="muted" style="font-size:.86rem">依序插入 <code class="inl">"app"</code>、<code class="inl">"apple"</code>、<code class="inl">"apply"</code>。看 arena 如何<b>配置新節點</b>(綠),以及後兩字如何<b>共用前綴 a-p-p</b>(藍 = 當前路徑,沿用既有節點)。左側是 arena、右側是對應的樹。</p>
+  <div class="stepper" id="step-trie"></div>
+
+  <h2>⑤ 面試追問</h2>
+  <div class="fu">
+    <div class="fu-l1"><div class="fu-q">array <code class="inl">[Option&lt;usize&gt;; 26]</code> vs <code class="inl">HashMap&lt;char, usize&gt;</code> children,怎麼選?</div>
+      array:O(1) 直接索引、cache-friendly、程式碼簡單;但每節點固定 26×8 = 208 bytes,稀疏(多數 slot 是 <code class="inl">None</code>)時浪費。HashMap:隨實際 children 成長、支援任意 alphabet(unicode);但每次存取有 hash + pointer chasing 開銷。</div>
+    <div class="stance"><span class="callout-t">立場</span>限定 a–z 的面試題我<b>一律用 array</b> —— 更快、更簡單、記憶體有界且無 hash 抖動。只有 alphabet 很大(unicode、任意 byte)或極度稀疏時才換 HashMap;此時通常還會考慮換掉整個 26-ary 設計。</div>
+    <div class="fu-l2"><div class="fu-q">IP routing table(longest-prefix match)是什麼變體?</div>
+      不是 26-ary,而是 <b>bitwise / binary radix trie</b>(每 bit 一層),或壓縮成 <b>path-compressed radix (Patricia) trie</b>(把單一子節點的鏈合併成一條邊)。full 256-ary 每節點太胖 → 用 multibit trie 折衷 stride(一次吃幾個 bit)。</div>
+    <div class="fu-l3"><div class="fu-q">Patricia / radix 的 path compression 省什麼、代價?</div>
+      省掉「只有一個子節點」的鏈:URL routing 有長共同前綴(<code class="inl">/api/v1/...</code>)時,把 <code class="inl">a-p-i-/-v-1</code> 這種單鏈壓成一條邊,節省節點數與遍歷步數。代價:插入/刪除要 <b>split / merge 邊</b>,邏輯複雜很多。<span class="unv">unverified</span>:Rust router 如 <code class="inl">matchit</code> / axum 內部走的正是這類 radix 設計(細節我沒逐行核對,別當定論)。</div>
+  </div>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>為什麼 <code class="inl">contains</code> 要檢查 <code class="inl">is_end</code>,而 <code class="inl">starts_with</code> 不用?</summary>
+    <div class="ans"><code class="inl">walk</code> 走到某節點只證明「這條路徑存在」。對 <code class="inl">contains</code>,還需該節點是某個字的<b>結尾</b>(<code class="inl">is_end</code>)—— 例如插了 "apple",走 "app" 到得了節點但它不是字尾,<code class="inl">contains("app")</code> 應為 false。<code class="inl">starts_with</code> 只問「有無這個前綴」,走得到就是 true,不管 <code class="inl">is_end</code>。</div></details>
+  <details class="quiz"><summary>用 <code class="inl">Box</code> 遞迴結構取代 arena,drop 深 trie 時的具體風險?</summary>
+    <div class="ans"><code class="inl">Box&lt;TrieNode&gt;</code> 的 drop 是<b>遞迴</b>的:drop 一個節點會 drop 它的 children、再 drop children 的 children…深度 L 的 trie 遞迴 L 層。深到一定程度(數萬層)會<b>爆 call stack → abort</b>。arena 版 drop 整個 <code class="inl">Vec</code> 是線性走過陣列、無遞迴。</div></details>
+  <details class="quiz"><summary><code class="inl">[None; 26]</code> 為什麼能直接寫,換成 <code class="inl">[Vec::new(); 26]</code> 為什麼不行?</summary>
+    <div class="ans"><code class="inl">[x; N]</code> 陣列字面量要求元素型別是 <code class="inl">Copy</code>(才能複製 N 份)。<code class="inl">Option&lt;usize&gt;</code> 是 <code class="inl">Copy</code> → OK。<code class="inl">Vec</code> 不是 <code class="inl">Copy</code>(擁有 heap 配置)→ <code class="inl">[Vec::new(); 26]</code> 編譯失敗,得用 <code class="inl">std::array::from_fn(|_| Vec::new())</code> 之類。</div></details>
+</section>
+
+<!-- ================= TREE ================= -->
+<section class="panel" id="tree">
+  <h1>Tree(泛用)— arena vs Rc&lt;RefCell&gt;</h1>
+
+  <div class="lead">
+    <span class="callout-t">用途</span>
+    泛用階層結構(可雙向父子導航),非特化的 BST/trie。
+    <div class="scene">Systems 場景:設定/資源的階層(rack → chassis → node → sensor)、依賴樹、需要「從子往上找父」的巡覽。</div>
+  </div>
+
+  <h2>① 概念推導:為什麼 Rust 的樹比想像中麻煩</h2>
+  <div class="card fail">
+    <span class="callout-t">核心衝突</span>
+    一般的雙向樹:parent 持有 children、child 持有 parent 的指標。這在 Rust 是<b>互相別名的可變引用</b> —— borrow checker 直接違法(child 若持 <code class="inl">&amp;mut parent</code>,同時 parent 又持 child,違反「同一時間至多一個 <code class="inl">&amp;mut</code>」)。單向(只 parent→child、<code class="inl">Box</code>)可以,但一要雙向、要共享、要能改,safe 引用就走不通。
+  </div>
+  <div class="card">
+    <span class="callout-t" style="color:var(--yellow)">兩條出路</span>
+    <ul class="tight">
+      <li><b>A. index-based arena</b>:所有權集中在 <code class="inl">Vec</code>,節點間用 <code class="inl">usize</code> 當「弱指標」。不觸發 borrow checker。</li>
+      <li><b>B. <code class="inl">Rc&lt;RefCell&gt;</code>**:shared ownership(<code class="inl">Rc</code>)+ interior mutability(<code class="inl">RefCell</code>)。但 parent 回指必須是 <code class="inl">Weak</code>,否則 <b>Rc cycle → 永不 drop(leak)</b>。</li>
+    </ul>
+  </div>
+
+  <h2>② 兩版對照</h2>
+  <h4>A. Arena(index-based)</h4>
+  <pre class="code"><script type="text/plain" class="rust-src">// Version A: index-based arena — ownership lives in one Vec
+struct ArenaNode<T> {
+    val: T,
+    parent: Option<usize>,
+    children: Vec<usize>,
+}
+pub struct ArenaTree<T> { nodes: Vec<ArenaNode<T>> }
+impl<T> ArenaTree<T> {
+    pub fn new() -> Self { Self { nodes: Vec::new() } }
+    pub fn add(&mut self, val: T, parent: Option<usize>) -> usize {
+        let id = self.nodes.len();
+        self.nodes.push(ArenaNode { val, parent, children: Vec::new() });
+        if let Some(p) = parent { self.nodes[p].children.push(id); }
+        id
+    }
+    pub fn get(&self, id: usize) -> &T { &self.nodes[id].val }
+    // DFS by index — no borrow of the tree structure held across the walk
+    pub fn dfs_from(&self, root: usize) -> Vec<usize> {
+        let mut order = Vec::new();
+        let mut stack = vec![root];
+        while let Some(u) = stack.pop() {
+            order.push(u);
+            for &c in self.nodes[u].children.iter().rev() { stack.push(c); }
+        }
+        order
+    }
+}</script></pre>
+
+  <h4>B. <code class="inl">Rc&lt;RefCell&gt;</code>(parent 用 Weak 斷環)</h4>
+  <pre class="code"><script type="text/plain" class="rust-src">// Version B: Rc<RefCell> with a Weak parent back-ref to break the cycle
+use std::rc::{Rc, Weak};
+use std::cell::RefCell;
+
+type Link<T> = Rc<RefCell<RcNode<T>>>;
+struct RcNode<T> {
+    val: T,
+    parent: Option<Weak<RefCell<RcNode<T>>>>, // Weak: child must NOT keep parent alive
+    children: Vec<Link<T>>,
+}
+fn new_node<T>(val: T) -> Link<T> {
+    Rc::new(RefCell::new(RcNode { val, parent: None, children: Vec::new() }))
+}
+fn add_child<T>(parent: &Link<T>, val: T) -> Link<T> {
+    let child = new_node(val);
+    child.borrow_mut().parent = Some(Rc::downgrade(parent)); // downgrade => Weak
+    parent.borrow_mut().children.push(Rc::clone(&child));    // strong: parent owns child
+    child
+}
+// climb child -> parent:
+//   let p = child.borrow().parent.as_ref().unwrap().upgrade().unwrap();
+// upgrade() returns None if the parent has already been dropped.</script></pre>
+  <p class="codecap">已驗證:B 版建樹後 <code class="inl">Rc::strong_count(&root) == 1</code> —— children 只持 <code class="inl">Weak</code> 回指,不增加 root 的 strong count,故無 cycle、能正常 drop。</p>
+
+  <h2>③ 複雜度 & 差異</h2>
+  <div class="tablewrap">
+  <table class="mini" style="width:100%">
+    <tr><th></th><th>Arena(index)</th><th>Rc&lt;RefCell&gt;</th></tr>
+    <tr><td>記憶體佈局</td><td class="hl">連續(cache 好)</td><td>散落 heap</td></tr>
+    <tr><td>借用檢查</td><td class="hl">編譯期、零 runtime</td><td>runtime <code class="inl">borrow()</code>,違規 panic</td></tr>
+    <tr><td>cycle 風險</td><td class="hl">無(usize 不擁有)</td><td>有,parent 需 Weak</td></tr>
+    <tr><td>drop</td><td class="hl">一次釋放 Vec</td><td>refcount 遞減,可能遞迴</td></tr>
+    <tr><td>危險</td><td>index 失效(邏輯 bug,非 UB)</td><td>borrow panic / leak</td></tr>
+    <tr><td>把子樹交出去獨立存活</td><td>難(綁在 arena)</td><td class="hl">易(clone 一個 Rc)</td></tr>
+  </table>
+  </div>
+
+  <h2>④ 互動 stepper(arena DFS)</h2>
+  <p class="muted" style="font-size:.86rem">走訪 arena 樹,看「index stack」如何驅動 DFS。重點:<b>全程用 <code class="inl">self.nodes[u]</code> 索引,不持有任何對樹結構的 borrow</b> —— 這正是 index 版繞過 borrow checker 的方式。</p>
+  <div class="stepper" id="step-tree"></div>
+
+  <h2>⑤ 面試追問</h2>
+  <div class="fu">
+    <div class="fu-l1"><div class="fu-q">為什麼 Rust 的樹比想像中麻煩?</div>
+      雙向父子 = 互相別名的可變引用,borrow checker 禁止。要嘛 <code class="inl">Rc&lt;RefCell&gt;</code>(shared + interior mutability,但 cycle + runtime panic),要嘛 arena + index。</div>
+    <div class="fu-l2"><div class="fu-q">index 版怎麼解、代價是什麼?</div>
+      所有權集中 arena <code class="inl">Vec</code>,節點間用 <code class="inl">usize</code> 當弱指標,不觸發 borrow checker。代價:<code class="inl">usize</code> <b>沒有生命週期保護</b> —— 刪節點(或 slot 被回收重用)後,舊 index 變 dangling。存取到會拿到<b>錯的節點</b>或 OOB panic,但這是<b>邏輯 bug,不是 UB</b>(不會記憶體不安全)。</div>
+    <div class="fu-l3"><div class="fu-q">怎麼把「index 失效」變成可偵測?</div>
+      <b>generational index</b>:slot 存 <code class="inl">(generation, Option&lt;T&gt;)</code>,handle 存 <code class="inl">(index, generation)</code>。存取時比對 generation —— 不符表示該 slot 已被回收重用 → 回 <code class="inl">None</code>,把「dangling index」變成安全的 <code class="inl">None</code>。std-only 手刻:<code class="inl">Vec&lt;(u32, Option&lt;T&gt;)&gt;</code> + free-list,回收時 generation +1。<span class="unv">unverified</span>:<code class="inl">slotmap</code> crate 與多數 ECS / game arena 用的就是這套(我沒逐行核對其實作)。</div>
+  </div>
+  <div class="stance"><span class="callout-t">立場</span>純內部演算法樹(BST、trie、parse tree、我這裡的依賴樹)<b>一律 arena</b>。<code class="inl">Rc&lt;RefCell&gt;</code> 只在「節點需要被多個外部擁有者共享持有、生命週期不齊」時才用 —— 例如 GUI widget tree、observer,或需要「把某子樹 clone 出去獨立存活」。為了避免 runtime borrow panic 與 cycle,能 arena 就 arena。</div>
+
+  <h2>⑥ 跨執行緒:Send / Sync</h2>
+  <div class="card">
+    <span class="callout-t" style="color:var(--aqua)">兩版的並發性質正好相反</span>
+    <ul class="tight">
+      <li><b>Arena 版天生 Send</b>:它就是 <code class="inl">Vec&lt;usize&gt; + Vec&lt;T&gt;</code>(當 <code class="inl">T: Send</code>)。要多執行緒<b>共享讀</b> → <code class="inl">Arc&lt;Tree&gt;</code>;要<b>共享改</b> → <code class="inl">Arc&lt;Mutex&lt;Tree&gt;&gt;</code> 或 <code class="inl">RwLock</code>。結構本身不用動。這是 index 版在並發下更省事的又一理由。</li>
+      <li><b>Rc&lt;RefCell&gt; 版是 <code class="inl">!Send</code></b>:<code class="inl">Rc</code> 非 Send(refcount 非 atomic)、<code class="inl">RefCell</code> 非 Sync。跨執行緒要整組換:<code class="inl">Rc→Arc</code>、<code class="inl">RefCell→Mutex</code>(或 <code class="inl">RwLock</code>)、<code class="inl">rc::Weak→sync::Weak</code>。</li>
+    </ul>
+  </div>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::sync::{Arc, Mutex, Weak};
+
+// Cross-thread tree: Rc->Arc, RefCell->Mutex, rc::Weak->sync::Weak.
+type Link<T> = Arc<Mutex<TreeNode<T>>>;
+struct TreeNode<T> {
+    val: T,
+    parent: Option<Weak<Mutex<TreeNode<T>>>>, // sync::Weak still breaks the cycle
+    children: Vec<Link<T>>,
+}
+fn add_child<T>(parent: &Link<T>, val: T) -> Link<T> {
+    let child = Arc::new(Mutex::new(
+        TreeNode { val, parent: None, children: Vec::new() }));
+    child.lock().unwrap().parent = Some(Arc::downgrade(parent));
+    parent.lock().unwrap().children.push(Arc::clone(&child));
+    child
+}
+// Arc<Mutex<TreeNode<T>>> is Send + Sync when T: Send.</script></pre>
+  <p class="codecap">已驗證:<code class="inl">Link&lt;i32&gt;</code> 通過 <code class="inl">Send + Sync</code> bound 斷言;arena 的 <code class="inl">Vec</code> 版無需包裝即為 Send。</p>
+  <div class="stance"><span class="callout-t">立場</span>換到 <code class="inl">Arc&lt;Mutex&gt;</code> 是「每個節點一把鎖」——細粒度但鎖多、易死鎖(同時鎖 parent+child 要固定順序)。演算法樹我幾乎不會這樣做;要並發改樹,更常是<b>整棵 <code class="inl">Arc&lt;RwLock&lt;Tree(arena)&gt;&gt;</code></b>(一把大鎖包 arena),或 copy-on-write 換整棵。逐節點鎖留給真正需要獨立子樹並發的場景。</div>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>B 版 parent 若用 <code class="inl">Rc</code>(而非 <code class="inl">Weak</code>)會怎樣?</summary>
+    <div class="ans">parent 強持 child、child 又強持 parent → <b>Rc cycle</b>。兩者 strong_count 永遠 ≥ 1,即使外部全部 drop 也不歸零 → 節點<b>永不釋放(記憶體 leak)</b>。<code class="inl">Weak</code> 讓回指不計入 strong count,打破環;存取時 <code class="inl">upgrade()</code> 檢查目標是否還活著。</div></details>
+  <details class="quiz"><summary>index 版與 <code class="inl">Rc&lt;RefCell&gt;</code> 版,各自「出錯」的性質有何本質差異?</summary>
+    <div class="ans">index 版:失效 index → 拿錯節點或 OOB panic,是<b>邏輯錯誤</b>,記憶體仍安全(Rust 保證 <code class="inl">Vec</code> 索引不越界訪問)。Rc 版:借用規則違反 → <code class="inl">RefCell</code> <b>runtime panic</b>;或忘記 Weak → <b>leak</b>。兩版都不會 UB,但 index 版錯誤更「安靜」(可能默默拿錯資料),Rc 版更「大聲」(直接 panic)。</div></details>
+  <details class="quiz"><summary>什麼情境下 <code class="inl">Rc&lt;RefCell&gt;</code> 才是對的選擇?</summary>
+    <div class="ans">當節點需要<b>被 tree 外部共享持有</b>、生命週期與 tree 不一致時。例如:把一個子樹交給另一個系統獨立存活(clone 一個 <code class="inl">Rc</code> 即可,arena 版做不到);或 observer / GUI 場景多個持有者。純演算法內用、所有權都在結構內 → arena 更好。</div></details>
+</section>
+
+<!-- ================= TIMER ================= -->
+<section class="panel" id="timer">
+  <h1>Event / Timer Queue(min-heap by deadline)</h1>
+
+  <div class="lead">
+    <span class="callout-t">用途</span>
+    一堆帶 deadline 的任務,總是先取「最早到期」者;並回報「距下一個 deadline 還有多久」。
+    <div class="scene">Systems 場景:executor 的 timer(<span class="xref" data-jump="intro" role="link" tabindex="0">承 P2</span>)、event loop 的 <code class="inl">epoll_wait</code> timeout 計算(P3)、retry / keepalive 排程。</div>
+  </div>
+
+  <h2>① 概念推導</h2>
+  <div class="card naive">
+    <span class="callout-t">Naive</span>
+    <code class="inl">Vec&lt;(Instant, Task)&gt;</code>,每次要取最早的就<b>掃全部找 min</b>,或每次插入後 <code class="inl">sort</code>。
+  </div>
+  <div class="card fail">
+    <span class="callout-t">失敗模式</span>
+    掃 min:每次取到期任務 O(n)。每插入即 sort:O(n log n) per insert。timer 場景是「海量排程 + 頻繁取最早」→ 這兩種都退化。
+  </div>
+  <div class="card fix">
+    <span class="callout-t">修法</span>
+    <b>min-heap by deadline</b>。std 的 <code class="inl">BinaryHeap</code> 是 <b>max-heap</b>,用 <code class="inl">Reverse</code> 把 <code class="inl">(Instant, id)</code> 反轉成「最早 deadline 在頂」。peek 頂 O(1)、push / pop O(log n)。<code class="inl">Instant</code> 本身實作 <code class="inl">Ord</code>(單調時鐘),tuple 依字典序比較 —— deadline 為主鍵,天然正確。
+  </div>
+
+  <h2>② Rust 實作要點</h2>
+  <ul class="tight">
+    <li><b>容器</b>:<code class="inl">BinaryHeap&lt;Reverse&lt;(Instant, u64)&gt;&gt;</code>。存 <code class="inl">(deadline, task_id)</code>;payload 若大,另用 <code class="inl">HashMap&lt;u64, Task&gt;</code> 側表,heap 只排 id(避免搬 payload)。</li>
+    <li><b><code class="inl">next_timeout</code> 是與 event loop 的接點</b>:回傳「距最近 deadline 多久」,直接餵給 <code class="inl">epoll_wait</code> / <code class="inl">poll</code> 的 timeout 參數。用 <code class="inl">saturating_duration_since</code> —— 已過期的 deadline 回 <code class="inl">Duration::ZERO</code> 而非 panic 或負值。沒有 timer 時回 <code class="inl">None</code>(對應 <code class="inl">epoll_wait</code> timeout = -1,無限等)。這把「timer 到期」與「I/O 就緒」統一成同一個 park 點。</li>
+    <li><b>ownership</b>:<code class="inl">pop</code> 直接 move 出 <code class="inl">Reverse((when, id))</code> 解構,無借用糾纏。</li>
+  </ul>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::collections::BinaryHeap;
+use std::cmp::Reverse;
+use std::time::{Duration, Instant};
+
+pub struct TimerQueue {
+    // BinaryHeap is a MAX-heap; Reverse turns it into a MIN-heap on deadline.
+    heap: BinaryHeap<Reverse<(Instant, u64)>>, // (deadline, task_id)
+}
+impl TimerQueue {
+    pub fn new() -> Self { Self { heap: BinaryHeap::new() } }
+    pub fn schedule(&mut self, delay: Duration, id: u64) {
+        self.heap.push(Reverse((Instant::now() + delay, id)));
+    }
+    pub fn schedule_at(&mut self, when: Instant, id: u64) {
+        self.heap.push(Reverse((when, id)));
+    }
+    // Feeds the event-loop / executor park timeout (e.g. epoll_wait timeout).
+    // None => no timers => wait indefinitely.
+    pub fn next_timeout(&self, now: Instant) -> Option<Duration> {
+        self.heap.peek().map(|Reverse((when, _))| when.saturating_duration_since(now))
+    }
+    // Pop everything already due at `now`, in deadline order.
+    pub fn pop_ready(&mut self, now: Instant) -> Vec<u64> {
+        let mut out = Vec::new();
+        while let Some(Reverse((when, _))) = self.heap.peek() {
+            if *when <= now {
+                let Reverse((_, id)) = self.heap.pop().unwrap();
+                out.push(id);
+            } else { break; }
+        }
+        out
+    }
+    pub fn len(&self) -> usize { self.heap.len() }
+}</script></pre>
+  <p class="codecap">已驗證:三個亂序 deadline 插入後,<code class="inl">next_timeout</code> 回最早者;<code class="inl">pop_ready</code> 按 deadline 序吐出到期任務;已過期 deadline 的 <code class="inl">next_timeout</code> 回 <code class="inl">Duration::ZERO</code>(不 panic)。</p>
+
+  <h2>③ 複雜度</h2>
+  <ul class="tight">
+    <li><span class="badge b-time">time</span> schedule <b>O(log n)</b>、peek / next_timeout <b>O(1)</b>、pop 單筆 <b>O(log n)</b>。</li>
+    <li><span class="badge b-space">space</span> <b>O(n)</b>(n = 排程中的 timer 數)。</li>
+    <li>對照 naive:掃 min 取到期 O(n)、每插入即 sort O(n log n)。</li>
+  </ul>
+
+  <h2>④ 互動 stepper</h2>
+  <p class="muted" style="font-size:.86rem">插入 deadline 亂序的 5 個 timer,再連 pop 兩次最早者。橘色 = 這步 sift 交換的節點。</p>
+  <div class="card tight" style="border-left:3px solid var(--orange);font-size:.82rem;background:rgba(231,138,78,.06)">
+    <b style="color:var(--orange)">注意</b>:std <code class="inl">BinaryHeap</code> <b>內部</b>就會做這些 sift-up / sift-down,API 隱藏了細節。這個 stepper 是把內部行為攤開,解釋 O(log n) 從何而來 —— 不是說你要自己寫 sift。
+  </div>
+  <div class="stepper" id="step-timer"></div>
+
+  <h2>⑤ 面試追問</h2>
+  <div class="fu">
+    <div class="fu-l1"><div class="fu-q">量大時為什麼 min-heap → timer wheel?</div>
+      min-heap 每次 insert / expire O(log n),且 heap array 對「海量 timer、多數會被 cancel / reset」的負載 cache 不友善(sift 到處跳)。<b>timer wheel</b>:用 bucket by <code class="inl">(deadline mod wheel_size)</code>,insert / expiry 攤還 <b>O(1)</b>。</div>
+    <div class="stance"><span class="callout-t">立場</span>TCP retransmit / keepalive 這種「海量 timer、多數提早取消、deadline 範圍有界」用 <b>wheel</b>;一般 app 的少量、範圍差異大的 timer 用 <b>min-heap</b> 就好 —— wheel 的離散解析度與 cascade 複雜度不值得為幾十個 timer 付出。</div>
+    <div class="fu-l2"><div class="fu-q">timer wheel 的代價?</div>
+      解析度<b>離散</b>(每 tick 一格,精度受格子大小限制);deadline 範圍大時,單層 wheel 格子會爆 → 要 <b>hierarchical wheel</b>(多層,像時鐘秒/分/時)。cancellation 也要能 O(1) 定位到 bucket(通常 handle 記著自己在哪格)。</div>
+    <div class="fu-l3"><div class="fu-q">hashed vs hierarchical wheel?</div>
+      <b>hashed</b>(單輪 + 每 bucket 一條 overflow list):簡單,但同 bucket 不同「輪次」的 timer 混在一條 list,tick 時要掃 list 挑出真的到期的。<b>hierarchical</b>(層層 cascade):插入 O(1),但 tick 到某層歸零時要把上層 timer <b>cascade 下放</b>到細層。<span class="unv">unverified</span>:Linux kernel timer 的具體演進(早期 hierarchical、後來為省 cascade 改用其他方案)我記不牢,別當定論;重點是「精度 vs 記憶體 vs cascade 成本」的三方取捨。</div>
+  </div>
+
+  <h2>⑥ Thread-safe 版:worker 睡到最近 deadline</h2>
+  <p class="muted" style="font-size:.86rem">真正的 timer thread 長這樣:<code class="inl">Mutex&lt;BinaryHeap&gt;</code> + <code class="inl">Condvar</code>,worker 用 <code class="inl">wait_timeout</code> 睡到<b>最近的 deadline</b>。若有人排進一個<b>更早</b>的 timer,<code class="inl">notify</code> 叫醒 worker 重算睡眠長度。Tokio 的 timer driver 也是這骨架。</p>
+  <pre class="code"><script type="text/plain" class="rust-src">use std::sync::{Mutex, Condvar};
+use std::collections::BinaryHeap;
+use std::cmp::Reverse;
+use std::time::{Duration, Instant};
+
+pub struct TimerWheel {
+    inner: Mutex<BinaryHeap<Reverse<(Instant, u64)>>>, // min-heap by deadline
+    cv: Condvar,
+}
+impl TimerWheel {
+    pub fn new() -> Self { Self { inner: Mutex::new(BinaryHeap::new()), cv: Condvar::new() } }
+    pub fn schedule(&self, delay: Duration, id: u64) {
+        let mut h = self.inner.lock().unwrap();
+        h.push(Reverse((Instant::now() + delay, id)));
+        drop(h);
+        self.cv.notify_one(); // a possibly-earlier deadline arrived: re-evaluate sleep
+    }
+    // Blocks until the next timer is due, fires it. (loops `rounds` times in demo)
+    pub fn run(&self, rounds: usize, out: &Mutex<Vec<u64>>) {
+        let mut fired = 0;
+        while fired < rounds {
+            let mut h = self.inner.lock().unwrap();
+            loop {
+                let now = Instant::now();
+                match h.peek() {
+                    None => { h = self.cv.wait(h).unwrap(); }      // empty: sleep till notified
+                    Some(&Reverse((when, _))) => {
+                        if when <= now {
+                            let Reverse((_, id)) = h.pop().unwrap();
+                            out.lock().unwrap().push(id);
+                            fired += 1;
+                            break;
+                        } else {
+                            let dur = when.saturating_duration_since(now);
+                            // wakes on notify (earlier timer) OR when dur elapses
+                            let (g, _) = self.cv.wait_timeout(h, dur).unwrap();
+                            h = g;
+                        }
+                    }
+                }
+                if fired >= rounds { break; }
+            }
+        }
+    }
+}</script></pre>
+  <div class="card fail tight">
+    <span class="callout-t">兩個必對的點</span>
+    <ul class="tight">
+      <li><b>睡的是「到最近 deadline 的差」,不是固定間隔</b>:<code class="inl">wait_timeout(dur)</code> 的 <code class="inl">dur = when − now</code>。這正是 <span class="xref" data-jump="epollasync" role="link" tabindex="0">epoll reactor</span> 裡 <code class="inl">epoll_wait</code> 的 timeout 參數來源——timer 的 <code class="inl">next_timeout()</code> 直接餵給 event loop。</li>
+      <li><b>插入更早 timer 要 <code class="inl">notify</code></b>:否則 worker 還在睡舊的、較晚的 deadline,新的早 timer 會遲發。<code class="inl">wait_timeout</code> 被 notify 叫醒後<b>重新 peek</b> 算新的 dur。</li>
+    </ul>
+  </div>
+  <p class="codecap">已驗證:一個晚插入但絕對 deadline 更早的 timer(id 2)正確搶佔到較早排、deadline 較晚者(id 1、3)之前 → fire 序 <code class="inl">[2,1,3,4]</code>(×3 穩定)。證明 <code class="inl">wait_timeout</code> + notify 的搶佔生效。</p>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>為什麼要 <code class="inl">Reverse</code>?不加會怎樣?</summary>
+    <div class="ans">std <code class="inl">BinaryHeap</code> 是 <b>max-heap</b>,<code class="inl">peek</code>/<code class="inl">pop</code> 給最大值。timer 要「最早 deadline」= 最小 <code class="inl">Instant</code>。<code class="inl">Reverse</code> 反轉比較,讓最小的浮到頂。不加就會先取到<b>最晚</b>的 timer,完全錯誤。</div></details>
+  <details class="quiz"><summary><code class="inl">next_timeout</code> 為什麼用 <code class="inl">saturating_duration_since</code> 而非 <code class="inl">duration_since</code>?</summary>
+    <div class="ans">若 deadline 已過(<code class="inl">when &lt; now</code>),<code class="inl">duration_since</code> 在部分平台會 <b>panic</b>(不允許負 <code class="inl">Duration</code>)。<code class="inl">saturating_duration_since</code> 回 <code class="inl">Duration::ZERO</code> —— 語意正確:「這個 timer 已到期,timeout 應為 0,立刻處理」,直接餵給 <code class="inl">epoll_wait(0)</code> 做非阻塞 poll。</div></details>
+  <details class="quiz"><summary>heap 存 <code class="inl">(Instant, u64)</code> 而非 <code class="inl">(Instant, Task)</code>,好處是什麼?</summary>
+    <div class="ans">payload 大時,heap 的 sift 每次交換都要搬整個 <code class="inl">Task</code> → 昂貴。只排 <code class="inl">u64</code> id、payload 放側表 <code class="inl">HashMap&lt;u64, Task&gt;</code>,sift 只搬 16 bytes 的 tuple,便宜。也讓 cancellation 容易(從側表移除即可,heap 裡的 stale id pop 到時查無側表就跳過)。</div></details>
+</section>
+
+<!-- ================= CHEAT ================= -->
+<section class="panel" id="epollasync">
+  <h1>epoll + async:把 reactor、executor、future 接起來</h1>
+  <div class="scene">Systems 場景:這是你 JD 裡「bridge HW/SW、定義 comm protocol」+ 「async internals(Pin/Waker)」的正面靶子。把前面的 <span class="xref" data-jump="timer" role="link" tabindex="0">timer</span>(算 timeout)和一個 epoll reactor 接上一個最小 executor,做出一個真的會 park / wake 的 async runtime 骨架。承 P2(block_on)+ P3(event loop)。</div>
+
+  <h2>① 先講清楚:std 沒有 epoll</h2>
+  <div class="card fail">
+    <span class="callout-t">「epoll 理論上可以用」的正解</span>
+    <code class="inl">std::os::fd</code> 只給你 <code class="inl">RawFd</code> / <code class="inl">AsRawFd</code>,<b>沒有</b> <code class="inl">epoll_wait</code>。所以嚴格說「std-only + epoll」是矛盾的——除非走 FFI。<b>但有一條真 std-only 路徑:你不需要 <code class="inl">libc</code> crate。</b>因為 <code class="inl">libc.so</code> 本來就被動態連進每個 Linux Rust binary,你可以自己 <code class="inl">extern "C" { fn epoll_create1(..) }</code> 手寫宣告,link 時對到系統 libc,<b>零外部 crate</b>。面試要 clarify 的是「我可以自己宣告 epoll 的 extern 嗎」,不是「可以引 libc crate 嗎」。
+  </div>
+  <div class="card tight">
+    <span class="callout-t" style="color:var(--yellow)">Edition 2024:<code class="inl">unsafe extern "C"</code></span>
+    2024 起 extern block <b>必須</b>標 <code class="inl">unsafe</code>,寫 <code class="inl">extern "C" { .. }</code> 直接 <span class="avoid">error: extern blocks must be unsafe</span>。實測:<code class="inl">unsafe extern</code> 在 <b>1.81 被拒、1.82 接受</b>,且 1.82 起<b>所有 edition 都接受</b> —— 所以照 2024 寫也能在 2021 編,沒有理由不直接寫對。<br>
+    同批(1.82,同樣不限 edition)還來了:block 內可把個別項目標成 <code class="inl">safe fn</code>,呼叫時免 <code class="inl">unsafe</code>:
+    <pre class="code" style="margin:8px 0 0"><script type="text/plain" class="rust-src">unsafe extern "C" {
+    // default: unsafe to call (takes raw pointers / arbitrary fd)
+    fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut u8) -> i32;
+    // opt-in: callable without `unsafe` — no pointers, no fd invariants to break
+    safe fn getpid() -> i32;
+}</script></pre>
+    本檔的 reactor <b>四個都留 unsafe</b>:它們全都碰 fd 或 raw pointer,標 <code class="inl">safe</code> 是在說謊。
+  </div>
+
+  <h2>② x86-64 陷阱:<code class="inl">epoll_event</code> 是 packed 的</h2>
+  <div class="card fail tight">
+    <span class="callout-t">最容易錯的一行</span>
+    <code class="inl">struct epoll_event</code> 在 x86-64 上是 <code class="inl">__attribute__((packed))</code>:<code class="inl">u32 events</code> 後面<b>沒有 4 bytes padding</b>,整個 struct 是 <b>12 bytes</b>。Rust 這邊必須 <code class="inl">#[repr(C, packed)]</code>,否則會被排成 16 bytes,傳給 kernel 的 array stride 就錯位、<code class="inl">epoll_wait</code> 回來的 <code class="inl">fd</code> 是垃圾。<b>連帶陷阱</b>:packed struct 不能取 field 的 reference(<code class="inl">&ev.data</code> 是 UB,unaligned),只能<b>整個 copy 出來</b>(<code class="inl">let fd = ev.data;</code>)。<span class="unv">unverified</span>:此 packed 屬性僅適用 x86-64;其他架構布局不同,<code class="inl">libc</code> crate 幫你 per-arch 處理——手寫版要註明架構。
+  </div>
+
+  <h2>③ 三塊拼圖:Reactor · Waker · Executor</h2>
+  <div class="card tight">
+    <ul class="tight">
+      <li><b>Reactor</b>:持 epoll fd + 一張 <code class="inl">fd → Waker</code> 表。<code class="inl">register</code> 把 fd 加進 epoll 並存 waker;<code class="inl">wait</code> 呼叫 <code class="inl">epoll_wait</code>,對每個就緒 fd 觸發它的 waker。</li>
+      <li><b>Waker</b>:用 <code class="inl">RawWaker</code> + <code class="inl">RawWakerVTable</code> <b>手工造</b>——這就是 async internals 的核心。底層是一個 <code class="inl">Arc&lt;AtomicBool&gt;</code> 旗標,<code class="inl">wake()</code> 就把旗標設 true。vtable 的四個函式(clone/wake/wake_by_ref/drop)要正確管 <code class="inl">Arc</code> refcount。</li>
+      <li><b>Executor(block_on)</b>:pin future、poll;回 <code class="inl">Pending</code> 就 <code class="inl">reactor.wait(timeout)</code> 停在 epoll 上;被 wake 後回圈重 poll,直到 <code class="inl">Ready</code>。</li>
+    </ul>
+  </div>
+  <pre class="diagram">  ┌─────────── block_on(reactor, future) ───────────┐
+  │                                                  │
+  │   flag=true ─► poll(future) ──► Ready(v) ─► return v
+  │       ▲              │                           │
+  │       │              ▼ Pending                   │
+  │       │     leaf 把 waker 註冊進 reactor          │
+  │       │              │                           │
+  │       │              ▼                           │
+  │  wake() 設 flag   reactor.wait(next_timeout)      │
+  │       ▲              │  epoll_wait(epfd, …, ms)   │
+  │       │              ▼                           │
+  │       └──── fd 就緒 → 取出該 fd 的 waker ──────────┘
+  │             (timeout 由 timer.next_timeout() 決定)
+  └──────────────────────────────────────────────────┘</pre>
+
+  <h2>④ 完整可跑骨架(零 crate,實測會 park + wake + async 讀)</h2>
+  <p class="muted" style="font-size:.86rem">下面整段用 <code class="inl">rustc --edition 2024 -O reactor.rs</code> 直接編(無 cargo、無依賴)。demo:另一條 thread 隔 50ms 才寫一個 byte,<code class="inl">block_on</code> 必須真的停在 <code class="inl">epoll_wait</code> 上被喚醒,才讀得到 <code class="inl">0x42</code>。</p>
+  <pre class="code"><script type="text/plain" class="rust-src">// Minimal epoll reactor + executor + leaf future — STD-ONLY, edition 2024.
+// epoll is NOT in std. We declare the C symbols ourselves; libc.so is already
+// linked into every Linux Rust binary, so these resolve at link time with ZERO
+// external crates. This is the honest "std-only epoll" path.
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::future::Future;
+use std::io;
+use std::mem::ManuallyDrop;
+use std::os::fd::{AsRawFd, RawFd};
+use std::os::raw::c_int;
+use std::pin::Pin;
+use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use std::time::Duration;
+
+// --- epoll FFI (hand-declared, no libc crate) ---
+#[repr(C, packed)]           // packed is the x86-64 layout (12 bytes, no padding)
+#[derive(Clone, Copy)]
+struct EpollEvent { events: u32, data: u64 }
+
+// Edition 2024: extern blocks MUST be marked `unsafe`. (Accepted since 1.82 in
+// all editions, so writing it this way is forward- and backward-compatible.)
+// Items inside default to unsafe-to-call; 2024 also lets you mark individual
+// items `safe fn`, which we deliberately don't do here (all four touch fds/ptrs).
+unsafe extern "C" {
+    fn epoll_create1(flags: c_int) -> c_int;
+    fn epoll_ctl(epfd: c_int, op: c_int, fd: c_int, event: *mut EpollEvent) -> c_int;
+    fn epoll_wait(epfd: c_int, events: *mut EpollEvent, maxevents: c_int, timeout: c_int) -> c_int;
+    fn close(fd: c_int) -> c_int;
+}
+const EPOLL_CTL_ADD: c_int = 1;
+const EPOLL_CTL_DEL: c_int = 2;
+const EPOLL_CTL_MOD: c_int = 3;
+const EPOLLIN: u32 = 0x001;
+const EEXIST: i32 = 17;
+
+// --- Waker built by hand from an AtomicBool flag (real RawWaker vtable) ---
+fn flag_waker(flag: Arc<AtomicBool>) -> Waker {
+    // Edition 2024: an `unsafe fn` body is no longer an implicit unsafe block.
+    // Each unsafe op now needs its own `unsafe {}` + SAFETY justification.
+    unsafe fn clone_fn(p: *const ()) -> RawWaker {
+        // SAFETY: p came from Arc::into_raw; the waker being cloned still holds a ref.
+        unsafe { Arc::increment_strong_count(p as *const AtomicBool) };
+        RawWaker::new(p, &VTABLE)
+    }
+    unsafe fn wake_fn(p: *const ()) {
+        // SAFETY: wake() CONSUMES the waker, so we own exactly one strong ref here.
+        let arc = unsafe { Arc::from_raw(p as *const AtomicBool) };
+        arc.store(true, Ordering::Release); // arc drops here -> refcount balanced
+    }
+    unsafe fn wake_by_ref_fn(p: *const ()) {
+        // SAFETY: same provenance. wake_by_ref only BORROWS the waker, so
+        // ManuallyDrop stops the reconstructed Arc from decrementing the count.
+        let arc = ManuallyDrop::new(unsafe { Arc::from_raw(p as *const AtomicBool) });
+        arc.store(true, Ordering::Release);
+    }
+    unsafe fn drop_fn(p: *const ()) {
+        // SAFETY: consumes the one strong ref this waker owned.
+        drop(unsafe { Arc::from_raw(p as *const AtomicBool) });
+    }
+    static VTABLE: RawWakerVTable = RawWakerVTable::new(clone_fn, wake_fn, wake_by_ref_fn, drop_fn);
+    let raw = RawWaker::new(Arc::into_raw(flag) as *const (), &VTABLE);
+    unsafe { Waker::from_raw(raw) }
+}
+
+// --- Reactor: epoll fd + (fd -> waker to fire on readiness) ---
+struct Reactor {
+    epfd: RawFd,
+    wakers: RefCell<HashMap<RawFd, Waker>>,
+}
+impl Reactor {
+    fn new() -> io::Result<Self> {
+        let epfd = unsafe { epoll_create1(0) };
+        if epfd < 0 { return Err(io::Error::last_os_error()); }
+        Ok(Self { epfd, wakers: RefCell::new(HashMap::new()) })
+    }
+    fn register_readable(&self, fd: RawFd, waker: Waker) {
+        let mut ev = EpollEvent { events: EPOLLIN, data: fd as u64 };
+        let r = unsafe { epoll_ctl(self.epfd, EPOLL_CTL_ADD, fd, &mut ev) };
+        if r < 0 && io::Error::last_os_error().raw_os_error() == Some(EEXIST) {
+            unsafe { epoll_ctl(self.epfd, EPOLL_CTL_MOD, fd, &mut ev); }
+        }
+        self.wakers.borrow_mut().insert(fd, waker);
+    }
+    // Park until a registered fd is ready (or timeout), then fire its waker.
+    // `timeout` is EXACTLY where a timer queue's next_timeout() plugs in.
+    fn wait(&self, timeout: Option<Duration>) {
+        let ms: c_int = match timeout {
+            None => -1, // no timers => block indefinitely
+            Some(d) => d.as_millis().min(c_int::MAX as u128) as c_int,
+        };
+        let mut evs = [EpollEvent { events: 0, data: 0 }; 32];
+        let n = unsafe { epoll_wait(self.epfd, evs.as_mut_ptr(), 32, ms) };
+        if n < 0 { return; } // EINTR: caller re-loops
+        for i in 0..n as usize {
+            let fd = evs[i].data as RawFd; // copy out of packed struct (no &ref!)
+            unsafe { epoll_ctl(self.epfd, EPOLL_CTL_DEL, fd, ptr::null_mut()); } // one-shot
+            if let Some(w) = self.wakers.borrow_mut().remove(&fd) { w.wake(); }
+        }
+    }
+}
+impl Drop for Reactor { fn drop(&mut self) { unsafe { close(self.epfd); } } }
+
+// --- Leaf future: resolves when fd becomes readable ---
+struct Readable<'a> { fd: RawFd, reactor: &'a Reactor, armed: bool }
+impl<'a> Future for Readable<'a> {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.armed { return Poll::Ready(()); } // woken => readable
+        self.armed = true;
+        self.reactor.register_readable(self.fd, cx.waker().clone());
+        Poll::Pending
+    }
+}
+
+// --- Executor: drive one future to completion, parking on the reactor ---
+fn block_on<F: Future>(reactor: &Reactor, future: F) -> F::Output {
+    let mut fut = Box::pin(future);
+    let flag = Arc::new(AtomicBool::new(true)); // start "ready" to poll once
+    let waker = flag_waker(flag.clone());
+    let mut cx = Context::from_waker(&waker);
+    loop {
+        if flag.swap(false, Ordering::AcqRel) {
+            if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) { return v; }
+        }
+        reactor.wait(None); // a full runtime passes timer.next_timeout() here
+    }
+}
+
+// --- Demo: asynchronously read one byte; writer fires after 50ms ---
+async fn read_byte(reactor: &Reactor, s: &std::os::unix::net::UnixStream) -> u8 {
+    use std::io::Read;
+    Readable { fd: s.as_raw_fd(), reactor, armed: false }.await;
+    let mut buf = [0u8; 1];
+    let mut r = s; // &UnixStream: impl Read for &UnixStream
+    let n = r.read(&mut buf).unwrap();
+    assert_eq!(n, 1);
+    buf[0]
+}
+
+fn main() {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+    use std::thread;
+    let reactor = Reactor::new().unwrap();
+    let (tx, rx) = UnixStream::pair().unwrap();
+    let writer = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50)); // forces block_on to actually park on epoll
+        (&tx).write_all(&[0x42]).unwrap();
+        drop(tx);
+    });
+    let got = block_on(&reactor, read_byte(&reactor, &rx));
+    writer.join().unwrap();
+    assert_eq!(got, 0x42);
+    println!("epoll reactor OK: async-read byte 0x{:02x} after real epoll park", got);
+}
+</script></pre>
+  <p class="codecap">已驗證:編過並跑出 <code class="inl">async-read byte 0x42 after real epoll park</code>;valgrind memcheck 無錯(packed FFI 布局正確、waker refcount 無 double-free / leak)。</p>
+
+  <h2>⑤ timer 怎麼接進來</h2>
+  <div class="card">
+    <span class="callout-t" style="color:var(--aqua)">reactor.wait 的 timeout = timer.next_timeout()</span>
+    骨架裡 <code class="inl">reactor.wait(None)</code> 是「無限等 fd」。真實 runtime 同時要處理<b>定時</b>任務:把 <span class="xref" data-jump="timer" role="link" tabindex="0">併發 timer</span> 的 <code class="inl">next_timeout()</code>(到最近 deadline 的 <code class="inl">Duration</code>)當成 <code class="inl">epoll_wait</code> 的 timeout 參數傳進去。於是 <code class="inl">epoll_wait</code> 會在「有 fd 就緒」<b>或</b>「最近的 timer 到期」時返回——I/O 與定時<b>統一在一個 syscall 等待點</b>。這就是 P3 event loop 的心臟,也是為什麼 timer 那節說「timeout 計算是 P3」。
+  </div>
+
+  <h2>⑥ 這個骨架簡化了什麼(面試要能指出)</h2>
+  <ul class="tight">
+    <li><b>One-shot 註冊</b>:<code class="inl">wait</code> 觸發後 <code class="inl">EPOLL_CTL_DEL</code> 拔掉,靠下次 poll 重新 register。production 用 <code class="inl">EPOLLONESHOT</code> 或 edge-triggered + 妥善的重掛。</li>
+    <li><b>單一 task</b>:<code class="inl">block_on</code> 只驅動一個 future。多 task executor 要一個 <b>ready queue</b>(<code class="inl">VecDeque&lt;TaskId&gt;</code>),waker <code class="inl">wake()</code> 時把 task id 推進 queue,executor 從 queue 取 task 再 poll——waker 就不是設旗標而是 enqueue。</li>
+    <li><b>Leaf 直接回 Ready</b>:實務 fd 設 <code class="inl">O_NONBLOCK</code>,poll 裡真的 <code class="inl">read</code>,遇 <code class="inl">EAGAIN</code> 才 register + 回 Pending;可能被 spurious wake,要能重試。</li>
+    <li><b>沒處理 <code class="inl">EPOLLHUP</code> / <code class="inl">EPOLLERR</code></b>:對端關閉 / 錯誤事件要喚醒對應 waker 讓上層 read 拿到 EOF / error。</li>
+  </ul>
+
+  <h2>Self-quiz</h2>
+  <details class="quiz"><summary>為什麼 <code class="inl">block_on</code> 一開始把 <code class="inl">flag</code> 設 <code class="inl">true</code>?設 <code class="inl">false</code> 會怎樣?</summary>
+    <div class="ans">future 從沒被 poll 過,必須先 poll 一次才會註冊 waker、才可能被喚醒。<code class="inl">flag=true</code> 讓第一圈的 <code class="inl">swap</code> 取到 true → 進行首次 poll。若設 <code class="inl">false</code>:第一圈 <code class="inl">swap</code> 取到 false → 跳過 poll → 直接 <code class="inl">reactor.wait</code>,但此時 epoll 裡<b>什麼都沒註冊</b>(leaf 還沒 poll 過)→ <code class="inl">epoll_wait</code> 永遠不返回 → 死鎖。</div></details>
+  <details class="quiz"><summary>packed struct 的 <code class="inl">let fd = evs[i].data;</code> 改成 <code class="inl">let fd = &evs[i].data;</code> 為什麼是 bug?</summary>
+    <div class="ans"><code class="inl">#[repr(C, packed)]</code> 下 <code class="inl">data</code> 這個 <code class="inl">u64</code> 可能落在非 8-byte 對齊的位址(前面只有 4-byte 的 <code class="inl">events</code>)。對 packed field 取 reference 會產生一個<b>宣稱對齊、實際未對齊</b>的指標 → 立即 UB(即使 x86 硬體容忍 unaligned load,Rust 語意上仍是 UB,且其他架構會 SIGBUS)。<b>copy by value</b> 讓編譯器生成正確的 unaligned load,是唯一安全的讀法。</div></details>
+  <details class="quiz"><summary><code class="inl">wake_by_ref_fn</code> 用 <code class="inl">ManuallyDrop</code>,但 <code class="inl">wake_fn</code> 沒有。為什麼?</summary>
+    <div class="ans">兩者都 <code class="inl">Arc::from_raw</code> 重建 <code class="inl">Arc</code>(把 raw pointer 當作一份 strong ref 的所有權)。<code class="inl">wake</code> 是<b>消耗型</b>(by value):它「用掉」這份 ref,結束時 <code class="inl">Arc</code> 正常 drop → refcount 減一,對稱。<code class="inl">wake_by_ref</code><b>不</b>消耗 waker(只借用),若讓重建的 <code class="inl">Arc</code> 在函式結束時 drop,會<b>多減一次</b> refcount → 提早釋放 / double-free。<code class="inl">ManuallyDrop</code> 阻止那次 drop,保持 refcount 不變。</div></details>  <details class="quiz"><summary>edition 2024 逼你在 <code class="inl">unsafe fn</code> 裡<b>再</b>寫一次 <code class="inl">unsafe {}</code>。這不是多餘的儀式 —— 兩個 <code class="inl">unsafe</code> 各自在講什麼?</summary>
+    <div class="ans"><b>它們是兩個方向相反的宣告。</b><code class="inl">unsafe fn</code> 是<b>對外</b>的:「我有前提條件,<b>caller</b> 必須保證」(MPSC 的 <code class="inl">pop</code>:只能有一個 consumer)。函式內的 <code class="inl">unsafe { }</code> 是<b>對內</b>的:「這裡的操作編譯器無法驗證,<b>我</b>已經檢查過了」。2021 把 <code class="inl">unsafe fn</code> 的整個 body 當成隱式 unsafe block,等於一旦函式標了 unsafe,body 裡<b>所有</b>危險操作都自動免審 —— 你在裡面手滑多寫一個沒被契約覆蓋的解參考,編譯器不會提醒。分開之後,<code class="inl">/// # Safety</code> 寫契約、<code class="inl">unsafe {}</code> + <code class="inl">// SAFETY:</code> 寫理由,兩者能被獨立審查。</div></details>
+</section>
+
+<section class="panel" id="cheat">
+  <h1>結構 × 何時用 · 速查表</h1>
+  <p class="muted" style="font-size:.88rem">面試選型時掃這張:典型場景 + 「別用它的時機」。</p>
+  <div class="tablewrap">
+  <table class="cheat">
+    <thead><tr><th>結構</th><th>典型場景(一句)</th><th>別用它的時機</th></tr></thead>
+    <tbody>
+      <tr><td>Ring buffer</td><td>固定容量 FIFO、packet/telemetry staging、bounded 記憶體 SPSC</td><td class="avoid">需要無界成長,或需隨機存取中段元素 → 用 <code class="inl">VecDeque</code>/<code class="inl">Vec</code></td></tr>
+      <tr><td>SPSC ring (atomic)</td><td>單 producer 單 consumer、跨執行緒、無鎖交遞</td><td class="avoid">多 producer 或多 consumer → 兩個 index 不夠,需 per-slot seq(Vyukov)或鎖</td></tr>
+      <tr><td>LRU cache</td><td>固定容量、要 O(1) get/put、淘汰最久未用</td><td class="avoid">高並發「讀即寫」精度不重要 → 改 CLOCK/sampled 近似,免寫鎖競爭</td></tr>
+      <tr><td>DSU</td><td>動態連通性/叢集、Kruskal MST、成環判斷</td><td class="avoid">要刪邊/拆分/undo → 標準 DSU 不支援;需 link-cut tree 或 offline reverse</td></tr>
+      <tr><td>Graph (adj list)</td><td>稀疏圖遍歷、topo、最短路</td><td class="avoid">稠密且 V 小、頻繁查任兩點有無邊 → matrix 的 O(1) 查邊更划算</td></tr>
+      <tr><td>Trie (26-ary array)</td><td>限定 a–z 的字首匹配、autocomplete</td><td class="avoid">大 alphabet/unicode/極稀疏 → array 浪費 208B/節點,改 HashMap children 或 radix</td></tr>
+      <tr><td>Tree (arena)</td><td>純內部階層/依賴樹、雙向父子導航</td><td class="avoid">節點要被外部共享持有、子樹需獨立存活 → 用 <code class="inl">Rc&lt;RefCell&gt;</code></td></tr>
+      <tr><td>Tree (Rc&lt;RefCell&gt;)</td><td>多擁有者、生命週期不齊、需交出子樹</td><td class="avoid">純演算法內用 → arena 免 runtime borrow panic 與 cycle</td></tr>
+      <tr><td>Min-heap timer</td><td>少量~中量 timer、deadline 範圍差異大、要精確排序</td><td class="avoid">海量 timer + 多提早取消 + 範圍有界 → timer wheel 的 O(1) 攤還更佳</td></tr>
+      <tr><td>Blocking queue (Mutex+Condvar)</td><td>thread pool work queue、worker 要 block/被喚醒、需 backpressure</td><td class="avoid">純交遞、caller 願 spin → lock-free 免 park 開銷</td></tr>
+      <tr><td>MPSC (intrusive, XCHG)</td><td>多 producer 單 consumer、unbounded、producer 要 wait-free</td><td class="avoid">記憶體需可預測(HW 介面)→ 用 bounded;unbounded 藏 backpressure 到 OOM</td></tr>
+      <tr><td>MPMC (per-slot seq)</td><td>多寫多讀、bounded、無鎖、可預測記憶體</td><td class="avoid">只有 1↔1 → SPSC 更省(免 CAS);需 block → 用 Condvar</td></tr>
+      <tr><td>Sharded LRU</td><td>高 QPS、可容忍 per-shard(非全域)淘汰精度</td><td class="avoid">需嚴格全域 LRU 序 → 全域鎖;或改近似 LRU</td></tr>
+      <tr><td>Concurrent timer (Condvar wait_timeout)</td><td>executor timer driver、睡到最近 deadline、可被更早 timer 搶佔</td><td class="avoid">已有 epoll event loop → 把 next_timeout 餵給 epoll_wait,不另起 timer thread</td></tr>
+      <tr><td>epoll reactor + executor</td><td>單一等待點統一 I/O 就緒 + 定時、驅動 async future</td><td class="avoid">純 CPU 無 I/O、少量固定 fd 阻塞讀就夠 → 不需 reactor</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="card tight muted" style="margin-top:20px;font-size:.84rem">
+    <b style="color:var(--fg0)">選型口訣</b>:先問「所有權在哪」——都在結構內 → index/arena;要被外部共享 → Rc。再問「規模與存取型態」——bounded + 單寫者 → ring/SPSC;要 O(1) 淘汰 → LRU;連通性 → DSU;有 deadline → heap(海量再上 wheel)。
+  </div>
+</section>
+
+</div><!-- /wrap -->
+
+<script>
+"use strict";
+/* ============ Rust syntax highlighter (single-pass tokenizer) ============ */
+function highlightRust(code){
+  code = code.replace(/^\n+/, "").replace(/\s+$/, "");
+  const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const KW = new Set(["fn","let","mut","struct","impl","enum","match","if","else","for","while","loop","return","pub","use","const","static","unsafe","as","ref","move","where","type","trait","dyn","in","break","continue","mod","crate","super","self","Self","async","await"]);
+  const TY = new Set(["usize","isize","u8","u16","u32","u64","u128","i8","i16","i32","i64","i128","f32","f64","bool","char","str","String","Vec","VecDeque","HashMap","HashSet","BTreeMap","BinaryHeap","Option","Result","Box","Rc","Arc","Weak","RefCell","Cell","UnsafeCell","MaybeUninit","Instant","Duration","Reverse","AtomicUsize","Ordering","Some","None","Ok","Err"]);
+  const BOOL = new Set(["true","false"]);
+  const pats = [
+    ["comment", /\/\/[^\n]*|\/\*[\s\S]*?\*\//y],
+    ["byte",    /b'(?:[^'\\]|\\.)'/y],
+    ["string",  /b?"(?:[^"\\]|\\.)*"/y],
+    ["char",    /'(?:[^'\\]|\\.)'/y],
+    ["lifetime",/'[a-zA-Z_][a-zA-Z0-9_]*/y],
+    ["attr",    /#!?\[[^\]]*\]/y],
+    ["number",  /\b\d[\d_]*(?:\.\d+)?(?:[iuf]\d+|usize|isize)?\b/y],
+    ["macro",   /\b[a-zA-Z_][a-zA-Z0-9_]*!/y],
+    ["ident",   /[a-zA-Z_][a-zA-Z0-9_]*/y],
+    ["ws",      /\s+/y],
+    ["other",   /[^]/y]
+  ];
+  let i = 0, out = "";
+  while(i < code.length){
+    let matched = false;
+    for(const [cls, re] of pats){
+      re.lastIndex = i;
+      const m = re.exec(code);
+      if(m && m.index === i){
+        let t = m[0];
+        if(cls === "ident"){
+          let c = KW.has(t) ? "tok-keyword" : BOOL.has(t) ? "tok-bool" : TY.has(t) ? "tok-type" : null;
+          out += c ? '<span class="'+c+'">'+esc(t)+'</span>' : esc(t);
+        } else if(cls === "ws" || cls === "other"){
+          out += esc(t);
+        } else {
+          out += '<span class="tok-'+cls+'">'+esc(t)+'</span>';
+        }
+        i += t.length; matched = true; break;
+      }
+    }
+    if(!matched){ out += esc(code[i]); i++; }
+  }
+  return out;
+}
+document.querySelectorAll("pre.code").forEach(pre=>{
+  const s = pre.querySelector("script.rust-src");
+  if(s){ pre.innerHTML = highlightRust(s.textContent); }
+});
+
+/* ============ tab navigation (delegated, data-jump; no anchors) ============ */
+function showTab(id){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active", p.id===id));
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active", b.getAttribute("data-jump")===id));
+  const inTab = document.querySelector('.tab-btn[data-jump="'+id+'"]');
+  if(inTab && inTab.scrollIntoView) inTab.scrollIntoView({block:"nearest", inline:"center"});
+  if(window.scrollTo) try{ window.scrollTo({top:0}); }catch(_){}
+}
+document.addEventListener("click", e=>{
+  const t = e.target.closest("[data-jump]");
+  if(!t) return;
+  showTab(t.getAttribute("data-jump"));
+});
+document.addEventListener("keydown", e=>{
+  if(e.key!=="Enter" && e.key!==" ") return;
+  const t = e.target.closest(".xref[data-jump]");
+  if(!t) return;
+  e.preventDefault();
+  showTab(t.getAttribute("data-jump"));
+});
+
+/* ============ generic stepper engine ============ */
+function mountStepper(mountId, frames, render){
+  const root = document.getElementById(mountId);
+  if(!root) return;
+  const view = document.createElement("div"); view.className = "stepper-view";
+  const desc = document.createElement("div"); desc.className = "stepper-desc";
+  const bar  = document.createElement("div"); bar.className  = "stepper-bar";
+  const prev = mkbtn("◀ 上一步"), next = mkbtn("下一步 ▶"), reset = mkbtn("⟲ 重來");
+  const count = document.createElement("span"); count.className = "stepper-count";
+  bar.append(prev, count, next, reset);
+  root.append(view, desc, bar);
+  let i = 0;
+  function draw(){
+    view.innerHTML = render(frames[i], i);
+    desc.innerHTML = frames[i].note || "";
+    count.textContent = (i+1) + " / " + frames.length;
+    prev.disabled = (i===0); next.disabled = (i===frames.length-1);
+  }
+  prev.onclick = ()=>{ if(i>0){ i--; draw(); } };
+  next.onclick = ()=>{ if(i<frames.length-1){ i++; draw(); } };
+  reset.onclick = ()=>{ i=0; draw(); };
+  draw();
+}
+function mkbtn(label){ const b=document.createElement("button"); b.className="sbtn"; b.textContent=label; return b; }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+/* ---------- RING BUFFER ---------- */
+function ringFrames(){
+  const cap=4, mask=cap-1;
+  let head=0, tail=0; const slots=new Array(cap).fill(null);
+  const F=[];
+  const snap=(note,extra)=>F.push(Object.assign({note,head,tail,slots:slots.slice(),mask,cap},extra||{}));
+  snap("初始:head = tail = 0,空。len = tail − head = 0。");
+  const push=(v,note)=>{ slots[tail&mask]=v; tail++; snap(note); };
+  const pop =(note)=>{ slots[head&mask]=null; head++; snap(note); };
+  push("A","push A → 寫入 slot (tail & mask)=0,tail=1。");
+  push("B","push B → slot 1,tail=2。");
+  push("C","push C → slot 2,tail=3。");
+  push("D","push D → slot 3,tail=4。此時 len = 4 − 0 = 4 = cap → <b>滿</b>。");
+  snap("push E 被拒:is_full() 為真,回 Err(E)。注意 <b>沒有</b> 浪費任何一格 —— 靠計數器區分滿/空,不犧牲格子。", {rejected:"E"});
+  pop("pop → 取出 (head & mask)=0 的 A,head=1。len 回到 3。");
+  push("E","push E → (tail & mask) = 4 & 3 = 0,<b>環繞</b> 寫回 slot 0。tail=5,計數器持續增加。");
+  pop("pop → (head & mask)=1 → B 出。head=2。");
+  return F;
+}
+function renderRing(f){
+  const hp = f.head & f.mask, tp = f.tail & f.mask;
+  let boxes = "";
+  for(let j=0;j<f.cap;j++){
+    const v = f.slots[j];
+    const cls = ["slot", v!=null?"filled":"empty"];
+    let mk="";
+    if(j===hp) mk += '<span class="mk mk-h">H</span>';
+    if(j===tp) mk += '<span class="mk mk-t">T</span>';
+    boxes += '<div class="'+cls.join(" ")+'"><span class="idx">'+j+'</span>'+(v!=null?esc(v):"·")+mk+'</div>';
+  }
+  const len = (f.tail - f.head);
+  let status;
+  if(len===0) status='<span class="statebadge st-empty">EMPTY</span>';
+  else if(len===f.cap) status='<span class="statebadge st-full">FULL</span>';
+  else status='<span class="statebadge st-ok">'+len+' / '+f.cap+'</span>';
+  let rej = f.rejected ? '<div class="evicted">push '+esc(f.rejected)+' ✗ 被拒(FULL)</div>' : "";
+  return '<div class="slotrow">'+boxes+'</div>'+
+    '<div class="metarow"><span><span class="k">head=</span><span class="v" style="color:var(--blue)">'+f.head+'</span></span>'+
+    '<span><span class="k">tail=</span><span class="v" style="color:var(--orange)">'+f.tail+'</span></span>'+
+    '<span><span class="k">len=tail−head=</span><span class="v">'+len+'</span></span>'+
+    '<span>'+status+'</span></div>'+rej;
+}
+
+/* ---------- LRU ---------- */
+function lruFrames(){
+  const cap=3;
+  const map={}; const nodes=[]; const free=[];
+  let head=null, tail=null;
+  const F=[];
+  function detach(i){ const p=nodes[i].prev,n=nodes[i].next;
+    if(p!=null) nodes[p].next=n; else head=n;
+    if(n!=null) nodes[n].prev=p; else tail=p;
+    nodes[i].prev=null; nodes[i].next=null; }
+  function pushFront(i){ nodes[i].prev=null; nodes[i].next=head;
+    if(head!=null) nodes[head].prev=i; head=i; if(tail==null) tail=i; }
+  function chain(){ const o=[]; let c=head; while(c!=null){ o.push(c); c=nodes[c].next; } return o; }
+  function snap(note,hl,evicted){ F.push({note,hl,evicted,
+    map:Object.assign({},map),
+    nodes:nodes.map(x=>({key:x.key,val:x.val,prev:x.prev,next:x.next})),
+    head,tail,chain:chain(),free:free.slice()}); }
+  function put(k,v,note){
+    if(k in map){ const i=map[k]; nodes[i].val=v; detach(i); pushFront(i); snap(note+" → 已存在,更新值並移到 MRU",i); return; }
+    let ev=null;
+    if(Object.keys(map).length===cap){ const t=tail; detach(t); ev={key:nodes[t].key,idx:t}; delete map[nodes[t].key]; free.push(t); }
+    let idx; if(free.length){ idx=free.pop(); nodes[idx]={key:k,val:v,prev:null,next:null}; }
+    else { idx=nodes.length; nodes.push({key:k,val:v,prev:null,next:null}); }
+    map[k]=idx; pushFront(idx); snap(note+(ev?" → 滿,淘汰 tail":""),idx,ev);
+  }
+  function get(k,note){ if(k in map){ const i=map[k]; detach(i); pushFront(i); snap(note+" → 命中,移到 MRU",i); } else snap(note+" → miss",null); }
+  snap("初始:map 空,slab 空,head = tail = null。",null);
+  put(1,"A","put(1,A)");
+  put(2,"B","put(2,B)");
+  put(3,"C","put(3,C)");
+  get(1,"get(1)");
+  put(4,"D","put(4,D)");
+  get(3,"get(3)");
+  put(2,"E","put(2,E)");
+  return F;
+}
+function renderLru(f){
+  // map table
+  const keys = Object.keys(f.map).sort((a,b)=>a-b);
+  let mapRows = keys.map(k=>'<tr><td>'+esc(k)+'</td><td>'+f.map[k]+'</td></tr>').join("") || '<tr><td colspan="2" class="freeslot">—</td></tr>';
+  let mapT = '<table class="mini"><tr><th>key</th><th>→ slot</th></tr>'+mapRows+'</table>';
+  // slab table
+  const freeSet = new Set(f.free);
+  let slabRows = f.nodes.map((n,idx)=>{
+    const isFree = freeSet.has(idx);
+    const hl = (idx===f.hl) ? " hl" : "";
+    if(isFree) return '<tr><td>'+idx+'</td><td class="freeslot" colspan="4">free</td></tr>';
+    return '<tr><td class="'+hl.trim()+'">'+idx+'</td><td class="'+hl.trim()+'">'+esc(n.key)+'</td><td class="'+hl.trim()+'">'+esc(n.val)+'</td><td class="'+hl.trim()+'">'+(n.prev==null?"·":n.prev)+'</td><td class="'+hl.trim()+'">'+(n.next==null?"·":n.next)+'</td></tr>';
+  }).join("") || '<tr><td colspan="5" class="freeslot">—</td></tr>';
+  let slabT = '<table class="mini"><tr><th>idx</th><th>key</th><th>val</th><th>prev</th><th>next</th></tr>'+slabRows+'</table>';
+  // chain
+  let chainH = "";
+  if(f.chain.length===0) chainH = '<span class="muted">(空)</span>';
+  else f.chain.forEach((idx,pos)=>{
+    const n = f.nodes[idx];
+    const ends = (pos===0?" mru":"") + (pos===f.chain.length-1?" lru":"");
+    const hl = (idx===f.hl)?" nb-hl":"";
+    chainH += '<span class="node-box'+ends+hl+'">'+esc(n.key)+':'+esc(n.val)+'<span class="sub">slot '+idx+'</span></span>';
+    if(pos<f.chain.length-1) chainH += '<span class="arrow">→</span>';
+  });
+  let ev = f.evicted ? '<div class="evicted">淘汰 key '+esc(f.evicted.key)+'(slot '+f.evicted.idx+')→ slot 進 free-list,隨即被新 key 重用</div>' : "";
+  let freeInfo = '<div class="muted" style="font-size:.74rem;margin-top:6px">free-list: ['+f.free.join(",")+']</div>';
+  return '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">'+
+    '<div><div class="muted" style="font-size:.72rem;margin-bottom:4px">map</div>'+mapT+'</div>'+
+    '<div><div class="muted" style="font-size:.72rem;margin-bottom:4px">slab (Vec&lt;Node&gt;)</div>'+slabT+'</div>'+
+    '</div>'+
+    '<div class="muted" style="font-size:.72rem;margin:12px 0 4px">邏輯鏈 <span style="color:var(--green)">MRU(head)</span> → <span style="color:var(--red)">LRU(tail)</span></div>'+
+    '<div class="chain">'+chainH+'</div>'+freeInfo+ev;
+}
+
+/* ---------- DSU ---------- */
+function dsuFrames(){
+  const n=6; const parent=[...Array(n).keys()]; const rank=new Array(n).fill(0);
+  const F=[];
+  function find(x,touch){ let r=x; while(parent[r]!==r) r=parent[r];
+    let c=x; while(parent[c]!==r){ const nx=parent[c]; parent[c]=r; touch.push(c); c=nx; } return r; }
+  function snap(note,hl){ F.push({note,hl:hl||[],parent:parent.slice(),rank:rank.slice(),n}); }
+  function union(a,b,note){ const t=[]; const ra=find(a,t),rb=find(b,t);
+    if(ra===rb){ snap(note+" → 已同組(root "+ra+"),不動",[ra]); return; }
+    let lo,hi; if(rank[ra]<rank[rb]){lo=ra;hi=rb;} else {lo=rb;hi=ra;}
+    parent[lo]=hi; if(rank[lo]===rank[hi]) rank[hi]++;
+    snap(note+" → 掛 "+lo+" 到 "+hi+(t.length?";順帶壓平 "+t.join(","):""),[lo,hi].concat(t)); }
+  function findF(x,note){ const t=[]; find(x,t); snap(note+(t.length?" → path compression 把 ["+t.join(",")+"] 直接指向 root":" → 路徑已扁,無可壓"),[x].concat(t)); }
+  snap("初始:每個節點自成一組,parent[i]=i,rank=0。");
+  union(0,1,"union(0,1)");
+  union(2,3,"union(2,3)");
+  union(4,5,"union(4,5)");
+  union(1,3,"union(1,3)");
+  union(1,5,"union(1,5)");
+  findF(3,"find(3)");
+  findF(5,"find(5)");
+  return F;
+}
+function depthOf(parent,i){ let d=0,c=i,g=0; while(parent[c]!==c && g++<64){ c=parent[c]; d++; } return d; }
+function renderDsu(f){
+  const n=f.n, W=340, colW=W/n;
+  // arrays
+  let pRow='<tr><td class="freeslot">i</td>', parRow='<tr><td class="freeslot">parent</td>', rRow='<tr><td class="freeslot">rank</td>';
+  for(let i=0;i<n;i++){ const hl=f.hl.includes(i)?' class="hl"':''; pRow+='<td'+hl+'>'+i+'</td>'; parRow+='<td'+hl+'>'+f.parent[i]+'</td>'; rRow+='<td'+hl+'>'+f.rank[i]+'</td>'; }
+  pRow+='</tr>'; parRow+='</tr>'; rRow+='</tr>';
+  const table='<table class="mini">'+pRow+parRow+rRow+'</table>';
+  // forest svg
+  const depth=[]; let maxD=0;
+  for(let i=0;i<n;i++){ depth[i]=depthOf(f.parent,i); if(depth[i]>maxD) maxD=depth[i]; }
+  const H=(maxD+1)*64+30;
+  const x=i=>colW*i+colW/2, y=i=>depth[i]*64+26;
+  let edges="", nodesS="";
+  for(let i=0;i<n;i++){
+    const p=f.parent[i];
+    if(p!==i){ edges+='<line class="arrrow" x1="'+x(i)+'" y1="'+(y(i)-15)+'" x2="'+x(p)+'" y2="'+(y(p)+15)+'"/>'; }
+  }
+  for(let i=0;i<n;i++){
+    const isRoot=f.parent[i]===i, touched=f.hl.includes(i);
+    const fill = touched? "var(--orange)" : isRoot? "var(--aqua)" : "var(--bg1)";
+    const stroke = touched? "var(--orange)" : isRoot? "var(--aqua)" : "var(--bg3)";
+    const tcol = (touched)? "var(--bg0)" : "var(--fg0)";
+    nodesS+='<circle cx="'+x(i)+'" cy="'+y(i)+'" r="15" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.6"/>'+
+            '<text x="'+x(i)+'" y="'+(y(i)+4)+'" text-anchor="middle" font-size="12" font-weight="700" fill="'+tcol+'">'+i+'</text>';
+    if(isRoot) nodesS+='<circle cx="'+x(i)+'" cy="'+y(i)+'" r="19" fill="none" stroke="'+stroke+'" stroke-width="1" opacity="0.5"/>';
+  }
+  const svg='<svg class="viz" viewBox="0 0 '+W+' '+H+'"><defs><marker id="ah" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--grey)"/></marker></defs>'+edges+nodesS+'</svg>';
+  return table+'<div style="margin-top:14px">'+svg+'</div>'+
+    '<div class="legend-line"><span class="lg-cur">本步改動</span><span style="color:var(--aqua)">◎ root</span><span style="color:var(--grey)">→ 指向 parent</span></div>';
+}
+
+/* ---------- GRAPH (BFS) ---------- */
+function graphFrames(){
+  const n=6; const adj=[[1,2],[0,3],[0,3,5],[1,2,4],[3],[2]];
+  const dist=new Array(n).fill(-1); const q=[]; const F=[];
+  dist[0]=0; q.push(0);
+  F.push({note:"BFS 從 0:dist[0]=0,入隊。queue=[0]",cur:0,dist:dist.slice(),queue:q.slice(),disc:[0],adj});
+  while(q.length){
+    const u=q.shift(); const disc=[];
+    for(const w of adj[u]){ if(dist[w]===-1){ dist[w]=dist[u]+1; q.push(w); disc.push(w); } }
+    F.push({note:"pop "+u+"(dist "+dist[u]+")→ 掃鄰居,新發現 ["+(disc.join(",")||"無")+"] 設 dist="+(dist[u]+1)+" 入隊",cur:u,dist:dist.slice(),queue:q.slice(),disc,adj});
+  }
+  F.push({note:"queue 空,BFS 完成。dist = 每點到 0 的最短邊數。",cur:null,dist:dist.slice(),queue:[],disc:[],adj});
+  return F;
+}
+const GPOS=[[55,45],[250,45],[55,150],[250,150],[250,255],[55,255]];
+function renderGraph(f){
+  const done=new Set(); f.dist.forEach((d,i)=>{ if(d!==-1) done.add(i); });
+  const inQ=new Set(f.queue);
+  const W=320,H=300;
+  let edges="";
+  const drawn=new Set();
+  f.adj.forEach((nb,u)=>nb.forEach(v=>{ const key=Math.min(u,v)+"-"+Math.max(u,v); if(drawn.has(key))return; drawn.add(key);
+    edges+='<line x1="'+GPOS[u][0]+'" y1="'+GPOS[u][1]+'" x2="'+GPOS[v][0]+'" y2="'+GPOS[v][1]+'" stroke="var(--bg3)" stroke-width="1.6"/>'; }));
+  let nodesS="";
+  for(let i=0;i<6;i++){
+    let fill="var(--bg1)",stroke="var(--bg3)",tcol="var(--fgdim)";
+    if(i===f.cur){ fill="var(--orange)"; stroke="var(--orange)"; tcol="var(--bg0)"; }
+    else if(inQ.has(i)){ fill="rgba(125,174,163,.25)"; stroke="var(--blue)"; tcol="var(--blue)"; }
+    else if(done.has(i)){ fill="rgba(169,182,101,.2)"; stroke="var(--green)"; tcol="var(--green)"; }
+    nodesS+='<circle cx="'+GPOS[i][0]+'" cy="'+GPOS[i][1]+'" r="18" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.8"/>'+
+      '<text x="'+GPOS[i][0]+'" y="'+(GPOS[i][1]+4)+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+tcol+'">'+i+'</text>'+
+      '<text x="'+GPOS[i][0]+'" y="'+(GPOS[i][1]+34)+'" text-anchor="middle" font-size="10" fill="var(--grey)">d='+(f.dist[i]===-1?"∞":f.dist[i])+'</text>';
+  }
+  const svg='<svg class="viz" viewBox="0 0 '+W+' '+H+'">'+edges+nodesS+'</svg>';
+  let distRow="i: "+f.dist.map((_,i)=>i).join("  ")+"\n d: "+f.dist.map(d=>d===-1?"∞":d).join("  ");
+  return '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">'+
+    '<div>'+svg+'</div>'+
+    '<div style="min-width:150px">'+
+    '<div class="muted" style="font-size:.74rem">queue(front→back)</div><div style="font-weight:700;color:var(--blue);margin:2px 0 12px">['+f.queue.join(", ")+']</div>'+
+    '<div class="muted" style="font-size:.74rem">dist[]</div><pre style="margin:2px 0;font-size:12px;color:var(--fg0)">'+distRow+'</pre>'+
+    '</div></div>'+
+    '<div class="legend-line"><span class="lg-cur">當前 pop</span><span class="lg-queue">在隊列</span><span class="lg-done">已完成</span><span class="lg-none">未訪</span></div>';
+}
+
+/* ---------- TRIE ---------- */
+function trieFrames(){
+  const nodes=[{ch:"root",children:{},end:false}];
+  const F=[];
+  function snap(note,path,neu){ F.push({note,path:path.slice(),neu,
+    nodes:nodes.map(x=>({ch:x.ch,children:Object.assign({},x.children),end:x.end}))}); }
+  function insert(word){
+    let cur=0; const path=[0];
+    snap('開始插入 "'+word+'",cur = root(0)',path,null);
+    for(const c of word){
+      if(nodes[cur].children[c]!=null){ cur=nodes[cur].children[c]; path.push(cur); snap("'"+c+"' 已存在 → 沿用節點 "+cur+"(共用前綴)",path,null); }
+      else { const i=nodes.length; nodes.push({ch:c,children:{},end:false}); nodes[cur].children[c]=i; cur=i; path.push(cur); snap("'"+c+"' 不存在 → arena 配置新節點 "+i+",cur 前進",path,i); }
+    }
+    nodes[cur].end=true; snap("標記節點 "+cur+" is_end=true(\""+word+"\" 完成)",path,null);
+  }
+  insert("app"); insert("apple"); insert("apply");
+  return F;
+}
+function renderTrie(f){
+  const pathSet=new Set(f.path);
+  // arena table
+  let rows=f.nodes.map((n,idx)=>{
+    const onPath=pathSet.has(idx), isNew=(idx===f.neu);
+    const cls = isNew? ' style="background:rgba(169,182,101,.22)"' : onPath? ' style="background:rgba(125,174,163,.18)"' : '';
+    const kids=Object.keys(n.children).sort().map(c=>c+"→"+n.children[c]).join(" ")||"·";
+    return '<tr'+cls+'><td>'+idx+'</td><td style="font-weight:700">'+(n.ch==="root"?"·":n.ch)+'</td><td>'+(n.end?'<span style="color:var(--green)">✓</span>':"·")+'</td><td style="text-align:left">'+kids+'</td></tr>';
+  }).join("");
+  let table='<table class="mini"><tr><th>idx</th><th>char</th><th>end</th><th>children</th></tr>'+rows+'</table>';
+  // indented tree
+  function walk(idx,depth){
+    const n=f.nodes[idx];
+    const label = idx===0? "root" : n.ch;
+    const onPath=pathSet.has(idx), isNew=(idx===f.neu);
+    const col = isNew? "var(--green)" : onPath? "var(--blue)" : "var(--fgdim)";
+    const endMark = n.end? ' <span style="color:var(--green)">●</span>' : "";
+    let line = "  ".repeat(depth)+'<span style="color:'+col+';font-weight:'+(onPath||isNew?"700":"400")+'">'+esc(label)+'</span>'+' <span class="muted" style="font-size:.7rem">#'+idx+'</span>'+endMark+"\n";
+    const kids=Object.keys(n.children).sort();
+    kids.forEach(c=>{ line+=walk(n.children[c],depth+1); });
+    return line;
+  }
+  let tree='<pre style="margin:0;font-size:12.5px;line-height:1.7">'+walk(0,0)+'</pre>';
+  let bc = f.path.map(i=>i===0?"root":f.nodes[i].ch).join(" → ");
+  return '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">'+
+    '<div><div class="muted" style="font-size:.72rem;margin-bottom:4px">arena</div>'+table+'</div>'+
+    '<div><div class="muted" style="font-size:.72rem;margin-bottom:4px">樹(綠=新節點,藍=當前路徑,●=is_end)</div>'+tree+'</div>'+
+    '</div><div class="muted" style="font-size:.78rem;margin-top:10px">current path: <span style="color:var(--blue);font-weight:700">'+esc(bc)+'</span></div>';
+}
+
+/* ---------- TREE (arena DFS) ---------- */
+function treeFrames(){
+  const nodes=[{v:"root",ch:[1,2]},{v:"a",ch:[3,4]},{v:"b",ch:[5]},{v:"c",ch:[]},{v:"d",ch:[]},{v:"e",ch:[]}];
+  const F=[]; const order=[]; const stack=[0]; const done=[];
+  F.push({note:"DFS by index,stack=[0]。整棵樹的所有權在 arena Vec,節點間只用 usize 連結 —— 走訪<b>不持有任何對樹結構的 borrow</b>。",stack:stack.slice(),order:order.slice(),cur:null,done:done.slice(),nodes});
+  while(stack.length){
+    const u=stack.pop(); order.push(u); const pushed=[];
+    for(let k=nodes[u].ch.length-1;k>=0;k--){ stack.push(nodes[u].ch[k]); pushed.unshift(nodes[u].ch[k]); }
+    done.push(u);
+    F.push({note:"pop "+u+"("+nodes[u].v+")→ 記錄,反序 push children ["+(pushed.join(",")||"無")+"]。全程 self.nodes[u] 索引,無 &mut 別名問題。",stack:stack.slice(),order:order.slice(),cur:u,done:done.slice(),nodes});
+  }
+  F.push({note:"走訪完成。對照 Rc<RefCell>:每次 borrow() 都有 runtime check;index 版全靜態、零 borrow,代價是 index 失效需自行防護(generational index)。",stack:[],order:order.slice(),cur:null,done:done.slice(),nodes});
+  return F;
+}
+const TPOS=[[160,35],[80,120],[240,120],[35,205],[125,205],[240,205]];
+function renderTree(f){
+  const inStack=new Set(f.stack), doneS=new Set(f.done);
+  const W=310,H=245;
+  const edges=[[0,1],[0,2],[1,3],[1,4],[2,5]];
+  let edgeS=edges.map(([a,b])=>'<line x1="'+TPOS[a][0]+'" y1="'+TPOS[a][1]+'" x2="'+TPOS[b][0]+'" y2="'+TPOS[b][1]+'" stroke="var(--bg3)" stroke-width="1.6"/>').join("");
+  let nodesS="";
+  for(let i=0;i<6;i++){
+    let fill="var(--bg1)",stroke="var(--bg3)",tcol="var(--fgdim)";
+    if(i===f.cur){ fill="var(--orange)"; stroke="var(--orange)"; tcol="var(--bg0)"; }
+    else if(inStack.has(i)){ fill="rgba(125,174,163,.22)"; stroke="var(--blue)"; tcol="var(--blue)"; }
+    else if(doneS.has(i)){ fill="rgba(169,182,101,.2)"; stroke="var(--green)"; tcol="var(--green)"; }
+    nodesS+='<circle cx="'+TPOS[i][0]+'" cy="'+TPOS[i][1]+'" r="17" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.8"/>'+
+      '<text x="'+TPOS[i][0]+'" y="'+(TPOS[i][1]-1)+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+tcol+'">'+f.nodes[i].v+'</text>'+
+      '<text x="'+TPOS[i][0]+'" y="'+(TPOS[i][1]+10)+'" text-anchor="middle" font-size="8" fill="var(--grey)">#'+i+'</text>';
+  }
+  const svg='<svg class="viz" viewBox="0 0 '+W+' '+H+'">'+edgeS+nodesS+'</svg>';
+  return '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">'+
+    '<div>'+svg+'</div>'+
+    '<div style="min-width:150px">'+
+    '<div class="muted" style="font-size:.74rem">stack(index)</div><div style="font-weight:700;color:var(--blue);margin:2px 0 12px">['+f.stack.join(", ")+']</div>'+
+    '<div class="muted" style="font-size:.74rem">visit order</div><div style="font-weight:700;color:var(--green);margin:2px 0">['+f.order.join(", ")+']</div>'+
+    '</div></div>'+
+    '<div class="legend-line"><span class="lg-cur">當前</span><span class="lg-queue">在 stack</span><span class="lg-done">已訪</span></div>';
+}
+
+/* ---------- TIMER (min-heap) ---------- */
+function timerFrames(){
+  const heap=[]; const F=[];
+  const less=(a,b)=>heap[a][0]<heap[b][0];
+  const swap=(i,j)=>{ const t=heap[i]; heap[i]=heap[j]; heap[j]=t; };
+  const snap=(note,hl)=>F.push({note,hl:hl?hl.slice():[],heap:heap.map(x=>x.slice())});
+  function push(d,id){ heap.push([d,id]); let i=heap.length-1; snap("schedule id "+id+" @"+d+"ms → 放到陣列末端(index "+i+"),準備 sift-up",[i]);
+    while(i>0){ const p=(i-1)>>1; if(less(i,p)){ swap(i,p); snap("sift-up:"+d+" < parent → 與 index "+p+" 交換",[i,p]); i=p; } else { snap("sift-up 停:"+d+" ≥ parent,位置確定",[i]); break; } }
+    if(i===0 && heap.length>1) snap("sift-up 到 root:"+d+" 是目前最早 deadline",[0]);
+  }
+  function popMin(){ const top=heap[0]; const last=heap.pop();
+    if(heap.length===0){ snap("pop min = id "+top[1]+"(@"+top[0]+"ms)→ 堆空",[]); return; }
+    heap[0]=last; let i=0; snap("pop min = id "+top[1]+"(@"+top[0]+"ms)→ 末端(@"+last[0]+")補到 root,準備 sift-down",[0]);
+    for(;;){ let l=2*i+1,r=2*i+2,m=i;
+      if(l<heap.length && less(l,m)) m=l;
+      if(r<heap.length && less(r,m)) m=r;
+      if(m===i){ snap("sift-down 停:比子節點小,位置確定",[i]); break; }
+      swap(i,m); snap("sift-down:與較小子節點 index "+m+" 交換",[i,m]); i=m; }
+  }
+  snap("空 timer heap。BinaryHeap 是 max-heap,用 Reverse 反成「最早 deadline 在頂」。以下攤開 std 內部的 sift。",[]);
+  push(50,1); push(10,2); push(30,3); push(20,4); push(40,5);
+  popMin(); popMin();
+  return F;
+}
+function renderTimer(f){
+  const N=f.heap.length;
+  // array
+  let cells="";
+  for(let i=0;i<N;i++){ const hl=f.hl.includes(i)?' style="background:rgba(231,138,78,.25);border-color:var(--orange)"':''; cells+='<div class="slot"'+hl+'><span class="idx">'+i+'</span>'+f.heap[i][0]+'</div>'; }
+  let arr='<div class="muted" style="font-size:.72rem;margin-bottom:14px">heap array(值=deadline ms)</div><div class="slotrow">'+(cells||'<span class="muted">(空)</span>')+'</div>';
+  // binary tree
+  let svg="";
+  if(N>0){
+    const levels=Math.floor(Math.log2(N))+1; const W=340, H=levels*66+30;
+    const pos=i=>{ const lv=Math.floor(Math.log2(i+1)); const idxInLv=i-((1<<lv)-1); const cnt=1<<lv; return [ (idxInLv+0.5)/cnt*W, lv*66+26 ]; };
+    let edges="",nodes="";
+    for(let i=1;i<N;i++){ const p=(i-1)>>1; const a=pos(i),b=pos(p); edges+='<line x1="'+a[0]+'" y1="'+(a[1]-14)+'" x2="'+b[0]+'" y2="'+(b[1]+14)+'" stroke="var(--bg3)" stroke-width="1.5"/>'; }
+    for(let i=0;i<N;i++){ const [cx,cy]=pos(i); const hl=f.hl.includes(i);
+      const fill=hl?"var(--orange)":i===0?"rgba(216,166,87,.25)":"var(--bg1)"; const stroke=hl?"var(--orange)":i===0?"var(--yellow)":"var(--bg3)"; const tc=hl?"var(--bg0)":"var(--fg0)";
+      nodes+='<circle cx="'+cx+'" cy="'+cy+'" r="17" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.7"/>'+
+        '<text x="'+cx+'" y="'+(cy-1)+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+tc+'">'+f.heap[i][0]+'</text>'+
+        '<text x="'+cx+'" y="'+(cy+10)+'" text-anchor="middle" font-size="8" fill="var(--grey)">id'+f.heap[i][1]+'</text>';
+    }
+    svg='<div style="margin-top:16px"><svg class="viz" viewBox="0 0 '+W+' '+H+'">'+edges+nodes+'</svg></div>';
+  }
+  return arr+svg+'<div class="legend-line"><span class="lg-cur">本步 sift 交換</span><span style="color:var(--yellow)">◎ heap 頂(最早 deadline)</span></div>';
+}
+
+/* ============ mount all ============ */
+mountStepper("step-ring", ringFrames(), renderRing);
+mountStepper("step-lru", lruFrames(), renderLru);
+mountStepper("step-dsu", dsuFrames(), renderDsu);
+mountStepper("step-graph", graphFrames(), renderGraph);
+mountStepper("step-trie", trieFrames(), renderTrie);
+mountStepper("step-tree", treeFrames(), renderTree);
+mountStepper("step-timer", timerFrames(), renderTimer);
+</script>
+</body>
+</html>

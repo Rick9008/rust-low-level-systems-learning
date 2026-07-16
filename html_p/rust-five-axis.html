@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rust 五軸機制:Ownership × XOR × Send/Sync × Ordering × Pin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#1d2021; --bg:#282828; --bg1:#32302f; --bg2:#45403d; --bg3:#5a524c; --bg4:#7c6f64;
+  --fg:#d4be98; --fg1:#ddc7a1; --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'Noto Sans TC','JetBrains Mono',system-ui,sans-serif;
+}
+html,body{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg0);color:var(--fg);font-family:var(--sans);line-height:1.7;font-size:15px;}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px;}
+
+header.top{border-bottom:1px solid var(--bg2);padding:30px 0 22px;margin-bottom:0;}
+header.top h1{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--fg1);letter-spacing:-.3px;}
+header.top .sub{color:var(--grey);font-size:12.5px;font-family:var(--mono);margin-top:8px;line-height:1.6;}
+header.top .sub b{color:var(--aqua);font-weight:600;}
+
+/* ---- tabs ---- */
+nav.tabs{display:flex;flex-wrap:wrap;gap:2px;border-bottom:1px solid var(--bg2);
+  position:sticky;top:0;background:var(--bg0);z-index:50;padding-top:10px;}
+nav.tabs button{background:none;border:none;border-bottom:2px solid transparent;
+  font-family:var(--mono);font-size:12.5px;color:var(--grey);cursor:pointer;
+  padding:9px 13px;transition:.13s;white-space:nowrap;}
+nav.tabs button:hover{color:var(--fg);background:var(--bg1);}
+nav.tabs button.on{color:var(--yellow);border-bottom-color:var(--yellow);background:var(--bg1);}
+nav.tabs button .ax{color:var(--bg4);margin-right:5px;}
+nav.tabs button.on .ax{color:var(--orange);}
+
+.panel{display:none;padding-top:26px;animation:fade .18s ease;}
+.panel.on{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+h2{font-family:var(--mono);font-size:17px;color:var(--yellow);margin:34px 0 12px;font-weight:700;}
+h2:first-child{margin-top:0;}
+h3{font-family:var(--mono);font-size:14px;color:var(--aqua);margin:24px 0 9px;font-weight:600;}
+p{margin:10px 0;}
+code{font-family:var(--mono);background:var(--bg1);color:var(--orange);padding:1px 5px;border-radius:3px;font-size:.88em;}
+a.jump,[data-jump]{color:var(--blue);cursor:pointer;border-bottom:1px dotted var(--blue);}
+[data-jump]:hover{color:var(--aqua);border-bottom-color:var(--aqua);}
+
+/* one-liner intuition box */
+.tldr{background:linear-gradient(90deg,var(--bg1),transparent);border-left:3px solid var(--yellow);
+  padding:12px 16px;margin:0 0 22px;font-size:15px;color:var(--fg1);}
+.tldr b{color:var(--yellow);}
+
+.note{border-left:3px solid var(--blue);background:var(--bg1);padding:11px 15px;margin:15px 0;font-size:13.5px;}
+.warn{border-left:3px solid var(--red);background:#33272680;padding:11px 15px;margin:15px 0;font-size:13.5px;}
+.warn b,.warn strong{color:var(--red);}
+.good{border-left:3px solid var(--green);background:#2b2f2380;padding:11px 15px;margin:15px 0;font-size:13.5px;}
+.good b{color:var(--green);}
+
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13px;}
+th,td{border:1px solid var(--bg2);padding:7px 10px;text-align:left;vertical-align:top;}
+th{background:var(--bg1);color:var(--yellow);font-family:var(--mono);font-size:12px;font-weight:600;}
+td code{font-size:.9em;}
+tr:hover td{background:#32302f60;}
+td.y{color:var(--green);} td.n{color:var(--red);} td.m{color:var(--yellow);}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
+pre{background:var(--bg);border:1px solid var(--bg2);border-radius:5px;padding:13px 15px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;-webkit-text-size-adjust:100%;
+  font-family:var(--mono);font-size:12.5px;line-height:1.62;margin:12px 0;}
+pre code{background:none;padding:0;color:var(--fg);font-size:inherit;}
+.k{color:var(--red);} .fn{color:var(--green);} .ty{color:var(--yellow);} .st{color:var(--green);}
+.cm{color:var(--grey);font-style:italic;} .nu{color:var(--purple);} .mac{color:var(--aqua);}
+.hl{background:#d8a65722;display:block;margin:0 -15px;padding:0 15px;border-left:2px solid var(--yellow);}
+.bad-line{background:#ea696222;display:block;margin:0 -15px;padding:0 15px;border-left:2px solid var(--red);}
+
+.verified{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--green);
+  border:1px solid var(--green);border-radius:3px;padding:1px 6px;margin-left:8px;vertical-align:middle;}
+.unverified{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--orange);
+  border:1px solid var(--orange);border-radius:3px;padding:1px 6px;margin-left:8px;vertical-align:middle;}
+.sourced{display:inline-block;font-family:var(--mono);font-size:10.5px;color:var(--blue);
+  border:1px solid var(--blue);border-radius:3px;padding:1px 6px;margin-left:8px;vertical-align:middle;}
+.src{font-family:var(--mono);font-size:11px;color:var(--bg4);margin-top:6px;}
+.src a{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--bg4);}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0;}
+.card{background:var(--bg1);border:1px solid var(--bg2);border-radius:6px;padding:13px 15px;}
+.card h4{font-family:var(--mono);font-size:13px;color:var(--purple);margin-bottom:6px;font-weight:600;}
+.card p{font-size:12.5px;margin:5px 0;color:var(--grey2);}
+
+/* stepper */
+.stepper{background:var(--bg);border:1px solid var(--bg2);border-radius:7px;padding:16px;margin:18px 0;}
+.stepper .sctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:13px;}
+.stepper button{font-family:var(--mono);font-size:12px;background:var(--bg2);color:var(--fg);
+  border:1px solid var(--bg3);border-radius:4px;padding:5px 11px;cursor:pointer;transition:.12s;}
+.stepper button:hover:not(:disabled){background:var(--bg3);color:var(--yellow);}
+.stepper button:disabled{opacity:.35;cursor:default;}
+.stepper .sidx{font-family:var(--mono);font-size:12px;color:var(--grey);margin-left:4px;}
+.stepper .toggle{margin-left:auto;display:flex;gap:0;border:1px solid var(--bg3);border-radius:4px;overflow:hidden;}
+.stepper .toggle button{border:none;border-radius:0;background:var(--bg1);font-size:11.5px;padding:5px 10px;}
+.stepper .toggle button.on{background:var(--yellow);color:var(--bg0);font-weight:700;}
+.narr{font-size:13px;color:var(--fg1);background:var(--bg1);border-left:3px solid var(--aqua);
+  padding:9px 13px;margin-top:12px;min-height:52px;}
+.narr b{color:var(--aqua);}
+.narr .why{display:block;color:var(--grey2);font-size:12px;margin-top:5px;}
+svg{display:block;max-width:100%;height:auto;}
+svg text{font-family:var(--mono);}
+/* ring viz */
+.slots{display:flex;gap:5px;margin:12px 0;flex-wrap:wrap;}
+.slot{width:64px;height:56px;border:1px solid var(--bg3);border-radius:5px;background:var(--bg1);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12px;transition:.15s;position:relative;}
+.slot .pidx{font-size:9px;color:var(--bg4);position:absolute;top:2px;left:4px;}
+.slot .val{font-size:14px;color:var(--fg);}
+.slot.empty .val{color:var(--bg3);}
+.slot.h{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue);}
+.slot.t{border-color:var(--green);box-shadow:0 0 0 1px var(--green);}
+.slot.ht{border-color:var(--purple);box-shadow:0 0 0 1px var(--purple);}
+.slot .mark{font-size:9px;position:absolute;bottom:2px;}
+.ctr{display:flex;gap:18px;font-family:var(--mono);font-size:12.5px;margin:10px 0;flex-wrap:wrap;}
+.ctr span b{color:var(--yellow);}
+.ctr .cH{color:var(--blue);} .ctr .cT{color:var(--green);}
+
+/* thread columns for ordering stepper */
+.threads{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;}
+@media(max-width:640px){.threads{grid-template-columns:1fr;}}
+.thcol{background:var(--bg1);border:1px solid var(--bg2);border-radius:6px;padding:11px;}
+.thcol h5{font-family:var(--mono);font-size:12px;margin-bottom:8px;font-weight:600;}
+.thcol.A h5{color:var(--green);} .thcol.B h5{color:var(--blue);}
+.op{font-family:var(--mono);font-size:12px;padding:5px 8px;border-radius:3px;margin:3px 0;
+  border-left:2px solid var(--bg3);color:var(--grey);transition:.15s;}
+.op.done{color:var(--fg);border-left-color:var(--bg4);}
+.op.now{background:var(--bg2);color:var(--yellow);border-left-color:var(--yellow);}
+.op.reordered{border-left-color:var(--red);color:var(--red);}
+.mem{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px dashed var(--bg3);
+  border-radius:5px;padding:9px 12px;margin:10px 0;}
+.mem .lbl{color:var(--grey);} .mem .v{color:var(--orange);}
+.verdict{font-family:var(--mono);font-size:13px;padding:8px 12px;border-radius:4px;margin-top:8px;}
+.verdict.ok{background:#2b2f2380;color:var(--green);border:1px solid var(--green);}
+.verdict.ub{background:#33272680;color:var(--red);border:1px solid var(--red);}
+
+/* poll loop stepper */
+.pl{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:640px){.pl{grid-template-columns:1fr;}}
+.plbox{background:var(--bg1);border:1px solid var(--bg2);border-radius:6px;padding:11px;font-family:var(--mono);font-size:12px;}
+.plbox h5{font-size:11.5px;color:var(--purple);margin-bottom:7px;}
+.plrow{padding:3px 0;color:var(--grey);}
+.plrow.on{color:var(--yellow);}
+
+.foot{margin-top:44px;padding-top:18px;border-top:1px solid var(--bg2);
+  font-family:var(--mono);font-size:11.5px;color:var(--bg4);line-height:1.8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <h1>Rust 五軸機制 — Ownership × XOR × Send/Sync × Ordering × Pin</h1>
+  <div class="sub">
+    快速複習用 · 沿用 <code>rust_shared_mutable_complete_reference.md</code> §2 的三軸框架往上長兩軸<br>
+    所有 Rust code <b>皆經 rustc 1.75.0 (edition 2021) 實際編譯執行驗證</b> · 標 <span class="verified">已驗</span> 者附本機實測輸出<br>
+    收束目標:Etched TPS 2026-07-28 · Rust · std-only · 45 min
+  </div>
+</header>
+
+<nav class="tabs" id="nav">
+  <button data-p="ov" class="on"><span class="ax">◇</span>總覽:五軸路由</button>
+  <button data-p="xor"><span class="ax">1·2</span>Ownership × XOR</button>
+  <button data-p="ss"><span class="ax">3</span>Send / Sync</button>
+  <button data-p="ord"><span class="ax">4</span>Ordering</button>
+  <button data-p="pin"><span class="ax">5</span>Pin / Unpin</button>
+  <button data-p="async"><span class="ax">→</span>async 內部</button>
+  <button data-p="spsc"><span class="ax">★</span>SPSC Ring:五軸交會</button>
+  <button data-p="live"><span class="ax">⏱</span>45 分鐘現場</button>
+</nav>
+<section class="panel on" id="p-ov">
+  <div class="tldr">
+    每個「共享」問題,先問<b>它卡在哪一軸</b>。答錯軸就會拿錯工具 —— 用 <code>Arc</code> 去解 XOR 問題、
+    用 <code>Mutex</code> 去解自引用問題,都是這種錯。五軸彼此正交,可以獨立判斷。
+  </div>
+
+  <h2>五軸:各自回答一個問題</h2>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:9%">軸</th><th style="width:23%">它回答的問題</th><th style="width:26%">工具</th>
+        <th style="width:19%">誰抓你的錯</th><th>錯了會怎樣</th></tr>
+    <tr><td><b>1 Ownership<br>/ lifetime</b></td><td>誰擁有?引用會 outlive 資料嗎?</td>
+        <td><code>Box</code> / <code>Rc</code> / <code>Arc</code> / <code>Weak</code></td>
+        <td class="y">編譯器</td><td>編不過。你當場就知道。</td></tr>
+    <tr><td><b>2 XOR<br>(aliasing)</b></td><td>要透過<i>共享</i>路徑<i>改</i>東西</td>
+        <td><code>Cell</code>/<code>RefCell</code>/<code>Mutex</code>/arena/GhostCell</td>
+        <td class="y">編譯器<br><span style="color:var(--yellow)">或執行期 panic/block</span></td>
+        <td>編不過,或 <code>RefCell</code> panic / <code>Mutex</code> 死鎖。<b>會響。</b></td></tr>
+    <tr><td><b>3 Thread<br>(Send/Sync)</b></td><td>這個值能不能換 thread / 被多 thread 同時 <code>&amp;</code>?</td>
+        <td>auto trait;<code>Arc</code>;<code>unsafe impl</code></td>
+        <td class="y">編譯器(auto trait)</td>
+        <td>編不過 —— <b>除非你自己 <code>unsafe impl</code> 說謊</b>,那就沒人擋了</td></tr>
+    <tr style="background:#33272640"><td><b style="color:var(--red)">4 Ordering</b></td>
+        <td>兩條 thread 對記憶體的<i>看法</i>怎麼同步?</td>
+        <td><code>Relaxed</code>/<code>Acquire</code>/<code>Release</code>/<code>SeqCst</code></td>
+        <td class="n"><b>沒有人</b><br><span style="font-size:11px">編譯器不管、<br>x86 測試也測不出</span></td>
+        <td class="n">UB。而且<b>在你的機器上會通過</b>。這是唯一沒有網的軸。</td></tr>
+    <tr><td><b>5 Self-ref<br>/ move</b></td><td>struct 裡有指向自己的指標</td>
+        <td><code>Pin</code> / <code>PhantomPinned</code></td>
+        <td class="y">編譯器(透過 <code>Pin</code> API 收掉 <code>&amp;mut</code>)</td>
+        <td>編不過;繞過 <code>Pin</code> 用 raw pointer → 懸空</td></tr>
+  </table></div>
+
+  <h2>這張圖是整份的重點</h2>
+  <p>五軸的差別不在難度,在<b>誰替你把關</b>。軸 1/2/3/5 你寫錯,編譯器當場擋下來 —— 所以它們對你來說是
+  「知不知道語法」的問題。軸 4 寫錯,編譯器<i>照過</i>,測試<i>照綠</i>,x86 <i>照跑對</i>,
+  然後在客戶的 ARM 機器上一年壞一次。</p>
+  <svg viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg" style="margin:14px 0;">
+    <defs>
+      <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#928374"/>
+      </marker>
+      <marker id="arR" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#ea6962"/>
+      </marker>
+    </defs>
+    <text x="20" y="24" fill="#d8a657" font-size="13" font-weight="700">你寫錯的時候,攔截網在哪一層?</text>
+
+    <!-- lanes -->
+    <text x="20" y="58" fill="#928374" font-size="10.5">軸</text>
+    <text x="150" y="58" fill="#928374" font-size="10.5">編譯期</text>
+    <text x="330" y="58" fill="#928374" font-size="10.5">執行期(你的機器)</text>
+    <text x="560" y="58" fill="#928374" font-size="10.5">執行期(ARM / 別的 CPU)</text>
+    <text x="790" y="58" fill="#928374" font-size="10.5">結果</text>
+    <line x1="20" y1="66" x2="880" y2="66" stroke="#45403d" stroke-width="1"/>
+
+    <!-- axis 1/2/3/5 : caught at compile -->
+    <g>
+      <rect x="20" y="80" width="110" height="26" rx="4" fill="#32302f" stroke="#a9b665"/>
+      <text x="30" y="97" fill="#a9b665" font-size="11">軸 1 · 2 · 3 · 5</text>
+      <line x1="132" y1="93" x2="205" y2="93" stroke="#928374" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="210" y="79" width="98" height="28" rx="4" fill="#2b2f23" stroke="#a9b665" stroke-width="1.5"/>
+      <text x="222" y="97" fill="#a9b665" font-size="11" font-weight="700">✓ 擋下來</text>
+      <text x="330" y="97" fill="#5a524c" font-size="11">(到不了這裡)</text>
+      <text x="560" y="97" fill="#5a524c" font-size="11">(到不了這裡)</text>
+      <text x="790" y="97" fill="#a9b665" font-size="11">編不過</text>
+    </g>
+    <text x="30" y="126" fill="#7c6f64" font-size="10">↑ 對你而言 = 語法題。查得到、當場知道。</text>
+
+    <line x1="20" y1="142" x2="880" y2="142" stroke="#45403d" stroke-width="1" stroke-dasharray="3 3"/>
+
+    <!-- axis 4 : escapes everything -->
+    <g>
+      <rect x="20" y="162" width="110" height="26" rx="4" fill="#332726" stroke="#ea6962"/>
+      <text x="30" y="179" fill="#ea6962" font-size="11" font-weight="700">軸 4 Ordering</text>
+      <line x1="132" y1="175" x2="205" y2="175" stroke="#ea6962" stroke-width="1.4" marker-end="url(#arR)"/>
+      <rect x="210" y="161" width="98" height="28" rx="4" fill="#282828" stroke="#5a524c" stroke-dasharray="3 3"/>
+      <text x="228" y="179" fill="#7c6f64" font-size="11">網破了</text>
+      <line x1="310" y1="175" x2="385" y2="175" stroke="#ea6962" stroke-width="1.4" marker-end="url(#arR)"/>
+      <rect x="390" y="161" width="128" height="28" rx="4" fill="#282828" stroke="#5a524c" stroke-dasharray="3 3"/>
+      <text x="400" y="179" fill="#7c6f64" font-size="11">網也破了(x86-TSO)</text>
+      <line x1="520" y1="175" x2="600" y2="175" stroke="#ea6962" stroke-width="1.4" marker-end="url(#arR)"/>
+      <rect x="605" y="161" width="150" height="28" rx="4" fill="#332726" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="617" y="179" fill="#ea6962" font-size="11" font-weight="700">✗ 一年壞一次</text>
+      <text x="790" y="179" fill="#ea6962" font-size="11" font-weight="700">UB</text>
+    </g>
+    <text x="30" y="208" fill="#e78a4e" font-size="10">↑ 對你而言 = 判斷題。查文件查不到「這個場景該用 acquire 還是 seq_cst」。</text>
+
+    <rect x="20" y="228" width="860" height="56" rx="5" fill="#32302f" stroke="#45403d"/>
+    <text x="34" y="248" fill="#d8a657" font-size="11" font-weight="700">實測(本機 x86,rustc 1.75,-O):</text>
+    <text x="34" y="266" fill="#d4be98" font-size="11">relaxed/relaxed 的 message-passing 跑 2000 次 → 失敗 <tspan fill="#ea6962" font-weight="700">0</tspan> 次。</text>
+    <text x="34" y="280" fill="#928374" font-size="10.5">「我測過了、沒事」在這一軸<tspan fill="#ea6962">不構成任何證據</tspan>。這就是 loom 存在的理由。</text>
+  </svg>
+  <h2>對 7/28 的權重(45 分鐘 · Rust · std-only)</h2>
+  <p>你點的九個主題不等重。45 分鐘扣掉 intro / 題目 / 提問,實際敲 code 只剩約 25 分鐘,
+  題目會是<b>單一元件</b>(ring buffer / thread pool / framing parser / LRU)。權重照這張走:</p>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:16%">軸</th><th style="width:13%">TPS 命中</th><th style="width:13%">deep dive</th><th>為什麼</th></tr>
+    <tr><td>1 Ownership / lifetime</td><td class="m">背景</td><td class="m">低</td>
+        <td>你是 production Rust engineer。這不是你的洞,不會被單獨考。<b>複習成本 ≈ 0,直接跳過</b>。</td></tr>
+    <tr><td>2 XOR / interior mut</td><td class="m">中</td><td class="m">中</td>
+        <td><code>UnsafeCell</code> 一定會出現在 ring / lock-free 裡。要講得出「為什麼不是 <code>RefCell</code>」。</td></tr>
+    <tr><td><b style="color:var(--green)">3 Send / Sync</b></td><td class="y"><b>高</b></td><td class="y"><b>高</b></td>
+        <td>你敲下 <code>unsafe impl Sync for Ring&lt;T&gt;</code> 的下一秒就會被要求辯護。這是<b>必問</b>。</td></tr>
+    <tr><td><b style="color:var(--red)">4 Ordering</b></td><td class="y"><b>高</b></td><td class="n"><b>最高</b></td>
+        <td>你自評的真洞(習慣性 seq_cst)。而且這是唯一「查文件查不到答案」的一軸。</td></tr>
+    <tr><td>5 Pin / Unpin</td><td class="m">低</td><td class="m">中</td>
+        <td>只有出 <code>block_on</code> 才碰得到,而且那裡 Pin 就兩行。<b>別在這花時間</b>,除非要講 async internals 故事。</td></tr>
+  </table></div>
+
+  <div class="warn">
+    <b>誠實的權重話</b>:你原本要求「Ownership / Lifetime / thread-safe / concurrency / async / Send / Sync / Pin / Unpin」九項。
+    對 7/28 那 25 分鐘真的開火的是<b>兩項</b>:Send/Sync 的辯護,跟 ordering 的配對。
+    而這兩項的考法是<b>你要用英文對著 Alex 講出來</b>,不是你要看懂。
+    這份文件能幫你重載事實;把事實變成能脫口而出的句子,只有嘴巴的 reps 做得到。
+  </div>
+
+  <h2>怎麼用這份</h2>
+  <div class="cards">
+    <div class="card"><h4>複習路徑(30 min)</h4>
+      <p>總覽 → <span data-jump="ss">Send/Sync</span> 的推導表 → <span data-jump="ord">Ordering</span> 的配對圖
+      → <span data-jump="spsc">SPSC</span> 的完整 code。其他略過。</p></div>
+    <div class="card"><h4>深度路徑(2 hr)</h4>
+      <p>全部 tab + 三個 stepper 走完 + 把 <span data-jump="spsc">SPSC</span> 的 code 關掉螢幕手寫一遍。</p></div>
+    <div class="card"><h4>面試前 5 分鐘</h4>
+      <p>只看 <span data-jump="live">45 分鐘現場</span> 那頁的時間預算表跟開場白。</p></div>
+    <div class="card"><h4>驗證紀律</h4>
+      <p>標 <span class="verified">已驗</span> = 我在 rustc 1.75 實際編過跑過,輸出貼在旁邊。
+      標 <span class="unverified">未驗</span> = 推理或記憶,你要自己查。</p></div>
+  </div>
+</section>
+<section class="panel" id="p-xor">
+  <div class="tldr">
+    每個引用攜帶兩個屬性 <b>(可別名?, 可變?)</b>,而且永遠只拿到其中一個 —— 這就是 XOR 這名字的由來。
+    <code>&amp;T</code> = (別名✓, 可變✗);<code>&amp;mut T</code> = (別名✗, 可變✓)。
+  </div>
+
+  <div class="note">
+    <b>這一頁是壓縮重載</b>,不是重教。完整版在你既有的 <code>rust_shared_mutable_complete_reference.md</code>
+    —— NLL/Polonius 的版本考據、GhostCell 的 rank-2 polymorphism、Linus 那段歸屬修正、
+    petgraph/bevy/rustc 的 arena 實例,那份都有且查證過,這裡不重複。
+    這頁只留<b>會在 7/28 那 25 分鐘裡出現的部分</b>。
+  </div>
+
+  <h2>interior mutability 階梯:選哪一階</h2>
+  <p><code>&amp;T</code> 不能改。要在 <code>&amp;T</code> 底下改,就是把 XOR 的檢查<b>從編譯期搬到別的地方</b>。
+  搬到哪,決定你選哪一階:</p>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:15%">型別</th><th style="width:20%">XOR 檢查搬到哪</th><th style="width:12%">Sync?</th>
+        <th style="width:14%">成本</th><th>什麼時候用</th></tr>
+    <tr><td><code>Cell&lt;T&gt;</code></td><td>不用檢查 —— 根本不交出引用,只 get/set 整個值</td>
+        <td class="n">✗ !Sync</td><td>零</td><td><code>T: Copy</code> 的小欄位。單執行緒。</td></tr>
+    <tr><td><code>RefCell&lt;T&gt;</code></td><td><b>執行期</b>:borrow flag 計數器</td>
+        <td class="n">✗ !Sync</td><td>一個計數器 + 分支;<b>違規 panic</b></td><td>單執行緒共享可變。原型。</td></tr>
+    <tr><td><code>Mutex&lt;T&gt;</code></td><td><b>執行期</b>:作業系統的鎖</td>
+        <td class="y">✓ Sync <b>當 <code>T: Send</code></b><br><span style="font-size:10.5px;color:var(--grey)">不需要 T: Sync</span></td><td>atomic + 可能 syscall;<b>違規 block</b></td><td>跨執行緒。預設答案。</td></tr>
+    <tr><td><code>RwLock&lt;T&gt;</code></td><td>執行期,但區分讀/寫</td>
+        <td class="y">✓ Sync <b>當 <code>T: Send + Sync</code></b><br><span style="font-size:10.5px;color:var(--orange)">↑ 跟 Mutex 的差別就在這</span></td><td>比 Mutex 貴;<b>writer starvation 風險</b></td><td>讀遠多於寫。要講得出 starvation。</td></tr>
+    <tr style="background:#33272640"><td><code>UnsafeCell&lt;T&gt;</code></td>
+        <td class="n"><b>搬到你腦子裡</b></td><td class="n">✗ !Sync(要自己 <code>unsafe impl</code>)</td>
+        <td>零 —— 這是唯一真的零成本的</td>
+        <td><b>ring / lock-free。7/28 你會用這個。</b></td></tr>
+  </table></div>
+
+  <div class="warn">
+    <b style="color:var(--orange)">最常被記反的一格</b><span class="sourced">查證 · std 原始碼</span>:
+    很多人以為「多條 thread 會碰它,所以 <code>Mutex&lt;T&gt;</code> 要 <code>T: Send + Sync</code>」。<b>反了。</b>
+    <pre style="margin:8px 0;background:var(--bg0)"><code><span class="cm">// library/std/src/sync/poison/mutex.rs</span>
+<span class="cm">// L238</span> <span class="k">unsafe impl</span>&lt;<span class="ty">T</span>: ?<span class="ty">Sized</span> + <span class="ty">Send</span>&gt; <span class="ty">Send</span> <span class="k">for</span> <span class="ty">Mutex</span>&lt;<span class="ty">T</span>&gt; {}
+<span class="hl"><span class="cm">// L257</span> <span class="k">unsafe impl</span>&lt;<span class="ty">T</span>: ?<span class="ty">Sized</span> + <span class="ty">Send</span>&gt; <span class="ty">Sync</span> <span class="k">for</span> <span class="ty">Mutex</span>&lt;<span class="ty">T</span>&gt; {}   <span class="cm">// ← 只有 Send</span></span>
+
+<span class="cm">// library/std/src/sync/poison/rwlock.rs</span>
+<span class="cm">// L104</span> <span class="k">unsafe impl</span>&lt;<span class="ty">T</span>: ?<span class="ty">Sized</span> + <span class="ty">Send</span>&gt; <span class="ty">Send</span> <span class="k">for</span> <span class="ty">RwLock</span>&lt;<span class="ty">T</span>&gt; {}
+<span class="hl"><span class="cm">// L107</span> <span class="k">unsafe impl</span>&lt;<span class="ty">T</span>: ?<span class="ty">Sized</span> + <span class="ty">Send</span> + <span class="ty">Sync</span>&gt; <span class="ty">Sync</span> <span class="k">for</span> <span class="ty">RwLock</span>&lt;<span class="ty">T</span>&gt; {}  <span class="cm">// ← 這個才是 Send + Sync</span></span></code></pre>
+    <b>直覺為什麼會反</b>:鎖的工作<b>就是序列化</b> —— <code>Mutex</code> 保證同時只有一個人拿得到 <code>&amp;mut T</code>,
+    所以 T 從來沒有被<i>共享</i>,只是被<i>輪流移交</i>。<code>Mutex&lt;T&gt;</code> 本質是「一次裝一個值、跨 thread 傳遞」的通道 → <code>T: Send</code>。
+    <code>RwLock</code> 的 read guard <b>真的會</b>同時發多個 <code>&amp;T</code> 出去 → 那時 T 才必須自己 Sync。
+    <br><br>
+    <b style="color:var(--red)">這條對 7/28 是承重的</b>:你 ring 的 <code>unsafe impl&lt;T: Send&gt; Sync for Ring&lt;T&gt;</code>
+    用的是<b>完全同一個理由</b>。記反了,你會把自己的 bound「修」成過度約束的 <code>T: Send + Sync</code>,
+    然後被問「為什麼需要 Sync?」時整段辯護垮掉。詳見 <span data-jump="ss">軸 3 的判別對</span>。
+  </div>
+
+  <div class="good">
+    <b>面試句</b>:「<code>UnsafeCell</code> 是所有 interior mutability 的底層原語 ——
+    它是唯一能在 <code>&amp;T</code> 底下合法拿到 <code>*mut T</code> 的型別。
+    <code>Cell</code>/<code>RefCell</code>/<code>Mutex</code> 內部全是它。
+    我在 ring 裡直接用它,是因為 XOR 已經被 head/tail 的 acquire/release 保證了 ——
+    再套一層 <code>RefCell</code> 是重複檢查,而且 <code>RefCell</code> 還 <code>!Sync</code>,跨不了 thread。」
+  </div>
+
+  <h2>arena + index:同時繞開軸 1 跟軸 2</h2>
+  <p>把整個結構當一個 owned blob,節點間用 <code>Copy</code> 的整數互指。
+  <b>borrow checker 不追蹤整數別名</b> —— index 不是引用(無 lifetime,繞開軸 1),
+  真正存取只有一個 <code>&amp;mut Arena</code>(無 XOR 衝突,繞開軸 2)。</p>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:30%">代價</th><th>解法</th></tr>
+    <tr><td>舊 index 指到被重用的 slot(邏輯懸空,無 UB)</td><td><b>generational index</b>:slot 帶 generation,stale handle 回 <code>None</code></td></tr>
+    <tr><td>borrow granularity 崩塌 —— 整個 arena 是一把粗鎖,無法同時 <code>&amp;mut</code> 兩節點</td>
+        <td><code>split_at_mut</code>;先把 index copy 出來;<code>mem::take</code></td></tr>
+    <tr><td>arena <i>內部</i>失去 borrow check(兩個 index 改同一節點,編譯器只看到兩個 <code>usize</code>)</td>
+        <td>紀律 + 測試;或 GhostCell 把編譯期 XOR 找回來</td></tr>
+  </table></div>
+
+  <div class="warn">
+    <b style="color:var(--orange)">2024 edition 陷阱</b><span class="sourced">查證</span>:<code>gen</code> 在 edition 2024 是<b>保留字</b>,
+    不能用來命名任何 item 或 binding —— 要改名或寫成 <code>r#gen</code>。
+    你寫 generational arena 時最自然的 <code>let gen = slot.gen;</code> 會直接編不過,
+    而 generational index 正是你 ★challenge 清單上的東西。CoderPad 那台跑
+    <b>Rust 1.92.0 (2024 Edition)</b> —— 命名用 <code>generation</code> 或 <code>g</code>。
+    <div class="src">一手來源:The Rust Reference · Keywords「The gen keyword was added as a reserved keyword in the 2024 edition」/ RFC 3513 gen-blocks<br>
+    <span style="color:var(--grey)">(我手上是 rustc 1.75,編不了 2024 edition,故此格為<b>文件查證</b>而非本機實編 —— 兩者在這份文件裡分開標。)</span></div>
+  </div>
+</section>
+<section class="panel" id="p-ss">
+  <div class="tldr">
+    <b>Send</b> = 這個值可以<b>換一條 thread 擁有</b>(move 過去)。<br>
+    <b>Sync</b> = 這個值可以<b>被多條 thread 同時 <code>&amp;</code></b>。<br>
+    兩者由一條恆等式綁死:<code>T: Sync</code> ⟺ <code>&amp;T: Send</code>。這不是巧合,<b>這就是 Sync 的定義</b>。
+  </div>
+
+  <h2>先把恆等式吃下去,推導表就不用背</h2>
+  <p>「T 可以被多條 thread 同時借」跟「T 的<i>引用</i>可以被送到別條 thread」是<b>同一句話</b>。
+  std 的 <code>Sync</code> 文件就是這樣定義的。吃下這條之後,整張表都能現推:</p>
+
+  <pre><code><span class="cm">// std 裡 Sync 的定義,字面上就是這樣</span>
+<span class="k">pub unsafe auto trait</span> <span class="ty">Sync</span> { }
+<span class="cm">// 且有這條 blanket impl:</span>
+<span class="k">unsafe impl</span>&lt;<span class="ty">T</span>: <span class="ty">Sync</span> + ?<span class="ty">Sized</span>&gt; <span class="ty">Send</span> <span class="k">for</span> &amp;<span class="ty">T</span> {}
+<span class="cm">//                ^^^^ T 是 Sync  ⟹  &amp;T 是 Send。反過來也成立。</span></code></pre>
+
+  <div class="good">
+    <b>編譯器親口證實這條</b><span class="verified">已驗</span>:我問它 <code>assert_send::&lt;&amp;RefCell&lt;i32&gt;&gt;()</code>,
+    它報的錯不是「<code>&amp;RefCell</code> 不能 send」,而是:
+    <pre style="margin:8px 0 4px;background:var(--bg0)"><code><span style="color:var(--red)">error[E0277]: `RefCell&lt;i32&gt;` cannot be <b>shared</b> between threads safely</span>
+   |     assert_send::&lt;&amp;RefCell&lt;i32&gt;&gt;();
+   |                   ^^^^^^^^^^^^^ `RefCell&lt;i32&gt;` cannot be <b>shared</b> between threads safely</code></pre>
+    你問的是 <b>Send</b>,它答的是 <b>shared(=Sync)</b>。恆等式在錯誤訊息裡現形了。
+  </div>
+
+  <h2>推導表<span class="verified">已驗 · 逐格問過 rustc 1.75</span></h2>
+  <p>下表每一格都是我實際 <code>assert_send::&lt;T&gt;()</code> / <code>assert_sync::&lt;T&gt;()</code> 編一遍的結果 ——
+  過的真的過,✗ 的真的報 E0277。</p>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:20%">型別</th><th style="width:9%">Send</th><th style="width:9%">Sync</th><th>為什麼(這欄才是被問的)</th></tr>
+    <tr><td><code>Rc&lt;T&gt;</code></td><td class="n">✗</td><td class="n">✗</td>
+        <td>refcount 是<b>非 atomic</b> 的。兩條 thread 同時 clone/drop → count 撕裂 → double free。
+        <b>兩個都 ✗</b>:連 move 過去都不行,因為別條 thread 手上可能還有同一個 <code>Rc</code>。</td></tr>
+    <tr><td><code>Arc&lt;T&gt;</code></td><td class="y">✓<sup>*</sup></td><td class="y">✓<sup>*</sup></td>
+        <td>refcount 是 atomic。<sup>*</sup>但要 <code>T: Send + Sync</code> —— <code>Arc&lt;RefCell&lt;i32&gt;&gt;</code> 依然 <b>!Sync</b>,
+        因為 <code>Arc</code> 只是把 <code>&amp;T</code> 發給大家,裡面的 <code>RefCell</code> 該炸還是炸。</td></tr>
+    <tr><td><code>Cell&lt;T&gt;</code></td><td class="y">✓</td><td class="n">✗</td>
+        <td>Send ✓:整個 move 過去,還是只有一個擁有者,沒問題。<br>
+        Sync ✗:<code>set()</code> 只需要 <code>&amp;self</code>,兩條 thread 同時 set = data race,而且<b>沒有任何檢查</b>。</td></tr>
+    <tr><td><code>RefCell&lt;T&gt;</code></td><td class="y">✓</td><td class="n">✗</td>
+        <td>同上。borrow flag 是普通 <code>Cell&lt;isize&gt;</code>,不是 atomic —— 兩條 thread 同時 <code>borrow_mut()</code>
+        會<b>雙雙成功</b>,拿到兩個 <code>&amp;mut</code>。panic 保護在並行下失效。</td></tr>
+    <tr><td><code>Mutex&lt;T&gt;</code></td><td class="y">✓</td><td class="y">✓</td>
+        <td>要 <code>T: Send</code>。注意 <b>不需要 <code>T: Sync</code></b> —— 因為 Mutex 保證同時只有一個人拿得到 <code>&amp;mut T</code>,
+        永遠不會有兩條 thread 同時持 <code>&amp;T</code>。<b>這格常被問。</b></td></tr>
+    <tr><td><code>RwLock&lt;T&gt;</code></td><td class="y">✓</td><td class="y">✓</td>
+        <td>要 <code>T: Send + <b>Sync</b></code>。跟 Mutex 的差別就在這 —— RwLock <b>真的會</b>同時發多個 <code>&amp;T</code> 出去,
+        所以 T 自己必須扛得住被共享。</td></tr>
+    <tr style="background:#32302f80"><td><code>MutexGuard&lt;'_, T&gt;</code></td><td class="n">✗</td><td class="y">✓<sup>†</sup></td>
+        <td><b>唯一一個 Send✗/Sync✓ 的常見型別,面試愛考。</b><br>
+        Send ✗:某些平台(pthread)要求<b>解鎖的 thread 必須是上鎖的那條</b>。guard 一旦 move 到別條 thread,
+        drop 就在錯的 thread 解鎖 → UB。<br>
+        <sup>†</sup>Sync ✓ 要 <code>T: Sync</code>:借 <code>&amp;MutexGuard</code> 出去只能 deref 成 <code>&amp;T</code>,不會解鎖。</td></tr>
+    <tr><td><code>*const T</code> / <code>*mut T</code></td><td class="n">✗</td><td class="n">✗</td>
+        <td>raw pointer 一律 <b>!Send + !Sync</b>。<b>這是你 7/28 會撞到的那格</b> ——
+        你的 ring 裡有 <code>UnsafeCell</code>(內含 raw pointer 語意),整個 struct 就被<b>傳染</b>成 !Sync。</td></tr>
+    <tr><td><code>&amp;T</code></td><td class="m">= <code>T: Sync</code></td><td class="m">= <code>T: Sync</code></td>
+        <td>恆等式本身。<code>&amp;RefCell&lt;i32&gt;</code> 不是 Send,因為 <code>RefCell</code> 不是 Sync。</td></tr>
+    <tr><td><code>&amp;mut T</code></td><td class="m">= <code>T: Send</code></td><td class="m">= <code>T: Sync</code></td>
+        <td><code>&amp;mut T</code> 是獨佔的 —— 送過去等於把 T 本身送過去,所以只要 <code>T: Send</code>。</td></tr>
+  </table></div>
+  <h2>一組判別對:同一個 <code>T</code>,Mutex 過、RwLock 不過<span class="verified">已驗</span></h2>
+  <p>這是整張表最值得記的一格,因為它<b>把兩把鎖的語意差異壓成一行編譯結果</b>:</p>
+
+  <pre><code><span class="fn">assert_sync</span>::&lt;<span class="ty">Mutex</span>&lt;<span class="ty">Cell</span>&lt;<span class="ty">i32</span>&gt;&gt;&gt;();   <span class="cm">// ✓ 編過</span>
+<span class="fn">assert_sync</span>::&lt;<span class="ty">RwLock</span>&lt;<span class="ty">Cell</span>&lt;<span class="ty">i32</span>&gt;&gt;&gt;();  <span class="cm">// ✗ error[E0277]</span>
+<span class="cm">//              ^^^^^^^^^ 同一個 T = Cell&lt;i32&gt;(Send 但 !Sync)</span></code></pre>
+
+  <svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" style="margin:12px 0;">
+    <text x="14" y="20" fill="#d8a657" font-size="12.5" font-weight="700">為什麼同一個 T,一個過一個不過</text>
+
+    <!-- Mutex side -->
+    <rect x="14" y="36" width="400" height="196" rx="6" fill="#2b2f23" stroke="#a9b665" stroke-width="1.2"/>
+    <text x="28" y="58" fill="#a9b665" font-size="12" font-weight="700">Mutex&lt;T&gt;: Sync  需要  T: Send</text>
+    <rect x="28" y="70" width="70" height="24" rx="3" fill="#32302f" stroke="#7daea3"/>
+    <text x="38" y="86" fill="#7daea3" font-size="10">thread 1</text>
+    <rect x="28" y="100" width="70" height="24" rx="3" fill="#32302f" stroke="#5a524c"/>
+    <text x="38" y="116" fill="#5a524c" font-size="10">thread 2</text>
+    <rect x="28" y="130" width="70" height="24" rx="3" fill="#32302f" stroke="#5a524c"/>
+    <text x="38" y="146" fill="#5a524c" font-size="10">thread 3</text>
+    <path d="M100,82 L168,82" stroke="#7daea3" stroke-width="1.6"/>
+    <path d="M100,112 L150,112" stroke="#5a524c" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <path d="M100,142 L150,142" stroke="#5a524c" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <text x="106" y="128" fill="#5a524c" font-size="9">(擋著)</text>
+    <rect x="170" y="70" width="60" height="84" rx="3" fill="#45403d" stroke="#d8a657"/>
+    <text x="180" y="108" fill="#d8a657" font-size="10">🔒 鎖</text>
+    <text x="176" y="122" fill="#928374" font-size="9">同時 1 人</text>
+    <path d="M232,112 L272,112" stroke="#a9b665" stroke-width="1.8"/>
+    <rect x="276" y="94" width="122" height="36" rx="3" fill="#32302f" stroke="#a9b665"/>
+    <text x="286" y="110" fill="#a9b665" font-size="10.5" font-weight="700">&amp;mut Cell&lt;i32&gt;</text>
+    <text x="286" y="124" fill="#928374" font-size="9">獨佔 → Cell 沒被共享</text>
+    <text x="28" y="180" fill="#d4be98" font-size="10.5">T 從來沒有被兩條 thread 同時 &amp; 過,</text>
+    <text x="28" y="196" fill="#d4be98" font-size="10.5">所以 <tspan fill="#ea6962">T 自己是不是 Sync 根本不重要</tspan>。</text>
+    <text x="28" y="216" fill="#a9b665" font-size="11" font-weight="700">→ 只要 T: Send(值會跨 thread 移動)</text>
+
+    <!-- RwLock side -->
+    <rect x="440" y="36" width="406" height="196" rx="6" fill="#332726" stroke="#ea6962" stroke-width="1.2"/>
+    <text x="454" y="58" fill="#ea6962" font-size="12" font-weight="700">RwLock&lt;T&gt;: Sync  需要  T: Send + Sync</text>
+    <rect x="454" y="70" width="70" height="24" rx="3" fill="#32302f" stroke="#7daea3"/>
+    <text x="464" y="86" fill="#7daea3" font-size="10">thread 1</text>
+    <rect x="454" y="100" width="70" height="24" rx="3" fill="#32302f" stroke="#7daea3"/>
+    <text x="464" y="116" fill="#7daea3" font-size="10">thread 2</text>
+    <rect x="454" y="130" width="70" height="24" rx="3" fill="#32302f" stroke="#7daea3"/>
+    <text x="464" y="146" fill="#7daea3" font-size="10">thread 3</text>
+    <path d="M526,82 L594,82" stroke="#7daea3" stroke-width="1.6"/>
+    <path d="M526,112 L594,112" stroke="#7daea3" stroke-width="1.6"/>
+    <path d="M526,142 L594,142" stroke="#7daea3" stroke-width="1.6"/>
+    <rect x="596" y="70" width="60" height="84" rx="3" fill="#45403d" stroke="#d8a657"/>
+    <text x="604" y="108" fill="#d8a657" font-size="10">read 鎖</text>
+    <text x="600" y="122" fill="#928374" font-size="9">同時多人</text>
+    <path d="M658,82 L698,82" stroke="#ea6962" stroke-width="1.8"/>
+    <path d="M658,112 L698,112" stroke="#ea6962" stroke-width="1.8"/>
+    <path d="M658,142 L698,142" stroke="#ea6962" stroke-width="1.8"/>
+    <rect x="702" y="64" width="130" height="96" rx="3" fill="#32302f" stroke="#ea6962"/>
+    <text x="712" y="86" fill="#ea6962" font-size="10.5" font-weight="700">&amp;Cell&lt;i32&gt;</text>
+    <text x="712" y="102" fill="#ea6962" font-size="10.5" font-weight="700">&amp;Cell&lt;i32&gt;</text>
+    <text x="712" y="118" fill="#ea6962" font-size="10.5" font-weight="700">&amp;Cell&lt;i32&gt;</text>
+    <text x="712" y="140" fill="#928374" font-size="9">三條同時 .set()</text>
+    <text x="712" y="152" fill="#ea6962" font-size="9">= data race</text>
+    <text x="454" y="180" fill="#d4be98" font-size="10.5">T <tspan fill="#ea6962">真的</tspan>被三條 thread 同時 &amp; 了,</text>
+    <text x="454" y="196" fill="#d4be98" font-size="10.5">所以 T 自己必須扛得住共享。</text>
+    <text x="454" y="216" fill="#ea6962" font-size="11" font-weight="700">→ 需要 T: Sync。Cell 不是 → 編不過。</text>
+  </svg>
+
+  <div class="good">
+    <b>面試句(這段值得背下來)</b>:「<code>Mutex&lt;T&gt;</code> 是 Sync 只需要 <code>T: Send</code>,
+    因為鎖保證同時只有一個 thread 拿得到 <code>&amp;mut T</code> —— T 從來沒被<i>共享</i>過,只是被<i>移交</i>。
+    <code>RwLock&lt;T&gt;</code> 就得要 <code>T: Sync</code>,因為 read guard 真的會同時發多個 <code>&amp;T</code> 出去。
+    這也是為什麼 <code>Mutex&lt;Cell&lt;i32&gt;&gt;</code> 能跨 thread,<code>RwLock&lt;Cell&lt;i32&gt;&gt;</code> 不行。」
+  </div>
+
+  <h2>auto trait:你平常不 impl 它,除非你有 raw pointer</h2>
+  <p>Send/Sync 是 <b>auto trait</b> —— 編譯器<b>結構化地</b>推導:所有欄位都 Send,這個 struct 就 Send。
+  你從來不用寫。直到你在 struct 裡放了 <code>UnsafeCell</code> / <code>*mut T</code> / <code>NonNull</code>,
+  <b>!Send/!Sync 就沿著欄位傳染上來</b>,整個型別死掉。這時你有兩條路:</p>
+
+  <div class="cards">
+    <div class="card"><h4>路 1:接受它</h4>
+      <p>型別就是不能跨 thread。單執行緒結構(<code>Rc</code>/<code>RefCell</code> 那掛)走這條。</p></div>
+    <div class="card"><h4>路 2:<code>unsafe impl</code> 覆寫</h4>
+      <p>你跟編譯器說「我知道你看不出來,但我保證安全」。<b>這一刻起,軸 3 的網對你破了</b> ——
+      沒有人再檢查。7/28 你會走這條。</p></div>
+  </div>
+
+  <h2>7/28 的必答題:辯護你的 <code>unsafe impl</code></h2>
+  <div class="warn">
+    你敲下這兩行的下一秒,Alex 會問「為什麼這是安全的?」。<b>答不出來 = 這題死了</b>,
+    因為 <code>unsafe impl</code> 的<i>全部意義</i>就是「我用人腦替代編譯器」—— 你講不出理由,等於承認沒替代。
+  </div>
+
+  <pre><code><span class="k">unsafe impl</span>&lt;<span class="ty">T</span>: <span class="ty">Send</span>&gt; <span class="ty">Send</span> <span class="k">for</span> <span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt; {}
+<span class="k">unsafe impl</span>&lt;<span class="ty">T</span>: <span class="ty">Send</span>&gt; <span class="ty">Sync</span> <span class="k">for</span> <span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt; {}
+<span class="cm">//            ^^^^^^^^ 注意:是 T: Send,不是 T: Send + Sync。這個 bound 本身就是考點。</span></code></pre>
+
+  <p><b>三段式辯護模板</b> —— 照這個結構講,不要即興:</p>
+  <div class="tblwrap"><table>
+    <tr><th style="width:16%">段</th><th style="width:34%">你要講的</th><th>Ring 的版本</th></tr>
+    <tr><td><b>① 誰碰什麼</b></td><td>指出存取是<b>不重疊</b>的</td>
+        <td>「producer 只寫 <code>tail</code> 跟 <code>tail</code> 指到的那格;consumer 只寫 <code>head</code> 跟 <code>head</code> 指到的那格。
+        兩者觸碰的 slot 集合永遠不相交。」</td></tr>
+    <tr><td><b>② 誰保證不重疊</b></td><td>指出<b>哪個機制</b>撐起①</td>
+        <td>「不相交是由 head/tail 的 <b>acquire/release 配對</b>保證的 ——
+        producer 看到 <code>head</code> 的 acquire-load 之後才決定寫哪格,那次 load 觀察到 consumer 的 release-store,
+        所以 consumer 對那格的讀已經 happens-before 我的寫。」</td></tr>
+    <tr><td><b>③ 為什麼 bound 是這個</b></td><td>解釋 <code>T: Send</code> 而非 <code>T: Send + Sync</code></td>
+        <td>「值會從 producer thread <b>移動</b>到 consumer thread,所以要 <code>T: Send</code>。
+        我<b>從不</b>同時把 <code>&amp;T</code> 交給兩條 thread —— pop 是 move out,不是借 ——
+        所以<b>不需要 <code>T: Sync</code></b>。跟 <code>Mutex&lt;T&gt;</code> 是同一個道理。」</td></tr>
+  </table></div>
+
+  <div class="note">
+    <b>誠實加分句</b>:講完三段可以補一句「這是我人工論證的,編譯器不檢查 ——
+    production 上我會拿 <b>loom</b> 窮舉 interleaving,再用 <b>Miri</b> 對 Stacked Borrows 跑一遍。」
+    這句話在 systems 公司是明確加分,因為它顯示你知道<b>自己的保證是人腦等級的,需要工具兜底</b>。
+  </div>
+</section>
+<section class="panel" id="p-ord">
+  <div class="tldr">
+    Ordering 是<b>「哪些寫入保證被看見」的合約</b>。它不是「快慢」的旋鈕 ——
+    選錯不會變慢,會變成 <b>UB</b>。而且 UB 在你的 x86 上<b>不會發生</b>,所以你測不出來。
+  </div>
+
+  <h2>四個等級</h2>
+  <div class="tblwrap"><table>
+    <tr><th style="width:13%">Ordering</th><th style="width:34%">它保證什麼</th><th>什麼時候用</th></tr>
+    <tr><td><code>Relaxed</code></td><td>只保證<b>這個變數自己</b>是 atomic(不撕裂)。<b>對周圍的讀寫零保證。</b></td>
+        <td>純計數器(<code>fetch_add</code> 統計)。<b>或:你只寫這個變數,不靠它同步任何東西</b> ——
+        像 ring 裡 producer load 自己的 <code>tail</code>。</td></tr>
+    <tr><td><code>Release</code><br><span style="color:var(--grey);font-size:11px">(store 用)</span></td>
+        <td><b>發布</b>:我之前的所有寫入,對「acquire-load 到這個值」的人都可見。<br>
+        前面的讀寫<b>不能</b>被排到我後面。</td>
+        <td>把資料準備好 → release-store 一個 flag/index 宣告「可以拿了」。</td></tr>
+    <tr><td><code>Acquire</code><br><span style="color:var(--grey);font-size:11px">(load 用)</span></td>
+        <td><b>觀察</b>:我讀到某人的 release-store 之後,他之前的所有寫入我都看得到。<br>
+        後面的讀寫<b>不能</b>被排到我前面。</td>
+        <td>讀 flag/index → 讀到了就安全存取對應的資料。</td></tr>
+    <tr><td><code>AcqRel</code></td><td>read-modify-write 用:讀的部分 acquire、寫的部分 release。</td>
+        <td><code>compare_exchange</code>、<code>fetch_*</code> 需要雙向時。</td></tr>
+    <tr><td><code>SeqCst</code></td><td>Acquire+Release,<b>再加</b>一個全域單一總順序(所有 thread 對所有 SeqCst 操作的先後看法一致)。</td>
+        <td><b>預設。永遠正確,只是可能慢。</b>需要「多個變數的先後在全域一致」時真的需要它(Dekker 那類)。</td></tr>
+  </table></div>
+
+  <div class="good">
+    <b>你的作業程序(memory 裡已有,這裡只是重載)</b>:<b>先全部寫 <code>SeqCst</code></b> ——
+    它永遠正確。然後<b>只在你講得出具體的 synchronizes-with 關係的地方</b>,才放寬成 acquire/release。
+    講不出來就留著 SeqCst。這個順序在面試裡是<b>加分</b>而不是示弱:
+    「我先求正確再求鬆」是 senior 的話,「我直接寫 relaxed」是 junior 的話。
+  </div>
+
+  <h2>核心:release 跟 acquire 是<b>一對</b>,單獨一邊沒有意義</h2>
+  <p>這是整軸唯一要記的機制。<code>Release</code> 跟 <code>Acquire</code> <b>必須作用在同一個變數上</b>,
+  而且 acquire 必須<b>真的讀到</b>那個 release 寫進去的值,才會建立
+  <b>synchronizes-with</b> 關係。有了它,才推得出 <b>happens-before</b>:</p>
+
+  <svg viewBox="0 0 860 264" xmlns="http://www.w3.org/2000/svg" style="margin:12px 0;">
+    <defs>
+      <marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto">
+        <path d="M0,0 L8,3.2 L0,6.4 Z" fill="#d8a657"/></marker>
+      <marker id="a3" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto">
+        <path d="M0,0 L8,3.2 L0,6.4 Z" fill="#a9b665"/></marker>
+    </defs>
+    <text x="14" y="19" fill="#d8a657" font-size="12.5" font-weight="700">synchronizes-with ⟹ happens-before</text>
+
+    <rect x="14" y="34" width="330" height="150" rx="6" fill="#2b2f23" stroke="#a9b665"/>
+    <text x="28" y="54" fill="#a9b665" font-size="12" font-weight="700">Thread A(producer)</text>
+    <rect x="28" y="64" width="300" height="26" rx="3" fill="#32302f" stroke="#5a524c"/>
+    <text x="38" y="81" fill="#d4be98" font-size="11">*data.get() = 42;</text>
+    <text x="250" y="81" fill="#928374" font-size="9">普通寫入</text>
+    <rect x="28" y="96" width="300" height="26" rx="3" fill="#32302f" stroke="#5a524c"/>
+    <text x="38" y="113" fill="#d4be98" font-size="11">other_stuff = 7;</text>
+    <text x="250" y="113" fill="#928374" font-size="9">也一起被發布</text>
+    <rect x="28" y="128" width="300" height="30" rx="3" fill="#45403d" stroke="#d8a657" stroke-width="1.6"/>
+    <text x="38" y="148" fill="#d8a657" font-size="11" font-weight="700">ready.store(true, Release);</text>
+    <path d="M20,158 L20,74 L26,74" stroke="#a9b665" stroke-width="1.3" fill="none" marker-end="url(#a3)"/>
+    <text x="34" y="174" fill="#928374" font-size="9.5">↑ release 是一道天花板:上面的寫入不准掉到下面</text>
+
+    <rect x="516" y="34" width="330" height="150" rx="6" fill="#252c30" stroke="#7daea3"/>
+    <text x="530" y="54" fill="#7daea3" font-size="12" font-weight="700">Thread B(consumer)</text>
+    <rect x="530" y="64" width="300" height="30" rx="3" fill="#45403d" stroke="#d8a657" stroke-width="1.6"/>
+    <text x="540" y="84" fill="#d8a657" font-size="11" font-weight="700">while !ready.load(Acquire) {}</text>
+    <rect x="530" y="100" width="300" height="26" rx="3" fill="#32302f" stroke="#5a524c"/>
+    <text x="540" y="117" fill="#a9b665" font-size="11">*data.get()  →  42 ✓ 保證</text>
+    <rect x="530" y="132" width="300" height="26" rx="3" fill="#32302f" stroke="#5a524c"/>
+    <text x="540" y="149" fill="#a9b665" font-size="11">other_stuff  →  7  ✓ 也保證</text>
+    <path d="M840,80 L840,150 L834,150" stroke="#7daea3" stroke-width="1.3" fill="none"/>
+    <text x="536" y="174" fill="#928374" font-size="9.5">↑ acquire 是一道地板:下面的讀取不准升到上面</text>
+
+    <path d="M330,143 C400,143 440,79 512,79" stroke="#d8a657" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+    <text x="368" y="105" fill="#d8a657" font-size="10.5" font-weight="700">synchronizes-with</text>
+    <text x="356" y="120" fill="#928374" font-size="9">(B 真的讀到 A 寫的 true 才成立)</text>
+
+    <rect x="14" y="196" width="832" height="56" rx="5" fill="#32302f" stroke="#45403d"/>
+    <text x="28" y="216" fill="#d8a657" font-size="11" font-weight="700">關鍵:配對成立之後,保護傘蓋住的是「A 在 release 之前的<tspan fill="#e78a4e">所有</tspan>寫入」,不只是那個 flag。</text>
+    <text x="28" y="234" fill="#928374" font-size="10.5">所以你只要 release 一個 index,就把前面寫進 slot 的整包資料都發布出去了 —— 這正是 ring buffer 能只靠兩個 atomic 運作的原因。</text>
+    <text x="28" y="248" fill="#ea6962" font-size="10">單獨一邊無效:A 用 Release、B 用 Relaxed → 沒有配對 → 沒有 happens-before → 跟兩邊都 Relaxed 一樣是 UB。</text>
+  </svg>
+  <h2>Stepper:同一段 code,兩種 ordering,兩種命運</h2>
+  <p>切換右上角的 <b>Relaxed / Release-Acquire</b>,看同一段 message-passing 怎麼分岔。
+  重點在觀察 <b>DATA 的寫入什麼時候變得對 B 可見</b>。</p>
+
+  <div class="stepper" id="st-ord">
+    <div class="sctl">
+      <button data-act="prev">← 上一步</button>
+      <button data-act="next">下一步 →</button>
+      <button data-act="reset">重置</button>
+      <span class="sidx" id="ord-idx"></span>
+      <span class="toggle">
+        <button data-mode="relaxed" class="on">Relaxed</button>
+        <button data-mode="acqrel">Release / Acquire</button>
+      </span>
+    </div>
+
+    <div class="threads">
+      <div class="thcol A"><h5>Thread A(producer)</h5><div id="ord-A"></div></div>
+      <div class="thcol B"><h5>Thread B(consumer)</h5><div id="ord-B"></div></div>
+    </div>
+
+    <div class="mem" id="ord-mem"></div>
+    <div class="narr" id="ord-narr"></div>
+    <div id="ord-verdict"></div>
+  </div>
+
+  <h2>x86 陷阱:這一格決定你講對還是講錯<span class="verified">已驗 · 本機實測</span></h2>
+  <div class="warn">
+    我把上面那段 relaxed 版本在<b>本機 x86 跑了 2000 次,失敗 0 次</b>。
+    <pre style="margin:8px 0;background:var(--bg0)"><code>[ok] release/acquire:2000 次全部看到 42(有保證)
+<span style="color:var(--red)">[!!] relaxed/relaxed:2000 次裡失敗 0 次  &lt;-- x86 上幾乎必為 0</span></code></pre>
+    <b>所以你在 CoderPad 上「跑一跑證明 relaxed 會壞」是做不到的。</b>它會跑對。
+  </div>
+
+  <h3>為什麼 x86 上跑得對,卻仍然是 UB</h3>
+  <div class="tblwrap"><table>
+    <tr><th style="width:22%">重排的來源</th><th style="width:26%">x86 會不會做</th><th>後果</th></tr>
+    <tr><td><b>CPU</b>:store→store 重排</td><td class="y">不會(x86-TSO 不允許)</td>
+        <td>所以 <code>DATA=42</code> 不會掉到 <code>READY=true</code> 後面。x86 <b>免費送你半個 release</b>。</td></tr>
+    <tr><td><b>CPU</b>:load→load 重排</td><td class="y">不會(x86-TSO 不允許)</td>
+        <td>所以 B 讀 DATA 不會升到讀 READY 前面。x86 <b>免費送你半個 acquire</b>。</td></tr>
+    <tr><td><b>CPU</b>:store→load 重排</td><td class="n"><b>會</b></td>
+        <td>這是 x86 唯一允許的重排,也是 <code>SeqCst</code> 在 x86 上真的要付錢(<code>mfence</code>/<code>lock</code>)的地方。</td></tr>
+    <tr style="background:#33272640"><td><b>編譯器</b>:LLVM 重排</td><td class="n"><b>會 —— 而且它有權</b></td>
+        <td class="n">Relaxed 對 LLVM 就是「這裡沒有同步」,它<b>合法地</b>可以把 <code>DATA=42</code> 沉到 store 之後、
+        把 <code>ready.load</code> 提到迴圈外變成無窮迴圈、或整個消掉。<b>今天沒做,不代表明天 -O3 不做。</b></td></tr>
+    <tr><td><b>其他 CPU</b>:ARM / RISC-V</td><td class="n"><b>會,而且常常</b></td>
+        <td class="n">weakly-ordered。同一份 code 在 Apple Silicon / Graviton / 你們家的加速卡上就撕給你看。</td></tr>
+  </table></div>
+
+  <div class="good">
+    <b>面試句(這句講對就贏了半場)</b>:<br>
+    <span style="color:var(--red)">✗ 不要講</span>:「這裡要用 acquire/release,不然會壞,我 demo 給你看」——<b>它不會壞,你會很尷尬</b>。<br>
+    <span style="color:var(--green)">✓ 要講</span>:「這裡必須 release/acquire。<b>不是因為 x86 會重排</b> ——
+    x86-TSO 本來就不做 store-store 跟 load-load 重排,所以 relaxed 在這台機器上跑起來會是對的。
+    問題是:<b>①</b> 記憶體模型上它是 UB,LLVM 有權把那個 store 沉下去;
+    <b>②</b> 換到 ARM 就真的撕。<b>「我測過沒事」在 ordering 上不構成證據 ——
+    這正是 loom 存在的理由,它窮舉 interleaving 而不是靠 x86 的運氣。</b>」
+  </div>
+
+  <div class="note">
+    這段話的價值不在「知道 acquire/release」—— 那是查得到的。價值在你展示了
+    <b>「我知道我的測試證明不了什麼」</b>。你 R1 被抓的那條軸(Independent Drive / 自己找到 bug)
+    在這裡有一個正面版本:<b>主動指出自己方法的極限,比等人來抓強</b>。
+  </div>
+</section>
+<section class="panel" id="p-pin">
+  <div class="tldr">
+    <code>Pin&lt;P&gt;</code> 的機制只有一句:<b>它不再交出 <code>&amp;mut T</code></b>。<br>
+    因為 <code>&amp;mut T</code> 是 move 一個值的<b>唯一入口</b>(<code>mem::swap</code> / <code>mem::replace</code> /
+    <code>ptr::write</code> 全都要它)。收掉這道門,值就 move 不走了。
+  </div>
+
+  <div class="note">
+    <b>權重提醒</b>:對 7/28 那 25 分鐘,這一軸<b>命中率低</b> —— 只有出 <code>block_on</code> 才碰得到,
+    而且那裡 Pin 就是 <code>pin!()</code> 一行。這頁的價值在 deep dive 講 async internals 故事時。
+    複習時間緊就跳過,先顧 <span data-jump="ss">Send/Sync</span> 跟 <span data-jump="ord">Ordering</span>。
+  </div>
+
+  <h2>問題長什麼樣:自引用 struct 一 move 就死<span class="verified">已驗 · 本機實測</span></h2>
+
+  <pre><code><span class="k">struct</span> <span class="ty">SelfRef</span> {
+    data: <span class="ty">String</span>,
+    ptr:  *<span class="k">const</span> <span class="ty">String</span>,   <span class="cm">// 指向上面那個 data</span>
+    _pin: <span class="ty">PhantomPinned</span>,
+}
+
+<span class="k">let mut</span> a = <span class="ty">SelfRef</span>::<span class="fn">new</span>(<span class="st">"hello"</span>);
+a.<span class="fn">init</span>();                    <span class="cm">// a.ptr = &amp;a.data</span>
+<span class="k">let</span> b = a;                   <span class="cm">// ← move!整個 struct 搬到新位址</span>
+<span class="cm">//                              b.ptr 還指著舊位址 → 懸空</span></code></pre>
+
+  <p>實際跑出來的位址:</p>
+  <pre><code><span style="color:var(--red)">[!!] move 之後:b.ptr=0x7ffc3f582188  但 &amp;b.data=0x7ffc3f582150  → 指標懸空了</span>
+<span class="cm">//                        ^^^^^^^^^^^^^^^^          ^^^^^^^^^^^^^^^^
+//                        差 0x38 = 56 bytes。struct 搬家了,ptr 沒跟著改。</span></code></pre>
+
+  <div class="warn">
+    <b>注意這裡編譯器一聲都沒吭。</b><code>let b = a;</code> 是最普通的 move,完全合法。
+    struct 裡的 raw pointer 對編譯器來說只是一堆 bytes,它不知道那是指向自己的。
+    <b>軸 5 之所以需要 <code>Pin</code>,就是因為型別系統原本沒有「這個值不能 move」的表達方式。</b>
+  </div>
+
+  <h2>Pin 怎麼解:堵住 <code>&amp;mut</code> 這道門</h2>
+
+  <svg viewBox="0 0 860 210" xmlns="http://www.w3.org/2000/svg" style="margin:12px 0;">
+    <text x="14" y="19" fill="#d8a657" font-size="12.5" font-weight="700">move 一個值,一定要先拿到 &amp;mut —— 所以收掉 &amp;mut 就等於禁止 move</text>
+
+    <rect x="14" y="34" width="250" height="160" rx="6" fill="#332726" stroke="#ea6962"/>
+    <text x="28" y="54" fill="#ea6962" font-size="12" font-weight="700">沒有 Pin:門開著</text>
+    <rect x="28" y="64" width="222" height="24" rx="3" fill="#32302f" stroke="#5a524c"/>
+    <text x="36" y="80" fill="#d4be98" font-size="10.5">&amp;mut SelfRef</text>
+    <path d="M139,90 L139,104" stroke="#ea6962" stroke-width="1.4"/>
+    <text x="36" y="102" fill="#928374" font-size="9">↓ 有了它就能…</text>
+    <rect x="28" y="106" width="105" height="22" rx="3" fill="#282828" stroke="#ea6962"/>
+    <text x="36" y="121" fill="#ea6962" font-size="10">mem::swap</text>
+    <rect x="145" y="106" width="105" height="22" rx="3" fill="#282828" stroke="#ea6962"/>
+    <text x="153" y="121" fill="#ea6962" font-size="10">mem::replace</text>
+    <rect x="28" y="132" width="105" height="22" rx="3" fill="#282828" stroke="#ea6962"/>
+    <text x="36" y="147" fill="#ea6962" font-size="10">ptr::write</text>
+    <rect x="145" y="132" width="105" height="22" rx="3" fill="#282828" stroke="#ea6962"/>
+    <text x="153" y="147" fill="#ea6962" font-size="10">let b = *x;</text>
+    <text x="36" y="172" fill="#ea6962" font-size="10.5" font-weight="700">→ 值被搬走 → self-ptr 懸空</text>
+
+    <text x="284" y="120" fill="#928374" font-size="22">⟹</text>
+
+    <rect x="330" y="34" width="250" height="160" rx="6" fill="#2b2f23" stroke="#a9b665"/>
+    <text x="344" y="54" fill="#a9b665" font-size="12" font-weight="700">有 Pin:門焊死</text>
+    <rect x="344" y="64" width="222" height="24" rx="3" fill="#32302f" stroke="#a9b665"/>
+    <text x="352" y="80" fill="#a9b665" font-size="10.5">Pin&lt;&amp;mut SelfRef&gt;</text>
+    <path d="M455,90 L455,104" stroke="#5a524c" stroke-width="1.4" stroke-dasharray="3 3"/>
+    <text x="352" y="102" fill="#928374" font-size="9">↓ 拿不到 &amp;mut(除非 T: Unpin)</text>
+    <rect x="344" y="106" width="222" height="48" rx="3" fill="#282828" stroke="#5a524c" stroke-dasharray="3 3"/>
+    <text x="352" y="126" fill="#5a524c" font-size="10">DerefMut 被 T: Unpin 擋住</text>
+    <text x="352" y="142" fill="#5a524c" font-size="10">要繞過只剩 unsafe get_unchecked_mut</text>
+    <text x="352" y="172" fill="#a9b665" font-size="10.5" font-weight="700">→ 值 move 不走 → self-ptr 永遠有效</text>
+
+    <rect x="600" y="34" width="246" height="160" rx="6" fill="#32302f" stroke="#45403d"/>
+    <text x="614" y="54" fill="#d8a657" font-size="12" font-weight="700">Unpin = 逃生門</text>
+    <text x="614" y="76" fill="#d4be98" font-size="10.5">auto trait。<tspan fill="#a9b665">幾乎所有型別都是。</tspan></text>
+    <text x="614" y="94" fill="#928374" font-size="10">意思是「我被 move 也無所謂」。</text>
+    <text x="614" y="116" fill="#d4be98" font-size="10.5">T: Unpin ⟹ Pin&lt;&amp;mut T&gt; 照樣</text>
+    <text x="614" y="130" fill="#d4be98" font-size="10.5">給你 &amp;mut ⟹ Pin 形同虛設。</text>
+    <text x="614" y="152" fill="#e78a4e" font-size="10.5">要退出 Unpin:塞一個</text>
+    <text x="614" y="166" fill="#e78a4e" font-size="10.5" font-weight="700">PhantomPinned 進 struct。</text>
+    <text x="614" y="184" fill="#928374" font-size="9.5">async fn 生成的 state machine 就是這樣。</text>
+  </svg>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:24%">你以為</th><th>實際</th></tr>
+    <tr><td>Pin 把值釘在記憶體位址上</td>
+        <td><code>Pin</code> 是<b>型別層的協定</b>,執行期什麼事都沒做 —— 它就是個 wrapper,零成本。
+        它做的唯一一件事是<b>在 API 上不給你 <code>&amp;mut</code></b>。值之所以不動,是因為你拿不到搬它的工具。</td></tr>
+    <tr><td><code>Pin</code> 是 unsafe 的東西</td>
+        <td><code>Pin</code> 本身全 safe。unsafe 出現在<b>兩端</b>:建立(<code>Pin::new_unchecked</code>,你保證之後不 move)
+        跟逃逸(<code>get_unchecked_mut</code>)。中間全部 safe。</td></tr>
+    <tr><td>要用 Pin 就要懂一堆東西</td>
+        <td>寫 <code>block_on</code> 只需要 <code>std::pin::pin!(fut)</code> 一行 —— 它在 stack 上釘住,
+        安全、零成本。<b>7/28 你只需要這一行。</b></td></tr>
+  </table></div>
+
+  <h2>那要怎麼改裡面的值?<span class="verified">已驗</span></h2>
+  <p>先看閘門在哪。<code>Pin</code> 對 <code>Deref</code> 跟 <code>DerefMut</code> <b>待遇不同</b>:</p>
+  <pre><code><span class="cm">// library/core/src/pin.rs  L1683 —— Deref:沒有任何 Unpin bound</span>
+<span class="k">impl</span>&lt;<span class="ty">Ptr</span>: <span class="ty">Deref</span>&gt; <span class="ty">Deref</span> <span class="k">for</span> <span class="ty">Pin</span>&lt;<span class="ty">Ptr</span>&gt; { ... }              <span class="cm">// &amp;T 永遠拿得到</span>
+
+<span class="cm">// L1768 —— DerefMut:閘門</span>
+<span class="hl"><span class="k">impl</span>&lt;<span class="ty">Ptr</span>&gt; <span class="ty">DerefMut</span> <span class="k">for</span> <span class="ty">Pin</span>&lt;<span class="ty">Ptr</span>&gt; <span class="k">where</span> &lt;<span class="ty">Ptr</span> <span class="k">as</span> <span class="ty">Deref</span>&gt;::<span class="ty">Target</span>: <span class="ty">Unpin</span> { ... }   <span class="cm">// ← &amp;mut T 被擋在這</span></span></code></pre>
+  <p><b>讀永遠沒事,被擋的只有 <code>&amp;mut</code></b> —— 因為 <code>&amp;mut</code> 是 move 的門。於是問題直接分岔成兩個世界:</p>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:15%">T 是 Unpin?</th><th style="width:30%">怎麼改</th><th>備註</th></tr>
+    <tr style="background:#2b2f2350"><td class="y"><b>是</b><br><span style="font-size:11px">(你 99% 的情況)</span></td>
+        <td class="y"><code>self.field = x;</code><br><code>self.n += 1;</code><br><code>Pin::get_mut(self)</code></td>
+        <td><b>Pin 形同不存在。</b>DerefMut 直接可用,什麼都不用做。
+        <b>手寫的 future 只要沒跨 await 借本地變數,就是這一格。</b></td></tr>
+    <tr><td class="n" rowspan="3"><b>不是</b><br><span style="font-size:11px">(有 <code>PhantomPinned</code><br>或自引用)</span></td>
+        <td class="y"><code>Pin::set(&amp;mut self, value)</code></td>
+        <td class="y"><b>安全,而且不需要 Unpin</b> —— 很多人不知道這條。整個值換掉。
+        <span style="color:var(--grey)">(見下方「為什麼它是安全的」)</span></td></tr>
+    <tr><td class="m">投影(projection)</td>
+        <td>逐欄位決定「這格算不算被 pin」。<b>std 沒有安全做法</b>,要自己寫 <code>unsafe</code>。
+        <code>pin-project</code> 是 crate → <b>7/28 std-only 用不到</b>。</td></tr>
+    <tr><td class="n"><code>get_unchecked_mut()</code></td>
+        <td class="n">核彈選項。拿到 <code>&amp;mut T</code>,然後<b>你賭你不會 move 它</b>。編譯器不再檢查。</td></tr>
+  </table></div>
+
+  <h3><code>Pin::set</code> 為什麼安全?</h3>
+  <pre><code><span class="cm">// L1481,stable since 1.33 —— 注意 where 子句「沒有」Unpin</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="fn">set</span>(&amp;<span class="k">mut</span> <span class="k">self</span>, value: <span class="ty">Ptr</span>::<span class="ty">Target</span>) <span class="k">where</span> <span class="ty">Ptr</span>::<span class="ty">Target</span>: <span class="ty">Sized</span> {
+    *(<span class="k">self</span>.pointer) = value;
+}</code></pre>
+  <div class="good">
+    因為 <code>*ptr = value</code> 是<b>就地析構舊值、就地寫入新值</b> —— <b>舊值從來沒有被 move</b>,
+    它在原地被 drop 掉了。Pin 的契約是「這個值在被 drop 之前不會 move」,而它<b>確實被 drop 了</b>。契約履行。
+  </div>
+
+  <h3>投影:每個欄位都是一個決定</h3>
+  <p>對 struct 的<b>每一格</b>問:「struct 被 pin 的時候,這格算不算也被 pin?」<b>這是你的選擇,不是推導出來的</b>,
+  而且選了就要一致。std 文件的原話是「沒有硬性規則」,並且說<b>選「不結構性 pin」通常比較輕鬆</b>。</p>
+
+  <pre><code><span class="cm">// 選 A:這格「不」結構性 pin → 投影出普通的 &amp;mut(std 文件自己的範例就長這樣)</span>
+<span class="k">fn</span> <span class="fn">tick_mut</span>(<span class="k">self</span>: <span class="ty">Pin</span>&lt;&amp;<span class="k">mut</span> <span class="ty">Self</span>&gt;) -&gt; &amp;<span class="k">mut</span> <span class="ty">u32</span> {
+    <span class="cm">// SAFETY: tick 不是結構性 pin 的欄位 —— 沒有指標指向它,我們也不 move 整個 Task。</span>
+    <span class="k">unsafe</span> { &amp;<span class="k">mut</span> <span class="k">self</span>.<span class="fn">get_unchecked_mut</span>().tick }
+}
+
+<span class="cm">// 選 B:這格「要」結構性 pin → 投影出 Pin&lt;&amp;mut Field&gt;</span>
+<span class="k">fn</span> <span class="fn">inner_pin_mut</span>(<span class="k">self</span>: <span class="ty">Pin</span>&lt;&amp;<span class="k">mut</span> <span class="ty">Self</span>&gt;) -&gt; <span class="ty">Pin</span>&lt;&amp;<span class="k">mut</span> <span class="ty">Inner</span>&gt; {
+    <span class="cm">// SAFETY: Task 被 pin ⟹ inner 也被 pin。從不 move 它,Drop 也不 move out。</span>
+    <span class="k">unsafe</span> { <span class="k">self</span>.<span class="fn">map_unchecked_mut</span>(|s| &amp;<span class="k">mut</span> s.inner) }
+}</code></pre>
+
+  <div class="warn">
+    <b>選 B(結構性 pin)要背四條額外要求</b><span class="sourced">查證 · std pin 模組文件</span>:
+    <ol style="margin:8px 0 0 20px;font-size:12.5px;">
+      <li><b>Structural Unpin</b>:struct 只有在<b>所有結構性 pin 的欄位都 Unpin</b> 時才能是 Unpin。
+      別手寫 <code>impl&lt;T&gt; Unpin for Struct&lt;T&gt;</code> 然後又提供指向 T 內部的結構性投影。</li>
+      <li><b>Pinned Destruction</b>:<code>drop</code> 的簽章是 <code>&amp;mut self</code>,但你的解構子<b>必須當作它收到的是 <code>Pin&lt;&amp;mut Self&gt;</code> 來寫</b>。
+      <b>推論:這個 struct 不能是 <code>#[repr(packed)]</code>。</b></li>
+      <li><b>Structural Notice of Destruction</b>:必須守住 Drop guarantee —— pin 過的儲存空間不能在<b>沒呼叫結構性欄位的解構子</b>的情況下被重用。
+      文件舉 <code>VecDeque&lt;T&gt;</code> 為例:它的解構子在某個元素 drop panic 時會漏掉其他元素 → <b>所以它不提供 pin 投影</b>。</li>
+      <li><b>不能提供任何會把資料 move 出結構性欄位的操作</b>。例如
+      <code>fn(Pin&lt;&amp;mut Struct&lt;T&gt;&gt;) -&gt; Option&lt;T&gt;</code> 這種 <code>take</code>-like 的方法 —— 有它,那格就不能是結構性 pin。</li>
+    </ol>
+    這四條就是 <code>pin-project</code> 這個 crate 存在的理由:它機械但易錯。<b>而 7/28 你 std-only,沒有它。</b>
+  </div>
+
+  <div class="good">
+    <b>7/28 的實際答案</b>:你手寫的 future <b>幾乎一定是 Unpin</b>(除非你跨 await 借了本地變數),
+    所以 <code>self.slot = Some(x)</code> <b>直接就能寫</b> —— <span data-jump="async">async 那頁的 <code>Delay</code></span> 就是活例子。
+    被追問「那自引用的怎麼辦?」→ 答「投影,而 std 沒有安全做法,得手寫 unsafe;生態系是用 <code>pin-project</code> 巨集解決的」。
+    <b>不要在 45 分鐘裡真的去手刻投影</b>,那是 deep dive 的話題。
+  </div>
+
+  <h2>為什麼 <code>Future</code> 需要它</h2>
+  <p><code>async fn</code> 會被展開成一個 state machine struct,每個 <code>.await</code> 是一個狀態。
+  如果你在 await 之前借了本地變數、await 之後還要用 —— 那個借用就得<b>存進 state machine 裡</b>,
+  而它指向的變數<b>也在同一個 struct 裡</b>。自引用就這樣長出來了:</p>
+
+  <pre><code><span class="k">async fn</span> <span class="fn">f</span>() {
+    <span class="k">let</span> buf = [<span class="nu">0u8</span>; <span class="nu">1024</span>];
+    <span class="k">let</span> slice = &amp;buf[..];      <span class="cm">// 借了 buf</span>
+    <span class="fn">read_into</span>(slice).<span class="k">await</span>;     <span class="cm">// ← 跨過 await 點</span>
+    <span class="fn">use_it</span>(slice);              <span class="cm">// await 之後還在用 → slice 必須存活</span>
+}
+<span class="cm">// 展開後 ≈ struct F { buf: [u8;1024], slice: &amp;'self [u8], state: u8, _p: PhantomPinned }
+//                                            ^^^^^^^^^^^^ 指向同一個 struct 裡的 buf</span></code></pre>
+
+  <div class="good">
+    <b>面試句</b>:「<code>Future::poll</code> 的 receiver 是 <code>Pin&lt;&amp;mut Self&gt;</code> 而不是 <code>&amp;mut Self</code>,
+    是因為 <code>async fn</code> 展開成的 state machine 可能持有指向自己欄位的引用 ——
+    只要跨 await 借用本地變數就會發生。executor 必須保證第一次 poll 之後那個 future 不再 move,
+    <code>Pin</code> 就是把這個保證編碼進型別。<b>手寫的 future 如果沒有自引用,它是 <code>Unpin</code>,
+    這個限制對它形同不存在</b> —— 我等下寫的 <code>Delay</code> 就是這種。」
+  </div>
+</section>
+<section class="panel" id="p-async">
+  <div class="tldr">
+    整個 async 就是一條契約:<b><code>poll</code> 回 <code>Pending</code> 的人,有義務安排 <code>wake()</code> 被叫。</b><br>
+    executor 只做兩件事:poll 它;回 Pending 就去睡,等人 wake 我再 poll。<b>其他都是這條的推論。</b>
+  </div>
+
+  <h2>三個型別,講完就沒了</h2>
+  <pre><code><span class="k">trait</span> <span class="ty">Future</span> {
+    <span class="k">type</span> <span class="ty">Output</span>;
+    <span class="k">fn</span> <span class="fn">poll</span>(<span class="k">self</span>: <span class="ty">Pin</span>&lt;&amp;<span class="k">mut</span> <span class="ty">Self</span>&gt;, cx: &amp;<span class="k">mut</span> <span class="ty">Context</span>&lt;<span class="st">'_</span>&gt;) -&gt; <span class="ty">Poll</span>&lt;<span class="ty">Self</span>::<span class="ty">Output</span>&gt;;
+}
+<span class="k">enum</span> <span class="ty">Poll</span>&lt;<span class="ty">T</span>&gt; { <span class="ty">Ready</span>(<span class="ty">T</span>), <span class="ty">Pending</span> }
+<span class="cm">// Context 目前實質上只是 Waker 的包裝:cx.waker() -&gt; &amp;Waker</span></code></pre>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:15%">角色</th><th>它的義務</th></tr>
+    <tr><td><b>Future</b></td><td>回 <code>Ready</code> → 完事。<br>
+        回 <code>Pending</code> → <b>必須</b>先把 <code>cx.waker()</code> 存到某處,並保證未來有人會叫它。
+        <b>存了不叫 = 永遠 hang;不存就回 Pending = 永遠 hang。</b></td></tr>
+    <tr><td><b>Waker</b></td><td>被 <code>wake()</code> 時,想辦法讓 executor 重新 poll 這個 future。
+        單執行緒 <code>block_on</code> 裡它就是 <code>unpark</code> 那條 thread。</td></tr>
+    <tr><td><b>Executor</b></td><td>loop { poll → Ready 就回傳;Pending 就休眠 }。<b>就這樣。</b></td></tr>
+  </table></div>
+
+  <h2>Stepper:poll → Pending → park → wake → poll → Ready</h2>
+  <p>切換 <b>有 token / 無 token</b>,看 <code>wake</code> 在 <code>park</code> <b>之前</b>就發生的時候會怎樣。
+  這是手寫 executor 唯一真正的坑。</p>
+
+  <div class="stepper" id="st-poll">
+    <div class="sctl">
+      <button data-act="prev">← 上一步</button>
+      <button data-act="next">下一步 →</button>
+      <button data-act="reset">重置</button>
+      <span class="sidx" id="poll-idx"></span>
+      <span class="toggle">
+        <button data-mode="token" class="on">park 有 token(std 真實行為)</button>
+        <button data-mode="notoken">假想:park 無 token</button>
+      </span>
+    </div>
+    <div class="pl">
+      <div class="plbox"><h5>executor(main thread)</h5><div id="poll-E"></div></div>
+      <div class="plbox"><h5>計時 thread / waker</h5><div id="poll-W"></div></div>
+    </div>
+    <div class="mem" id="poll-mem"></div>
+    <div class="narr" id="poll-narr"></div>
+    <div id="poll-verdict"></div>
+  </div>
+
+  <h2>誰去叫 <code>wake()</code>?—— <code>waker</code> 那格不能住在 Future 裡<span class="verified">已驗</span></h2>
+  <p>這是手寫 future 的第一個結構性關卡。天真的寫法長這樣,而且<b>編得過</b>:</p>
+  <pre><code><span class="k">struct</span> <span class="ty">Naive</span> { done: <span class="k">bool</span>, waker: <span class="ty">Option</span>&lt;<span class="ty">Waker</span>&gt; }   <span class="cm">// ← 很多人第一次都這樣寫</span>
+
+<span class="k">fn</span> <span class="fn">poll</span>(<span class="k">mut</span> <span class="k">self</span>: <span class="ty">Pin</span>&lt;&amp;<span class="k">mut</span> <span class="ty">Self</span>&gt;, cx: &amp;<span class="k">mut</span> <span class="ty">Context</span>) -&gt; <span class="ty">Poll</span>&lt;()&gt; {
+    <span class="k">if</span> <span class="k">self</span>.done { <span class="k">return</span> <span class="ty">Poll</span>::<span class="ty">Ready</span>(()); }
+    <span class="k">self</span>.waker = <span class="ty">Some</span>(cx.<span class="fn">waker</span>().<span class="fn">clone</span>());   <span class="cm">// 存了…然後呢?</span>
+    <span class="ty">Poll</span>::<span class="ty">Pending</span>
+}</code></pre>
+
+  <div class="warn">
+    <b>問題:誰去 <code>self.waker.take()</code>?</b><br>
+    <code>poll</code> 的簽章是 <code>Pin&lt;&amp;mut Self&gt;</code> —— <b>只有執行器拿得到它</b>。
+    背景執行緒 / IO driver / 中斷處理常式手上<b>沒有 <code>&amp;mut Naive</code></b>,
+    Future 一旦交出去,執行器就是唯一持有者。
+    <b>→ <code>self.waker</code> 這格永遠沒有人讀得到,<code>block_on(Naive)</code> 會 park 到天荒地老。</b>
+  </div>
+
+  <p><b>正確形狀:Future 只是「共享狀態的把手」</b>,<code>waker</code> 住在 <code>Shared</code> 裡:</p>
+  <pre><code><span class="k">struct</span> <span class="ty">Shared</span>&lt;<span class="ty">T</span>&gt; { value: <span class="ty">Option</span>&lt;<span class="ty">T</span>&gt;, waker: <span class="ty">Option</span>&lt;<span class="ty">Waker</span>&gt; }
+<span class="k">pub struct</span> <span class="ty">SpawnBlocking</span>&lt;<span class="ty">T</span>&gt;(<span class="ty">Arc</span>&lt;<span class="ty">Mutex</span>&lt;<span class="ty">Shared</span>&lt;<span class="ty">T</span>&gt;&gt;&gt;);   <span class="cm">// ← Future 本身只是一個 Arc</span>
+
+<span class="k">impl</span>&lt;<span class="ty">T</span>: <span class="ty">Send</span>&gt; <span class="ty">Future</span> <span class="k">for</span> <span class="ty">SpawnBlocking</span>&lt;<span class="ty">T</span>&gt; {
+    <span class="k">type</span> <span class="ty">Output</span> = <span class="ty">T</span>;
+    <span class="k">fn</span> <span class="fn">poll</span>(<span class="k">self</span>: <span class="ty">Pin</span>&lt;&amp;<span class="k">mut</span> <span class="ty">Self</span>&gt;, cx: &amp;<span class="k">mut</span> <span class="ty">Context</span>) -&gt; <span class="ty">Poll</span>&lt;<span class="ty">T</span>&gt; {
+        <span class="k">let mut</span> guard = <span class="k">self</span>.<span class="nu">0</span>.<span class="fn">lock</span>().<span class="fn">unwrap</span>();
+        <span class="k">if let</span> <span class="ty">Some</span>(value) = guard.value.<span class="fn">take</span>() { <span class="k">return</span> <span class="ty">Poll</span>::<span class="ty">Ready</span>(value); }
+        guard.waker = <span class="ty">Some</span>(cx.<span class="fn">waker</span>().<span class="fn">clone</span>());   <span class="cm">// 每次 poll 都覆蓋(waker 會換人)</span>
+        <span class="ty">Poll</span>::<span class="ty">Pending</span>
+    }
+}
+
+<span class="cm">// ★ take() + wake() 跑在【背景執行緒】上,透過它自己那份 Arc clone:</span>
+thread::<span class="fn">spawn</span>({
+    <span class="k">let</span> inner = inner.<span class="fn">clone</span>();          <span class="cm">// ← 另一邊碰得到狀態的唯一路徑</span>
+    <span class="k">move</span> || {
+        <span class="k">let</span> value = <span class="fn">closure</span>();          <span class="cm">// 做真正的苦工</span>
+<span class="hl">        <span class="k">let</span> maybe_waker = {
+            <span class="k">let mut</span> guard = inner.<span class="fn">lock</span>().<span class="fn">unwrap</span>();
+            guard.value = <span class="ty">Some</span>(value);
+            guard.waker.<span class="fn">take</span>()               <span class="cm">// 取出來,順便標記「用掉了」</span>
+        };                                 <span class="cm">// ← guard 在這裡 drop。這個大括號是刻意的。</span></span>
+        <span class="k">if let</span> <span class="ty">Some</span>(waker) = maybe_waker {
+            waker.<span class="fn">wake</span>();                  <span class="cm">// ← 在【鎖外面】叫</span>
+        }
+    }
+});</code></pre>
+
+  <h3>為什麼是 <code>take()</code> 而不是 <code>wake_by_ref()</code></h3>
+  <div class="tblwrap"><table>
+    <tr><th style="width:26%">理由</th><th>說明</th></tr>
+    <tr><td>① 所有權</td><td><code>Waker::wake(self)</code> 吃掉所有權(比 <code>wake_by_ref</code> 少一次 refcount 操作)。<code>take()</code> 剛好給你。</td></tr>
+    <tr><td>② 語意標記</td><td>「這個 waker 用掉了」。留著會有叫兩次的風險。</td></tr>
+    <tr style="background:#2b2f2350"><td class="y"><b>③ 能在放掉鎖之後才叫</b></td>
+        <td class="y"><b>這條才是重點。</b><code>wake()</code> 是一個 <b>vtable call,跳進執行器的任意程式碼</b> ——
+        而執行器<b>完全可以合法地同步重新 poll</b>(Waker 契約只要求「安排重新 poll」,沒說不能當場做),
+        poll 的第一件事就是 lock 同一把鎖 → <b>自己等自己</b>。</td></tr>
+  </table></div>
+
+  <div class="warn">
+    <b>實測</b><span class="verified">已驗</span>:我寫了一個「收到 wake 就同步重新 lock」的執行器去打它 ——
+    <pre style="margin:8px 0;background:var(--bg0)"><code><span style="color:var(--red)">[3a] ✗ 卡住了(300ms 沒回來)—— 在鎖裡面叫 wake() = 自己等自己</span>
+<span style="color:var(--green)">[3b] ✓ 順利完成 —— 先 take、放鎖、再 wake</span></code></pre>
+    <b>一般規則(不是 async 專屬)</b>:<b>永遠不要握著鎖去呼叫你不控制的程式碼。</b>
+    <code>wake()</code> 就是那種程式碼。
+  </div>
+
+  <div class="note">
+    <b>有趣的是:官方 async-book 的 <code>TimerFuture</code> 就是握著鎖叫 <code>wake()</code> 的</b><span class="sourced">查證</span>
+    —— 它 <code>lock()</code> 之後直接 <code>shared_state.waker.take()</code> 然後 <code>waker.wake()</code>,guard 還活著。
+    對<b>它自己那個</b> executor 沒事(那個 waker 只是往 channel 塞東西,不碰這把鎖),但<b>這個寫法不通用</b>。
+    <div class="src">來源:rust-lang.github.io/async-book · 02_execution/03_wakeups(TimerFuture)</div>
+  </div>
+
+  <h2>完整 <code>block_on</code>,std-only<span class="verified">已驗 · 編過跑過</span></h2>
+  <pre><code><span class="k">use</span> std::future::<span class="ty">Future</span>;
+<span class="k">use</span> std::pin::pin;
+<span class="k">use</span> std::sync::<span class="ty">Arc</span>;
+<span class="k">use</span> std::task::{<span class="ty">Context</span>, <span class="ty">Poll</span>, <span class="ty">Wake</span>, <span class="ty">Waker</span>};
+<span class="k">use</span> std::thread::{<span class="k">self</span>, <span class="ty">Thread</span>};
+
+<span class="k">struct</span> <span class="ty">ThreadWaker</span>(<span class="ty">Thread</span>);
+
+<span class="k">impl</span> <span class="ty">Wake</span> <span class="k">for</span> <span class="ty">ThreadWaker</span> {
+    <span class="k">fn</span> <span class="fn">wake</span>(<span class="k">self</span>: <span class="ty">Arc</span>&lt;<span class="ty">Self</span>&gt;)        { <span class="k">self</span>.<span class="nu">0</span>.<span class="fn">unpark</span>(); }
+    <span class="k">fn</span> <span class="fn">wake_by_ref</span>(<span class="k">self</span>: &amp;<span class="ty">Arc</span>&lt;<span class="ty">Self</span>&gt;) { <span class="k">self</span>.<span class="nu">0</span>.<span class="fn">unpark</span>(); }
+}
+
+<span class="k">fn</span> <span class="fn">block_on</span>&lt;<span class="ty">F</span>: <span class="ty">Future</span>&gt;(fut: <span class="ty">F</span>) -&gt; <span class="ty">F</span>::<span class="ty">Output</span> {
+    <span class="k">let mut</span> fut = <span class="mac">pin!</span>(fut);                       <span class="cm">// ← 軸 5 在這裡,就這一行</span>
+    <span class="k">let</span> waker = <span class="ty">Waker</span>::<span class="fn">from</span>(<span class="ty">Arc</span>::<span class="fn">new</span>(<span class="ty">ThreadWaker</span>(thread::<span class="fn">current</span>())));
+    <span class="k">let mut</span> cx = <span class="ty">Context</span>::<span class="fn">from_waker</span>(&amp;waker);
+    <span class="k">loop</span> {
+        <span class="k">match</span> fut.<span class="fn">as_mut</span>().<span class="fn">poll</span>(&amp;<span class="k">mut</span> cx) {
+            <span class="ty">Poll</span>::<span class="ty">Ready</span>(v) =&gt; <span class="k">return</span> v,
+<span class="hl">            <span class="ty">Poll</span>::<span class="ty">Pending</span>  =&gt; thread::<span class="fn">park</span>(),      <span class="cm">// ← 整段的正確性靠 park 的 token</span></span>
+        }
+    }
+}</code></pre>
+
+  <div class="good">
+    <b>為什麼這 18 行是對的<span class="verified">已驗</span></b> —— 我寫了一個<b>在回傳 Pending 之前就 wake</b> 的 future 去打它:
+    <pre style="margin:8px 0;background:var(--bg0)"><code><span class="k">fn</span> <span class="fn">poll</span>(...) -&gt; <span class="ty">Poll</span>&lt;&amp;<span class="st">'static</span> <span class="k">str</span>&gt; {
+    <span class="k">if</span> <span class="k">self</span>.<span class="nu">0</span> { <span class="k">return</span> <span class="ty">Poll</span>::<span class="ty">Ready</span>(<span class="st">"醒了"</span>); }
+    <span class="k">self</span>.<span class="nu">0</span> = <span class="k">true</span>;
+    cx.<span class="fn">waker</span>().<span class="fn">wake_by_ref</span>();   <span class="cm">// wake 發生在 executor 還沒 park 的時候</span>
+    <span class="ty">Poll</span>::<span class="ty">Pending</span>
+}</code></pre>
+    結果:<code style="color:var(--green)">[ok] wake-before-park 沒有 hang → 醒了 (817ns)</code><br>
+    <b>原因</b>:<code>thread::unpark</code> 會留下一個 <b>token</b>。之後的 <code>park()</code> 看到 token 就<b>直接返回</b>,不睡。
+    如果 park 沒有 token 語意,這裡就是永久 deadlock —— 而這是手寫 executor 最經典的 bug。
+  </div>
+
+  <div class="warn">
+    <b>追問預備</b>:「那 spurious wakeup 呢?」→
+    <code>park</code> 允許無理由醒來,所以它<b>一定要包在 loop 裡</b>。上面的 <code>loop</code> 剛好處理掉:
+    亂醒 → 再 poll 一次 → 還沒好就再 park。<b>「poll 是冪等的、多 poll 幾次只是浪費不會錯」</b>
+    是 Future 契約的一部分,這正是為什麼 spurious wakeup 在 async 裡無害。
+    <span style="color:var(--grey)">(同一個道理在 C++ 是 <code>condvar.wait()</code> 一定要走 predicate 版。)</span>
+  </div>
+
+  <h2>Delay:那個「waker 會換人」的坑<span class="verified">已驗</span></h2>
+  <p>你 memory 裡記的那條 —— <b>每次 poll 都要存最新的 waker</b> —— 長這樣:</p>
+  <pre><code><span class="k">struct</span> <span class="ty">Delay</span> {
+    when: <span class="ty">Instant</span>,
+    slot: <span class="ty">Option</span>&lt;<span class="ty">Arc</span>&lt;<span class="ty">Mutex</span>&lt;<span class="ty">Option</span>&lt;<span class="ty">Waker</span>&gt;&gt;&gt;&gt;,   <span class="cm">// 跟計時 thread 共用的信箱</span>
+}
+
+<span class="k">impl</span> <span class="ty">Future</span> <span class="k">for</span> <span class="ty">Delay</span> {
+    <span class="k">type</span> <span class="ty">Output</span> = &amp;<span class="st">'static</span> <span class="k">str</span>;
+    <span class="k">fn</span> <span class="fn">poll</span>(<span class="k">mut</span> <span class="k">self</span>: <span class="ty">Pin</span>&lt;&amp;<span class="k">mut</span> <span class="ty">Self</span>&gt;, cx: &amp;<span class="k">mut</span> <span class="ty">Context</span>&lt;<span class="st">'_</span>&gt;) -&gt; <span class="ty">Poll</span>&lt;<span class="ty">Self</span>::<span class="ty">Output</span>&gt; {
+        <span class="k">if</span> <span class="ty">Instant</span>::<span class="fn">now</span>() &gt;= <span class="k">self</span>.when { <span class="k">return</span> <span class="ty">Poll</span>::<span class="ty">Ready</span>(<span class="st">"時間到"</span>); }
+        <span class="k">match</span> &amp;<span class="k">self</span>.slot {
+<span class="hl">            <span class="ty">Some</span>(slot) =&gt; { *slot.<span class="fn">lock</span>().<span class="fn">unwrap</span>() = <span class="ty">Some</span>(cx.<span class="fn">waker</span>().<span class="fn">clone</span>()); }  <span class="cm">// ← 每次都換</span></span>
+            <span class="ty">None</span> =&gt; {
+                <span class="k">let</span> slot = <span class="ty">Arc</span>::<span class="fn">new</span>(<span class="ty">Mutex</span>::<span class="fn">new</span>(<span class="ty">Some</span>(cx.<span class="fn">waker</span>().<span class="fn">clone</span>())));
+                <span class="k">let</span> slot2 = slot.<span class="fn">clone</span>();
+                <span class="k">let</span> when = <span class="k">self</span>.when;
+                thread::<span class="fn">spawn</span>(<span class="k">move</span> || {
+                    <span class="k">let</span> now = <span class="ty">Instant</span>::<span class="fn">now</span>();
+                    <span class="k">if</span> now &lt; when { thread::<span class="fn">sleep</span>(when - now); }
+                    <span class="k">if let</span> <span class="ty">Some</span>(w) = slot2.<span class="fn">lock</span>().<span class="fn">unwrap</span>().<span class="fn">take</span>() { w.<span class="fn">wake</span>(); }
+                });
+                <span class="k">self</span>.slot = <span class="ty">Some</span>(slot);
+            }
+        }
+        <span class="ty">Poll</span>::<span class="ty">Pending</span>
+    }
+}</code></pre>
+  <p>實測:<code style="color:var(--green)">[ok] Delay → 時間到 (120.215723ms)</code>(要求 120ms)</p>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:30%">這裡的設計決定</th><th>被追問時怎麼答</th></tr>
+    <tr><td>為什麼要 <code>Arc&lt;Mutex&lt;Option&lt;Waker&gt;&gt;&gt;</code> 這麼囉唆?<br>直接 spawn 時 clone 一次不行嗎?</td>
+        <td><b>不行。</b>future 可能被搬到別的 task / 別的 executor,<b>下次 poll 給你的 waker 是不同的</b>。
+        只在第一次 clone → 計時器叫醒的是<b>舊的</b> executor → 現在這個永遠不醒。
+        契約寫的是「存<b>最新</b>的 waker」。</td></tr>
+    <tr><td><code>self.slot = Some(slot)</code> 為什麼能穿過 <code>Pin</code> 寫?</td>
+        <td>因為 <code>Delay</code> <b>沒有自引用 → 它是 <code>Unpin</code></b> → <code>Pin&lt;&amp;mut Delay&gt;</code> 照樣給 <code>DerefMut</code>。
+        <b>Pin 對它形同不存在。</b>(呼應 <span data-jump="pin">軸 5</span>:Unpin 是逃生門。)</td></tr>
+    <tr><td>每次 poll 都 <code>clone</code> waker,不浪費?</td>
+        <td>Waker clone 是 refcount +1,很便宜。tokio 真實作法是先 <code>will_wake()</code> 比對,
+        同一個就不換 —— 那是優化,<b>45 分鐘裡先寫對的版本</b>。</td></tr>
+    <tr><td>一個 Delay 開一條 thread,能 scale 嗎?</td>
+        <td><b>不能,而且要主動講。</b>真的 runtime 是一個 timer wheel / BinaryHeap 加一條 driver thread,
+        或直接掛 <code>epoll_wait</code> 的 timeout。<b>先講出限制,再講怎麼修 = pillar 4。</b></td></tr>
+  </table></div>
+</section>
+<section class="panel" id="p-spsc">
+  <div class="tldr">
+    SPSC ring 是五軸的交會點,也是 7/28 最可能的題型。<b>它只需要兩個 atomic</b>,
+    因為 <span data-jump="ord">軸 4</span> 的保護傘讓「release 一個 index」就把整格資料發布出去了。
+  </div>
+
+  <h2>核心結構洞察:head / tail <b>單調遞增,永不取模</b></h2>
+  <p>這是整個 ring 唯一的結構技巧,也是最多人寫錯的地方。
+  如果 head/tail 存的是<b>物理下標</b>(0..cap),那 <code>head == tail</code> 同時代表<b>空</b>和<b>滿</b>,你分不出來 ——
+  於是要浪費一格、或多存一個 <code>count</code>(而 count 要 atomic,又多一個爭用點)。</p>
+  <p>把 head/tail 存成<b>累計計數</b>(從 0 一路加到 <code>usize::MAX</code> 再繞回),
+  <b>只在索引的瞬間才 <code>&amp; mask</code></b>,兩個問題同時消失:</p>
+
+  <svg viewBox="0 0 860 236" xmlns="http://www.w3.org/2000/svg" style="margin:12px 0;">
+    <text x="14" y="19" fill="#d8a657" font-size="12.5" font-weight="700">邏輯計數(單調) vs 物理下標(取模)—— 分開之後,空/滿就能區分</text>
+
+    <text x="14" y="46" fill="#928374" font-size="10.5">邏輯層(head/tail 實際存的):一路加,不回頭</text>
+    <line x1="14" y1="56" x2="846" y2="56" stroke="#45403d"/>
+    <g font-size="10" fill="#5a524c" font-family="monospace">
+      <text x="20" y="72">0</text><text x="120" y="72">4</text><text x="220" y="72">8</text>
+      <text x="320" y="72">12</text><text x="420" y="72">16</text><text x="520" y="72">20</text>
+      <text x="620" y="72">24</text><text x="700" y="72">…</text>
+      <text x="760" y="72">usize::MAX</text>
+    </g>
+    <line x1="20" y1="80" x2="750" y2="80" stroke="#5a524c" stroke-width="1"/>
+    <path d="M750,80 L840,80" stroke="#5a524c" stroke-width="1" stroke-dasharray="3 3"/>
+    <path d="M840,80 C852,80 852,94 840,94 L20,94" stroke="#e78a4e" stroke-width="1.2" fill="none" stroke-dasharray="3 3"/>
+    <text x="600" y="108" fill="#e78a4e" font-size="9.5">wrapping_add 繞回 0 —— 用 wrapping_sub 算差值,依然正確</text>
+    <circle cx="320" cy="80" r="4.5" fill="#7daea3"/>
+    <text x="306" y="46" fill="#7daea3" font-size="10" font-weight="700">head=12</text>
+    <circle cx="470" cy="80" r="4.5" fill="#a9b665"/>
+    <text x="456" y="46" fill="#a9b665" font-size="10" font-weight="700">tail=18</text>
+    <line x1="320" y1="88" x2="470" y2="88" stroke="#d8a657" stroke-width="1.2"/>
+    <text x="344" y="102" fill="#d8a657" font-size="10">tail-head = 6 = 目前存了幾個</text>
+
+    <text x="14" y="140" fill="#928374" font-size="10.5">物理層(只在存取那一瞬間算):idx = 計數 &amp; mask,mask = cap-1 = 7</text>
+    <g>
+      <rect x="14" y="150" width="76" height="40" rx="4" fill="#32302f" stroke="#45403d"/><text x="42" y="175" fill="#5a524c" font-size="11" font-family="monospace">[0]</text>
+      <rect x="94" y="150" width="76" height="40" rx="4" fill="#32302f" stroke="#45403d"/><text x="122" y="175" fill="#5a524c" font-size="11" font-family="monospace">[1]</text>
+      <rect x="174" y="150" width="76" height="40" rx="4" fill="#3a3a2a" stroke="#a9b665"/><text x="196" y="169" fill="#d4be98" font-size="11" font-family="monospace">[2]</text><text x="184" y="184" fill="#a9b665" font-size="8.5">tail 18&amp;7=2</text>
+      <rect x="254" y="150" width="76" height="40" rx="4" fill="#32302f" stroke="#45403d"/><text x="282" y="175" fill="#5a524c" font-size="11" font-family="monospace">[3]</text>
+      <rect x="334" y="150" width="76" height="40" rx="4" fill="#2f3438" stroke="#7daea3"/><text x="356" y="169" fill="#d4be98" font-size="11" font-family="monospace">[4]</text><text x="342" y="184" fill="#7daea3" font-size="8.5">head 12&amp;7=4</text>
+      <rect x="414" y="150" width="76" height="40" rx="4" fill="#3a352a" stroke="#5a524c"/><text x="442" y="175" fill="#d4be98" font-size="11" font-family="monospace">[5]</text>
+      <rect x="494" y="150" width="76" height="40" rx="4" fill="#3a352a" stroke="#5a524c"/><text x="522" y="175" fill="#d4be98" font-size="11" font-family="monospace">[6]</text>
+      <rect x="574" y="150" width="76" height="40" rx="4" fill="#3a352a" stroke="#5a524c"/><text x="602" y="175" fill="#d4be98" font-size="11" font-family="monospace">[7]</text>
+    </g>
+    <text x="662" y="163" fill="#928374" font-size="9.5">← 有資料的格子</text>
+    <text x="662" y="178" fill="#928374" font-size="9.5">   (head..tail 之間)</text>
+
+    <rect x="14" y="202" width="832" height="30" rx="4" fill="#2b2f23" stroke="#a9b665"/>
+    <text x="26" y="221" fill="#a9b665" font-size="11" font-weight="700">空 = (head == tail) · 滿 = (tail.wrapping_sub(head) == cap) · 兩者永不混淆,不浪費格子,不需要第三個 atomic。</text>
+  </svg>
+
+  <h2>Stepper:走一遍,特別看 wrap 那一步</h2>
+  <div class="stepper" id="st-ring">
+    <div class="sctl">
+      <button data-act="prev">← 上一步</button>
+      <button data-act="next">下一步 →</button>
+      <button data-act="reset">重置</button>
+      <span class="sidx" id="ring-idx"></span>
+      <span class="toggle">
+        <button data-mode="normal" class="on">一般序列</button>
+        <button data-mode="wrap">從 usize::MAX-2 開始</button>
+      </span>
+    </div>
+    <div class="ctr" id="ring-ctr"></div>
+    <div class="slots" id="ring-slots"></div>
+    <div class="narr" id="ring-narr"></div>
+  </div>
+
+  <h2>五軸在這段 code 裡各佔哪幾行</h2>
+  <div class="tblwrap"><table>
+    <tr><th style="width:11%">軸</th><th style="width:30%">出現在哪</th><th>它在這裡解決什麼</th></tr>
+    <tr><td><b>1</b> Ownership</td><td><code>Arc&lt;Ring&lt;T&gt;&gt;</code> ×2</td>
+        <td>producer / consumer 各持一份。誰最後放手誰負責 drop。</td></tr>
+    <tr><td><b>2</b> XOR</td><td><code>UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;</code></td>
+        <td>要在 <code>&amp;Ring</code> 底下寫 slot。<code>MaybeUninit</code> 另外處理「這格還沒有值」——
+        沒有它就得要求 <code>T: Default</code> 去填假值。</td></tr>
+    <tr><td><b>3</b> Send/Sync</td><td>兩行 <code>unsafe impl</code></td>
+        <td><code>UnsafeCell</code> 把 <code>!Sync</code> 傳染上來 → 手動覆寫 → <b>要辯護</b>
+        (<span data-jump="ss">三段式模板</span>)。</td></tr>
+    <tr><td><b>4</b> Ordering</td><td>四個 load/store 的 <code>Ordering</code> 參數</td>
+        <td>撐起軸 3 的辯護。<b>沒有它,「不重疊」就只是願望。</b></td></tr>
+    <tr><td><b>5</b> Pin</td><td class="m">沒出現</td>
+        <td>ring 不自引用。<b>這題完全不需要 Pin</b> —— 講得出「為什麼這裡不需要」也是分。</td></tr>
+  </table></div>
+
+  <h2>完整實作<span class="verified">已驗 · 5 組測試全過,含 200k 並行守恆</span></h2>
+  <div class="note">
+    這段是我實際編過跑過的字串,不是示意 code。測試包含:基本 FIFO / 滿空可區分 /
+    <b>跨 <code>usize::MAX</code> wrap 點</b> / <b>200,000 筆雙執行緒守恆</b> / Drop 無 leak 無 double-free。
+  </div>
+<pre><code><span class="k">use</span> std::cell::<span class="ty">UnsafeCell</span>;
+<span class="k">use</span> std::mem::<span class="ty">MaybeUninit</span>;
+<span class="k">use</span> std::sync::atomic::{<span class="ty">AtomicUsize</span>, <span class="ty">Ordering</span>};
+<span class="k">use</span> std::sync::<span class="ty">Arc</span>;
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt; {
+    buf: <span class="ty">Box</span>&lt;[<span class="ty">UnsafeCell</span>&lt;<span class="ty">MaybeUninit</span>&lt;<span class="ty">T</span>&gt;&gt;]&gt;,
+    mask: <span class="ty">usize</span>,
+    head: <span class="ty">AtomicUsize</span>, <span class="cm">// consumer 下一個要讀的位置(單調遞增,不取模)</span>
+    tail: <span class="ty">AtomicUsize</span>, <span class="cm">// producer 下一個要寫的位置(單調遞增,不取模)</span>
+}
+
+<span class="cm">// SAFETY: producer 只寫 tail、consumer 只寫 head;兩者觸碰的 slot 由</span>
+<span class="cm">// head/tail 的 acquire/release 配對保證不重疊。T 會從 producer thread</span>
+<span class="cm">// 移動到 consumer thread,故需 T: Send。我們從不同時交出 &amp;T 給兩條</span>
+<span class="cm">// thread,故不需要 T: Sync。</span>
+<span class="k">unsafe</span> <span class="k">impl</span>&lt;<span class="ty">T</span>: <span class="ty">Send</span>&gt; <span class="ty">Send</span> <span class="k">for</span> <span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt; {}
+<span class="k">unsafe</span> <span class="k">impl</span>&lt;<span class="ty">T</span>: <span class="ty">Send</span>&gt; <span class="ty">Sync</span> <span class="k">for</span> <span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt; {}
+
+<span class="k">impl</span>&lt;<span class="ty">T</span>&gt; <span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt; {
+    <span class="k">fn</span> <span class="fn">cap</span>(&amp;<span class="k">self</span>) -&gt; <span class="ty">usize</span> {
+        <span class="k">self</span>.mask + <span class="nu">1</span>
+    }
+}
+
+<span class="k">impl</span>&lt;<span class="ty">T</span>&gt; <span class="ty">Drop</span> <span class="k">for</span> <span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt; {
+    <span class="k">fn</span> <span class="fn">drop</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) {
+        <span class="k">let</span> head = *<span class="k">self</span>.head.<span class="fn">get_mut</span>();
+        <span class="k">let</span> tail = *<span class="k">self</span>.tail.<span class="fn">get_mut</span>();
+        <span class="k">let</span> <span class="k">mut</span> i = head;
+        <span class="k">while</span> i != tail {
+            <span class="k">unsafe</span> { (*<span class="k">self</span>.buf[i &amp; <span class="k">self</span>.mask].<span class="fn">get</span>()).<span class="fn">assume_init_drop</span>() };
+            i = i.<span class="fn">wrapping_add</span>(<span class="nu">1</span>);
+        }
+    }
+}
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="ty">Producer</span>&lt;<span class="ty">T</span>&gt; {
+    ring: <span class="ty">Arc</span>&lt;<span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt;&gt;,
+}
+<span class="k">pub</span> <span class="k">struct</span> <span class="ty">Consumer</span>&lt;<span class="ty">T</span>&gt; {
+    ring: <span class="ty">Arc</span>&lt;<span class="ty">Ring</span>&lt;<span class="ty">T</span>&gt;&gt;,
+}
+
+<span class="k">pub</span> <span class="k">fn</span> channel&lt;<span class="ty">T</span>&gt;(cap: <span class="ty">usize</span>) -&gt; (<span class="ty">Producer</span>&lt;<span class="ty">T</span>&gt;, <span class="ty">Consumer</span>&lt;<span class="ty">T</span>&gt;) {
+    <span class="mac">assert!</span>(cap.<span class="fn">is_power_of_two</span>() &amp;&amp; cap &gt; <span class="nu">0</span>, <span class="st">&quot;cap 必須是 <span class="nu">2</span> 的冪&quot;</span>);
+    <span class="k">let</span> buf = (<span class="nu">0</span>..cap)
+        .<span class="fn">map</span>(|_| <span class="ty">UnsafeCell</span>::<span class="fn">new</span>(<span class="ty">MaybeUninit</span>::<span class="fn">uninit</span>()))
+        .collect::&lt;<span class="ty">Vec</span>&lt;_&gt;&gt;()
+        .<span class="fn">into_boxed_slice</span>();
+    <span class="k">let</span> ring = <span class="ty">Arc</span>::<span class="fn">new</span>(<span class="ty">Ring</span> {
+        buf,
+        mask: cap - <span class="nu">1</span>,
+        head: <span class="ty">AtomicUsize</span>::<span class="fn">new</span>(<span class="nu">0</span>),
+        tail: <span class="ty">AtomicUsize</span>::<span class="fn">new</span>(<span class="nu">0</span>),
+    });
+    (
+        <span class="ty">Producer</span> { ring: ring.<span class="fn">clone</span>() },
+        <span class="ty">Consumer</span> { ring },
+    )
+}
+
+<span class="k">impl</span>&lt;<span class="ty">T</span>&gt; <span class="ty">Producer</span>&lt;<span class="ty">T</span>&gt; {
+    <span class="k">pub</span> <span class="k">fn</span> <span class="fn">push</span>(&amp;<span class="k">mut</span> <span class="k">self</span>, val: <span class="ty">T</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">T</span>&gt; {
+        <span class="k">let</span> tail = <span class="k">self</span>.ring.tail.<span class="fn">load</span>(<span class="ty">Ordering</span>::Relaxed); <span class="cm">// 只有我寫 tail</span>
+        <span class="k">let</span> head = <span class="k">self</span>.ring.head.<span class="fn">load</span>(<span class="ty">Ordering</span>::Acquire); <span class="cm">// 看見 consumer 的釋放</span>
+        <span class="k">if</span> tail.<span class="fn">wrapping_sub</span>(head) == <span class="k">self</span>.ring.<span class="fn">cap</span>() {
+            <span class="k">return</span> <span class="ty">Err</span>(val); <span class="cm">// 滿</span>
+        }
+        <span class="k">unsafe</span> { (*<span class="k">self</span>.ring.buf[tail &amp; <span class="k">self</span>.ring.mask].<span class="fn">get</span>()).<span class="fn">write</span>(val) };
+        <span class="k">self</span>.ring.tail.<span class="fn">store</span>(tail.<span class="fn">wrapping_add</span>(<span class="nu">1</span>), <span class="ty">Ordering</span>::Release); <span class="cm">// 發布</span>
+        <span class="ty">Ok</span>(())
+    }
+}
+
+<span class="k">impl</span>&lt;<span class="ty">T</span>&gt; <span class="ty">Consumer</span>&lt;<span class="ty">T</span>&gt; {
+    <span class="k">pub</span> <span class="k">fn</span> <span class="fn">pop</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Option</span>&lt;<span class="ty">T</span>&gt; {
+        <span class="k">let</span> head = <span class="k">self</span>.ring.head.<span class="fn">load</span>(<span class="ty">Ordering</span>::Relaxed); <span class="cm">// 只有我寫 head</span>
+        <span class="k">let</span> tail = <span class="k">self</span>.ring.tail.<span class="fn">load</span>(<span class="ty">Ordering</span>::Acquire); <span class="cm">// 看見 producer 的發布</span>
+        <span class="k">if</span> head == tail {
+            <span class="k">return</span> <span class="ty">None</span>; <span class="cm">// 空</span>
+        }
+        <span class="k">let</span> val = <span class="k">unsafe</span> { (*<span class="k">self</span>.ring.buf[head &amp; <span class="k">self</span>.ring.mask].<span class="fn">get</span>()).<span class="fn">assume_init_read</span>() };
+        <span class="k">self</span>.ring.head.<span class="fn">store</span>(head.<span class="fn">wrapping_add</span>(<span class="nu">1</span>), <span class="ty">Ordering</span>::Release); <span class="cm">// 釋放 slot</span>
+        <span class="ty">Some</span>(val)
+    }
+}</code></pre>
+
+  <h2>四個 Ordering,每個寫錯的後果<span class="verified">已驗 · 反例</span></h2>
+  <p>這四行是全部的爭議點。<b>被追問時要能逐行講</b> —— 而且要講得出「寫錯會怎樣」,
+  不只是「這樣寫是對的」:</p>
+
+  <div class="tblwrap"><table>
+    <tr><th style="width:26%">那一行</th><th style="width:14%">為什麼是這個</th><th>改成 <code>Relaxed</code> 會怎樣</th></tr>
+    <tr><td><code>tail.load(<b>Relaxed</b>)</code><br><span style="font-size:11px;color:var(--grey)">push 裡讀自己的 tail</span></td>
+        <td class="y">本來就該 Relaxed</td>
+        <td class="y"><b>沒事,這就是 Relaxed</b>。<code>tail</code> <b>只有 producer 會寫</b> ——
+        我讀自己剛寫的值,不需要跟任何人同步。<b>這格用 Acquire 是白付錢</b>,講得出來是加分。</td></tr>
+    <tr><td><code>head.load(<b>Acquire</b>)</code><br><span style="font-size:11px;color:var(--grey)">push 裡看 consumer 進度</span></td>
+        <td class="m">配對 consumer 的 release</td>
+        <td class="n">我可能看到 consumer 已經推進的 <code>head</code>,<b>卻還沒看到它把那格讀完</b> →
+        我覆寫一格 consumer 正在讀的資料。<b>撕裂。</b></td></tr>
+    <tr><td><code>tail.store(.., <b>Release</b>)</code><br><span style="font-size:11px;color:var(--grey)">push 的最後一行</span></td>
+        <td class="n"><b>最關鍵的一行</b></td>
+        <td class="n">consumer 看到新 <code>tail</code>,但<b>看不到我剛寫進 slot 的資料</b> →
+        它讀到未初始化記憶體 → <code>assume_init_read</code> 一個垃圾 → <b>如果 T 有指標,直接 segfault</b>。</td></tr>
+    <tr><td><code>head.load(<b>Relaxed</b>)</code> / <code>tail.load(<b>Acquire</b>)</code> / <code>head.store(<b>Release</b>)</code><br>
+        <span style="font-size:11px;color:var(--grey)">pop 裡,完全對稱</span></td>
+        <td class="m">鏡像</td>
+        <td class="n"><code>head.store</code> 若 Relaxed:producer 看到 slot 空了就寫進去,
+        <b>但我可能還沒讀完</b> → 我讀到一半的值被覆寫。</td></tr>
+  </table></div>
+
+  <div class="warn">
+    <b>x86 提醒(呼應 <span data-jump="ord">軸 4</span>)</b>:上面每一個「會怎樣」,
+    <b>在 CoderPad 那台 x86 上跑 20 萬次都不會發生</b>。我實測過 relaxed message-passing 2000 次全過。
+    所以這些反例是<b>用嘴講的</b>,不是用 Run 按鈕證明的。
+  </div>
+
+  <h2>被追問時的三個 follow-up(先想好)</h2>
+  <div class="cards">
+    <div class="card"><h4>「false sharing 呢?」</h4>
+      <p><code>head</code> 跟 <code>tail</code> 在同一條 cache line → producer 寫 tail 會讓 consumer 的 head 快取失效,
+      互相打。解:<code>#[repr(align(64))]</code> 把兩者拆開。<b>45 分鐘裡先講出來、如果有時間再加。</b></p></div>
+    <div class="card"><h4>「為什麼 SPSC 不用 CAS?」</h4>
+      <p>因為每個 atomic <b>只有一個 writer</b>。CAS 是用來解決「多個 writer 搶同一個變數」的,
+      這裡沒有那個問題。<b>MPMC 才需要</b>(關鍵字:Vyukov bounded queue)。</p></div>
+    <div class="card"><h4>「滿了要怎麼辦?」</h4>
+      <p>我回 <code>Err(val)</code> 把值<b>還給呼叫者</b> —— 這是刻意的:值沒地方放就不能吞掉。
+      三種策略:fail-fast(現在這樣)/ block(要 condvar)/ drop-oldest(要 consumer 也能動 head,就不再是 SPSC)。
+      <b>講得出這三條 = pillar 4。</b></p></div>
+    <div class="card"><h4>「怎麼測?」</h4>
+      <p>守恆斷言(送出總數 == 收到總數、順序不變)+ <b>loom</b> 窮舉 interleaving。
+      <b>不要說「我跑了很多次沒事」</b> —— 那在 ordering 上不是證據。</p></div>
+  </div>
+</section>
+<section class="panel" id="p-live">
+  <div class="tldr">
+    <b>2026-07-28(二)08:45–09:30 台北 · 45 分鐘 · Rust · CoderPad + Google Meet · 面試官 Alex Mikhalev · 英文</b><br>
+    扣掉 intro / 題目 / 提問,<b>實際敲 code 只有約 25 分鐘</b>。這一頁的所有內容都是這個數字的推論。
+  </div>
+
+  <h2>時間預算(照這個跑,不要即興)</h2>
+  <div class="tblwrap"><table>
+    <tr><th style="width:11%">分鐘</th><th style="width:20%">在做什麼</th><th>紀律</th></tr>
+    <tr><td><b>0–3</b></td><td>自我介紹</td><td>30 秒版本。不要講完整履歷。</td></tr>
+    <tr><td><b>3–5</b></td><td>聽題目</td><td>聽完<b>複述一遍</b>再動 —— 這是 pillar 1 的免費分。</td></tr>
+    <tr><td><b>5–10</b></td><td>clarify + 口頭 outline</td><td><b>壓在 5 分鐘。</b>這裡超時就沒 code 了。</td></tr>
+    <tr><td><b>10–35</b></td><td>寫 code</td><td><b>naive 先跑起來</b>,再迭代。不要一次寫完美版。</td></tr>
+    <tr style="background:#33272640"><td><b>35–40</b></td><td class="n"><b>dry-run</b></td>
+        <td class="n"><b>35 分硬停,不管當下多想再優化。</b>這五分鐘是 pillar 5,也是你 R1 掉分的那條軸。<b>不可讓渡。</b></td></tr>
+    <tr><td><b>40–45</b></td><td>你問他</td><td>準備 2–3 個真問題。</td></tr>
+  </table></div>
+
+  <h2>開場必說的三句(前 2 分鐘講完)</h2>
+  <div class="tblwrap"><table>
+    <tr><th style="width:22%">要宣告什麼</th><th style="width:38%">怎麼說(英文)</th><th>為什麼</th></tr>
+    <tr><td><b>① 開書宣告</b></td>
+        <td>"Before we start — the scheduling email mentioned I can look up language references. I might open the std docs to check a signature. I won't use any AI assistance."</td>
+        <td class="n"><b>Etched 的信寫死了:查文件可以,但<b>必須事先告知</b>。</b>沒講就查 = 破規則。
+        AI 工具明文禁止。</td></tr>
+    <tr><td><b>② std-only 假設</b></td>
+        <td>"I noticed the pad has crates available. The prep material mentioned building without external libraries, so I'll use std only — let me know if you'd rather I reach for a crate."</td>
+        <td><b>陳述假設,讓他糾正</b>。pad 上有 tokio/rayon = 陷阱:
+        「architect a custom thread pool without relying on external libraries」是他們的原話。</td></tr>
+    <tr><td><b>③ 測試形式</b></td>
+        <td>"I see there's a tests directory — would you like me to write tests there, or is a quick main() exercise enough?"</td>
+        <td>只在 pad 顯示 Files panel 時問(= Rust Project 模式)。<b>花你 10 秒,買 pillar 1 的分。</b></td></tr>
+  </table></div>
+
+  <div class="note">
+    <b>環境事實(你自己 scratch-pad 測出來的,以此為準)</b>:CoderPad 跑 <b>Rust 1.92.0 (2024 Edition)</b>。
+    可用 crate:tokio, serde, serde_json, rand, rayon, regex, reqwest, chrono, anyhow, thiserror, itertools, bitflags, url, uuid。
+    <b>沒有 libc、沒有 mio → epoll 這題基本出局</b>。
+    crate 清單長得像通用 web service 組合 → <b>那是 CoderPad 的預設,不是 Etched 挑的</b>,
+    從清單推不出他們想考什麼。
+  </div>
+
+  <h2>五根柱子 → 對應你的動作</h2>
+  <div class="tblwrap"><table>
+    <tr><th style="width:22%">Etched 的 pillar</th><th style="width:34%">你的具體動作</th><th>對應</th></tr>
+    <tr><td><b>1 Clarify &amp; Communicate</b></td>
+        <td>複述題目 → 問 3 個(容量固定?單/多 producer?滿了要 block 還是 fail?)→ 上面那三句宣告</td>
+        <td>免費分,5 分鐘內做完</td></tr>
+    <tr><td><b>2 Abstract the Noise</b></td>
+        <td>次要關注點用一個 trait / 簡單 API stub 掉。例:「我先假設有個 <code>Sink</code> trait 負責輸出,專心做 ring 本身」</td>
+        <td>25 分鐘不夠做全部,主動切</td></tr>
+    <tr><td><b>3 Start Simple Then Iterate</b></td>
+        <td><b>先寫 <code>Mutex&lt;VecDeque&gt;</code> 版本讓它會動</b>,講「這是 baseline,鎖是爭用點」,<b>再</b>換 lock-free</td>
+        <td>你的 naive→lever 弧。<b>naive 要真的跑</b>,不是嘴上說</td></tr>
+    <tr><td><b>4 Talk Through Trade-offs</b></td>
+        <td>每個決定講 Big-O + 一個放棄的選項。<b>明講 Big-O 是「massive green flag」(他們原話)</b></td>
+        <td>你 R1 的空間複雜度盲點 → <b>每個解都講時間<i>和</i>空間</b></td></tr>
+    <tr style="background:#2b2f2360"><td><b>5 Dry-Run Before You Run</b></td>
+        <td class="y"><b>35 分硬停,按 Run 之前先逐行 trace</b></td>
+        <td class="y"><b>「找到自己的 bug 比第一次就寫對更強」——
+        這是他們原話,也剛好是你 R1 掉分的那條軸(Independent Drive)</b></td></tr>
+  </table></div>
+
+  <h2>Pillar 5 的操作化:CoderPad 有 Run 按鈕,這是陷阱</h2>
+  <div class="warn">
+    你自己的 scratch-pad 截圖已經示範過這個坑:<b>測試面板顯示綠色 "test result: ok. 0 passed",
+    下面 terminal 卻是 "error: could not compile"</b>。只看綠色 = 相信一個假的 pass。
+    <br><br>
+    <b>Run 之前的三個動作</b>(這是你 R1 復盤的反射,搬過來):
+    <ol style="margin:8px 0 0 20px;font-size:13px;">
+      <li><b>把 code 當成別人寫的來讀。</b>你 R1 的失敗模式是「我講過了所以我對」—— 講出聲會製造確定感,眼睛就跳過了。逐字讀字面。</li>
+      <li><b>挑一個非平凡邊界手動 trace。</b>ring 就是 <b>wrap 那一格</b>(<code>head=cap-1</code> 要跳到 <code>0</code>)、滿、空。
+      <b>不要 trace 第一格</b> —— R1 的 bug 就是零初始化在原點剛好對。</li>
+      <li><b>guard 順序</b>:bounds check 一定在前(<code>||</code> 短路),不要寫成 <code>arr[i] &amp;&amp; inside(i)</code>。</li>
+    </ol>
+  </div>
+
+  <div class="good">
+    <b><code>main()</code> + <code>assert_eq!</code> 就是 pillar 5 的可執行版本</b>:<br>
+    assert 裡填的<b>期望值 = 你手動 trace 的預測</b>。panic = 你的 trace 錯了。
+    這比 <code>#[cfg(test)]</code> 快,而且<b>在 Project 跟 plain Rust 兩種 pad 模式下都能跑</b>
+    (Project 模式仍有 Run Main)。你 repo 的 <code>rehearsals/</code> 是 test module 寫的 —— <b>改成 assert-in-main</b>。
+  </div>
+
+  <h2>題目來了先跑這條決策鏈</h2>
+  <div class="tblwrap"><table>
+    <tr><th style="width:6%">#</th><th style="width:26%">問自己</th><th>答案分岔</th></tr>
+    <tr><td>1</td><td>有幾個 writer?</td><td>1 個 → 不用 CAS,兩個 atomic 就夠(SPSC)。<br>多個 → 要 CAS 迴圈,而且<b>要主動講 reclamation 問題</b>。</td></tr>
+    <tr><td>2</td><td>容量固定嗎?</td><td>固定 → 陣列 + mask(要求 2 的冪,<b>要問</b>)。<br>不固定 → 先 <code>VecDeque</code>,講清楚 grow 的成本。</td></tr>
+    <tr><td>3</td><td>滿了 / 空了怎麼辦?</td><td><b>這題一定要問。</b>fail-fast / block / drop-oldest 是三種完全不同的 code。</td></tr>
+    <tr><td>4</td><td>naive 版本是什麼?</td><td><code>Mutex&lt;VecDeque&gt;</code>。<b>先寫它,讓它跑</b>,再說「鎖是爭用點,SPSC 可以拆掉」。</td></tr>
+    <tr><td>5</td><td>lever 是什麼?</td><td>單 writer → 每個 atomic 只有一個 writer → 不需要互斥,只需要<b>發布/觀察</b> → acquire/release。</td></tr>
+    <tr><td>6</td><td>ordering 怎麼填?</td><td><b>先全部 SeqCst</b>。跑對了,再逐個放寬,<b>每放寬一個就講一次 synchronizes-with</b>。講不出來就留 SeqCst。</td></tr>
+  </table></div>
+
+  <div class="warn">
+    <b>最後一句實話</b>:這份文件能做的到此為止。<br>
+    上面每一格都是「你要在 08:45 對著 Alex 用英文講出來」的東西 ——
+    而<b>讀過</b>跟<b>講得出來</b>之間隔的不是理解,是嘴巴的 reps。
+    你的 <code>etched-supercomputing-prep-plan.md</code> §7 紅線寫著「這份 plan 是唯一 artifact,
+    之後的產出都應該是你手寫的 code 和 mock 錄音」。<b>這份 HTML 是我破了那條線做的。</b>
+    剩下 13 天,唯一還有邊際效益的動作是:<b>關掉這頁,打開 CoderPad,手寫一次 SPSC,錄下你講 ordering 的那 3 分鐘。</b>
+  </div>
+</section>
+<div class="foot">
+  Rust 五軸機制 · 為 Etched Supercomputing TPS(2026-07-28)所建 · Gruvbox Material / JetBrains Mono<br>
+  所有 <span class="verified">已驗</span> code 經 rustc 1.75.0 edition 2021 實際編譯執行;SPSC 區塊的 code 由驗證過的原始檔程式化生成並 round-trip 重編確認。<br>
+  <span class="sourced">查證</span> = 一手文件查證(未本機實編)。<span class="unverified">未驗</span> = 推理或記憶,請自行查核。
+</div>
+</div><!-- /wrap -->
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- tabs ---------- */
+var nav = document.getElementById('nav');
+function show(p){
+  var bs = nav.querySelectorAll('button');
+  for(var i=0;i<bs.length;i++) bs[i].classList.toggle('on', bs[i].getAttribute('data-p')===p);
+  var ps = document.querySelectorAll('.panel');
+  for(var j=0;j<ps.length;j++) ps[j].classList.toggle('on', ps[j].id==='p-'+p);
+  window.scrollTo(0,0);
+}
+nav.addEventListener('click', function(e){
+  var b = e.target.closest('button[data-p]');
+  if(b) show(b.getAttribute('data-p'));
+});
+/* data-jump instead of <a href="#id"> */
+document.addEventListener('click', function(e){
+  var t = e.target.closest('[data-jump]');
+  if(t) show(t.getAttribute('data-jump'));
+});
+
+/* ---------- generic stepper wiring ---------- */
+function wire(rootId, getLen, render){
+  var root = document.getElementById(rootId);
+  if(!root) return null;
+  var st = { i:0, mode:null };
+  var tog = root.querySelectorAll('.toggle button');
+  if(tog.length) st.mode = tog[0].getAttribute('data-mode');
+  function draw(){
+    if(st.i > getLen(st.mode)-1) st.i = getLen(st.mode)-1;
+    if(st.i < 0) st.i = 0;
+    render(st.i, st.mode);
+    var idx = root.querySelector('.sidx');
+    if(idx) idx.textContent = '第 '+(st.i+1)+' / '+getLen(st.mode)+' 步';
+    var pv = root.querySelector('[data-act="prev"]'), nx = root.querySelector('[data-act="next"]');
+    if(pv) pv.disabled = (st.i===0);
+    if(nx) nx.disabled = (st.i===getLen(st.mode)-1);
+  }
+  root.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    var act = b.getAttribute('data-act'), md = b.getAttribute('data-mode');
+    if(act==='next') st.i++;
+    else if(act==='prev') st.i--;
+    else if(act==='reset') st.i=0;
+    else if(md){
+      st.mode = md; st.i = 0;
+      for(var k=0;k<tog.length;k++) tog[k].classList.toggle('on', tog[k]===b);
+    } else return;
+    draw();
+  });
+  draw();
+  return draw;
+}
+
+/* ================= 1. ORDERING STEPPER ================= */
+var ORD = {
+  relaxed: [
+    {a:-1,b:-1,ro:-1,data:0,ready:false,seen:null,
+     n:'<b>初始</b>:DATA=0、READY=false。A 想把 42 交給 B,用 READY 當旗標。兩邊都寫 <code>Relaxed</code>。',
+     w:'Relaxed 的保證只有一條:READY 這個變數本身讀寫不撕裂。<b>它對周圍的讀寫零承諾。</b>'},
+    {a:-1,b:-1,ro:1,data:0,ready:true,seen:null,
+     n:'<b>重排發生</b>:A 的第二行(<code>ready.store</code>)<b>先執行了</b>,第一行的 <code>DATA=42</code> 還沒落地。',
+     w:'誰做的?<b>LLVM</b> —— Relaxed 對它就是「這裡沒有同步」,它有權把那個普通寫入沉到 store 之後。(x86 CPU 自己不會這樣重排,但編譯器會。)'},
+    {a:-1,b:0,ro:1,data:0,ready:true,seen:null,
+     n:'<b>B 讀到 READY = true</b>,跳出等待迴圈,認為「資料準備好了」。',
+     w:'B 沒有任何依據這樣認為 —— Relaxed load 不建立 synchronizes-with,B 讀到 true 不代表看得到 A 的其他寫入。'},
+    {a:-1,b:1,ro:1,data:0,ready:true,seen:0,verdict:'ub',
+     n:'<b>B 讀 DATA → 拿到 0。</b>',
+     w:'撕裂。B 看到了旗標卻沒看到資料。如果 DATA 是 <code>MaybeUninit</code> 的 slot,這裡就是讀未初始化記憶體 → 有指標就 segfault。'},
+    {a:0,b:1,ro:1,data:42,ready:true,seen:0,verdict:'ub',
+     n:'<b>A 的 <code>DATA=42</code> 現在才落地</b> —— 太遲了,B 已經拿走 0 了。',
+     w:'注意這整條路徑在 x86 上<b>幾乎不會發生</b>(我實測 2000 次 0 次)。它是<b>記憶體模型上的 UB</b>,不是「x86 會壞」。'}
+  ],
+  acqrel: [
+    {a:-1,b:-1,ro:-1,data:0,ready:false,seen:null,
+     n:'<b>初始</b>:同一段 code,只把 store 改 <code>Release</code>、load 改 <code>Acquire</code>。',
+     w:'注意:<b>兩邊都要改</b>。只改一邊等於沒改 —— 配對不成立就沒有 happens-before。'},
+    {a:0,b:-1,ro:-1,data:42,ready:false,seen:null,
+     n:'<b>A 寫 DATA = 42</b>(普通寫入)。',
+     w:'這行還是普通寫入,沒有任何 atomic 語意。它的可見性完全靠下一行的 release 帶出去。'},
+    {a:1,b:-1,ro:-1,data:42,ready:true,seen:null,
+     n:'<b>A 執行 <code>ready.store(true, Release)</code></b> —— 這是一道天花板。',
+     w:'Release 保證:<b>我前面的所有寫入</b>,不准被排到我後面。所以 DATA=42 一定已經落地。這一行把它「發布」出去。'},
+    {a:1,b:0,ro:-1,data:42,ready:true,seen:null,
+     n:'<b>B 的 <code>ready.load(Acquire)</code> 讀到 true</b> —— 而這個 true <b>正是 A release 寫的那個</b>。',
+     w:'配對成立 → <b>synchronizes-with</b>。這是整個機制唯一的觸發條件:acquire 必須<i>真的讀到</i>那個 release 寫的值。'},
+    {a:1,b:1,ro:-1,data:42,ready:true,seen:42,verdict:'ok',
+     n:'<b>B 讀 DATA → 42。有保證,不是運氣。</b>',
+     w:'synchronizes-with ⟹ happens-before ⟹ A 在 release 之前的<b>所有</b>寫入對 B 可見。這就是 ring buffer 只用兩個 atomic 就能發布整格資料的原因。'}
+  ]
+};
+var ordAops = ['*data.get() = 42;','ready.store(true, ORD);'];
+var ordBops = ['while !ready.load(ORD) {}','let v = *data.get();'];
+wire('st-ord', function(m){return ORD[m].length;}, function(i,m){
+  var s = ORD[m][i];
+  var ordName = (m==='relaxed') ? 'Relaxed' : null;
+  function ops(list, cur, host, isA){
+    var h='';
+    for(var k=0;k<list.length;k++){
+      var cls='op';
+      if(s.ro===k && m==='relaxed' && k===1 && s.a<0) cls+=' reordered now';
+      else if(k<=cur) cls+=(k===cur?' now':' done');
+      var txt=list[k];
+      if(m==='relaxed') txt=txt.replace('ORD','Relaxed');
+      else txt=txt.replace('ORD', isA?'Release':'Acquire');
+      h+='<div class="'+cls+'">'+txt+(s.ro===k&&m==='relaxed'&&s.a<0?'  ← 被提前執行':'')+'</div>';
+    }
+    document.getElementById(host).innerHTML=h;
+  }
+  ops(ordAops, s.a, 'ord-A', true);
+  ops(ordBops, s.b, 'ord-B', false);
+  document.getElementById('ord-mem').innerHTML =
+    '<span class="lbl">記憶體:</span> DATA = <span class="v">'+s.data+'</span> &nbsp;·&nbsp; READY = <span class="v">'+s.ready+'</span>'+
+    (s.seen!==null ? ' &nbsp;&nbsp;<span class="lbl">B 實際讀到的 DATA =</span> <span class="v" style="color:'+(s.seen===42?'#a9b665':'#ea6962')+'">'+s.seen+'</span>' : '');
+  document.getElementById('ord-narr').innerHTML = s.n + '<span class="why">'+s.w+'</span>';
+  var v = document.getElementById('ord-verdict');
+  v.innerHTML = !s.verdict ? '' :
+    (s.verdict==='ok' ? '<div class="verdict ok">✓ 有保證:B 一定看到 42</div>'
+                      : '<div class="verdict ub">✗ UB:B 看到旗標卻沒看到資料(x86 上跑起來卻是對的 → 測不出來)</div>');
+});
+
+/* ================= 2. POLL / WAKE STEPPER ================= */
+var POLL = {
+  token: [
+    {e:0,w:-1,tok:0,st:'poll #1',
+     n:'<b>executor 第一次 poll</b>。',
+     y:'block_on 的 loop 起點。'},
+    {e:1,w:0,tok:0,st:'Pending',
+     n:'<b>future 回 Pending</b>,但在此之前它先做了兩件事:存下 <code>cx.waker().clone()</code>、spawn 一條計時 thread。',
+     y:'契約:回 Pending 就<b>有義務</b>安排 wake 被叫。存了不叫 = hang;不存就回 Pending = hang。'},
+    {e:1,w:1,tok:1,st:'Pending',
+     n:'<b>⚡ 計時 thread 搶先了</b>:時間到 → <code>wake()</code> → <code>unpark(main)</code>。<br>但 main thread <b>還沒 park</b>!',
+     y:'這就是 wake-before-park 競態。天真的想法:「unpark 一個沒睡的 thread → 什麼都沒發生 → 等下 park 就永遠醒不來」。'},
+    {e:2,w:1,tok:0,st:'park() 立刻返回',
+     n:'<b>executor 執行 <code>thread::park()</code> —— 但它<b>沒有睡</b>。</b>park 看到 token=1,<b>吃掉 token 直接返回</b>。',
+     y:'<b>這就是 std 的 park/unpark token 語意。</b>unpark 留下的 token 是持久的,不是一個瞬間的信號。'},
+    {e:3,w:1,tok:0,st:'Ready',verdict:'ok',
+     n:'<b>executor 再 poll 一次 → Ready</b>。完成。',
+     y:'本機實測:<code>[ok] wake-before-park 沒有 hang → 醒了 (817ns)</code>。817ns = 根本沒睡過。'}
+  ],
+  notoken: [
+    {e:0,w:-1,tok:null,st:'poll #1',
+     n:'<b>同一段 code</b>,但假設 <code>park</code> <b>沒有</b> token 語意(純粹「睡到有人叫」)。',
+     y:'很多人手寫 executor 時腦中的模型就是這個 —— 這也是為什麼會寫出會 hang 的 executor。'},
+    {e:1,w:0,tok:null,st:'Pending',
+     n:'<b>future 回 Pending</b>,存好 waker,spawn 計時 thread。一模一樣。',
+     y:''},
+    {e:1,w:1,tok:null,st:'Pending',
+     n:'<b>⚡ 計時 thread 搶先</b>:<code>wake()</code> → <code>unpark(main)</code>。main 還沒 park。',
+     y:'沒有 token 的話,這個 unpark <b>掉進虛空</b> —— 沒有人在睡,叫誰?'},
+    {e:2,w:2,tok:null,st:'park() 睡下去',verdict:'ub',
+     n:'<b>executor 現在才 park() → 睡死。</b>',
+     y:'計時 thread 已經跑完了,<b>不會有第二次 wake</b>。waker 存在信箱裡也沒用,沒人再去拿。'},
+    {e:2,w:2,tok:null,st:'💀 DEADLOCK',verdict:'ub',
+     n:'<b>永久 deadlock。</b>程式停在這裡,永遠。',
+     y:'<b>std 的 park 有 token,所以真實世界不會發生這個</b> —— 但如果你自己用 condvar 手刻 park,<b>忘了那個 flag 就會複刻這個 bug</b>。這是手寫 executor 的頭號坑。'}
+  ]
+};
+var pollE = ['loop { match fut.poll(&mut cx) {','  Poll::Pending => ','    thread::park()','  Poll::Ready(v) => return v'];
+var pollW = ['(計時 thread 已 spawn,睡 120ms)','時間到 → waker.wake() → unpark(main)','(計時 thread 結束,不會再叫了)'];
+wire('st-poll', function(m){return POLL[m].length;}, function(i,m){
+  var s = POLL[m][i];
+  function rows(list, cur, host){
+    var h='';
+    for(var k=0;k<list.length;k++) h+='<div class="plrow'+(k===cur?' on':'')+'">'+(k===cur?'▸ ':'  ')+list[k]+'</div>';
+    document.getElementById(host).innerHTML=h;
+  }
+  rows(pollE, s.e, 'poll-E');
+  rows(pollW, s.w, 'poll-W');
+  document.getElementById('poll-mem').innerHTML =
+    '<span class="lbl">executor 狀態:</span> <span class="v">'+s.st+'</span>' +
+    (s.tok===null ? ' &nbsp;·&nbsp; <span class="lbl">park token:</span> <span class="v" style="color:#5a524c">不存在(假想)</span>'
+                  : ' &nbsp;·&nbsp; <span class="lbl">park token:</span> <span class="v" style="color:'+(s.tok?'#a9b665':'#928374')+'">'+s.tok+'</span>');
+  document.getElementById('poll-narr').innerHTML = s.n + (s.y?'<span class="why">'+s.y+'</span>':'');
+  var v = document.getElementById('poll-verdict');
+  v.innerHTML = !s.verdict ? '' :
+    (s.verdict==='ok' ? '<div class="verdict ok">✓ 完成 —— token 讓 wake-before-park 無害</div>'
+                      : '<div class="verdict ub">✗ DEADLOCK —— 這就是 park 需要 token 的理由</div>');
+});
+
+/* ================= 3. RING STEPPER ================= */
+/* 所有數字由 rustc 實算產生(見 calc.rs),非手算 */
+var MAXs = '18446744073709551615';
+/* head/tail 一律用【字串】存 —— 這些值超過 Number.MAX_SAFE_INTEGER(2^53),
+   寫成 JS number 字面量會靜默塌成同一個 double。只用 BigInt 做算術。 */
+function lbl(v){
+  if(v==='18446744073709551613') return 'MAX-2';
+  if(v==='18446744073709551614') return 'MAX-1';
+  if(v==='18446744073709551615') return 'MAX';
+  return v;
+}
+var RING = {
+  normal: [
+    {h:'0',t:'0',buf:[null,null,null,null],idx:null,act:'init',
+     n:'<b>初始</b>:head=0, tail=0。cap=4, mask=3。',
+     y:'空的判準:<code>head == tail</code>。目前 0==0 → 空。'},
+    {h:'0',t:'1',buf:['A',null,null,null],idx:0,act:'push(A)',
+     n:'<b>push(A)</b> → 寫進物理格 <code>tail &amp; 3 = 0 &amp; 3 = <b>0</b></code>,然後 tail 遞增到 1。',
+     y:'順序很重要:<b>先寫格子,再 release-store tail</b>。反過來就是把旗標發布在資料之前。'},
+    {h:'0',t:'2',buf:['A','B',null,null],idx:1,act:'push(B)',
+     n:'<b>push(B)</b> → 物理格 <code>1 &amp; 3 = 1</code>,tail=2。',y:'len = tail-head = 2。'},
+    {h:'0',t:'3',buf:['A','B','C',null],idx:2,act:'push(C)',
+     n:'<b>push(C)</b> → 物理格 2,tail=3。',y:'len = 3。還沒滿。'},
+    {h:'0',t:'4',buf:['A','B','C','D'],idx:3,act:'push(D)',full:true,
+     n:'<b>push(D)</b> → 物理格 3,tail=4。<b>現在滿了</b>:<code>tail-head = 4-0 = 4 = cap</code>。',
+     y:'注意 <b>tail=4 但沒有第 4 格</b> —— tail 是<b>邏輯計數</b>,不是下標。這正是重點。'},
+    {h:'0',t:'4',buf:['A','B','C','D'],idx:null,act:'push(E) → Err',full:true,
+     n:'<b>push(E) 被拒絕</b>,回 <code>Err(E)</code> 把值還給呼叫者。',
+     y:'滿的判準 <code>tail.wrapping_sub(head) == cap</code> 成立。<b>值不能吞掉</b> —— 沒地方放就還給你。'},
+    {h:'1',t:'4',buf:[null,'B','C','D'],idx:0,act:'pop() → A',
+     n:'<b>pop()</b> → 讀物理格 <code>head &amp; 3 = 0</code>,拿走 A,head 遞增到 1。',
+     y:'head 也是邏輯計數。這一格現在邏輯上空了,可以被覆寫。'},
+    {h:'1',t:'5',buf:['E','B','C','D'],idx:0,act:'push(E)',full:true,wrapHere:true,
+     n:'<b>★ 關鍵格:push(E)</b> → 物理格 <code>tail &amp; 3 = 4 &amp; 3 = <b>0</b></code> —— <b>物理下標繞回 0 了</b>,但邏輯 tail 是 5,一路往上。',
+     y:'這就是「單調計數 + 只在索引時取模」的全部內容。<b>tail=5 跟 head=1 差 4 = 滿</b>,而 head 也是 1 不是 0 —— 兩個計數各自單調,永遠不會混淆空跟滿。'},
+    {h:'2',t:'5',buf:['E',null,'C','D'],idx:1,act:'pop() → B',
+     n:'<b>pop()</b> → 物理格 1,拿走 B,head=2。',y:'len = 5-2 = 3。'}
+  ],
+  wrap: [
+    {h:'18446744073709551613',t:'18446744073709551613',buf:[null,null,null,null],idx:null,act:'init',
+     n:'<b>把 head/tail 都設到 <code>usize::MAX - 2</code></b>,直接測繞回。',
+     y:'這是我實際測試裡的第 3 組(<code>[ok] 跨 usize::MAX wrap 點</code>)。你要在面試裡手動 trace 的就是這種格子,<b>不是第一格</b>。'},
+    {h:'18446744073709551613',t:'18446744073709551614',buf:[null,'0',null,null],idx:1,act:'push(0)',
+     n:'<b>push(0)</b> → 物理格 <code>(MAX-2) &amp; 3 = <b>1</b></code>,tail → MAX-1。',
+     y:'MAX 的二進位是全 1,所以 MAX&3=3、MAX-1&3=2、MAX-2&3=1。'},
+    {h:'18446744073709551613',t:'18446744073709551615',buf:[null,'0','1',null],idx:2,act:'push(1)',
+     n:'<b>push(1)</b> → 物理格 2,tail → <b>MAX</b>。',y:'len = 2。tail 已經頂到 usize 的天花板。'},
+    {h:'18446744073709551613',t:'0',buf:[null,'0','1','2'],idx:3,act:'push(2)',wrapHere:true,
+     n:'<b>★ tail 溢位了</b>:<code>MAX.wrapping_add(1) = <b>0</b></code>。tail 現在是 <b>0</b>,head 還是 MAX-2。',
+     y:'<b>len 仍然算對:<code>0.wrapping_sub(MAX-2) = 3</code></b>。這就是為什麼一定要用 <code>wrapping_sub</code> 而不是 <code>tail - head</code> —— 後者在這裡會 panic(debug)或算出垃圾。'},
+    {h:'18446744073709551613',t:'1',buf:['3','0','1','2'],idx:0,act:'push(3)',full:true,
+     n:'<b>push(3)</b> → 物理格 <code>0 &amp; 3 = 0</code>,tail=1。<b>滿</b>:<code>1.wrapping_sub(MAX-2) = 4 = cap</code>。',
+     y:'head=MAX-2、tail=1 —— 數值上 tail <b>小於</b> head,但滿的判斷完全正確。<b>用減法比大小在這裡是錯的,用 wrapping_sub 算差值才對。</b>'},
+    {h:'18446744073709551613',t:'1',buf:['3','0','1','2'],idx:null,act:'push(4) → Err',full:true,
+     n:'<b>push(4) 被拒絕</b>。滿的判斷在繞回之後依然正確。',
+     y:'如果你寫的是 <code>if tail - head == cap</code>,這裡 <code>1 - (MAX-2)</code> 在 debug build 會 <b>panic: attempt to subtract with overflow</b>。'},
+    {h:'18446744073709551614',t:'1',buf:['3',null,'1','2'],idx:1,act:'pop() → 0',
+     n:'<b>pop()</b> → 物理格 <code>(MAX-2) &amp; 3 = 1</code>,拿走 0,head → MAX-1。',
+     y:'len = 3。head 接著也會繞過 MAX,一樣沒問題。'}
+  ]
+};
+wire('st-ring', function(m){return RING[m].length;}, function(i,m){
+  var s = RING[m][i];
+  var len; /* 用 BigInt 精確模擬 usize 迴繞,避免 JS double 失準 */
+  var M = (1n<<64n);
+  len = Number(((BigInt(s.t) - BigInt(s.h)) % M + M) % M);
+  document.getElementById('ring-ctr').innerHTML =
+    '<span class="cH">head = <b>'+lbl(s.h)+'</b>  (物理 '+(Number(BigInt(s.h)&3n))+')</span>'+
+    '<span class="cT">tail = <b>'+lbl(s.t)+'</b>  (物理 '+(Number(BigInt(s.t)&3n))+')</span>'+
+    '<span>len = tail ⊖ head = <b>'+len+'</b></span>'+
+    '<span>狀態:<b style="color:'+(len===0?'#928374':(len===4?'#ea6962':'#a9b665'))+'">'+(len===0?'空':(len===4?'滿':'有料'))+'</b></span>'+
+    '<span style="color:var(--grey)">動作:'+s.act+'</span>';
+  var hp = Number(BigInt(s.h)&3n), tp = Number(BigInt(s.t)&3n), h='';
+  for(var k=0;k<4;k++){
+    var cls='slot', mark='';
+    var isH = (hp===k && len>0), isT = (tp===k && len<4);
+    if(isH&&isT) cls+=' ht'; else if(isH) cls+=' h'; else if(isT) cls+=' t';
+    if(s.buf[k]===null) cls+=' empty';
+    if(s.idx===k) cls+=' ht';
+    if(isH) mark+='<span class="mark" style="color:#7daea3;left:4px">H</span>';
+    if(isT) mark+='<span class="mark" style="color:#a9b665;right:4px">T</span>';
+    h+='<div class="'+cls+'"><span class="pidx">['+k+']</span><span class="val">'+(s.buf[k]===null?'·':s.buf[k])+'</span>'+mark+'</div>';
+  }
+  document.getElementById('ring-slots').innerHTML = h +
+    (s.wrapHere ? '<div style="align-self:center;margin-left:10px;color:#e78a4e;font-family:var(--mono);font-size:11px">← 繞回點</div>' : '');
+  document.getElementById('ring-narr').innerHTML = s.n + '<span class="why">'+s.y+'</span>';
+});
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rust Atomic Memory Ordering — SPSC Ring Buffer</title>
+<style>
+:root{
+  --bg0:#282828; --bg0dim:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg0:#d4be98; --fg1:#ddc7a1;
+  --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665; --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; background:var(--bg0dim); color:var(--fg0);
+  font-family:'JetBrains Mono','Fira Code',ui-monospace,Consolas,monospace;
+  font-size:15px; line-height:1.65;
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:0 16px 80px;}
+header.top{padding:26px 0 10px;}
+header.top h1{font-size:20px; margin:0 0 4px; color:var(--yellow);}
+header.top .sub{color:var(--grey2); font-size:13px;}
+.tabbar{
+  position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:6px;
+  background:var(--bg0dim); padding:10px 0 8px; border-bottom:1px solid var(--bg3); margin-bottom:20px;
+}
+.tabbtn{
+  font:inherit; cursor:pointer; border:1px solid var(--bg3); background:var(--bg1); color:var(--grey2);
+  padding:7px 12px; border-radius:8px; font-size:13px; transition:.12s;
+}
+.tabbtn:hover{border-color:var(--bg4); color:var(--fg0);}
+.tabbtn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.panel{display:none;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+h2{font-size:17px; color:var(--aqua); border-left:3px solid var(--aqua); padding-left:10px; margin:30px 0 12px;}
+h3{font-size:15px; color:var(--orange); margin:22px 0 8px;}
+p{margin:10px 0;}
+code{background:var(--bg1); padding:1px 5px; border-radius:4px; font-size:.92em; color:var(--fg1);}
+pre{
+  background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px;
+  overflow-x:auto; -webkit-text-size-adjust:100%; text-size-adjust:100%; font-size:13px; line-height:1.55;
+}
+pre code{background:none; padding:0; color:var(--fg0);}
+.anchor{
+  background:linear-gradient(135deg,var(--bg2),var(--bg1)); border:1px solid var(--yellow);
+  border-radius:12px; padding:18px 20px; margin:18px 0;
+}
+.anchor .big{font-size:18px; color:var(--yellow); font-weight:700;}
+.anchor .small{color:var(--grey2); font-size:13px; margin-top:6px;}
+.card{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px; margin:14px 0;}
+.card.warn{border-color:var(--red);}
+.card.good{border-color:var(--green);}
+.card.info{border-color:var(--blue);}
+.jump{
+  display:inline; font:inherit; cursor:pointer; background:none; border:none; padding:0;
+  color:var(--blue); text-decoration:underline dotted; text-underline-offset:3px;
+}
+.jump:hover{color:var(--aqua);}
+.o-rel{color:var(--blue);} .o-acq{color:var(--aqua);} .o-rlx{color:var(--grey);} .o-sc{color:var(--purple);}
+.tag{display:inline-block; padding:0 6px; border-radius:4px; font-size:11px; border:1px solid currentColor; margin-left:4px;}
+ul{margin:8px 0; padding-left:22px;} li{margin:5px 0;}
+.kbd{background:var(--bg3); border:1px solid var(--bg4); border-radius:5px; padding:1px 7px; font-size:12px;}
+table.mini{border-collapse:collapse; width:100%; margin:12px 0; font-size:13px;}
+table.mini th,table.mini td{border:1px solid var(--bg3); padding:7px 9px; text-align:left; vertical-align:top;}
+table.mini th{background:var(--bg2); color:var(--fg1);}
+.hl-red{color:var(--red);} .hl-grn{color:var(--green);} .hl-yel{color:var(--yellow);}
+.note{color:var(--grey2); font-size:12.5px;}
+.unv{color:var(--orange); font-weight:700;}
+
+/* stepper */
+.stepwrap{margin-top:10px;}
+.svgbox{background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:8px; overflow-x:auto; -webkit-text-size-adjust:100%;}
+.svgbox svg{display:block; min-width:900px;}
+.svgbox.wide svg{min-width:1120px;}
+.lane-label{fill:var(--grey2); font-size:13px; font-family:inherit;}
+.lane-line{stroke:var(--bg4); stroke-width:2;}
+.evt rect{fill:var(--bg2); stroke:var(--bg4); stroke-width:1.5; rx:7;}
+.evt.local rect{fill:var(--bg1); stroke:var(--grey); stroke-width:1.5;}
+.evt.local .op{fill:var(--grey2);}
+.evt.chg rect{stroke:var(--yellow); stroke-width:2.5;}
+.evt .op{fill:var(--fg0); font-size:12px; font-family:inherit;}
+.evt .payload rect{fill:var(--bg1); stroke-dasharray:3 3;}
+.badge{font-size:11px; font-family:inherit; font-weight:700;}
+.badge.o-rel{fill:var(--blue);} .badge.o-acq{fill:var(--aqua);} .badge.o-rlx{fill:var(--grey);} .badge.o-sc{fill:var(--purple);}
+.swarrow{fill:none; stroke:var(--grey); stroke-width:2; opacity:.35;}
+.swarrow.on{opacity:.7;}
+.swarrow.hl{stroke-width:3; opacity:1;}
+.swarrow.tail.hl{stroke:var(--blue);} .swarrow.head.hl{stroke:var(--aqua);}
+.swarrow.broken{stroke:var(--red); stroke-dasharray:7 5; opacity:1; stroke-width:2.5;}
+.swlabel{fill:var(--grey2); font-size:11px; font-family:inherit;}
+.hbband{opacity:0;}
+.hbband.show{opacity:.16;}
+.hbband.data{fill:var(--blue);} .hbband.space{fill:var(--aqua);}
+.race{opacity:0;}
+.race.show{opacity:1;}
+.raceline{stroke:var(--red); stroke-width:2.5; stroke-dasharray:6 4; fill:none;}
+.racetxt{fill:var(--red); font-size:12px; font-weight:700; font-family:inherit;}
+.stepctrl{display:flex; align-items:center; gap:10px; margin:14px 0;}
+.stepctrl button{font:inherit; cursor:pointer; background:var(--bg2); border:1px solid var(--bg4); color:var(--fg0); padding:7px 14px; border-radius:8px;}
+.stepctrl button:hover{border-color:var(--yellow); color:var(--yellow);}
+.dots{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap;}
+.dot{width:26px; height:26px; border-radius:50%; border:1px solid var(--bg4); background:var(--bg1); color:var(--grey2); font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+.dot.active{background:var(--yellow); color:var(--bg0); border-color:var(--yellow); font-weight:700;}
+.dot.brk.active{background:var(--red); border-color:var(--red); color:#fff;}
+.stepgrid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:6px;}
+@media(max-width:760px){.stepgrid{grid-template-columns:1fr;}}
+.codepanel{background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.7; overflow-x:auto; white-space:pre; -webkit-text-size-adjust:100%;}
+.codepanel .fn{color:var(--yellow);}
+.codepanel .cm{color:var(--grey);}
+.codepanel .chgline{background:rgba(216,166,87,.14); border-radius:4px; display:inline-block; width:100%;}
+.stepcard{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px;}
+.stepcard.brk{border-color:var(--red);}
+.stepcard h4{margin:0 0 8px; color:var(--orange); font-size:14px;}
+details{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:2px 14px; margin:12px 0;}
+details[open]{padding-bottom:12px;}
+summary{cursor:pointer; padding:12px 0; color:var(--fg1); font-weight:500;}
+summary:hover{color:var(--yellow);}
+.qnum{color:var(--purple); font-weight:700;}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--grey2); margin:8px 2px;}
+.legend span b{padding:0 5px; border-radius:3px;}
+.seqarrow{stroke:var(--grey2); stroke-width:2; fill:none; opacity:.85;}
+.swbig{stroke:var(--blue); stroke-width:3; fill:none;}
+.hbarc{stroke:var(--green); stroke-width:2.5; stroke-dasharray:7 5; fill:none;}
+.hbcover{fill:var(--green); opacity:.10;}
+.deflab{font-size:12px; font-family:inherit;}
+.dl{margin:14px 0; display:grid; gap:8px;}
+.dl .row{display:flex; gap:12px; align-items:baseline; background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:9px 13px; font-size:13.5px;}
+.dl .n{color:var(--yellow); font-weight:700; flex:0 0 auto; font-size:15px;}
+.dl .n.b{color:var(--blue);} .dl .n.g{color:var(--green);}
+.dl sup{color:var(--grey2);}
+.pbox{fill:var(--bg2); stroke:var(--bg4); stroke-width:1.5;}
+.pttl{fill:var(--fg1); font-size:13px; font-family:inherit; font-weight:700;}
+.psub{fill:var(--grey); font-size:11px; font-family:inherit;}
+.pcode{fill:var(--grey2); font-size:11px; font-family:inherit;}
+.parrow{stroke:var(--grey2); stroke-width:2.5; fill:none;}
+.pdrop{stroke:var(--grey); stroke-width:1.5; stroke-dasharray:4 4; fill:none;}
+.mboxa{fill:rgba(234,105,98,.10); stroke:var(--red); stroke-width:2;}
+.mboxb{fill:rgba(125,174,163,.10); stroke:var(--blue); stroke-width:2;}
+.mttl{font-size:12.5px; font-family:inherit; font-weight:700;}
+.mtxt{font-size:11.5px; font-family:inherit; fill:var(--grey2);}
+.bracket{stroke:var(--green); stroke-width:2; fill:none;}
+.brtxt{fill:var(--green); font-size:12px; font-family:inherit; font-weight:700;}
+.fastarrow{stroke:var(--red); stroke-width:2.5; fill:none;}
+.slowarrow{stroke:var(--grey2); stroke-width:2.5; stroke-dasharray:6 5; fill:none;}
+.arrlab{font-size:11.5px; font-family:inherit;}
+.xform{display:grid; grid-template-columns:1fr auto 1fr; gap:12px; align-items:center; margin:16px 0;}
+@media(max-width:820px){.xform{grid-template-columns:1fr;}}
+.xform .lbl{font-size:12px; color:var(--grey2); margin-bottom:6px;}
+.xform pre{margin:0;}
+.xarrow{display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--orange); font-size:11px; text-align:center; max-width:130px; line-height:1.4;}
+.xarrow .big{font-size:28px; line-height:1;}
+.tk-cm{color:var(--grey); font-style:italic;}
+.tk-kw{color:var(--red);}
+.tk-ty{color:var(--yellow);}
+.tk-fn{color:var(--aqua);}
+.tk-mac{color:var(--orange);}
+.tk-str{color:var(--green);}
+.tk-num{color:var(--purple);}
+.tk-attr{color:var(--orange);}
+.tk-life{color:var(--orange);}
+.tk-o-rel{color:var(--blue);}
+.tk-o-acq{color:var(--aqua);}
+.tk-o-rlx{color:var(--grey);}
+.tk-o-sc{color:var(--purple);}
+.codepanel .tk-cm{font-style:normal;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <h1>Rust Atomic Memory Ordering</h1>
+  <div class="sub">貫穿載體:std-only SPSC ring buffer &nbsp;·&nbsp; edition 2021 &nbsp;·&nbsp; 禁外部 crate</div>
+</header>
+
+<nav class="tabbar">
+  <button class="tabbtn active" data-jump="p-overview">導讀</button>
+  <button class="tabbtn" data-jump="p-concept">① 概念推導</button>
+  <button class="tabbtn" data-jump="p-stepper">② 互動 Stepper</button>
+  <button class="tabbtn" data-jump="p-followup">③ 面試追問</button>
+  <button class="tabbtn" data-jump="p-quiz">④ Self-Quiz</button>
+  <button class="tabbtn" data-jump="p-code">完整代碼</button>
+</nav>
+
+<!-- ============ OVERVIEW ============ -->
+<section id="p-overview" class="panel active">
+  <div class="anchor">
+    <div class="big">「seq_cst 永遠不會錯,只是可能慢。」</div>
+    <div class="small">策略:全部先寫 <span class="o-sc">SeqCst</span> 寫對 → 再逐點 relax,每一步都能講出它為什麼安全。這份教材就是這個 relax 過程的可視化。</div>
+  </div>
+
+  <p>面試限 std-only、不得用 crate。我們用一個 <b>single-producer single-consumer(SPSC)</b> lock-free ring buffer 當載體,把 memory ordering 的每個決策都逼出來:哪個操作能 <span class="o-rlx">Relaxed</span>、哪對必須 <span class="o-rel">Release</span>/<span class="o-acq">Acquire</span>、為什麼不需要 <span class="o-sc">SeqCst</span> 的全域順序。</p>
+
+  <h2>閱讀路線</h2>
+  <ul>
+    <li><button class="jump" data-jump="p-concept">① 概念推導</button>:naive 全 Relaxed 版 → 它為什麼是 UB → 修法。順便把四種 ordering、synchronizes-with / happens-before、兩個 handshake、free-running index 的 state 全部先立起來(不讓變數在 stepper 裡憑空出現)。</li>
+    <li><button class="jump" data-jump="p-stepper">② 互動 Stepper</button>:雙執行緒時間線。從全 SeqCst 開始,一步 relax 一個 load/store,畫出 synchronizes-with 箭頭與 happens-before 陰影,最後一步示範「acquire 誤降 relaxed」如何斷掉因果縫。</li>
+    <li><button class="jump" data-jump="p-followup">③ 面試追問</button>:三條追問鏈,每條至少三層(x86 上 Acquire 還有意義嗎?何時才真的需要 SeqCst?對齊後還有殘留 cache 流量嗎?)。</li>
+    <li><button class="jump" data-jump="p-quiz">④ Self-Quiz</button>:5 題,答案 <span class="kbd">&lt;details&gt;</span> 摺疊。含指定題:consumer 讀 tail 的 acquire 誤寫成 relaxed,給一個會出錯的 interleaving。</li>
+    <li><button class="jump" data-jump="p-code">完整代碼</button>:可編譯的 <code>Ring&lt;T&gt;</code>(rustc 1.75、edition 2021、std-only)+ 雙執行緒 FIFO 交叉驗證。</li>
+  </ul>
+
+  <div class="card info">
+    <b>驗證聲明。</b>本頁所有 Rust 以 rustc 1.75.0(edition 2021,<code>-O</code>)實際編譯通過,並用雙執行緒 push/pop 做 FIFO 交叉驗證(cap=1 / 2 / 1024,多次)。<span class="note">未跑 ThreadSanitizer / Miri(需 nightly);正確性論證以 happens-before 模型為準,壓測作為佐證。x86 指令層敘述(mfence / mov)標為「typical lowering」,編譯器實際可能在 <code>mov+mfence</code> 與 <code>lock xchg</code> 間選擇。</span>
+  </div>
+</section>
+
+<!-- ============ CONCEPT ============ -->
+<section id="p-concept" class="panel">
+  <h2>1. Naive 版:全 <span class="o-rlx">Relaxed</span>(「我單執行緒測都過」)</h2>
+  <p>最直覺的寫法:<code>head</code>/<code>tail</code> 用 <code>AtomicUsize</code>,但因為單執行緒測試會過,所有 load/store 都填 <span class="o-rlx">Relaxed</span>。payload buffer(<code>buf[idx]</code>)是 <b>non-atomic</b> 的——它的安全<b>完全</b>依賴 head/tail 這兩個 atomic 建立的 happens-before。</p>
+  <pre><code>// ⚠ naive:發佈與觀察都 Relaxed(use Ordering::*;)
+// producer
+let cell = self.buf[t &amp; mask].get();
+unsafe { (*cell).as_mut_ptr().write(x); }            // non-atomic payload 寫入
+self.tail.store(t + 1, Relaxed);                     // 「發佈」
+
+// consumer
+if self.tail.load(Relaxed) != head {                 // 看到新 tail
+    let v = unsafe { std::ptr::read((*cell).as_ptr()) }; // ⚠ 無 acquire → 可能讀到未初始化
+}</code></pre>
+
+  <h2>2. 失敗模式:這是 UB,不是「偶爾讀到舊值」</h2>
+  <ul>
+    <li>兩個 <span class="o-rlx">Relaxed</span> 操作之間<b>沒有 synchronizes-with</b> → 沒有 happens-before。consumer「看到 <code>tail==1</code>」<b>不蘊含</b>「看到 <code>buf[0]==X</code>」。</li>
+    <li><b>弱記憶體序 CPU(ARM/POWER)</b>:producer 對 <code>buf[0]</code> 與 <code>tail</code> 是兩個獨立寫入,沒有 release 就可能亂序傳播——<code>tail=1</code> 先被別的 core 看到,<code>buf[0]=X</code> 還沒。consumer 讀到未初始化 / 舊值。</li>
+    <li><b>即使在 x86(TSO,硬體不會亂序這組)</b>:編譯器仍可在 Relaxed 下把 <code>buf[0]</code> 的讀取重排到 <code>tail</code> 讀取之前(Relaxed 不禁止)→ 一樣爆。</li>
+    <li>形式上:producer 對 <code>buf[0]</code> 的<b>寫</b>、consumer 對 <code>buf[0]</code> 的<b>讀</b>,無 HB 排序、對同一 non-atomic 位址、至少一寫 → <b class="hl-red">data race → UB</b>。整段未定義,不是機率問題。</li>
+  </ul>
+
+  <h3>2.1 先定位:「重排」可以在<u>兩個地方</u>發生</h3>
+  <p>上面第 2、3 條 bullet 常被混成一團,其實它們是<b>不同層</b>的失效。從你寫的原始碼,到「別的 core 實際看到的順序」,中間有<b>兩道關卡,每一道都會重排</b>:</p>
+  <div class="svgbox">
+    <svg viewBox="0 0 940 280" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="pa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a89984"/></marker>
+      </defs>
+      <rect class="pbox" x="20" y="40" width="190" height="72" rx="10"/>
+      <text class="pttl" x="115" y="66" text-anchor="middle">① 你寫的順序</text>
+      <text class="psub" x="115" y="84" text-anchor="middle">source order</text>
+      <text class="pcode" x="115" y="103" text-anchor="middle">buf[0]=X ; tail=1</text>
+
+      <path class="parrow" d="M215,76 L348,76" marker-end="url(#pa)"/>
+      <text class="psub" x="282" y="64" text-anchor="middle" style="fill:#d8a657">編譯器</text>
+
+      <rect class="pbox" x="355" y="40" width="200" height="72" rx="10"/>
+      <text class="pttl" x="455" y="66" text-anchor="middle">② 編出來的順序</text>
+      <text class="psub" x="455" y="84" text-anchor="middle">binary / machine code</text>
+      <text class="pcode" x="455" y="103" text-anchor="middle">可能已經跟你寫的不同</text>
+
+      <path class="parrow" d="M560,76 L698,76" marker-end="url(#pa)"/>
+      <text class="psub" x="629" y="64" text-anchor="middle" style="fill:#d8a657">CPU / cache 傳播</text>
+
+      <rect class="pbox" x="705" y="40" width="215" height="72" rx="10"/>
+      <text class="pttl" x="812" y="66" text-anchor="middle">③ 別的 core 看到的順序</text>
+      <text class="psub" x="812" y="84" text-anchor="middle">visible order</text>
+      <text class="pcode" x="812" y="103" text-anchor="middle">← 正確性只認這個</text>
+
+      <path class="pdrop" d="M282,88 L282,134"/>
+      <rect class="mboxb" x="175" y="138" width="215" height="74" rx="8"/>
+      <text class="mttl" x="282" y="160" text-anchor="middle" style="fill:#7daea3">Mode B:編譯器重排</text>
+      <text class="mtxt" x="282" y="179" text-anchor="middle">Relaxed 不禁止</text>
+      <text class="mtxt" x="282" y="197" text-anchor="middle" style="fill:#ea6962">所有架構都中(x86 也是)</text>
+
+      <path class="pdrop" d="M629,88 L629,134"/>
+      <rect class="mboxa" x="522" y="138" width="215" height="74" rx="8"/>
+      <text class="mttl" x="629" y="160" text-anchor="middle" style="fill:#ea6962">Mode A:硬體重排</text>
+      <text class="mtxt" x="629" y="179" text-anchor="middle" style="fill:#a9b665">x86 TSO:不會</text>
+      <text class="mtxt" x="629" y="197" text-anchor="middle" style="fill:#ea6962">ARM / POWER:會</text>
+
+      <path class="bracket" d="M60,232 L60,246 L890,246 L890,232"/>
+      <text class="brtxt" x="475" y="268" text-anchor="middle">Release / Acquire = 同時對「編譯器」與「硬體」下的合約 —— 兩道關卡一起綁</text>
+    </svg>
+  </div>
+  <p>所以「x86 是 TSO、硬體不會亂序,我不標 ordering 也沒事」是<b class="hl-red">錯的</b>:它只免除你 Mode A,<b>Mode B 照樣爆</b>。</p>
+
+  <h3>2.2 Mode A — ARM/POWER:兩個 store 亂序<u>傳播</u></h3>
+  <p>producer 的 <code>buf[0]=X</code>(non-atomic store)和 <code>tail.store(1, Relaxed)</code> 是<b>兩個獨立寫入</b>。Relaxed 不要求它們之間有任何順序,於是硬體可以讓<b>後</b>寫的 <code>tail</code> <b>先</b>被 consumer 的 core 看到:</p>
+  <div class="svgbox">
+    <svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="fa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea6962"/></marker>
+        <marker id="sa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a89984"/></marker>
+      </defs>
+      <line class="lane-line" x1="60" y1="90" x2="920" y2="90"/>
+      <line class="lane-line" x1="60" y1="250" x2="920" y2="250"/>
+      <text class="lane-label" x="8" y="56">Producer</text>
+      <text class="lane-label" x="8" y="292">Consumer</text>
+
+      <g class="evt payload"><rect x="70" y="68" width="140" height="42" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="4 3"/>
+        <text class="op" x="140" y="86" text-anchor="middle">t₁ buf[0] = X</text>
+        <text class="op" x="140" y="103" text-anchor="middle" style="fill:#928374;font-size:11px">non-atomic store</text></g>
+      <g class="evt"><rect x="230" y="68" width="150" height="42" rx="7"/>
+        <text class="op" x="305" y="86" text-anchor="middle">t₂ tail.store(1,</text>
+        <text class="op" x="305" y="103" text-anchor="middle" style="fill:#928374">Relaxed)</text></g>
+
+      <path class="fastarrow" d="M305,112 L470,226" marker-end="url(#fa)"/>
+      <path class="slowarrow" d="M140,112 L838,226" marker-end="url(#sa)"/>
+      <circle cx="358" cy="145" r="5" fill="#ea6962"/>
+      <text class="arrlab" x="432" y="143" style="fill:#ea6962;font-weight:700">⚡ tail 超車 payload —— 亂序傳播</text>
+      <text class="arrlab" x="452" y="212" text-anchor="end" style="fill:#ea6962">tail 先傳到</text>
+      <text class="arrlab" x="855" y="205" text-anchor="middle" style="fill:#a89984">payload 後傳到</text>
+
+      <g class="evt"><rect x="398" y="230" width="152" height="42" rx="7"/>
+        <text class="op" x="474" y="248" text-anchor="middle">t₃ 看到 tail == 1</text>
+        <text class="op" x="474" y="265" text-anchor="middle" style="fill:#928374;font-size:11px">「資料備好了!」</text></g>
+      <g class="evt payload"><rect x="570" y="230" width="160" height="42" rx="7" fill="#32302f" stroke="#ea6962" stroke-dasharray="4 3"/>
+        <text class="op" x="650" y="248" text-anchor="middle">t₄ 讀 buf[0]</text>
+        <text class="op" x="650" y="265" text-anchor="middle" style="fill:#ea6962">→ ⊥ 舊值/未初始化</text></g>
+      <g class="evt"><rect x="755" y="230" width="165" height="42" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="4 3"/>
+        <text class="op" x="838" y="248" text-anchor="middle" style="fill:#928374">t₅ buf[0]=X 才到</text>
+        <text class="op" x="838" y="265" text-anchor="middle" style="fill:#928374;font-size:11px">(太遲了)</text></g>
+    </svg>
+  </div>
+  <div class="card warn">
+    <b>關鍵:consumer 沒做錯任何事。</b>它的 program order 完全正確(先讀 <code>tail</code>、再讀 <code>buf[0]</code>)。錯在 producer 那<b>兩個 store 沒被綁定順序</b>。<span class="o-rel">Release</span> store 的作用正是:<b>先把它之前的所有寫入推出去,這個 store 才可見</b> —— 加上 Release,<code>tail=1</code> 就不可能超車 <code>buf[0]=X</code>。
+  </div>
+  <p class="note">圖中的「傳播快慢」是<b>示意</b>;微架構機制(store buffer 排空順序、cache 傳播路徑)不是重點,架構層規則才是:<b>ARM/POWER 沒有屏障就不保證 store-store 順序</b>。<span class="unv">unverified</span>:各家記憶體模型的確切條文(POWER 的 non-multi-copy-atomic、ARMv8 的 other-multi-copy-atomic)我不背原文,面試講到「無屏障則 store-store 無序」這層即可。</p>
+
+  <h3>2.3 Mode B — x86:硬體很乖,<u>編譯器</u>把 bug 烤進 binary</h3>
+  <p>x86-TSO 對<b>不同位址</b>只允許 StoreLoad 重排:store-store 不重排、load-load 不重排(另有 store-forwarding 讓 core 提前讀到自己的寫入)。所以 Mode A 在 x86 上<b>不會</b>發生。但 <span class="o-rlx">Relaxed</span> <b>對編譯器</b>同樣什麼都沒承諾——它不排序 relaxed atomic 與周圍的 non-atomic 存取。於是 LLVM 可以合法地這樣改你的 code:</p>
+  <div class="xform">
+    <div>
+      <div class="lbl">你寫的(source)</div>
+      <pre><code>// consumer:自旋等資料
+loop {
+    let t = self.tail.load(Relaxed);
+    if t == head { continue; }   // 還沒資料
+    // 讀 payload(在迴圈內)
+    break unsafe { std::ptr::read((*cell).as_ptr()) };
+}</code></pre>
+    </div>
+    <div class="xarrow">
+      <div class="big">→</div>
+      <div><b>LLVM LICM</b><br>Relaxed 不排序<br>非 atomic 存取</div>
+    </div>
+    <div>
+      <div class="lbl">編譯器輸出(等價語義)</div>
+      <pre><code>// 非 atomic 讀取被提出迴圈!
+let v = unsafe { std::ptr::read((*cell).as_ptr()) };
+loop {                           // ⚠ producer 還沒寫
+    let t = self.tail.load(Relaxed);
+    if t == head { continue; }
+    break v;                     // ⚠ 永遠是那個舊值
+}</code></pre>
+    </div>
+  </div>
+  <div class="card warn">
+    <b>為什麼 LICM 是「合法」的?</b>因為語言的合約是「程式<b>無 data race</b>」——在那個假設下,自旋期間沒有別人會寫 <code>*cell</code>,所以那個非 atomic 讀取是 loop-invariant,提出迴圈天經地義。諷刺的是:<b>你的程式正好有 race,假設是假的</b>,於是這個「正確」的最佳化把你炸掉。
+  </div>
+  <div class="card warn">
+    <b>x86 硬體一個 reorder 都沒做</b>,忠實照 binary 一條條執行 —— 但 <b>binary 本身就已經是錯的</b>,bug 在<b>編譯期</b>就烤進去了。這就是為什麼「x86 反正是 TSO」不能當成省略 <span class="o-acq">Acquire</span> 的理由:<b>ordering 是同時對編譯器與硬體下的合約</b>,x86 只免除你其中一半。<button class="jump" data-jump="p-followup">→ 追問鏈 A 的 L2/L3 就是問這個</button>
+  </div>
+
+  <h3>2.4 對照:兩個 Mode</h3>
+  <table class="mini">
+    <tr><th></th><th>Mode A — 硬體重排</th><th>Mode B — 編譯器重排</th></tr>
+    <tr><th>發生在哪一層</th><td>CPU / cache 傳播(執行期)</td><td>LLVM(編譯期)</td></tr>
+    <tr><th>本文圖示的是哪一側</th><td>producer:兩個 store 亂序傳播</td><td>consumer:payload 讀取被提前</td></tr>
+    <tr><th>x86 (TSO)</th><td class="hl-grn">不會發生</td><td class="hl-red">會發生</td></tr>
+    <tr><th>ARM / POWER</th><td class="hl-red">會發生</td><td class="hl-red">會發生</td></tr>
+    <tr><th>本例的修法</th><td>producer 用 <span class="o-rel">Release</span> store</td><td>consumer 用 <span class="o-acq">Acquire</span> load</td></tr>
+    <tr><th>測得出來嗎</th><td>x86 上跑一萬次都綠 → 上 ARM 才爆</td><td><code>-O0</code> 常測不到、<code>-O2</code> 才爆(還看編譯器當天心情)</td></tr>
+  </table>
+  <div class="card info">
+    <b>其實是 2×2,我畫的是對角線兩格。</b>
+    <table class="mini">
+      <tr><th></th><th>編譯器層</th><th>硬體層</th></tr>
+      <tr><th>Producer(寫 payload → store tail)</th><td>把 payload 寫入<b>沉</b>到 store 之後</td><td class="hl-yel">Mode A(圖 2.2)</td></tr>
+      <tr><th>Consumer(load tail → 讀 payload)</th><td class="hl-yel">Mode B(圖 2.3)</td><td>load-load 重排(ARM 上)</td></tr>
+    </table>
+    四格由<b>同一對</b> <span class="o-rel">Release</span>(綁住 producer 那兩格)/ <span class="o-acq">Acquire</span>(綁住 consumer 那兩格)一次擋掉 —— 這就是 <button class="jump" data-jump="p-stepper">Stepper 第 3 步</button>在做的事。
+  </div>
+
+  <h2>3. 修法:一對 <span class="o-rel">Release</span> / <span class="o-acq">Acquire</span> 縫出因果</h2>
+  <ul>
+    <li><b>發佈端 <span class="o-rel">Release</span></b>(producer store <code>tail</code>):此 store 之前的所有寫入(含 <code>buf[0]=X</code>)排在它之前,且對做 Acquire 讀到此值的執行緒可見。</li>
+    <li><b>觀察端 <span class="o-acq">Acquire</span></b>(consumer load <code>tail</code>):此 load 之後的讀取排在其後;讀到該 Release store 寫的值,即可看到其之前的所有寫入。</li>
+    <li>這對 Release/Acquire 構成 <b>synchronizes-with</b>;加上執行緒內的 sequenced-before,<code>buf[0]=X</code> <b>happens-before</b> consumer 讀 <code>buf[0]</code> → 不再是 race。</li>
+    <li>head 那邊<b>對稱</b>:consumer 釋放 slot 用 Release,producer 觀察空位用 Acquire,保證「producer 覆寫舊 slot」排在「consumer 讀完舊資料」之後。</li>
+  </ul>
+  <div class="anchor">
+    <div class="big">與其一開始糾結哪個該 Acquire、哪個能 Relaxed——</div>
+    <div class="small">全部先寫 <span class="o-sc">SeqCst</span>(永遠正確,只是可能慢),再逐點 relax,每步講清楚為什麼安全。<button class="jump" data-jump="p-stepper">→ 進互動 Stepper 走一遍</button></div>
+  </div>
+
+  <h2>4. 先把 state 與詞彙立起來(進 stepper 前的地基)</h2>
+
+  <h3>4.1 四種 Ordering(std 語義)</h3>
+  <table class="mini">
+    <tr><th>Ordering</th><th>語義(store / load)</th></tr>
+    <tr><td class="o-rlx">Relaxed</td><td>只保證此操作原子(不可分割)+ 單一位址 modification order 一致。<b>不</b>建立跨執行緒 happens-before,不排序其他記憶體操作。</td></tr>
+    <tr><td class="o-rel">Release</td><td>(store)此 store 之前的記憶體操作,對「以 Acquire+ 讀到此值」的執行緒可見,且不被重排到 store 之後。release-acquire pair 的發佈側。</td></tr>
+    <tr><td class="o-acq">Acquire</td><td>(load)此 load 之後的操作不被重排到它之前;讀到某 Release store 寫的值即可看到其之前的所有寫入。pair 的觀察側。</td></tr>
+    <tr><td class="o-sc">SeqCst</td><td>在 load/store 各自 Acquire/Release 之上,<b>額外</b>讓所有 SeqCst 操作參與「單一全域 total order」。最強、通常最貴。</td></tr>
+  </table>
+  <p class="note"><code>AcqRel</code> 給 read-modify-write(如 <code>fetch_add</code>)用:load 側 Acquire、store 側 Release。本題 SPSC 用不到,列此備查。</p>
+
+  <h3>4.2 synchronizes-with / happens-before</h3>
+  <p>先用一張時間軸把三個名詞的關係擺清楚,再看下面的定義。經典 message-passing:Thread A 寫資料、發旗標;Thread B 讀旗標、讀資料。</p>
+  <div class="svgbox">
+    <svg viewBox="0 0 960 320" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="m-grey" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a89984"/></marker>
+        <marker id="m-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7daea3"/></marker>
+        <marker id="m-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a9b665"/></marker>
+      </defs>
+      <rect class="hbcover" x="52" y="63" width="440" height="54" rx="8"/>
+      <rect class="hbcover" x="506" y="223" width="440" height="54" rx="8"/>
+      <line class="lane-line" x1="50" y1="90" x2="950" y2="90"/>
+      <line class="lane-line" x1="50" y1="250" x2="950" y2="250"/>
+      <text class="lane-label" x="8" y="52">Thread A</text>
+      <text class="lane-label" x="8" y="300">Thread B</text>
+      <path class="hbarc" d="M120,63 C 320,8 720,8 862,63" marker-end="url(#m-green)"/>
+      <text class="deflab" x="490" y="24" text-anchor="middle" style="fill:#a9b665;font-weight:700">③ happens-before(A1 ⟹ B2)</text>
+      <path class="swbig" d="M452,115 L543,225" marker-end="url(#m-blue)"/>
+      <text class="deflab" x="502" y="178" text-anchor="middle" style="fill:#7daea3;font-weight:700">② synchronizes-with</text>
+      <path class="seqarrow" d="M182,90 L246,90" marker-end="url(#m-grey)"/>
+      <path class="seqarrow" d="M762,250 L786,250" marker-end="url(#m-grey)"/>
+      <text class="deflab" x="120" y="134" text-anchor="middle" style="fill:#a89984">① sequenced-before</text>
+      <g class="evt payload"><rect x="60" y="67" width="120" height="46" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="4 3"/><text class="op" x="120" y="88" text-anchor="middle">A1</text><text class="op" x="120" y="105" text-anchor="middle">data = 42</text></g>
+      <g class="evt"><rect x="250" y="67" width="232" height="46" rx="7"/><text class="op" x="366" y="88" text-anchor="middle">A2  flag.store(true,</text><text class="op" x="366" y="105" text-anchor="middle" style="fill:#7daea3">Release)</text></g>
+      <g class="evt"><rect x="510" y="227" width="250" height="46" rx="7"/><text class="op" x="635" y="248" text-anchor="middle">B1  flag.load(</text><text class="op" x="635" y="265" text-anchor="middle" style="fill:#89b482">Acquire) == true</text></g>
+      <g class="evt payload"><rect x="790" y="227" width="150" height="46" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="4 3"/><text class="op" x="865" y="248" text-anchor="middle">B2</text><text class="op" x="865" y="265" text-anchor="middle">讀 data → 42</text></g>
+    </svg>
+  </div>
+  <div class="dl">
+    <div class="row"><span class="n">①</span><span><b>sequenced-before</b>(程式順序):<b>同一條執行緒</b>內,前面的操作排在後面之前。這是「執行緒內」的因果,不跨執行緒。</span></div>
+    <div class="row"><span class="n b">②</span><span><b>synchronizes-with</b>:對同一 atomic,一個 <span class="o-rel">Release</span> store 被「讀到該值的 <span class="o-acq">Acquire</span> load」觀察到時,兩者構成此關係。<b>這是唯一能跨執行緒的因果接縫。</b></span></div>
+    <div class="row"><span class="n g">③</span><span><b>happens-before</b> = ① ∪ ② 的<b>遞移閉包</b>。上圖 <code>A1</code> →<sup>①</sup> <code>A2</code> →<sup>②</sup> <code>B1</code> →<sup>①</sup> <code>B2</code> 串起來,就得到 <b>A1 happens-before B2</b> ⟹ B2 保證看到 <code>data==42</code>。少了 ②(把 Acquire 降成 Relaxed)這條鏈就斷,B2 讀到的 data 變 UB。</span></div>
+  </div>
+  <ul>
+    <li><b>synchronizes-with</b>:對變數 M 的一個 Release store,與「讀到該值(或其 release sequence 後續值)的 Acquire load on M」構成 synchronizes-with。</li>
+    <li><b>happens-before</b>:A hb B ⟺ A sequenced-before B(同執行緒 program order)<b>或</b> A synchronizes-with B,再取遞移閉包。A hb B ⟹ A 的效果對 B 可見。</li>
+    <li>一句話:<b>synchronizes-with 是跨執行緒唯一的「因果接縫」;把兩條執行緒的 program order 縫起來,才生出 happens-before。</b></li>
+  </ul>
+
+  <h3>4.3 兩個 handshake 與 state 變數</h3>
+  <ul>
+    <li><b>state</b>:<code>head</code>(consumer 寫、producer 讀)、<code>tail</code>(producer 寫、consumer 讀),皆 <b>free-running</b>(單調遞增,溢位時 wrap)。</li>
+    <li>元素個數 = <code>tail.wrapping_sub(head)</code>,恆 ∈ [0, capacity]。空:<code>head == tail</code>;滿:<code>tail.wrapping_sub(head) == capacity</code>。</li>
+    <li>capacity 取 2 的次方,indexing 用 <code>idx &amp; (capacity-1)</code> 取代 <code>%</code>。</li>
+    <li><b>為什麼 <code>wrapping_sub</code> 對</b>:真實差值恆 ≤ capacity(很小),它算 (tail−head) mod 2^64;差值 &lt; 模數時結果即真實差值——即使 tail 已 wrap 過 <code>usize::MAX</code> 而 head 還沒。</li>
+    <li><b>Handshake ①(資料可得,走 tail)</b>:producer 寫 payload → Release store tail;consumer Acquire load tail → 讀 payload。保證讀得到剛寫的資料。</li>
+    <li><b>Handshake ②(空間可得,走 head)</b>:consumer 讀完 payload → Release store head;producer Acquire load head → 覆寫 slot。保證不覆蓋 consumer 還沒讀完的資料。</li>
+  </ul>
+
+  <h3>4.4 為什麼「讀自己的 index」可以 <span class="o-rlx">Relaxed</span></h3>
+  <div class="card good">
+    producer 是 <code>tail</code> 的<b>唯一寫者</b>。它在 <code>push</code> 裡讀自己的 <code>tail</code>,只是要知道自己上次寫到哪。同執行緒 store→load 有 sequenced-before,加上單一位址的 read-your-own-writes 保證,必讀到自己最新值——<b>不需要跨執行緒 Acquire</b>。Acquire 的用途是看<b>別的</b>執行緒對<b>別的</b>位址的寫入,此處無此需求。consumer 讀自己的 <code>head</code> 同理。
+  </div>
+
+  <h3>4.5 效能面:false sharing 與 cache line 對齊</h3>
+  <ul>
+    <li><code>head</code> 由 consumer 寫、<code>tail</code> 由 producer 寫。若落在<b>同一條 cache line</b>,每次任一方更新,MESI 就得把整條 line 在兩 core 的 cache 間搬(寫者取得 Modified/Exclusive、令對方副本失效)。兩個邏輯無關的變數因物理共用一條 line 互相拖累 = <b>false sharing</b>,line 在兩 core 間 ping-pong。</li>
+    <li>修法:每個 atomic 各佔一條 line。x86-64 常見 line 64 bytes,用 <code>#[repr(align(64))]</code> 包 newtype。</li>
+    <li><b>std-only 注意</b>:std <b>沒有</b> <code>CachePadded</code>(那是 <code>crossbeam_utils::CachePadded</code>);本題禁 crate,就自己用 <code>#[repr(align(64))]</code> 刻——這本身是不錯的面試點。</li>
+    <li>進階:部分平台(某些 ARM,或 x86 spatial prefetcher 成對抓相鄰 line)用 128 bytes 連 prefetch 一起擋。<span class="unv">unverified</span>:crossbeam 對某些 target 用比 64 大的常數,確切值不背;面試講「64 起跳、某些平台加碼 128」即可。</li>
+  </ul>
+</section>
+
+<!-- ============ STEPPER ============ -->
+<section id="p-stepper" class="panel">
+  <h2>2. Relax 之旅:全 SeqCst → 逐點放鬆</h2>
+  <p>時間線用 <b>capacity = 1</b>(單槽)呈現,強迫嚴格 ping-pong,讓「producer 覆寫前必須等 consumer 讀完」的依賴看得見。一次 push→pop→push 涵蓋<b>兩個 handshake</b>與 slot 重用。</p>
+  <div class="legend">
+    <span><b class="o-rel">Release</b> 發佈</span>
+    <span><b class="o-acq">Acquire</b> 觀察</span>
+    <span><b class="o-rlx">Relaxed</b> 無跨執行緒序</span>
+    <span><b class="o-sc">SeqCst</b> 全域 total order</span>
+    <span>虛線框 = non-atomic payload</span>
+    <span>箭頭 = synchronizes-with</span>
+    <span>陰影 = happens-before 覆蓋</span>
+    <span>⟲ = 讀自己的 index(本地,無箭頭)</span>
+  </div>
+
+  <div class="svgbox wide">
+    <svg viewBox="0 0 1180 310" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#928374"/>
+        </marker>
+      </defs>
+
+      <!-- happens-before bands (behind) -->
+      <rect id="hb-dp" class="hbband data"  x="166" y="52"  width="250" height="52" rx="8"/>
+      <rect id="hb-dc" class="hbband data"  x="556" y="209" width="250" height="52" rx="8"/>
+      <rect id="hb-sc" class="hbband space" x="678" y="209" width="256" height="52" rx="8"/>
+      <rect id="hb-sp" class="hbband space" x="914" y="52"  width="250" height="52" rx="8"/>
+
+      <!-- lanes -->
+      <line class="lane-line" x1="45" y1="78"  x2="1170" y2="78"/>
+      <line class="lane-line" x1="45" y1="235" x2="1170" y2="235"/>
+      <text class="lane-label" x="8" y="42">Producer</text>
+      <text class="lane-label" x="8" y="292">Consumer</text>
+
+      <!-- synchronizes-with arrows -->
+      <path id="ar-tail" class="swarrow tail on" d="M352,101 L617,212" marker-end="url(#ah)"/>
+      <path id="ar-head" class="swarrow head on" d="M870,212 L978,101" marker-end="url(#ah)"/>
+      <text id="sw-tail-lab" class="swlabel" x="478" y="158" text-anchor="end">sw (tail)</text>
+      <text id="sw-head-lab" class="swlabel" x="935" y="158">sw (head)</text>
+
+      <!-- Producer lane -->
+      <g class="evt local" id="eA">
+        <rect x="50" y="57" width="110" height="42" rx="7"/>
+        <text class="op" x="105" y="74" text-anchor="middle">⟲ tail.load</text>
+        <text class="badge o-sc" id="bA" x="105" y="91" text-anchor="middle">SeqCst</text>
+      </g>
+      <g class="evt payload" id="e1">
+        <rect x="172" y="57" width="110" height="42" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="4 3"/>
+        <text class="op" x="227" y="82" text-anchor="middle">buf[0]=X</text>
+      </g>
+      <g class="evt" id="e2">
+        <rect x="294" y="57" width="116" height="42" rx="7"/>
+        <text class="op" x="352" y="74" text-anchor="middle">tail.store</text>
+        <text class="badge o-sc" id="b2" x="352" y="91" text-anchor="middle">SeqCst</text>
+      </g>
+      <g class="evt" id="e6">
+        <rect x="920" y="57" width="116" height="42" rx="7"/>
+        <text class="op" x="978" y="74" text-anchor="middle">head.load</text>
+        <text class="badge o-sc" id="b6" x="978" y="91" text-anchor="middle">SeqCst</text>
+      </g>
+      <g class="evt payload" id="e7">
+        <rect x="1048" y="57" width="110" height="42" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="4 3"/>
+        <text class="op" x="1103" y="82" text-anchor="middle">buf[0]=Y</text>
+      </g>
+
+      <!-- Consumer lane -->
+      <g class="evt local" id="eD">
+        <rect x="440" y="214" width="110" height="42" rx="7"/>
+        <text class="op" x="495" y="231" text-anchor="middle">⟲ head.load</text>
+        <text class="badge o-sc" id="bD" x="495" y="248" text-anchor="middle">SeqCst</text>
+      </g>
+      <g class="evt" id="e3">
+        <rect x="562" y="214" width="110" height="42" rx="7"/>
+        <text class="op" x="617" y="231" text-anchor="middle">tail.load</text>
+        <text class="badge o-sc" id="b3" x="617" y="248" text-anchor="middle">SeqCst</text>
+      </g>
+      <g class="evt payload" id="e4">
+        <rect x="684" y="214" width="116" height="42" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="4 3"/>
+        <text class="op" x="742" y="239" text-anchor="middle">read buf[0]</text>
+      </g>
+      <g class="evt" id="e5">
+        <rect x="812" y="214" width="116" height="42" rx="7"/>
+        <text class="op" x="870" y="231" text-anchor="middle">head.store</text>
+        <text class="badge o-sc" id="b5" x="870" y="248" text-anchor="middle">SeqCst</text>
+      </g>
+
+      <!-- race marker -->
+      <g id="race-mark" class="race">
+        <path class="raceline" d="M742,214 L1103,99"/>
+        <text class="racetxt" x="800" y="178" text-anchor="end">DATA RACE ⚡</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="stepctrl">
+    <button data-step="prev">‹ 上一步</button>
+    <button data-step="next">下一步 ›</button>
+    <span id="stepno" class="note"></span>
+    <div class="dots">
+      <div class="dot active" data-step="0">0</div>
+      <div class="dot" data-step="1">1</div>
+      <div class="dot" data-step="2">2</div>
+      <div class="dot" data-step="3">3</div>
+      <div class="dot" data-step="4">4</div>
+      <div class="dot" data-step="5">5</div>
+      <div class="dot brk" data-step="6">6</div>
+    </div>
+  </div>
+
+  <div class="stepgrid">
+    <div class="codepanel" id="codepanel"></div>
+    <div class="stepcard" id="stepcard"></div>
+  </div>
+</section>
+
+<!-- ============ FOLLOW-UP ============ -->
+<section id="p-followup" class="panel">
+  <h2>3. 面試追問(三條鏈,每條 ≥ 三層)</h2>
+
+  <h3>鏈 A — ordering 為什麼不能省</h3>
+  <div class="card">
+    <p><b>L1 — consumer 讀 tail 為什麼要 Acquire,不能 Relaxed?</b></p>
+    <p>要和 producer 的 Release 構成 synchronizes-with,才有 happens-before,才保證看到 payload。Relaxed 無 HB → data race → UB(見 <button class="jump" data-jump="p-concept">概念推導</button>的 naive 失敗)。</p>
+    <p><b>L2 — x86 上 Acquire load 反正編成普通 <code>mov</code>,那標 Acquire 還有差嗎?</b></p>
+    <p>有。(1) <b>可攜性</b>:ARM/POWER 上 Acquire 會編出屏障,x86 只是剛好硬體夠強。(2) <b>Acquire 是對抽象機器 / 編譯器的合約</b>:即使在 x86,它也禁止<b>編譯器</b>把後面的 payload 讀取重排到 acquire load 之前、或做不該做的 CSE/hoist。ordering 管的是「編譯器 + 硬體」兩層,不只硬體。</p>
+    <p><b>L3 — 給一個 x86 上 Acquire 擋得住、Relaxed 擋不住的<u>編譯器</u>重排。</b></p>
+    <p>Relaxed 下,編譯器可把 <code>let v = buf[idx]</code>(payload 讀)重排到 <code>tail.load</code> 之前(Relaxed 不禁止跨這兩個操作重排),於是可能先讀到 slot 的舊/未初始化值,再讀 tail;Acquire 把 payload 讀鎖在其後,禁止此 hoist。這是純<b>編譯期</b>重排,硬體層看不到——所以「x86 反正 mov」不能當成省略 Acquire 的理由。</p>
+  </div>
+
+  <h3>鏈 B — 為什麼 SPSC 不用 SeqCst</h3>
+  <div class="card">
+    <p><b>L1 — 為什麼一對 Release/Acquire 就夠,不用 SeqCst?</b></p>
+    <p>只需要<b>成對</b>的 synchronizes-with(tail 一對、head 一對)建立局部 HB;沒有第三條執行緒,也不需把兩個 handshake 之間排出全域順序。SeqCst 的「所有 SeqCst 操作單一 total order」是嚴格多出來的保證。</p>
+    <p><b>L2 — 那什麼時候<u>才</u>需要 SeqCst?</b></p>
+    <p>當多條執行緒需要對「兩個<b>獨立</b>變數的操作順序」達成全域一致時。典型是 store-buffer litmus(Dekker/Peterson 骨架):兩執行緒各自「寫自己的 flag、讀對方的 flag」,要禁止「兩邊都讀到 0」。</p>
+    <p><b>L3 — 寫出那個 litmus,說明為什麼 Release/Acquire 不夠、要 SeqCst。</b></p>
+    <pre><code>// X, Y: AtomicUsize = 0;   use Ordering::SeqCst;
+// Thread 1                     // Thread 2
+X.store(1, SeqCst);            Y.store(1, SeqCst);
+let r1 = Y.load(SeqCst);       let r2 = X.load(SeqCst);
+// 問:能否 r1 == 0 &amp;&amp; r2 == 0 ?(SeqCst 下:不可能;若改 Rel/Acq 則可能)</code></pre>
+    <p>Release/Acquire 只排序「同一變數的發佈/觀察」,<b>不</b>排序「本執行緒的 store 與對<u>另一</u>變數的 load」——<b>StoreLoad 重排是允許的</b>,所以兩邊都可能讀到 0(<code>r1==r2==0</code>)。只有 SeqCst 的全域 total order 能禁止此結果(不存在一個總順序讓兩個 load 都排在兩個 store 之前)。SPSC 沒有「跨獨立變數的全域順序」需求,故不需 SeqCst。</p>
+  </div>
+
+  <h3>鏈 C — 效能 / cache</h3>
+  <div class="card">
+    <p><b>L1 — 這裡的 false sharing 是什麼、怎麼修?</b></p>
+    <p>head/tail 同 line → 兩 core 寫入互相 invalidate、line ping-pong;<code>#[repr(align(64))]</code> 讓各佔一條 line(std 無 <code>CachePadded</code>,自己刻)。</p>
+    <p><b>L2 — 為什麼是 64?何時用 128?</b></p>
+    <p>64 是 x86-64 常見 line 大小;有些 CPU spatial prefetcher 成對抓相鄰 line、或部分 ARM 用 128 bytes,這時對齊 128 才連 prefetch 一起擋。<span class="unv">unverified</span>:crossbeam 對某些 target 用比 64 大的常數,確切值不背。</p>
+    <p><b>L3 — head/tail 各自對齊後,還有殘留 cache 流量嗎?怎麼再降?</b></p>
+    <p>有。producer <b>每次</b> push 都 Acquire load 對方的 <code>head</code>(跨 core 讀 consumer 的 line),consumer 每次 pop 也 load <code>tail</code>。優化:各自快取上次看到的對方 index——producer 存一個<b>非共享</b>的 <code>cached_head</code>,consumer 存 <code>cached_tail</code>。push 先用 cache 判斷是否滿;只有<b>看起來滿</b>時才真的 Acquire load 更新 cache、再判一次:</p>
+    <pre><code>// delta 示意(producer 持有 cached_head: Cell&lt;usize&gt;,非共享;use Ordering::*;)
+let tail = self.tail.load(Relaxed);
+if tail.wrapping_sub(self.cached_head.get()) == CAP {
+    // 只有看起來滿才碰 consumer 的 cache line
+    self.cached_head.set(self.head.load(Acquire));
+    if tail.wrapping_sub(self.cached_head.get()) == CAP {
+        return Err(item);            // 真的滿
+    }
+}
+// ... 寫 payload、Release store tail</code></pre>
+    <p>如此大多數 push 完全不碰 consumer 的 cache line,跨 core 一致性流量大減(rigtorp 的經典手法,純 std 多加欄位即可)。<span class="note">完整驗證版是 <button class="jump" data-jump="p-code">完整代碼</button>的 base 版;此處僅示意 delta,表達式皆為合法 Rust。</span></p>
+  </div>
+</section>
+
+<!-- ============ QUIZ ============ -->
+<section id="p-quiz" class="panel">
+  <h2>4. Self-Quiz(答案摺疊)</h2>
+
+  <details>
+    <summary><span class="qnum">Q1(指定題)</span>&nbsp;把 consumer 讀 <code>tail</code> 的 Acquire 誤寫成 Relaxed,給一個會出錯的 interleaving。</summary>
+    <p>設定:producer <code>buf[0]=X; tail.store(1, Release)</code>;consumer <code>t = tail.load(Relaxed); if t != head { v = buf[0] }</code>——tail load 是 <span class="o-rlx">Relaxed</span>(錯)。</p>
+    <p>缺 Acquire → producer 的 Release store 與 consumer 的 load 之間<b>沒有 synchronizes-with</b> → <code>buf[0]=X</code>(寫)與 <code>v=buf[0]</code>(讀)之間<b>沒有 happens-before</b> → 對同一 non-atomic 位址、一寫一讀、無排序 → <b class="hl-red">data race → UB</b>。</p>
+    <pre><code>Producer                         Consumer
+                                 t = tail.load(Relaxed) → 0   // 空,回 None(正常)
+buf[0].write(X)   // non-atomic, 尚未全域可見
+tail.store(1, Release)
+                                 t = tail.load(Relaxed) → 1   // 看到新 tail
+                                 // 沒有 acquire 屏障
+                                 v = buf[0]                   // 未被排在 load 之後;
+                                                              // 可取到 pre-X 的舊/未初始化值 → UB</code></pre>
+    <p>關鍵:consumer「看到 <code>tail==1</code>」<b>不蘊含</b>「看到 <code>buf[0]==X</code>」。x86 上就算硬體不重排這組,<b>編譯器</b>在 Relaxed 下仍可把 <code>v=buf[0]</code> 提到 <code>tail.load</code> 之前;ARM/POWER 上連硬體都可能讓 tail 的更新先於 buf[0] 的寫入傳播到 consumer 的 core。無論哪條路徑,形式上都是 data race——不是「偶爾讀到舊值」而已。<b>這是 <button class="jump" data-jump="p-stepper">Stepper 第 6 步</button>(producer 讀 head 的 Acquire 誤降)的對稱另一半。</b></p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q2</span>&nbsp;producer 讀自己的 <code>tail</code> 用 Relaxed 安全嗎?為什麼?</summary>
+    <p>安全。producer 是 <code>tail</code> 唯一寫者,同執行緒 store→load 有 sequenced-before + 單位址 read-your-writes,必見自己最新寫入。Acquire 只為看<b>別的</b>執行緒對<b>別的</b>位址的寫入,此處無此需求。</p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q3</span>&nbsp;SPSC 為什麼不需要 SeqCst?什麼情況才需要?</summary>
+    <p>只需 tail、head 兩對 Release/Acquire 的局部 HB;無第三執行緒、無跨獨立變數的全域順序需求。需要 SeqCst 的是 store-buffer litmus(<code>X=1;r1=Y ‖ Y=1;r2=X</code> 禁 <code>r1==r2==0</code>)這種要全域 total order 的場景(見 <button class="jump" data-jump="p-followup">追問鏈 B</button>)。</p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q4</span>&nbsp;head 和 tail 放同一條 cache line 會怎樣?怎麼修?</summary>
+    <p>false sharing:兩 core 各寫其一,cache line 互相 invalidate、ping-pong,吞掉一截吞吐。修:<code>#[repr(align(64))]</code> 讓各佔一條 line(std 無 <code>CachePadded</code>,自己刻)。</p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q5</span>&nbsp;capacity 為什麼要 2 的次方?<code>tail.wrapping_sub(head)</code> 為什麼正確,即使 tail 溢位 wrap 過?</summary>
+    <ul>
+      <li><b>2 的次方</b> → <code>idx &amp; (capacity-1)</code> 取代 <code>idx % capacity</code>,遮罩比除法快、且是 free-running index 折回 buffer 的正解。</li>
+      <li><b><code>wrapping_sub</code> 正確性</b>:真實元素數恆 ∈ [0, capacity](不滿不 push、不空不 pop),而 capacity ≪ 2^64。它算 (tail−head) mod 2^64;真實差值 &lt; 模數時結果即真實差值——即使 tail 已 wrap 過 <code>usize::MAX</code>、head 還沒(此時直接相減會是負,但 wrapping 語義下 mod 2^64 仍給出正確的小差值)。</li>
+      <li><b>邊界(他會追問)</b>:若差值可能 &gt; capacity 就會誤判——但不變式保證不會;這也是為什麼滿的判斷用 <code>== capacity</code> 而非 <code>&gt;= capacity</code> 就夠(永遠不會衝過頭)。</li>
+    </ul>
+  </details>
+</section>
+
+<!-- ============ CODE ============ -->
+<section id="p-code" class="panel">
+  <h2>完整代碼(std-only,edition 2021)</h2>
+  <div class="card good"><b>已驗證。</b>以 rustc 1.75.0(edition 2021,<code>-O</code>)編譯通過(<code>--crate-type=lib</code> 零警告),並用下方 harness 做雙執行緒 FIFO 交叉驗證(cap=1 / 2 / 1024,多次執行),外加 <code>Drop</code> 殘留清理測試。<span class="note">四個 ordering 決策:兩個 own-index 讀 <span class="o-rlx">Relaxed</span>、tail/head 兩對 <span class="o-rel">Release</span>/<span class="o-acq">Acquire</span>——即 Stepper 第 4 步的最佳版。</span></div>
+  <pre><code>use std::cell::UnsafeCell;
+use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+// std 沒有 CachePadded(那是 crossbeam_utils 的);std-only 就自己刻。
+// 64 bytes 是 x86-64 常見的 cache line 大小;有些平台(部分 ARM)是 128。
+#[repr(align(64))]
+struct CachePadded&lt;T&gt;(T);
+
+impl&lt;T&gt; std::ops::Deref for CachePadded&lt;T&gt; {
+    type Target = T;
+    fn deref(&amp;self) -&gt; &amp;T { &amp;self.0 }
+}
+
+struct Ring&lt;T&gt; {
+    buf: Box&lt;[UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;]&gt;,
+    mask: usize,                    // capacity - 1;capacity 必為 2 的次方
+    head: CachePadded&lt;AtomicUsize&gt;, // consumer 寫、producer 讀
+    tail: CachePadded&lt;AtomicUsize&gt;, // producer 寫、consumer 讀
+}
+
+// SPSC 不變式(最多一 producer / 一 consumer)由「只發一組 handle」保證,非型別系統。
+unsafe impl&lt;T: Send&gt; Send for Ring&lt;T&gt; {}
+unsafe impl&lt;T: Send&gt; Sync for Ring&lt;T&gt; {}
+
+pub struct Producer&lt;T&gt; { ring: Arc&lt;Ring&lt;T&gt;&gt; }
+pub struct Consumer&lt;T&gt; { ring: Arc&lt;Ring&lt;T&gt;&gt; }
+
+pub fn channel&lt;T&gt;(capacity: usize) -&gt; (Producer&lt;T&gt;, Consumer&lt;T&gt;) {
+    assert!(capacity.is_power_of_two(), "capacity must be a power of two");
+    let buf = (0..capacity)
+        .map(|_| UnsafeCell::new(MaybeUninit::uninit()))
+        .collect::&lt;Vec&lt;_&gt;&gt;()
+        .into_boxed_slice();
+    let ring = Arc::new(Ring {
+        buf,
+        mask: capacity - 1,
+        head: CachePadded(AtomicUsize::new(0)),
+        tail: CachePadded(AtomicUsize::new(0)),
+    });
+    (Producer { ring: ring.clone() }, Consumer { ring })
+}
+
+impl&lt;T&gt; Producer&lt;T&gt; {
+    pub fn push(&amp;self, item: T) -&gt; Result&lt;(), T&gt; {
+        let r = &amp;*self.ring;
+        let tail = r.tail.load(Ordering::Relaxed); // 讀自己的 index → Relaxed
+        let head = r.head.load(Ordering::Acquire);  // 與 consumer 的 Release 握手
+        if tail.wrapping_sub(head) == r.buf.len() {
+            return Err(item);                        // 滿了
+        }
+        let slot = r.buf[tail &amp; r.mask].get();
+        unsafe { (*slot).as_mut_ptr().write(item); } // 寫 payload(non-atomic)
+        r.tail.store(tail.wrapping_add(1), Ordering::Release); // 發佈
+        Ok(())
+    }
+}
+
+impl&lt;T&gt; Consumer&lt;T&gt; {
+    pub fn pop(&amp;self) -&gt; Option&lt;T&gt; {
+        let r = &amp;*self.ring;
+        let head = r.head.load(Ordering::Relaxed);  // 讀自己的 index → Relaxed
+        let tail = r.tail.load(Ordering::Acquire);   // 與 producer 的 Release 握手
+        if head == tail {
+            return None;                             // 空的
+        }
+        let slot = r.buf[head &amp; r.mask].get();
+        let item = unsafe { std::ptr::read((*slot).as_ptr()) }; // 讀 payload
+        r.head.store(head.wrapping_add(1), Ordering::Release);  // 釋放 slot
+        Some(item)
+    }
+}
+
+impl&lt;T&gt; Drop for Ring&lt;T&gt; {
+    fn drop(&amp;mut self) {
+        // 把還沒 consume 的元素 drop 掉,避免 leak。
+        let (head, tail) = (*self.head.0.get_mut(), *self.tail.0.get_mut());
+        let mut h = head;
+        while h != tail {
+            let slot = self.buf[h &amp; self.mask].get();
+            unsafe { std::ptr::drop_in_place((*slot).as_mut_ptr()); }
+            h = h.wrapping_add(1);
+        }
+    }
+}</code></pre>
+
+  <details>
+    <summary>▶ 雙執行緒 FIFO 交叉驗證 harness(點開)</summary>
+    <pre><code>// 雙執行緒 FIFO 交叉驗證(cap=1 / 2 / 1024)。已於 rustc 1.75、edition 2021 跑過。
+fn main() {
+    use std::thread;
+    const N: usize = 2_000_000;
+
+    for cap in [1usize, 2, 1024] {
+        let (tx, rx) = channel::&lt;usize&gt;(cap);
+        let prod = thread::spawn(move || {
+            let mut i = 0usize;
+            while i &lt; N {
+                // 生產環境用 std::hint::spin_loop();
+                // 單核 sandbox 驗證時改用 std::thread::yield_now() 避免 busy-spin livelock。
+                match tx.push(i) { Ok(()) =&gt; i += 1, Err(_) =&gt; std::hint::spin_loop() }
+            }
+        });
+        let cons = thread::spawn(move || {
+            let mut next = 0usize;
+            while next &lt; N {
+                match rx.pop() {
+                    Some(v) =&gt; { assert_eq!(v, next, "cap={cap}: 亂序或值錯"); next += 1; }
+                    None =&gt; std::hint::spin_loop(),
+                }
+            }
+        });
+        prod.join().unwrap();
+        cons.join().unwrap();
+        println!("cap={cap:&gt;5}: {N} items 依序通過,無亂序、無遺失");
+    }
+}</code></pre>
+    <p class="note">單核環境下 busy-spin 會 livelock(<code>spin_loop()</code> 只是 pause hint,不讓出 OS thread);驗證時把兩處 spin 換成 <code>std::thread::yield_now()</code> 即可,ring 本身不動。</p>
+  </details>
+</section>
+
+</div><!-- /.wrap -->
+
+<script>
+(function(){
+  "use strict";
+  var REL="Release", ACQ="Acquire", RLX="Relaxed", SC="SeqCst";
+  function ordCls(o){ return {Release:"o-rel",Acquire:"o-acq",Relaxed:"o-rlx",SeqCst:"o-sc"}[o]; }
+
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"u128":1,"i8":1,"i16":1,"i32":1,"i64":1,
+    "i128":1,"f32":1,"f64":1,"bool":1,"char":1,"str":1,"String":1,"Vec":1,"Box":1,"Option":1,"Result":1,
+    "Arc":1,"AtomicUsize":1,"UnsafeCell":1,"MaybeUninit":1,"Ordering":1,"Cell":1,"Producer":1,"Consumer":1,
+    "Ring":1,"CachePadded":1,"Some":1,"None":1,"Ok":1,"Err":1,"Send":1,"Sync":1,"Deref":1,"Drop":1,"Target":1};
+  var RS_ORD = {"Relaxed":"tk-o-rlx","Acquire":"tk-o-acq","Release":"tk-o-rel","SeqCst":"tk-o-sc","AcqRel":"tk-o-rel"};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i];
+      if(c==="/"&&src[i+1]==="/"){ var j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="/"&&src[i+1]==="*"){ var j=src.indexOf("*/",i+2); j=(j<0)?n:j+2; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ var j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ var j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="'"){
+        var lm=/^'[A-Za-z_][A-Za-z0-9_]*/.exec(src.slice(i));
+        if(lm && src[i+lm[0].length]!=="'"){ out+="<span class='tk-life'>"+esc(lm[0])+"</span>"; i+=lm[0].length; continue; }
+        var chm=/^'(\\.|[^'])'/.exec(src.slice(i));
+        if(chm){ out+="<span class='tk-str'>"+esc(chm[0])+"</span>"; i+=chm[0].length; continue; }
+        out+=esc(c); i++; continue;
+      }
+      if(c>="0"&&c<="9"){
+        var nm=/^(0x[0-9a-fA-F_]+|0b[01_]+|[0-9][0-9_]*(\.[0-9][0-9_]*)?([eE][+-]?[0-9]+)?)([a-zA-Z_][a-zA-Z0-9_]*)?/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        var j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_ORD[w]) cls=RS_ORD[w];
+        else if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+
+  // 每步:A=producer讀tail(own), B=producer store tail, C=consumer load tail,
+  //       D=consumer讀head(own), E=consumer store head, F=producer load head
+  var STEPS = [
+    { // 0
+      ord:{A:SC,B:SC,C:SC,D:SC,E:SC,F:SC}, chg:[], code:[],
+      arrows:{tail:"on",head:"on"}, hb:{dp:false,dc:false,sc:false,sp:false}, race:false, brk:false,
+      title:"基準:全 SeqCst",
+      body:"每個 load/store 都 <span class='o-sc'>SeqCst</span>,所有 SeqCst 操作落在單一全域 total order,兩個 handshake(tail、head)自然成立——payload 一定看得到、slot 不會被搶寫。<b>這版永遠正確,只是可能慢</b>(SeqCst store 在 x86 要 fence)。之後每按 Next relax 一個操作,並說明它為何仍安全。"
+    },
+    { // 1
+      ord:{A:RLX,B:SC,C:SC,D:SC,E:SC,F:SC}, chg:["A"], code:["A"],
+      arrows:{tail:"on",head:"on"}, hb:{dp:false,dc:false,sc:false,sp:false}, race:false, brk:false,
+      title:"Relax:producer 讀自己的 tail → Relaxed",
+      body:"圖上最左邊的 <b>⟲ tail.load</b> 那格降成 <span class='o-rlx'>Relaxed</span> 了。<code>push</code> 開頭讀 <code>tail</code> 只是問『我上次寫到哪』。producer 是 <code>tail</code> 唯一寫者,同執行緒 store→load 有 sequenced-before,單位址 read-your-writes 保證讀到自己最新值——<b>不需要跨執行緒 Acquire</b>。<b>看圖就懂:⟲ 那格沒有任何箭頭進出</b>——沒有要跟誰握手,自然不需要 ordering。"
+    },
+    { // 2
+      ord:{A:RLX,B:SC,C:SC,D:RLX,E:SC,F:SC}, chg:["D"], code:["D"],
+      arrows:{tail:"on",head:"on"}, hb:{dp:false,dc:false,sc:false,sp:false}, race:false, brk:false,
+      title:"Relax:consumer 讀自己的 head → Relaxed",
+      body:"consumer lane 的 <b>⟲ head.load</b> 同樣降 <span class='o-rlx'>Relaxed</span>。對稱理由:consumer 是 <code>head</code> 唯一寫者,讀自己的 index 只需同執行緒保證,一樣<b>沒有箭頭連到它</b>。到此兩格 ⟲ 都是 Relaxed,四個真正參與握手的操作(兩對箭頭端點)仍是 SeqCst——下一步才動它們。"
+    },
+    { // 3
+      ord:{A:RLX,B:REL,C:ACQ,D:RLX,E:SC,F:SC}, chg:["B","C"], code:["B","C"],
+      arrows:{tail:"hl",head:"on"}, hb:{dp:true,dc:true,sc:false,sp:false}, race:false, brk:false,
+      title:"Relax:tail handshake → Release / Acquire",
+      body:"handshake ①(資料可得)。producer 發佈 <code>tail</code> 用 <span class='o-rel'>Release</span>,把先前的 <code>buf[0]=X</code> 排在 store 之前並使其可見;consumer 觀察 <code>tail</code> 用 <span class='o-acq'>Acquire</span>。兩者構成 <b>synchronizes-with</b>(藍箭頭),於是 <code>buf[0]=X</code> <b>happens-before</b> consumer 讀 <code>buf[0]</code>(藍陰影:E1 寫 ⇒ E4 讀)。降到 Release/Acquire 就拿到這條因果縫,<b>不必動用 SeqCst 的全域順序</b>。"
+    },
+    { // 4
+      ord:{A:RLX,B:REL,C:ACQ,D:RLX,E:REL,F:ACQ}, chg:["E","F"], code:["E","F"],
+      arrows:{tail:"on",head:"hl"}, hb:{dp:false,dc:false,sc:true,sp:true}, race:false, brk:false,
+      title:"Relax:head handshake → Release / Acquire(最佳版)",
+      body:"handshake ②(空間可得)。consumer 讀完 payload 後 <span class='o-rel'>Release</span> store <code>head</code>,把『我讀完 E4 了』排在 store 之前;producer <span class='o-acq'>Acquire</span> load <code>head</code> 才覆寫。synchronizes-with(青箭頭)使 consumer 讀 X(E4)<b>happens-before</b> producer 覆寫 Y(E7)——保證不搶在 consumer 讀完前蓋掉 slot(青陰影:E4 ⇒ E7)。<b>這就是全 relax 後的最佳版</b>:兩對 Release/Acquire,兩個 own-read Relaxed。"
+    },
+    { // 5
+      ord:{A:RLX,B:REL,C:ACQ,D:RLX,E:REL,F:ACQ}, chg:[], code:[],
+      arrows:{tail:"hl",head:"hl"}, hb:{dp:true,dc:true,sc:true,sp:true}, race:false, brk:false,
+      title:"為什麼到此為止、不需要 SeqCst(完整圖)",
+      body:"<b>這張是完整圖</b>:兩條箭頭同時亮、四塊陰影全開——SPSC 要的因果全在這裡了。只需<b>兩對成對</b>的 synchronizes-with(tail 一對、head 一對)建立局部 HB。沒有第三執行緒,也不需把兩個 handshake 排出<b>全域</b>順序,SeqCst 的『所有 SeqCst 操作單一 total order』是多餘保證。<b>成本差</b>:x86 上 SeqCst <b>store</b> 的 typical lowering 需 <code>mfence</code>(或 <code>lock</code>-prefixed 交換),而 Release/Acquire/Relaxed 的 load/store 都是普通 <code>mov</code>——relax 掉的正是 E2、E5 兩個 store 的 fence;弱記憶體序架構(ARM/POWER)省更多。<b>另一刀是 false sharing</b>:<code>head</code>/<code>tail</code> 若同 cache line 會 ping-pong,用 <code>#[repr(align(64))]</code> 各佔一條 line(std 無 <code>CachePadded</code>,自己刻)。"
+    },
+    { // 6
+      ord:{A:RLX,B:REL,C:ACQ,D:RLX,E:REL,F:RLX}, chg:["F"], code:["F"],
+      arrows:{tail:"on",head:"broken"}, hb:{dp:false,dc:false,sc:false,sp:false}, race:true, brk:true,
+      title:"反例:producer 讀 head 的 Acquire 誤降為 Relaxed",
+      body:"handshake ② 的青箭頭<b>斷了</b>(Relaxed load 不與 consumer 的 Release store 構成 synchronizes-with)→ E4(consumer 讀 X)與 E7(producer 覆寫 Y)之間<b>沒有 happens-before</b>。兩者對同一 slot、一讀一寫、無排序 → <b class='hl-red'>data race → UB</b>:producer 可能在 consumer 還沒讀完 <code>buf[0]</code> 時就用 Y 蓋掉它,consumer 讀到半舊半新的撕裂值。<b>Self-Quiz 第 1 題是對稱另一半</b>:把 consumer 讀 <code>tail</code> 的 Acquire 降成 Relaxed。"
+    }
+  ];
+
+  function codeHTML(step){
+    var o = step.ord, chg = step.code || [];
+    function ln(key, txt){ var h = hlRust(txt); return (key && chg.indexOf(key) >= 0) ? "<span class='chgline'>"+h+"</span>" : h; }
+    var rows = [
+      [null, "// use std::sync::atomic::Ordering::{Relaxed, Acquire, Release, SeqCst};"],
+      [null, "fn push(&self, item: T) -> Result<(), T> {"],
+      ["A",  "    let tail = self.tail.load("+o.A+");             // 讀自己的 index"],
+      ["F",  "    let head = self.head.load("+o.F+");             // 讀對方的 head"],
+      [null, "    if tail.wrapping_sub(head) == self.buf.len() {   // 滿?"],
+      [null, "        return Err(item);"],
+      [null, "    }"],
+      [null, "    let cell = self.buf[tail & self.mask].get();"],
+      [null, "    unsafe { (*cell).as_mut_ptr().write(item); }     // 寫 payload"],
+      ["B",  "    self.tail.store(tail.wrapping_add(1), "+o.B+"); // 發佈"],
+      [null, "    Ok(())"],
+      [null, "}"],
+      [null, ""],
+      [null, "fn pop(&self) -> Option<T> {"],
+      ["D",  "    let head = self.head.load("+o.D+");             // 讀自己的 index"],
+      ["C",  "    let tail = self.tail.load("+o.C+");             // 讀對方的 tail"],
+      [null, "    if head == tail { return None; }                 // 空?"],
+      [null, "    let cell = self.buf[head & self.mask].get();"],
+      [null, "    let v = unsafe { std::ptr::read((*cell).as_ptr()) }; // 讀 payload"],
+      ["E",  "    self.head.store(head.wrapping_add(1), "+o.E+"); // 釋放 slot"],
+      [null, "    Some(v)"],
+      [null, "}"]
+    ];
+    return rows.map(function(r){ return ln(r[0], r[1]); }).join("\n");
+  }
+
+  function setBadge(id, ord){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.textContent = ord;
+    el.setAttribute("class", "badge " + ordCls(ord));
+  }
+  function setArrow(id, state){
+    var el = document.getElementById(id);
+    if(!el) return;
+    var base = id === "ar-tail" ? "swarrow tail" : "swarrow head";
+    el.setAttribute("class", base + " " + state);
+  }
+  function setBand(id, on){
+    var el = document.getElementById(id);
+    if(!el) return;
+    var cls = el.getAttribute("class").replace(/\s*show/,"");
+    el.setAttribute("class", cls + (on ? " show" : ""));
+  }
+  function setEvtChg(step){
+    var map = {A:"eA",B:"e2",C:"e3",D:"eD",E:"e5",F:"e6"};
+    ["eA","eD","e2","e3","e5","e6"].forEach(function(eid){
+      var g = document.getElementById(eid);
+      if(g) g.setAttribute("class", g.getAttribute("class").replace(/\s*chg/,""));
+    });
+    (step.chg||[]).forEach(function(k){
+      var eid = map[k];
+      if(eid){ var g=document.getElementById(eid); if(g) g.setAttribute("class", g.getAttribute("class")+" chg"); }
+    });
+  }
+
+  var cur = 0;
+  function render(i){
+    if(i < 0) i = 0; if(i > STEPS.length-1) i = STEPS.length-1;
+    cur = i;
+    var s = STEPS[i];
+    setBadge("bA", s.ord.A); setBadge("bD", s.ord.D);
+    setBadge("b2", s.ord.B); setBadge("b3", s.ord.C); setBadge("b5", s.ord.E); setBadge("b6", s.ord.F);
+    setArrow("ar-tail", s.arrows.tail); setArrow("ar-head", s.arrows.head);
+    setBand("hb-dp", s.hb.dp); setBand("hb-dc", s.hb.dc); setBand("hb-sc", s.hb.sc); setBand("hb-sp", s.hb.sp);
+    var race = document.getElementById("race-mark");
+    if(race) race.setAttribute("class", "race" + (s.race ? " show" : ""));
+    setEvtChg(s);
+
+    var cp = document.getElementById("codepanel");
+    if(cp) cp.innerHTML = codeHTML(s);
+    var sc = document.getElementById("stepcard");
+    if(sc){
+      sc.setAttribute("class", "stepcard" + (s.brk ? " brk" : ""));
+      sc.innerHTML = "<h4>Step "+i+" — "+s.title+"</h4><div>"+s.body+"</div>";
+    }
+    var no = document.getElementById("stepno");
+    if(no) no.textContent = "Step " + i + " / " + (STEPS.length-1);
+    document.querySelectorAll(".dot").forEach(function(d){
+      d.classList.toggle("active", parseInt(d.getAttribute("data-step"),10) === i);
+    });
+  }
+
+  function showTab(id){
+    document.querySelectorAll(".panel").forEach(function(p){ p.classList.toggle("active", p.id === id); });
+    document.querySelectorAll(".tabbtn").forEach(function(b){ b.classList.toggle("active", b.getAttribute("data-jump") === id); });
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+
+  // 單一 delegated click handler:同時處理 data-jump(換 tab)與 data-step(stepper)
+  document.addEventListener("click", function(ev){
+    var jt = ev.target.closest("[data-jump]");
+    if(jt){ showTab(jt.getAttribute("data-jump")); return; }
+    var st = ev.target.closest("[data-step]");
+    if(st){
+      var v = st.getAttribute("data-step");
+      if(v === "next") render(cur+1);
+      else if(v === "prev") render(cur-1);
+      else render(parseInt(v,10));
+    }
+  });
+
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
+  render(0);
+})();
+</script>
+</body>
+</html>

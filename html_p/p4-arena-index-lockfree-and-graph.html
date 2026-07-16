@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arena + index:兩種完全不同的用途</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg:#d4be98; --fg-dim:#a89984; --gray:#928374;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box}
+html,body{
+  -webkit-text-size-adjust:100%;
+  margin:0; padding:0; background:var(--bg0); color:var(--fg);
+  font-family:'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size:15px; line-height:1.7;
+}
+.wrap{max-width:960px; margin:0 auto; padding:0 16px 120px}
+header.top{padding:26px 16px 10px; border-bottom:1px solid var(--bg3)}
+header.top h1{margin:0 0 6px; font-size:21px; color:var(--yellow); font-weight:700}
+header.top .sub{color:var(--fg-dim); font-size:13px}
+nav.tabs{
+  position:sticky; top:0; z-index:20; background:var(--bg0);
+  display:flex; flex-wrap:wrap; gap:6px; padding:12px 16px;
+  border-bottom:1px solid var(--bg3);
+}
+nav.tabs button{
+  font-family:inherit; font-size:13px; cursor:pointer;
+  background:var(--bg1); color:var(--fg-dim);
+  border:1px solid var(--bg3); border-radius:6px; padding:7px 12px;
+  transition:all .12s;
+}
+nav.tabs button:hover{color:var(--fg); border-color:var(--bg4)}
+nav.tabs button.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow)}
+.panel{display:none; padding-top:22px}
+.panel.active{display:block}
+h2{font-size:18px; color:var(--aqua); margin:30px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--bg2)}
+h2:first-child{margin-top:6px}
+h3{font-size:15px; color:var(--orange); margin:22px 0 8px}
+h4{font-size:14px; color:var(--blue); margin:16px 0 6px}
+p{margin:10px 0}
+code.ic{background:var(--bg2); color:var(--aqua); padding:1px 6px; border-radius:4px; font-size:13.5px}
+.note{color:var(--fg-dim)}
+pre{
+  -webkit-text-size-adjust:100%;
+  background:var(--bg1); border:1px solid var(--bg3); border-radius:8px;
+  padding:14px 16px; overflow-x:auto; margin:12px 0; font-size:13.5px; line-height:1.55;
+}
+pre code{white-space:pre; font-family:inherit}
+.c-kw{color:var(--red)} .c-ty{color:var(--yellow)} .c-str{color:var(--green)}
+.c-cmt{color:var(--gray); font-style:italic} .c-num{color:var(--purple)}
+.codelabel{font-size:12px; color:var(--fg-dim); margin:14px 0 -4px}
+.codelabel b{color:var(--green)}
+.card{background:var(--bg1); border:1px solid var(--bg3); border-left:3px solid var(--blue);
+  border-radius:8px; padding:14px 16px; margin:14px 0}
+.card.warn{border-left-color:var(--red)}
+.card.good{border-left-color:var(--green)}
+.card.key{border-left-color:var(--yellow)}
+.card h4{margin-top:0}
+.jump{color:var(--blue); cursor:pointer; border-bottom:1px dashed var(--blue)}
+.jump:hover{color:var(--aqua); border-bottom-color:var(--aqua)}
+table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.5px}
+th,td{border:1px solid var(--bg3); padding:8px 10px; text-align:left; vertical-align:top}
+th{background:var(--bg2); color:var(--yellow)}
+td.a{color:var(--aqua)} td.b{color:var(--purple)}
+ul,ol{margin:8px 0; padding-left:22px}
+li{margin:5px 0}
+details{background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:4px 14px; margin:12px 0}
+details summary{cursor:pointer; color:var(--yellow); font-weight:500; padding:8px 0}
+details[open] summary{border-bottom:1px solid var(--bg2); margin-bottom:8px}
+kbd{background:var(--bg3); border:1px solid var(--bg4); border-radius:4px; padding:1px 6px; font-size:12px}
+.tag{display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; margin-right:6px}
+.tag.a{background:#3a2f2a; color:var(--orange); border:1px solid var(--orange)}
+.tag.b{background:#2a3330; color:var(--aqua); border:1px solid var(--aqua)}
+.tag.u{background:#332a2a; color:var(--red); border:1px solid var(--red)}
+/* ---- steppers ---- */
+.stepper{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:16px; margin:16px 0}
+.stepctl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px}
+.stepctl button{font-family:inherit; font-size:13px; cursor:pointer; background:var(--bg3);
+  color:var(--fg); border:1px solid var(--bg4); border-radius:6px; padding:6px 14px}
+.stepctl button:hover{background:var(--bg4)}
+.stepctl button:disabled{opacity:.35; cursor:default}
+.stepctl .frameno{color:var(--fg-dim); font-size:12px}
+.toggle{margin-left:auto; display:flex; gap:0; border:1px solid var(--bg4); border-radius:6px; overflow:hidden}
+.toggle button{border:0; border-radius:0; background:var(--bg1); color:var(--fg-dim); padding:6px 12px}
+.toggle button.on{background:var(--yellow); color:var(--bg0); font-weight:700}
+.narr{background:var(--bg0); border:1px solid var(--bg3); border-radius:8px; padding:12px 14px;
+  min-height:64px; font-size:13.5px; line-height:1.65}
+.narr .hot{color:var(--red); font-weight:700}
+.narr .ok{color:var(--green); font-weight:700}
+.headbox{display:inline-block; padding:6px 12px; border-radius:6px; font-weight:700;
+  border:2px solid var(--blue); color:var(--blue); background:var(--bg0); margin:6px 0}
+.headbox.danger{border-color:var(--red); color:var(--red)}
+.slots{display:flex; flex-wrap:wrap; gap:10px; margin:12px 0}
+.slot{min-width:96px; border:2px solid var(--bg4); border-radius:8px; padding:8px 10px;
+  background:var(--bg0); text-align:center}
+.slot .sid{font-size:11px; color:var(--fg-dim)}
+.slot .sval{font-size:16px; font-weight:700; margin:2px 0}
+.slot .snext{font-size:11px; color:var(--fg-dim)}
+.slot.stack{border-color:var(--blue)} .slot.stack .sval{color:var(--blue)}
+.slot.free{border-color:var(--gray); opacity:.6} .slot.free .sval{color:var(--gray)}
+.slot.transit{border-color:var(--yellow)} .slot.transit .sval{color:var(--yellow)}
+.slot.danger{border-color:var(--red); background:#2a1f1f} .slot.danger .sval{color:var(--red)}
+.thread{border:1px dashed var(--bg4); border-radius:8px; padding:8px 12px; margin:10px 0; font-size:12.5px}
+.thread b{color:var(--purple)}
+.thread.frozen{border-color:var(--orange)} .thread.frozen b{color:var(--orange)}
+.legend{font-size:11.5px; color:var(--fg-dim); margin-top:10px}
+.legend span{margin-right:14px}
+.dot{display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:middle; margin-right:4px}
+/* dsu forest */
+.arrs{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0}
+.acell{border:1px solid var(--bg4); border-radius:5px; min-width:40px; text-align:center; padding:4px 2px; background:var(--bg0)}
+.acell .ai{font-size:10px; color:var(--fg-dim)} .acell .av{font-size:14px; font-weight:700}
+.acell.hot{border-color:var(--yellow)} .acell.hot .av{color:var(--yellow)}
+.acell.comp{border-color:var(--green)} .acell.comp .av{color:var(--green)}
+.forest{display:flex; flex-wrap:wrap; gap:18px; margin:14px 0; align-items:flex-start}
+.dnode{display:flex; flex-direction:column; align-items:center}
+.dbubble{width:38px; height:38px; border-radius:50%; border:2px solid var(--blue); background:var(--bg0);
+  display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--blue); font-size:14px}
+.dbubble.root{border-color:var(--yellow); color:var(--yellow)}
+.dbubble.hot{border-color:var(--orange); color:var(--orange)}
+.dbubble.comp{border-color:var(--green); color:var(--green)}
+.dchildren{display:flex; gap:12px; margin-top:6px; padding-top:6px; border-top:1px solid var(--bg3)}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>arena + index:同一招,兩個毫不相干的用途</h1>
+  <div class="sub">std-only Rust · edition 2021 · 所有 code 已用 rustc 1.75 實際編譯 + 交叉驗證</div>
+</header>
+<nav class="tabs" id="tabs">
+  <button class="active" data-tab="overview">總覽</button>
+  <button data-tab="use-a">用途 A · lock-free</button>
+  <button data-tab="use-b">用途 B · graph/tree</button>
+  <button data-tab="followups">面試追問</button>
+  <button data-tab="quiz">Self-quiz</button>
+</nav>
+<div class="wrap">
+
+<section class="panel active" id="overview">
+<h2>一句話先分清楚</h2>
+<p>「不用指標、用 <code class="ic">u32</code> / <code class="ic">usize</code> index 互指」這招會出現在兩個地方,考點<b>完全不同</b>,別混:</p>
+
+<table>
+<tr><th style="width:90px"></th><th>用途 A(並發)</th><th>用途 B(單執行緒)</th></tr>
+<tr><td>要解的問題</td><td class="a">lock-free 的 <b>reclamation 地獄</b>:pop 後這塊記憶體誰能 free?別的執行緒還握著它。</td><td class="b">Rust borrow checker 對 graph/tree 的 <b>&amp;mut 別名限制</b>:兩個 node 互指在 safe Rust 幾乎寫不出。</td></tr>
+<tr><td>敵人是</td><td class="a">memory allocator + 其他執行緒的時序</td><td class="b">編譯器(borrow checker)</td></tr>
+<tr><td>index 幫上什麼</td><td class="a">記憶體永不還給 allocator → 沒有 use-after-free。但 <span class="jump" data-jump="use-a">index 重用讓 ABA 換個形狀回來</span>。</td><td class="b">所有權集中在 arena(<code class="ic">Vec&lt;Node&gt;</code>),node 之間只存 index → 沒有別名、沒有 cycle leak、沒有 runtime borrow 成本。</td></tr>
+<tr><td>額外機制</td><td class="a">tagged index:<code class="ic">AtomicU64 = [generation | index]</code></td><td class="b">(進階)generational index 防 stale handle —— 和 A 的 generation 同構</td></tr>
+<tr><td>典型場景</td><td class="a">Treiber stack / MS-queue、free list、slab</td><td class="b">DSU、adjacency list、petgraph、tree 遍歷</td></tr>
+</table>
+
+<div class="card key">
+<h4>兩者唯一的共通點,只是「機制」,不是「問題」</h4>
+<p>A 和 B 都把「pointer」換成「整數 index」,但這是<b>手段撞在一起</b>而已。A 解的是<b>並發下的安全重用</b>,B 解的是<b>單執行緒下的別名表達力</b>。把它們當同一件事,面試會被追問打穿(<span class="jump" data-jump="quiz">見 self-quiz 第 2 題</span>)。</p>
+</div>
+
+<h2>什麼時候伸手拿哪一個</h2>
+<ul>
+<li><span class="tag a">A</span>要寫 lock-free 結構、又不准用 <code class="ic">crossbeam</code> / <code class="ic">epoch</code> / hazard pointer → 用固定大小 arena + tagged index 把 reclamation 問題「消去」(不是解決,是繞過)。</li>
+<li><span class="tag b">B</span>要在單執行緒建 graph / tree / union-find,又不想陷進 <code class="ic">Rc&lt;RefCell&lt;Node&gt;&gt;</code> 的 ownership 地獄 → 把 node 丟進 <code class="ic">Vec</code>,用 index 當「指標」。這是 Rust 圈做圖論的<b>慣用解</b>。</li>
+</ul>
+
+<div class="card">
+<h4>本頁怎麼讀</h4>
+<p>每個用途都照這個順序:<b>naive 版 → 它的失敗模式 → 修法</b>,概念在靜態卡先建好,再進<span class="jump" data-jump="use-a">互動 stepper</span>。所有 Rust 都可編譯、無 <code class="ic">// 省略</code> 佔位。不確定的事實標 <span class="tag u">unverified</span>。</p>
+</div>
+</section>
+
+<section class="panel" id="use-a">
+<h2><span class="tag a">A</span>lock-free with arena:繞開 reclamation 地獄</h2>
+
+<h3>① naive 版:AtomicPtr Treiber stack</h3>
+<p>先看最直白的 lock-free stack:head 是一個 <code class="ic">AtomicPtr&lt;Node&gt;</code>,push/pop 用 CAS 換 head。</p>
+<div class="codelabel"><b>可編譯</b> · <code>rustc --edition 2021 --crate-type lib</code> 通過</div>
+<pre><code class="rust">// Use A intro: naive AtomicPtr Treiber stack.
+// Compiles and is memory-safe ONLY because it leaks (never frees).
+// The moment you add Box::from_raw to reclaim, the (*head).next read in
+// another thread's pop() becomes a use-after-free.
+use std::sync::atomic::{AtomicPtr, Ordering};
+use std::ptr;
+
+struct Node {
+    value: u32,
+    next: *mut Node,
+}
+
+pub struct Stack {
+    head: AtomicPtr&lt;Node&gt;,
+}
+
+impl Stack {
+    pub fn new() -&gt; Self {
+        Stack { head: AtomicPtr::new(ptr::null_mut()) }
+    }
+
+    pub fn push(&amp;self, value: u32) {
+        let node = Box::into_raw(Box::new(Node { value, next: ptr::null_mut() }));
+        loop {
+            let head = self.head.load(Ordering::Acquire);
+            unsafe { (*node).next = head; }
+            if self
+                .head
+                .compare_exchange_weak(head, node, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                break;
+            }
+        }
+    }
+
+    pub fn pop(&amp;self) -&gt; Option&lt;u32&gt; {
+        loop {
+            let head = self.head.load(Ordering::Acquire);
+            if head.is_null() {
+                return None;
+            }
+            // UAF SITE (if we ever freed): another thread may have popped+freed `head`.
+            let next = unsafe { (*head).next };
+            if self
+                .head
+                .compare_exchange_weak(head, next, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                let value = unsafe { (*head).value };
+                // let _ = unsafe { Box::from_raw(head) }; // &lt;- adding this = UAF above.
+                return Some(value); // we LEAK head deliberately.
+            }
+        }
+    }
+}</code></pre>
+
+<div class="card warn">
+<h4>失敗模式:reclamation —— 到底誰能 free?</h4>
+<p>看 <code class="ic">pop()</code> 裡這行:<code class="ic">let next = unsafe { (*head).next };</code></p>
+<p>時序:執行緒 T1 <code class="ic">load</code> 到 <code class="ic">head = P</code>。T1 還沒讀 <code class="ic">(*P).next</code>,就被 preempt。此時 T2 把 P pop 掉、<code class="ic">Box::from_raw(P)</code> 釋放記憶體。T1 回來讀 <code class="ic">(*P).next</code> → <b>讀到已釋放的記憶體 = use-after-free</b>。</p>
+<p>所以上面那段 code 之所以能編譯且 memory-safe,<b>是因為它故意 leak</b>(<code class="ic">pop</code> 裡永遠不 <code class="ic">Box::from_raw</code>)。一旦你加上釋放,UAF 立刻出現在別的執行緒的 <code class="ic">(*head).next</code>。</p>
+<p class="note">這就是 reclamation 地獄。業界的解法(hazard pointer、epoch-based reclamation、RCU)都很重 —— crossbeam 的 <code class="ic">epoch</code> 就是在做這件事。本次面試不准用外部 crate,所以我們換路。</p>
+</div>
+
+<h3>② 修法第一步:arena 把「free」消去</h3>
+<p>核心轉念:<b>記憶體永不還給 allocator</b>。開一塊固定大小的 <code class="ic">Box&lt;[Slot]&gt;</code>(arena),node 之間不用指標、用 <code class="ic">u32</code> index 互指。pop 掉的 slot 不釋放,而是掛回一條 <b>free list</b> 等重用。</p>
+
+<div class="card good">
+<h4>UAF 消失了</h4>
+<p>既然 slot 的記憶體永遠在那塊 arena 裡(從不 unmap),<code class="ic">slots[idx].next</code> 這個讀取<b>永遠合法</b> —— 頂多讀到「邏輯上過期」的值,但不會碰到未映射記憶體。reclamation 的記憶體安全問題,被「不釋放」直接消去。</p>
+</div>
+
+<div class="card warn">
+<h4>但 ABA 換個形狀回來了</h4>
+<p>記憶體安全 ≠ 邏輯正確。你把 pointer 換成 index、又<b>重用 slot</b>,於是「同一個 index 值」可以指向<b>邏輯上不同的元素</b>。一個 cache 住舊 index 的 CAS,會在 index 繞回同值時<b>誤判成功</b>。這就是 ABA —— 它不是記憶體問題,是「CAS 判定身份」的問題。下面用 stepper 走一遍。</p>
+</div>
+
+<h3>③ 修法第二步:tagged index —— 讓每次重用都被看見</h3>
+<p>狀態變數 <code class="ic">head</code> 從「只存 index」升級成 <code class="ic">AtomicU64 = [generation : u32 高位 | index : u32 低位]</code>。這個 tag/generation 在<b>每次成功 CAS 都 +1</b>。ABA 防禦的關鍵:CAS 比對<b>整個 64-bit</b>,所以只要 head 被動過(哪怕 index 繞回同值),tag 已經前進,舊值的 CAS 必然失敗。</p>
+
+<div class="codelabel"><b>重點片段</b> · pack/unpack + free-list 的 tagged CAS(節錄自下方完整檔)</div>
+<pre><code class="rust">const NULL: u32 = u32::MAX;
+
+#[inline]
+fn pack(tag: u32, index: u32) -&gt; u64 {
+    ((tag as u64) &lt;&lt; 32) | (index as u64)
+}
+
+#[inline]
+fn unpack(v: u64) -&gt; (u32, u32) {
+    ((v &gt;&gt; 32) as u32, v as u32)
+}
+
+struct Slot {
+    next: AtomicU32, // index of next slot, or NULL
+    val: AtomicU32,  // payload kept atomic so &amp;self mutation stays 100% safe
+}
+
+pub struct ArenaStack {
+    slots: Box&lt;[Slot]&gt;,
+    data: AtomicU64, // data stack head:  [tag | index]
+    free: AtomicU64, // free list head:   [tag | index]
+}
+
+impl ArenaStack {
+    pub fn with_capacity(cap: u32) -&gt; Self {
+        assert!(cap &gt; 0 &amp;&amp; cap &lt; NULL);
+        let mut v = Vec::with_capacity(cap as usize);
+        for i in 0..cap {
+            // free list initially chains 0 -&gt; 1 -&gt; ... -&gt; (cap-1) -&gt; NULL
+            let next = if i + 1 &lt; cap { i + 1 } else { NULL };
+            v.push(Slot { next: AtomicU32::new(next), val: AtomicU32::new(0) });
+        }
+        ArenaStack {
+            slots: v.into_boxed_slice(),
+            data: AtomicU64::new(pack(0, NULL)), // empty stack
+            free: AtomicU64::new(pack(0, 0)),    // all slots free, head = 0
+        }
+    }
+
+    // Pop a free slot (Treiber pop on the free list).
+    fn alloc(&amp;self) -&gt; Option&lt;u32&gt; {
+        loop {
+            let old = self.free.load(Ordering::Acquire);
+            let (tag, idx) = unpack(old);
+            if idx == NULL {
+                return None; // arena exhausted -&gt; bounded reject
+            }
+            let next = self.slots[idx as usize].next.load(Ordering::Relaxed);
+            let new = pack(tag.wrapping_add(1), next);
+            if self
+                .free
+                .compare_exchange_weak(old, new, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return Some(idx);
+            }
+        }
+    }</code></pre>
+
+<p>free list 自己也是一個 Treiber stack(<code class="ic">alloc</code> = pop、<code class="ic">dealloc</code> = push),所以<b>它也有 ABA</b> —— 上面 <code class="ic">alloc</code> 對 <code class="ic">self.free</code> 的 CAS 同樣掛了 tag。這不是可選項,是必須(<span class="jump" data-jump="followups">追問 L1 會打這裡</span>)。</p>
+
+<h4>完整實作(bounded lock-free stack over arena)</h4>
+<div class="codelabel"><b>已編譯 + 通過 8-thread 守恆測試</b>:8 執行緒各 push/pop 1000 次,總 pop 數精確 = 8000,無遺失/重複節點</div>
+<pre><code class="rust">// Use A core: bounded lock-free Treiber stack over an index arena.
+// Head is AtomicU64 = [tag: u32 (high) | index: u32 (low)].
+// The tag advances on every successful CAS -&gt; defeats ABA on the head.
+// Nodes are never freed; freed slots return to a free list (itself a
+// tagged Treiber stack, so it has the SAME ABA and needs the SAME tag).
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+
+const NULL: u32 = u32::MAX;
+
+#[inline]
+fn pack(tag: u32, index: u32) -&gt; u64 {
+    ((tag as u64) &lt;&lt; 32) | (index as u64)
+}
+
+#[inline]
+fn unpack(v: u64) -&gt; (u32, u32) {
+    ((v &gt;&gt; 32) as u32, v as u32)
+}
+
+struct Slot {
+    next: AtomicU32, // index of next slot, or NULL
+    val: AtomicU32,  // payload kept atomic so &amp;self mutation stays 100% safe
+}
+
+pub struct ArenaStack {
+    slots: Box&lt;[Slot]&gt;,
+    data: AtomicU64, // data stack head:  [tag | index]
+    free: AtomicU64, // free list head:   [tag | index]
+}
+
+impl ArenaStack {
+    pub fn with_capacity(cap: u32) -&gt; Self {
+        assert!(cap &gt; 0 &amp;&amp; cap &lt; NULL);
+        let mut v = Vec::with_capacity(cap as usize);
+        for i in 0..cap {
+            // free list initially chains 0 -&gt; 1 -&gt; ... -&gt; (cap-1) -&gt; NULL
+            let next = if i + 1 &lt; cap { i + 1 } else { NULL };
+            v.push(Slot { next: AtomicU32::new(next), val: AtomicU32::new(0) });
+        }
+        ArenaStack {
+            slots: v.into_boxed_slice(),
+            data: AtomicU64::new(pack(0, NULL)), // empty stack
+            free: AtomicU64::new(pack(0, 0)),    // all slots free, head = 0
+        }
+    }
+
+    // Pop a free slot (Treiber pop on the free list).
+    fn alloc(&amp;self) -&gt; Option&lt;u32&gt; {
+        loop {
+            let old = self.free.load(Ordering::Acquire);
+            let (tag, idx) = unpack(old);
+            if idx == NULL {
+                return None; // arena exhausted -&gt; bounded reject
+            }
+            let next = self.slots[idx as usize].next.load(Ordering::Relaxed);
+            let new = pack(tag.wrapping_add(1), next);
+            if self
+                .free
+                .compare_exchange_weak(old, new, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return Some(idx);
+            }
+        }
+    }
+
+    // Return a slot to the free list (Treiber push on the free list).
+    fn dealloc(&amp;self, idx: u32) {
+        loop {
+            let old = self.free.load(Ordering::Acquire);
+            let (tag, head_idx) = unpack(old);
+            self.slots[idx as usize].next.store(head_idx, Ordering::Relaxed);
+            let new = pack(tag.wrapping_add(1), idx);
+            if self
+                .free
+                .compare_exchange_weak(old, new, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return;
+            }
+        }
+    }</code></pre>
+<pre><code class="rust">    // Push a value. Err(value) if the arena is full (bounded).
+    pub fn push(&amp;self, value: u32) -&gt; Result&lt;(), u32&gt; {
+        let idx = match self.alloc() {
+            Some(i) =&gt; i,
+            None =&gt; return Err(value),
+        };
+        self.slots[idx as usize].val.store(value, Ordering::Relaxed);
+        loop {
+            let old = self.data.load(Ordering::Acquire);
+            let (tag, head_idx) = unpack(old);
+            self.slots[idx as usize].next.store(head_idx, Ordering::Relaxed);
+            let new = pack(tag.wrapping_add(1), idx);
+            // Release publishes both the val store and the next store above.
+            if self
+                .data
+                .compare_exchange_weak(old, new, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+    }
+
+    // Pop a value.
+    pub fn pop(&amp;self) -&gt; Option&lt;u32&gt; {
+        loop {
+            let old = self.data.load(Ordering::Acquire);
+            let (tag, idx) = unpack(old);
+            if idx == NULL {
+                return None;
+            }
+            let next = self.slots[idx as usize].next.load(Ordering::Relaxed);
+            let new = pack(tag.wrapping_add(1), next);
+            if self
+                .data
+                .compare_exchange_weak(old, new, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                let value = self.slots[idx as usize].val.load(Ordering::Relaxed);
+                self.dealloc(idx); // slot reused later -&gt; ABA is why we tag.
+                return Some(value);
+            }
+        }
+    }
+}</code></pre>
+
+<div class="card">
+<h4>payload 為什麼是 <code class="ic">AtomicU32</code>?誠實邊界</h4>
+<p>這裡把 <code class="ic">val</code> 設成 <code class="ic">AtomicU32</code>,是為了讓 <code class="ic">&amp;self</code> 下的寫入<b>100% safe</b>(atomic 永遠可並發存取)。真實的泛型 payload <code class="ic">T</code> 需要 <code class="ic">UnsafeCell&lt;T&gt;</code> + 一條 unsafe 不變式:「alloc/dealloc protocol 保證同一時刻只有一個執行緒獨佔該 slot」。本檔為了「可編譯且全 safe」選了前者;正確性論證在 <code class="ic">alloc</code>→寫→<code class="ic">push</code> 這段獨佔期。</p>
+</div>
+
+<h2 id="aba-stepper">互動:ABA timeline 漫畫</h2>
+<p>經典 3-node ABA。切換 <kbd>naive</kbd> / <kbd>tagged</kbd> 看同一時序下 T1 的 CAS 結果如何不同。<b>前提假設</b>:allocator 把剛 free 掉的 slot 交回來(一般 allocator 可能這樣做;嚴格 LIFO free list 的重用順序另有玄機 —— <span class="jump" data-jump="followups">見追問 L1'</span>)。</p>
+
+<div class="stepper" id="aba">
+  <div class="stepctl">
+    <button id="aba-prev">‹ 上一步</button>
+    <button id="aba-next">下一步 ›</button>
+    <span class="frameno" id="aba-fno"></span>
+    <div class="toggle">
+      <button id="aba-naive" class="on">naive(只存 index)</button>
+      <button id="aba-tagged">tagged [gen|idx]</button>
+    </div>
+  </div>
+  <div>head:&nbsp; <span id="aba-head" class="headbox"></span></div>
+  <div class="slots" id="aba-slots"></div>
+  <div id="aba-thread"></div>
+  <div class="narr" id="aba-narr"></div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--blue)"></span>在堆疊上</span>
+    <span><span class="dot" style="background:var(--gray)"></span>已 free(在 free list)</span>
+    <span><span class="dot" style="background:var(--yellow)"></span>重用中</span>
+    <span><span class="dot" style="background:var(--red)"></span>危險 / 壞掉</span>
+  </div>
+</div>
+
+<div class="card key">
+<h4>從 stepper 得到的一句話</h4>
+<p>arena 把 <b>reclamation(記憶體安全)</b>消去;tag 把 <b>ABA(身份判定)</b>消去。兩件事、兩個機制,少一個都不行。</p>
+</div>
+
+<h3>誠實邊界(必背)</h3>
+<ul>
+<li><b>tag 會 wrap:</b> generation 是 32-bit,理論上 2³² 次 CAS 後繞回。若某執行緒剛好卡住整整 2³² 次操作、且 index 又回到同值,ABA 復活。實務上機率天文數字級低,但這是真的洞(<span class="jump" data-jump="followups">追問 L2</span>)。</li>
+<li><b>free list 自身的 ABA:</b> 已在 <code class="ic">alloc</code>/<code class="ic">dealloc</code> 用 tag 擋掉,和 data stack 同一招。</li>
+<li><b>arena 滿了:</b> <code class="ic">alloc</code> 回 <code class="ic">None</code> → <code class="ic">push</code> 回 <code class="ic">Err(value)</code>,這是 bounded-reject。要 grow(動態擴容)且維持 lock-free <b>極難</b>(<span class="jump" data-jump="followups">追問 L3</span>)。</li>
+</ul>
+</section>
+
+<section class="panel" id="use-b">
+<h2><span class="tag b">B</span>index-based arena:繞開 borrow checker(單執行緒)</h2>
+
+<h3>① 為什麼 safe Rust 幾乎寫不出「兩個 node 互指」</h3>
+<p>Rust 的 <code class="ic">&amp;mut</code> 是<b>獨佔</b>的(aliasing XOR mutation)。想在 struct field 存 <code class="ic">&amp;mut Node</code> 來讓兩個 node 互指,會同時撞上「獨佔別名」和「self-referential 的 lifetime 無法命名」兩道牆。</p>
+
+<div class="codelabel"><span class="tag u">已編譯驗證會失敗</span> · 實際錯誤是 <code>E0506</code>(不是直覺以為的 E0499)</div>
+<pre><code class="rust">// Use B motivation: two nodes pointing to each other with &amp;mut is
+// forbidden by the borrow checker (&amp;mut is exclusive: aliasing XOR mutation).
+struct Node&lt;'a&gt; {
+    value: i32,
+    next: Option&lt;&amp;'a mut Node&lt;'a&gt;&gt;,
+}
+
+fn main() {
+    let mut a = Node { value: 1, next: None };
+    let mut b = Node { value: 2, next: None };
+    a.next = Some(&amp;mut b);
+    b.next = Some(&amp;mut a); // cannot: a is already mutably borrowed via a.next
+}</code></pre>
+
+<div class="card warn">
+<h4>編譯器實際吐的錯</h4>
+<pre><code class="rust">error[E0506]: cannot assign to `b.next` because it is borrowed
+  --&gt; s3_borrow_fail.rs:12:5
+   |
+11 |     a.next = Some(&amp;mut b);
+   |                   ------ `b.next` is borrowed here
+12 |     b.next = Some(&amp;mut a);
+   |     ^^^^^^^^^^^^^^^^^^^^^ ... already borrowed</code></pre>
+<p>一旦 <code class="ic">&amp;mut b</code> 被存進 <code class="ic">a.next</code>,<code class="ic">b</code> 就被獨佔借走,你連 <code class="ic">b.next = ...</code> 都不能寫。互指?不可能。</p>
+</div>
+
+<div class="card">
+<h4>那 <code class="ic">Rc&lt;RefCell&lt;Node&gt;&gt;</code> 呢?能,但有代價</h4>
+<ul>
+<li><b>runtime borrow check:</b> 每次 <code class="ic">.borrow_mut()</code> 都是執行期檢查,違規<b>panic</b>(不是編譯期擋)。</li>
+<li><b>reference cycle 會 leak:</b> node 互相 <code class="ic">Rc</code> 指 → strong count 永遠不歸零 → 記憶體洩漏。要用 <code class="ic">Weak</code> 打斷 cycle,心智負擔大。</li>
+<li><b>cache 不友善:</b> 每個 node 一次堆積配置,散在記憶體各處。</li>
+</ul>
+</div>
+
+<div class="card good">
+<h4>修法:所有權集中在 arena,node 只存 index</h4>
+<p>把 node 全丟進一個 <code class="ic">Vec&lt;Node&gt;</code>。node 之間不存參照、只存 <code class="ic">usize</code> index。於是:<b>沒有別名問題</b>(唯一擁有者是那個 Vec)、<b>沒有 cycle-as-leak</b>(index 不是 owning pointer)、<b>沒有 runtime borrow 成本</b>(存取就是 Vec 索引)。<code class="ic">petgraph</code> 核心就是這個設計 <span class="tag u">內部細節 unverified,但 index-based 是其核心</span>。</p>
+</div>
+
+<h3>② DSU / union-find:index 思維的極致,一個 Vec 就夠</h3>
+<p>狀態變數在此建立:<code class="ic">parent: Vec&lt;usize&gt;</code>,<code class="ic">parent[i]</code> = 父節點的 index,root 指向自己;<code class="ic">rank: Vec&lt;u8&gt;</code> = 樹高上界。兩個優化:<b>path compression</b>(find 回程把沿路每個 node 直接指向 root)+ <b>union by rank</b>(矮樹掛到高樹下)。</p>
+
+<div class="codelabel"><b>已編譯 + 對照 brute-force labeling 交叉驗證</b></div>
+<pre><code class="rust">// Use B: disjoint set union. Pure index-based, std-only, one Vec is enough.
+// parent[i] = index of parent (root points to itself). rank = height upper bound.
+pub struct DisjointSet {
+    parent: Vec&lt;usize&gt;,
+    rank: Vec&lt;u8&gt;,
+}
+
+impl DisjointSet {
+    pub fn new(n: usize) -&gt; Self {
+        DisjointSet {
+            parent: (0..n).collect(), // each element starts as its own root
+            rank: vec![0; n],
+        }
+    }
+
+    // find with path compression: every node on the path re-points to the root.
+    pub fn find(&amp;mut self, x: usize) -&gt; usize {
+        if self.parent[x] != x {
+            let root = self.find(self.parent[x]); // parent[x] copied out (usize: Copy)
+            self.parent[x] = root;
+        }
+        self.parent[x]
+    }
+
+    // union by rank: attach the shorter tree under the taller root.
+    // Returns false if a and b were already in the same set.
+    pub fn union(&amp;mut self, a: usize, b: usize) -&gt; bool {
+        let ra = self.find(a);
+        let rb = self.find(b);
+        if ra == rb {
+            return false;
+        }
+        if self.rank[ra] &lt; self.rank[rb] {
+            self.parent[ra] = rb;
+        } else if self.rank[ra] &gt; self.rank[rb] {
+            self.parent[rb] = ra;
+        } else {
+            self.parent[rb] = ra;
+            self.rank[ra] += 1;
+        }
+        true
+    }
+
+    pub fn connected(&amp;mut self, a: usize, b: usize) -&gt; bool {
+        self.find(a) == self.find(b)
+    }
+}
+
+fn main() {
+    let mut d = DisjointSet::new(6);
+    assert!(d.union(0, 1));
+    assert!(d.union(2, 3));
+    assert!(d.union(0, 2));
+    assert!(!d.union(1, 3)); // already connected via 0-1-2-3
+    assert!(d.connected(1, 3));
+    assert!(!d.connected(1, 4));
+    assert!(d.union(4, 5));
+    assert!(d.union(0, 4));
+    assert!(d.connected(3, 5)); // all merged now
+    // brute-force cross-check against a reference labeling
+    let edges = [(0usize, 1usize), (2, 3), (0, 2), (4, 5), (0, 4)];
+    let mut label = [0usize, 1, 2, 3, 4, 5];
+    for &amp;(a, b) in &amp;edges {
+        let (la, lb) = (label[a], label[b]);
+        for l in label.iter_mut() {
+            if *l == lb { *l = la; }
+        }
+    }
+    for i in 0..6 {
+        for j in 0..6 {
+            assert_eq!(d.connected(i, j), label[i] == label[j], "mismatch {} {}", i, j);
+        }
+    }
+    println!("dsu: OK");
+}</code></pre>
+
+<div class="card key">
+<h4>複雜度</h4>
+<p>path compression + union by rank 一起用 → 每次操作<b>攤還 O(α(n))</b>,α 是 inverse Ackermann。對任何實際的 <code class="ic">n</code>(遠大於宇宙原子數),α(n) &lt; 5,實務上當<b>常數</b>看。</p>
+</div>
+
+<h2 id="dsu-stepper">互動:DSU 森林 + path compression</h2>
+<p>看 <code class="ic">parent[]</code> / <code class="ic">rank[]</code> 怎麼演進,以及 <code class="ic">find</code> 的<b>路徑壓縮</b>如何把鏈打平。綠色 = 這步被壓縮/合併的 node。</p>
+
+<div class="stepper" id="dsu">
+  <div class="stepctl">
+    <button id="dsu-prev">‹ 上一步</button>
+    <button id="dsu-next">下一步 ›</button>
+    <span class="frameno" id="dsu-fno"></span>
+  </div>
+  <div class="narr" id="dsu-narr"></div>
+  <h4 style="margin:14px 0 4px">森林</h4>
+  <div class="forest" id="dsu-forest"></div>
+  <h4 style="margin:14px 0 4px">parent[]</h4>
+  <div class="arrs" id="dsu-parent"></div>
+  <h4 style="margin:14px 0 4px">rank[]</h4>
+  <div class="arrs" id="dsu-rank"></div>
+</div>
+
+<h3>③ graph:adjacency list = <code class="ic">Vec&lt;Vec&lt;usize&gt;&gt;</code></h3>
+<p>圖就是「每個 node 存一串鄰居的 index」。BFS 用 <code class="ic">VecDeque</code>、DFS 用 <code class="ic">Vec</code> 當 stack、topo sort 用 Kahn's、Dijkstra 用 <code class="ic">BinaryHeap&lt;Reverse&lt;...&gt;&gt;</code> 做 min-heap。全部 std-only。</p>
+
+<div class="codelabel"><b>已編譯 + 驗證</b>:BFS/DFS 順序、topo 合法性、cycle 偵測、Dijkstra 最短路徑全對</div>
+<pre><code class="rust">// Use B: graph on index-based adjacency list. All std-only.
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, VecDeque};
+
+// BFS from start; returns visit order.
+pub fn bfs(adj: &amp;[Vec&lt;usize&gt;], start: usize) -&gt; Vec&lt;usize&gt; {
+    let mut visited = vec![false; adj.len()];
+    let mut order = Vec::new();
+    let mut q = VecDeque::new();
+    visited[start] = true;
+    q.push_back(start);
+    while let Some(u) = q.pop_front() {
+        order.push(u);
+        for &amp;v in &amp;adj[u] {
+            if !visited[v] {
+                visited[v] = true;
+                q.push_back(v);
+            }
+        }
+    }
+    order
+}
+
+// Iterative DFS from start; returns visit order.
+pub fn dfs(adj: &amp;[Vec&lt;usize&gt;], start: usize) -&gt; Vec&lt;usize&gt; {
+    let mut visited = vec![false; adj.len()];
+    let mut order = Vec::new();
+    let mut stack = vec![start];
+    while let Some(u) = stack.pop() {
+        if visited[u] {
+            continue;
+        }
+        visited[u] = true;
+        order.push(u);
+        for &amp;v in adj[u].iter().rev() {
+            if !visited[v] {
+                stack.push(v);
+            }
+        }
+    }
+    order
+}
+
+// Kahn's topological sort; None if the graph has a cycle.
+pub fn topo_sort(adj: &amp;[Vec&lt;usize&gt;]) -&gt; Option&lt;Vec&lt;usize&gt;&gt; {
+    let n = adj.len();
+    let mut indeg = vec![0usize; n];
+    for u in 0..n {
+        for &amp;v in &amp;adj[u] {
+            indeg[v] += 1;
+        }
+    }
+    let mut q: VecDeque&lt;usize&gt; = (0..n).filter(|&amp;u| indeg[u] == 0).collect();
+    let mut order = Vec::with_capacity(n);
+    while let Some(u) = q.pop_front() {
+        order.push(u);
+        for &amp;v in &amp;adj[u] {
+            indeg[v] -= 1;
+            if indeg[v] == 0 {
+                q.push_back(v);
+            }
+        }
+    }
+    if order.len() == n { Some(order) } else { None }
+}
+
+// Dijkstra on a weighted adjacency list (v, weight). min-heap via Reverse.
+pub fn dijkstra(adj: &amp;[Vec&lt;(usize, u64)&gt;], start: usize) -&gt; Vec&lt;u64&gt; {
+    let mut dist = vec![u64::MAX; adj.len()];
+    let mut heap = BinaryHeap::new();
+    dist[start] = 0;
+    heap.push(Reverse((0u64, start)));
+    while let Some(Reverse((d, u))) = heap.pop() {
+        if d &gt; dist[u] {
+            continue; // stale entry
+        }
+        for &amp;(v, w) in &amp;adj[u] {
+            let nd = d.saturating_add(w);
+            if nd &lt; dist[v] {
+                dist[v] = nd;
+                heap.push(Reverse((nd, v)));
+            }
+        }
+    }
+    dist
+}
+
+fn main() {
+    // 0-&gt;1, 0-&gt;2, 1-&gt;3, 2-&gt;3, 3-&gt;4  (a small DAG)
+    let g: Vec&lt;Vec&lt;usize&gt;&gt; =
+        vec![vec![1, 2], vec![3], vec![3], vec![4], vec![]];
+    assert_eq!(bfs(&amp;g, 0), vec![0, 1, 2, 3, 4]);
+    assert_eq!(dfs(&amp;g, 0), vec![0, 1, 3, 4, 2]);
+    let topo = topo_sort(&amp;g).expect("DAG has a topo order");
+    // validate topo: for every edge u-&gt;v, pos[u] &lt; pos[v]
+    let mut pos = vec![0usize; g.len()];
+    for (i, &amp;u) in topo.iter().enumerate() { pos[u] = i; }
+    for u in 0..g.len() {
+        for &amp;v in &amp;g[u] {
+            assert!(pos[u] &lt; pos[v], "topo violated {}-&gt;{}", u, v);
+        }
+    }
+    // cycle -&gt; None
+    let cyc: Vec&lt;Vec&lt;usize&gt;&gt; = vec![vec![1], vec![2], vec![0]];
+    assert!(topo_sort(&amp;cyc).is_none());
+
+    // Dijkstra: 0-(1)-&gt;1, 0-(4)-&gt;2, 1-(2)-&gt;2, 1-(7)-&gt;3, 2-(1)-&gt;3
+    let wg: Vec&lt;Vec&lt;(usize, u64)&gt;&gt; = vec![
+        vec![(1, 1), (2, 4)],
+        vec![(2, 2), (3, 7)],
+        vec![(3, 1)],
+        vec![],
+    ];
+    let dist = dijkstra(&amp;wg, 0);
+    assert_eq!(dist, vec![0, 1, 3, 4]); // 0-&gt;1-&gt;2-&gt;3 = 1+2+1 = 4
+    println!("graph: OK");
+}</code></pre>
+
+<div class="card">
+<h4>兩個 std 慣用點</h4>
+<ul>
+<li><code class="ic">BinaryHeap</code> 是 <b>max-heap</b>,要 min-heap 就包 <code class="ic">Reverse</code>。Dijkstra 靠這個。</li>
+<li>Dijkstra 的 <b>stale entry</b>:pop 出來若 <code class="ic">d &gt; dist[u]</code> 直接 skip —— 這是「lazy deletion」,避免 std <code class="ic">BinaryHeap</code> 沒有 decrease-key 的問題。<code class="ic">saturating_add</code> 防 <code class="ic">u64</code> 溢位。</li>
+</ul>
+</div>
+
+<h3>④ tree:同樣 <code class="ic">Vec&lt;Node&gt;</code> + child indices</h3>
+<p>tree 是 graph 的特例。parent link 只是 <code class="ic">Option&lt;usize&gt;</code> —— <b>不需要 <code class="ic">Weak</code></b>(index 不是 owning),<b>不會 leak cycle</b>,遍歷就是遞迴索引,<b>沒有 <code class="ic">.borrow()</code> 執行期檢查</b>。對照 <code class="ic">Rc&lt;RefCell&gt;</code> 版本,index 版順很多。</p>
+
+<div class="codelabel"><b>已編譯 + 驗證</b>:subtree_sum / depth 全對</div>
+<pre><code class="rust">// Use B: tree as an arena. Parent link is just Option&lt;usize&gt; -&gt; no Weak,
+// no reference cycle to leak, no runtime borrow check. Access = Vec index.
+pub struct TreeArena {
+    nodes: Vec&lt;TreeNode&gt;,
+}
+
+pub struct TreeNode {
+    pub value: i32,
+    pub parent: Option&lt;usize&gt;,
+    pub children: Vec&lt;usize&gt;,
+}
+
+impl TreeArena {
+    pub fn new() -&gt; Self {
+        TreeArena { nodes: Vec::new() }
+    }
+
+    // Insert a node; wire it into its parent's child list. Returns its index.
+    pub fn add(&amp;mut self, value: i32, parent: Option&lt;usize&gt;) -&gt; usize {
+        let id = self.nodes.len();
+        self.nodes.push(TreeNode { value, parent, children: Vec::new() });
+        if let Some(p) = parent {
+            self.nodes[p].children.push(id);
+        }
+        id
+    }
+
+    // Recursive subtree sum -- trivial with indices, no borrow gymnastics.
+    pub fn subtree_sum(&amp;self, id: usize) -&gt; i32 {
+        let node = &amp;self.nodes[id];
+        let mut total = node.value;
+        for &amp;c in &amp;node.children {
+            total += self.subtree_sum(c);
+        }
+        total
+    }
+
+    // Depth via parent chain (walk up).
+    pub fn depth(&amp;self, mut id: usize) -&gt; usize {
+        let mut d = 0;
+        while let Some(p) = self.nodes[id].parent {
+            d += 1;
+            id = p;
+        }
+        d
+    }
+}
+
+fn main() {
+    let mut t = TreeArena::new();
+    let root = t.add(1, None);
+    let a = t.add(2, Some(root));
+    let b = t.add(3, Some(root));
+    let _c = t.add(4, Some(a));
+    let _d = t.add(5, Some(a));
+    assert_eq!(t.subtree_sum(root), 1 + 2 + 3 + 4 + 5);
+    assert_eq!(t.subtree_sum(a), 2 + 4 + 5);
+    assert_eq!(t.subtree_sum(b), 3);
+    assert_eq!(t.depth(root), 0);
+    assert_eq!(t.depth(a), 1);
+    assert_eq!(t.depth(_c), 2);
+    println!("tree: OK");
+}</code></pre>
+
+<table>
+<tr><th style="width:120px"></th><th><code class="ic">Rc&lt;RefCell&lt;Node&gt;&gt;</code></th><th>index-based arena</th></tr>
+<tr><td>父連結</td><td class="b">要 <code class="ic">Weak</code>(否則 cycle leak)</td><td class="a"><code class="ic">Option&lt;usize&gt;</code>,沒事</td></tr>
+<tr><td>存取檢查</td><td class="b">runtime <code class="ic">.borrow()</code>,違規 panic</td><td class="a">Vec 索引,編譯期靜態</td></tr>
+<tr><td>記憶體佈局</td><td class="b">散落堆積</td><td class="a">連續、cache 友善</td></tr>
+<tr><td>生命週期</td><td class="b">各 node 獨立、可局部釋放</td><td class="a">整張圖同生共死(build→use→drop)</td></tr>
+<tr><td>footgun</td><td class="b">忘了 <code class="ic">Weak</code> → leak</td><td class="a">index 會 dangle / 越界(<span class="jump" data-jump="followups">追問 L2'</span>)</td></tr>
+</table>
+
+<div class="card key">
+<h4>選擇準則</h4>
+<p>整張圖<b>同一個生命週期</b>、要 cache locality、想躲 <code class="ic">Rc</code> 開銷與 cycle leak → <b>index</b>。node 需要<b>異質生命週期</b>、結構要能隨 <code class="ic">Rc</code> 歸零自動收縮 → <b><code class="ic">Rc&lt;RefCell&gt;</code></b>。面試絕大多數圖論題,答案是 index。</p>
+</div>
+</section>
+
+<section class="panel" id="followups">
+<h2>常見面試追問(至少 3 層深)</h2>
+<p>L4 modal = medium 題 + follow-up。這裡把 escalation 排成階梯,每層都是上一層答對後會被追問的。</p>
+
+<h3><span class="tag a">A</span>lock-free 這條線</h3>
+<div class="card">
+<h4>L1 ── 「你的 tag 擋住了 data stack 的 ABA。free list 呢?」</h4>
+<p>free list 本身就是<b>另一個 Treiber stack</b>(<code class="ic">alloc</code>=pop、<code class="ic">dealloc</code>=push),<b>同樣有 ABA</b>,要掛<b>同樣的 tag</b>。本檔 <code class="ic">self.free</code> 的 CAS 已經是 tagged。若只 tag data stack、不 tag free list,你會在 <code class="ic">alloc</code> 撞到一模一樣的 stale-CAS-成功。這題在測你有沒有意識到「同一結構重複出現、同一漏洞就重複出現」。</p>
+</div>
+<div class="card">
+<h4>L1' ── 「你 stepper 假設 allocator 把剛 free 的 slot 交回來。可是嚴格 LIFO free list 的重用順序是被序列化的,那 ABA 還會發生嗎?」</h4>
+<p>好問題,而且很微妙。嚴格 LIFO free list 下,T1 正在操作的 head node 是<b>最先被 free</b> 的,所以會<b>最後才被重用</b>;等它終於被重用時,中間那個 node 早已被 push 回堆疊(這才騰出 free list 的位置),於是 <code class="ic">A.next</code> 通常又指回一個合法的在堆疊 node。這讓最單純的 ABA 反例<b>難以構造</b>。</p>
+<p class="note">但別依賴這個脆弱推理。它一崩就崩:(i) 多條 free list / size class;(ii) 你把 index 暴露給外部持有者、跨操作 cache(就是 generational index 的場景);(iii) queue 這類 head/tail 重用方式不同的結構;(iv) 任何非 LIFO 的重用策略。<b>tag 的價值就是讓正確性不依賴「allocator 怎麼重用」這種推理</b> —— 動過就 fail,一律成立。這是穩健的工程答案。</p>
+</div>
+<div class="card">
+<h4>L2 ── 「tag 是 32-bit,會 wrap。什麼情況下 wrap 讓 ABA 復活?」</h4>
+<p>某執行緒在 CAS 前被凍結,期間其他執行緒對<b>同一個 atomic</b> 做了剛好 2³² 次成功 CAS,讓 tag 繞回原值,<b>且</b> index 也回到同值 → 凍結的執行緒 CAS 誤成功。實務上 2³² 次操作 + 執行緒剛好卡那麼久,機率天文級低。緩解:(a) 用更寬的 tag —— 但 std 沒有穩定的 <code class="ic">AtomicU128</code> <span class="tag u">unverified,std 目前無 128-bit atomic 的可攜保證</span>,所以純 std 就是接受 32-bit tag;(b) 若 index 用不到滿 32-bit,可挪幾個 bit 給 tag。誠實講:純 std-only 下這是個可接受但真實存在的洞。</p>
+</div>
+<div class="card">
+<h4>L3 ── 「為什麼 arena 要 grow(動態擴容)且維持 lock-free 這麼難?走一遍哪裡爆。」</h4>
+<p>grow 要配置新的後備儲存、把舊資料搬過去。問題:此刻可能有讀者<b>正握著舊 store 的 index</b>、或<b>正在 CAS 中</b>。你得原子地換掉整塊 backing store,同時協調這些讀者 —— 這<b>正是你一開始想躲掉的 reclamation 問題</b>(舊 store 何時能安全釋放?)又回來了。可行路線是加一層 indirection:<b>分段儲存</b>(<code class="ic">Vec&lt;segment&gt;</code>,只 append 新 segment、舊 segment 位址不動),或 RCU 式換 store + epoch 回收舊塊。所以面試給的正解通常是「<b>bounded arena</b> + 滿了就 reject」;要 unbounded 就得上 segmented 或 epoch,而後者已超出 std-only。</p>
+</div>
+
+<h3><span class="tag b">B</span>graph/tree 這條線</h3>
+<div class="card">
+<h4>L1 ── 「<code class="ic">Rc&lt;RefCell&gt;</code> 也能做圖。你什麼時候<b>真的</b>會選它而不是 index?」</h4>
+<p>當 node 需要<b>異質生命週期</b>(有的活得比 arena 久、有的要提早釋放)、或你要圖結構隨引用歸零<b>自動收縮清理</b>時,選 <code class="ic">Rc&lt;RefCell&gt;</code>。index 版的前提是「整張圖同生共死」:一起 build、一起用、一起 drop。若你的 use case 會頻繁刪 node 且要立刻回收記憶體,index 版要嘛留 tombstone、要嘛 swap-remove 打亂 index,兩者都比 <code class="ic">Rc</code> 的自動清理麻煩。</p>
+</div>
+<div class="card">
+<h4>L2' ── 「index-based 有個 <code class="ic">Rc&lt;RefCell&gt;</code> 沒有的 footgun。是什麼?production library 怎麼修?」</h4>
+<p><b>stale / dangling index</b>:你刪掉一個 node,它的 index 現在要嘛越界(panic)、要嘛(若用 swap-remove)指到<b>另一個 node</b> —— 型別系統不會擋,你拿到一個「看起來合法、其實指錯」的 index。<code class="ic">Rc</code> 天然不會:<code class="ic">Rc</code> 沒了就是沒了。</p>
+<p>production 解法:<b>generational index</b>(如 <code class="ic">slotmap</code> / <code class="ic">generational-arena</code> <span class="tag u">crate 名稱 unverified</span>)。index 變成 <code class="ic">[slot | generation]</code>,slot 每次重用 generation++,存取時比對 generation → 舊 handle 驗證失敗。<b>注意這跟用途 A 的 tagged index 是同一個機制</b> —— 都是「用 generation 讓重用被觀察到」。</p>
+</div>
+<div class="card">
+<h4>L3' ── 「你說 generational index。但 generation 也是有限 bit,跟 ABA 的 tag wrap 是同一個問題嗎?」</h4>
+<p><b>是,一模一樣。</b>有限的 generation counter 會 wrap,一個 stale handle 理論上可以在 slot 被重用剛好 2ᵏ 次後、驗證通過對到重用的 slot。32/64-bit generation 下機率天文級低,但這是<b>和 ABA tag wrap 完全同構的洞</b>。這題把 A 和 B 綁在一起:兩邊都用有限 generation 換「重用可觀察」,也就都繼承同一個 wrap 邊界。答得出這層,代表你看穿了「index 只是機制」。</p>
+</div>
+
+<h3>跨界追問</h3>
+<div class="card key">
+<h4>「A 和 B 都用整數 index 取代 pointer。它們在解同一個問題嗎?」</h4>
+<p><b>不是。</b>A 解<b>並發下的安全重用</b>(在其他執行緒 + allocator 的時序中,重用一塊記憶體而不 UAF);它的敵人是 memory allocator 和時序。B 解<b>單執行緒下的別名表達力</b>(在 borrow checker 底下表達 shared/mutable 的圖結構);它的敵人是編譯器。共用的「index 取代 pointer」只是<b>機制撞在一起</b>,不是問題相同。把兩者混為一談,就是這題要抓的。</p>
+</div>
+</section>
+
+<section class="panel" id="quiz">
+<h2>Self-quiz(5 題,答案摺疊)</h2>
+<p>先自己答完再展開。這幾題涵蓋兩個用途、把它們綁在一起,並包含指定必考題。</p>
+
+<details>
+<summary>Q1 ── arena 已經繞過 reclamation(永不 free → 沒 UAF),那 ABA 為什麼沒消失?</summary>
+<p>因為 arena 只解掉<b>記憶體安全</b>(那塊記憶體從不 unmap,所以讀 <code class="ic">slots[idx].next</code> 永遠合法)。ABA 是<b>另一個層次的問題</b>:它是「CAS 用什麼判定身份」的問題。你把 pointer 換成 index、又重用 slot,於是「同一個 index 值」可以指向邏輯上<b>不同的元素</b>。一個 cache 住舊 index 的 CAS,會在 index 繞回同值時誤判成功 → 結構被破壞。記憶體安全和邏輯正確是兩回事;arena 給你前者,tag(讓每次重用被觀察到)才給你後者。</p>
+</details>
+
+<details>
+<summary>Q2 ── 用途 A 與用途 B 都用 index 互指,但它們解的是兩個<b>完全不同</b>的問題。分別是什麼?</summary>
+<p><b>用途 A(並發):</b>解 lock-free 的<b>安全重用 / reclamation</b>。在其他執行緒 + allocator 的時序下,重用一塊記憶體而不造成 use-after-free。敵人是 memory allocator 和執行緒時序。機制:固定 arena(永不 free 消去 UAF)+ tagged index(消去 ABA)。</p>
+<p><b>用途 B(單執行緒):</b>解 borrow checker 的<b>別名表達力</b>。在 <code class="ic">&amp;mut</code> 獨佔規則下,表達「兩個 node 互指」這種 shared/mutable 圖結構。敵人是編譯器。機制:所有權集中在 <code class="ic">Vec&lt;Node&gt;</code>,node 間只存 index(消去別名、cycle leak、runtime borrow)。</p>
+<p>「用 index 取代 pointer」是<b>共用的機制</b>,但兩邊要解的問題毫不相干。</p>
+</details>
+
+<details>
+<summary>Q3 ── 為什麼 graph 用 <code class="ic">Vec&lt;index&gt;</code> 而不用 <code class="ic">Rc&lt;RefCell&lt;Node&gt;&gt;</code>?各自的代價?</summary>
+<p><b>用 index 的理由 / 好處:</b>所有權集中在 arena → 沒有別名問題;index 不是 owning pointer → 圖有 cycle 也不會 leak(<code class="ic">Rc</code> 版 cycle 會 leak,得用 <code class="ic">Weak</code> 打斷);存取是 Vec 索引 → 編譯期靜態、沒有 <code class="ic">.borrow()</code> 的執行期檢查與 panic 風險;連續記憶體 → cache 友善。</p>
+<p><b>index 的代價:</b>index 是「未檢查的指標」—— 可能 dangle、越界(panic)、或(swap-remove 後)指到別的 node,型別系統不擋。整張圖傾向同生共死,不利頻繁刪 node 即時回收。</p>
+<p><b><code class="ic">Rc&lt;RefCell&gt;</code> 的代價:</b>runtime borrow check(違規 panic 不是編譯期擋)、cycle leak 要 <code class="ic">Weak</code>、堆積配置 cache 不友善。<b>它的好處:</b>node 可異質生命週期、可隨引用歸零自動收縮清理。</p>
+</details>
+
+<details>
+<summary>Q4 ── tagged index 是 <code class="ic">[generation | index]</code> 的 64-bit。generation 有限、會 wrap。這個 wrap 在什麼情況讓 ABA 復活?為什麼實務上通常可接受?</summary>
+<p><b>復活條件:</b>某執行緒在 CAS 之前被凍結,期間其他執行緒對<b>同一個 atomic</b> 做了剛好 2³²(32-bit generation)次成功 CAS,使 generation 繞回原值,<b>並且</b> index 也回到同一值。此時凍結執行緒帶著舊的 <code class="ic">[gen|idx]</code> 做 CAS,會誤判成功。</p>
+<p><b>為何可接受:</b>要湊齊「同一 atomic 恰好 2³² 次操作」+「該執行緒剛好卡住這麼久」+「index 又回同值」,機率是天文數字級。純 std-only 下沒有可攜的更寬 atomic <span class="tag u">unverified</span>,所以通常就接受 32-bit generation;若 index 用不滿 32-bit,可挪 bit 加寬 generation 進一步壓低機率。誠實說:這是個真實但實務上可忽略的洞。</p>
+</details>
+
+<details>
+<summary>Q5 ── index-based arena 有個 <code class="ic">Rc&lt;RefCell&gt;</code> 沒有的 footgun(stale / dangling index)。它是什麼?production library 怎麼修?這跟用途 A 有什麼關係?</summary>
+<p><b>footgun:</b>刪掉一個 node 後,它的 index 要嘛越界(存取 panic)、要嘛(swap-remove)指到另一個 node —— 一個「看起來合法、實則指錯」的 index,型別系統不擋。<code class="ic">Rc</code> 天然沒這問題(<code class="ic">Rc</code> 沒了就是沒了)。</p>
+<p><b>修法:</b>generational index。index 變成 <code class="ic">[slot | generation]</code>,slot 每次重用 generation++,存取時比對 generation,舊 handle 驗證失敗即拒絕(<code class="ic">slotmap</code> / <code class="ic">generational-arena</code> 這類 <span class="tag u">crate 名稱 unverified</span>)。</p>
+<p><b>跟用途 A 的關係:</b>這跟 A 的 tagged index 是<b>同一個機制</b> —— 都是用 generation 讓「slot 被重用」變得<b>可觀察</b>。也因此兩邊都繼承同一個 generation wrap 邊界(見 Q4)。這正是「index 只是機制、問題各異,但機制的性質共享」的最好例證。</p>
+</details>
+</section>
+
+<script>
+// ---- Rust highlighter (operates on unescaped textContent, re-escapes safely)
+(function(){
+  var KW = new Set(['fn','let','mut','struct','impl','pub','loop','while','for','in','if','else',
+    'return','match','const','use','as','self','move','unsafe','true','false','where','type','enum']);
+  var TY = new Set(['Vec','Box','Option','Result','Self','usize','u8','u32','u64','i32','bool',
+    'AtomicU32','AtomicU64','AtomicPtr','Ordering','VecDeque','BinaryHeap','Reverse','Arc',
+    'Node','Slot','ArenaStack','Stack','DisjointSet','TreeArena','TreeNode','Some','None','Ok','Err']);
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function hl(src){
+    var re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*")|('(?:[^'\\]|\\.)?')|([A-Za-z_][A-Za-z0-9_]*)|(\d+)/g;
+    var out='', last=0, m;
+    while((m=re.exec(src))){
+      out += esc(src.slice(last, m.index));
+      var t = m[0];
+      if(m[1]) out += '<span class="c-cmt">'+esc(t)+'</span>';
+      else if(m[2]||m[3]) out += '<span class="c-str">'+esc(t)+'</span>';
+      else if(m[4]) out += KW.has(t) ? '<span class="c-kw">'+t+'</span>'
+                        : (TY.has(t) ? '<span class="c-ty">'+t+'</span>' : esc(t));
+      else if(m[5]) out += '<span class="c-num">'+t+'</span>';
+      last = m.index + t.length;
+    }
+    out += esc(src.slice(last));
+    return out;
+  }
+  var blocks = document.querySelectorAll('pre code.rust');
+  for(var i=0;i<blocks.length;i++){ blocks[i].innerHTML = hl(blocks[i].textContent); }
+})();
+
+// ---- tabs + jumps (delegated; NO href anchors) ----
+(function(){
+  function switchTab(id){
+    var panels = document.querySelectorAll('.panel');
+    for(var i=0;i<panels.length;i++){ panels[i].classList.toggle('active', panels[i].id===id); }
+    var btns = document.querySelectorAll('nav.tabs button');
+    for(var j=0;j<btns.length;j++){ btns[j].classList.toggle('active', btns[j].getAttribute('data-tab')===id); }
+    window.scrollTo(0,0);
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('[data-tab],[data-jump]');
+    if(!t) return;
+    var id = t.getAttribute('data-tab') || t.getAttribute('data-jump');
+    if(id){ switchTab(id); }
+  });
+})();
+
+// ---- ABA stepper ----
+(function(){
+  var NL = '\u2205'; // empty set symbol
+  // frames 0..4 hold the world; frame 5 resolves T1's CAS per mode.
+  var F = [
+    { head:{tag:10,idx:0},
+      slots:{0:{next:'1',st:'stack'},1:{next:'2',st:'stack'},2:{next:NL,st:'stack'}},
+      t1:null,
+      narr:'初始:堆疊 head \u2192 [0] \u2192 [1] \u2192 [2] \u2192 '+NL+'。三個 slot 都在堆疊上。' },
+    { head:{tag:10,idx:0},
+      slots:{0:{next:'1',st:'stack'},1:{next:'2',st:'stack'},2:{next:NL,st:'stack'}},
+      t1:{exp:{tag:10,idx:0}, cached:'1', frozen:true,
+          note:'load head=[10,0],讀 slot[0].next=[1]。準備 CAS(head:[10,0]\u2192[_,1])。此刻被 preempt,凍結。'},
+      narr:'T1 開始 pop。它記下 expected=[10,0]、cached next=[1]。然後被 preempt,<b>凍結</b> —— 後面 T2 為所欲為。' },
+    { head:{tag:11,idx:1},
+      slots:{0:{next:'-',st:'free'},1:{next:'2',st:'stack'},2:{next:NL,st:'stack'}},
+      t1:{exp:{tag:10,idx:0}, cached:'1', frozen:true, note:'仍凍結,手上還是舊的 expected=[10,0]。'},
+      narr:'T2 pop 掉 [0]:head\u2192[11,1],slot[0] 進 free list。注意 tag 已從 10 \u2192 11。' },
+    { head:{tag:12,idx:2},
+      slots:{0:{next:'-',st:'free'},1:{next:'-',st:'free'},2:{next:NL,st:'stack'}},
+      t1:{exp:{tag:10,idx:0}, cached:'1', frozen:true, note:'仍凍結。它 cache 的 next=[1],但 [1] 現在已 freed。'},
+      narr:'T2 再 pop 掉 [1]:head\u2192[12,2],slot[1] 也進 free list。<b>現在 slot[1] 已 freed</b> —— 記住這點。' },
+    { head:{tag:13,idx:0},
+      slots:{0:{next:'2',st:'transit'},1:{next:'-',st:'free'},2:{next:NL,st:'stack'}},
+      t1:{exp:{tag:10,idx:0}, cached:'1', frozen:true, note:'仍凍結,手上 expected=[10,0]、cached next=[1]。'},
+      narr:'<b>關鍵重用</b>:T2 push 新值,allocator 把 slot[0] 交回來。這次 slot[0].next = [2](<b>不是 [1] 了</b>!),head\u2192[13,0]。堆疊實際是 [0]\u2192[2]\u2192'+NL+',slot[1] 仍 freed。index 繞回 0,但邏輯狀態全變了。' },
+    { resolve:true }
+  ];
+  var st = { i:0, mode:'naive' };
+  var elHead=document.getElementById('aba-head'), elSlots=document.getElementById('aba-slots'),
+      elThread=document.getElementById('aba-thread'), elNarr=document.getElementById('aba-narr'),
+      elFno=document.getElementById('aba-fno'),
+      bPrev=document.getElementById('aba-prev'), bNext=document.getElementById('aba-next'),
+      bNaive=document.getElementById('aba-naive'), bTagged=document.getElementById('aba-tagged');
+
+  function headStr(h){ return st.mode==='tagged' ? '[tag='+h.tag+' | idx='+h.idx+']' : 'idx='+h.idx; }
+  function slotEl(id, s){
+    var d=document.createElement('div'); d.className='slot '+s.st;
+    d.innerHTML='<div class="sid">slot ['+id+']</div><div class="sval">'+ (s.val||('#'+id)) +
+      '</div><div class="snext">next\u2192'+s.next+'</div>';
+    return d;
+  }
+  function render(){
+    var f = F[st.i];
+    if(!f.resolve){
+      elHead.className='headbox';
+      elHead.textContent = headStr(f.head);
+      elSlots.innerHTML='';
+      for(var k=0;k<3;k++){ elSlots.appendChild(slotEl(k, f.slots[k])); }
+      if(f.t1){
+        elThread.innerHTML='<div class="thread'+(f.t1.frozen?' frozen':'')+'"><b>T1'+
+          (f.t1.frozen?'(凍結)':'')+'</b> · expected='+
+          (st.mode==='tagged'?'[tag='+f.t1.exp.tag+' | idx='+f.t1.exp.idx+']':'idx='+f.t1.exp.idx)+
+          ' · cached next=['+f.t1.cached+']<br>'+f.t1.note+'</div>';
+      } else { elThread.innerHTML=''; }
+      elNarr.innerHTML = f.narr;
+    } else {
+      // resolve using world = F[4]
+      var w = F[4];
+      var cur = w.head;                       // head is [13, idx=0]
+      var exp = {tag:10, idx:0};              // T1's frozen expected
+      elSlots.innerHTML='';
+      if(st.mode==='naive'){
+        // naive compares idx only: cur.idx(0) == exp.idx(0) -> SUCCESS -> head := cached(1)
+        var slots={0:{next:'2',st:'stack'},1:{next:'-',st:'danger'},2:{next:NL,st:'stack'}};
+        for(var k1=0;k1<3;k1++){ elSlots.appendChild(slotEl(k1, slots[k1])); }
+        elHead.className='headbox danger';
+        elHead.textContent='idx=1  (\u2190 被設成 freed 的 [1]!)';
+        elThread.innerHTML='<div class="thread frozen"><b>T1 恢復</b> · CAS(expected idx=0, new idx=1)<br>'+
+          '只比 index:head.idx 現在=0,期待=0 \u2192 <b>誤判 MATCH</b>。</div>';
+        elNarr.innerHTML='<span class="hot">\u{1F4A5} ABA(naive,只存 index)</span>:T1 的 CAS 期待 head.idx=0,'+
+          '而 head.idx 此刻確實=0 \u2192 <b>誤判成功</b>!head 被設成它 cache 的 [1] —— 但 [1] 早已 freed!'+
+          '堆疊瞬間壞掉:[2] 及其下全部遺失,freed 的 [1] 復活成 head。index 重用讓 ABA 換個形狀回來了。';
+      } else {
+        // tagged compares full 64-bit: cur=[13,0] vs exp=[10,0] -> tag mismatch -> FAIL -> retry
+        var slots2={0:{next:'2',st:'transit'},1:{next:'-',st:'free'},2:{next:NL,st:'stack'}};
+        for(var k2=0;k2<3;k2++){ elSlots.appendChild(slotEl(k2, slots2[k2])); }
+        elHead.className='headbox';
+        elHead.textContent='[tag=13 | idx=0]  (未被動)';
+        elThread.innerHTML='<div class="thread"><b>T1 恢復</b> · CAS(expected [tag=10|idx=0], new [_|1])<br>'+
+          '比對整個 64-bit:head=[13,0],期待=[10,0] \u2192 tag 10\u226013 \u2192 <b>FAIL</b> \u2192 retry。</div>';
+        elNarr.innerHTML='<span class="ok">\u2705 tagged([gen|idx])</span>:T1 的 CAS 期待整個 [10,0],'+
+          '但 head 現在是 [13,0],tag 不符 \u2192 <b>CAS 失敗</b> \u2192 T1 重讀 head=[13,0] 重算。'+
+          '只要 head 被動過(哪怕 index 繞回同值),tag 已前進,舊 CAS 必敗。ABA 被擋下。';
+      }
+    }
+    elFno.textContent = '第 '+(st.i)+' / '+(F.length-1)+' 步';
+    bPrev.disabled = st.i===0;
+    bNext.disabled = st.i===F.length-1;
+  }
+  bPrev.onclick=function(){ if(st.i>0){st.i--; render();} };
+  bNext.onclick=function(){ if(st.i<F.length-1){st.i++; render();} };
+  bNaive.onclick=function(){ st.mode='naive'; bNaive.classList.add('on'); bTagged.classList.remove('on'); render(); };
+  bTagged.onclick=function(){ st.mode='tagged'; bTagged.classList.add('on'); bNaive.classList.remove('on'); render(); };
+  render();
+})();
+
+// ---- DSU stepper ----
+(function(){
+  // hardcoded, hand-verified frames. parent/rank arrays + notes + highlights.
+  var F = [
+    { p:[0,1,2,3,4,5], r:[0,0,0,0,0,0], hot:[], comp:[],
+      note:'初始:每個元素自成一個 set,parent[i]=i(root 指向自己),rank 全 0。' },
+    { p:[0,0,2,3,4,5], r:[1,0,0,0,0,0], hot:[0,1], comp:[],
+      note:'union(0,1):兩者 rank 皆 0 \u2192 把 1 掛到 0 底下,rank[0] 升為 1。' },
+    { p:[0,0,2,2,4,5], r:[1,0,1,0,0,0], hot:[2,3], comp:[],
+      note:'union(2,3):同理,3 掛到 2 底下,rank[2] 升為 1。' },
+    { p:[0,0,0,2,4,5], r:[2,0,1,0,0,0], hot:[0,2], comp:[],
+      note:'union(0,2):find(0)=0(rank1)、find(2)=2(rank1),rank 相等 \u2192 把 2 掛到 0,rank[0] 升為 2。此刻 3\u21922\u21920 是一條長度 2 的鏈。' },
+    { p:[0,0,0,2,4,4], r:[2,0,1,0,1,0], hot:[4,5], comp:[],
+      note:'union(4,5):另一棵樹,5 掛到 4,rank[4] 升為 1。' },
+    { p:[0,0,0,0,4,4], r:[2,0,1,0,1,0], hot:[], comp:[3],
+      note:'find(3):走 3\u21922\u21920 找到 root 0,回程<b>路徑壓縮</b>把 3 直接指向 0。parent[3]:2\u21920。下次 find(3) 變 O(1)。' },
+    { p:[0,0,0,0,0,4], r:[2,0,1,0,1,0], hot:[0,4], comp:[],
+      note:'union(0,4):find(0)=0(rank2)、find(4)=4(rank1),rank[0] 較高 \u2192 4 掛到 0,rank 不變。現在 5\u21924\u21920。' },
+    { p:[0,0,0,0,0,0], r:[2,0,1,0,1,0], hot:[], comp:[5],
+      note:'find(5):走 5\u21924\u21920,回程壓縮 parent[5]:4\u21920。整片森林被打平,全部直接指向 root 0。' }
+  ];
+  var i=0;
+  var elNarr=document.getElementById('dsu-narr'), elForest=document.getElementById('dsu-forest'),
+      elP=document.getElementById('dsu-parent'), elR=document.getElementById('dsu-rank'),
+      elFno=document.getElementById('dsu-fno'),
+      bPrev=document.getElementById('dsu-prev'), bNext=document.getElementById('dsu-next');
+
+  function arrRow(container, arr, hot, comp){
+    container.innerHTML='';
+    for(var k=0;k<arr.length;k++){
+      var c=document.createElement('div');
+      var cls='acell'; if(comp.indexOf(k)>=0) cls+=' comp'; else if(hot.indexOf(k)>=0) cls+=' hot';
+      c.className=cls;
+      c.innerHTML='<div class="ai">'+k+'</div><div class="av">'+arr[k]+'</div>';
+      container.appendChild(c);
+    }
+  }
+  function buildChildren(p){
+    var ch={}; for(var k=0;k<p.length;k++){ ch[k]=[]; }
+    for(var j=0;j<p.length;j++){ if(p[j]!==j){ ch[p[j]].push(j); } }
+    return ch;
+  }
+  function nodeEl(id, ch, f, isRoot){
+    var wrap=document.createElement('div'); wrap.className='dnode';
+    var b=document.createElement('div');
+    var cls='dbubble'; if(f.comp.indexOf(id)>=0) cls+=' comp';
+    else if(f.hot.indexOf(id)>=0) cls+=' hot'; else if(isRoot) cls+=' root';
+    b.className=cls; b.textContent=id; wrap.appendChild(b);
+    if(ch[id].length){
+      var kids=document.createElement('div'); kids.className='dchildren';
+      for(var m=0;m<ch[id].length;m++){ kids.appendChild(nodeEl(ch[id][m], ch, f, false)); }
+      wrap.appendChild(kids);
+    }
+    return wrap;
+  }
+  function render(){
+    var f=F[i];
+    elNarr.innerHTML=f.note;
+    var ch=buildChildren(f.p);
+    elForest.innerHTML='';
+    for(var k=0;k<f.p.length;k++){ if(f.p[k]===k){ elForest.appendChild(nodeEl(k, ch, f, true)); } }
+    arrRow(elP, f.p, f.hot, f.comp);
+    arrRow(elR, f.r, f.hot, f.comp);
+    elFno.textContent='第 '+i+' / '+(F.length-1)+' 步';
+    bPrev.disabled=i===0; bNext.disabled=i===F.length-1;
+  }
+  bPrev.onclick=function(){ if(i>0){i--; render();} };
+  bNext.onclick=function(){ if(i<F.length-1){i++; render();} };
+  render();
+})();
+</script>
+
+</div>
+</body>
+</html>

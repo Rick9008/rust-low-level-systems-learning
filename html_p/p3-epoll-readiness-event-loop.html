@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>epoll readiness 模型 × std-only event loop（Rust 面試教材）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#1d2021; --bg1:#282828; --bg2:#32302f; --bg3:#3c3836; --bg-code:#16181a;
+  --fg:#d4be98; --fg2:#ddc7a1; --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+  --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+}
+html,body{
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+  margin:0; padding:0; background:var(--bg0); color:var(--fg);
+  font-family:"JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size:15px; line-height:1.7;
+}
+*{box-sizing:border-box;}
+a{color:var(--blue);}
+h1,h2,h3{color:var(--fg2); font-weight:700; line-height:1.35;}
+h1{font-size:1.5rem; margin:0 0 .3rem;}
+h2{font-size:1.2rem; margin:1.8rem 0 .7rem; border-bottom:1px solid var(--bg3); padding-bottom:.35rem;}
+h3{font-size:1.02rem; margin:1.2rem 0 .5rem; color:var(--yellow);}
+p{margin:.6rem 0;}
+code.inl{background:var(--bg2); color:var(--aqua); padding:.05rem .35rem; border-radius:4px; font-size:.92em;}
+strong{color:var(--orange); font-weight:700;}
+.header{
+  position:sticky; top:0; z-index:20; background:var(--bg1);
+  border-bottom:1px solid var(--bg3); padding:.9rem 1.1rem .3rem;
+}
+.header .sub{color:var(--grey2); font-size:.86rem; margin:.15rem 0 .6rem;}
+.tabs{display:flex; flex-wrap:wrap; gap:.4rem;}
+.tab{
+  background:var(--bg2); color:var(--grey2); border:1px solid var(--bg3);
+  font-family:inherit; font-size:.82rem; padding:.42rem .7rem; border-radius:6px;
+  cursor:pointer; white-space:nowrap;
+}
+.tab:hover{color:var(--fg); border-color:var(--grey);}
+.tab.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.content{max-width:960px; margin:0 auto; padding:1.4rem 1.1rem 5rem;}
+.panel{display:none;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:.4;} to{opacity:1;}}
+.card{
+  background:var(--bg1); border-left:3px solid var(--blue);
+  border-radius:6px; padding:.9rem 1.1rem; margin:1rem 0;
+}
+.card.warn{border-left-color:var(--red);}
+.card.good{border-left-color:var(--green);}
+.card.note{border-left-color:var(--yellow);}
+.card.info{border-left-color:var(--purple);}
+.card .t{font-weight:700; color:var(--fg2); margin-bottom:.3rem; display:block;}
+.tag{font-size:.72rem; padding:.08rem .4rem; border-radius:4px; margin-left:.4rem; vertical-align:middle;}
+.tag.v{background:#2a3a2a; color:var(--green); border:1px solid var(--green);}
+.tag.u{background:#3a2a2a; color:var(--orange); border:1px solid var(--orange);}
+pre{
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+  background:var(--bg-code); border:1px solid var(--bg3); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:12.5px; line-height:1.55;
+  font-family:inherit; color:var(--fg); margin:.7rem 0;
+}
+pre code{font-family:inherit; white-space:pre;}
+.tok-cmt{color:var(--grey); font-style:italic;}
+.tok-kw{color:var(--red);}
+.tok-type{color:var(--yellow);}
+.tok-str{color:var(--green);}
+.tok-num{color:var(--purple);}
+.tok-mac{color:var(--aqua);}
+.tok-fn{color:var(--blue);}
+.tok-attr{color:var(--orange);}
+.cap{font-size:.78rem; color:var(--grey2); margin:.9rem 0 -.3rem; font-weight:500;}
+.cap b{color:var(--aqua);}
+pre.diagram{color:var(--fg2); font-size:12px; line-height:1.4;}
+table{border-collapse:collapse; width:100%; margin:.9rem 0; font-size:.86rem;}
+th,td{border:1px solid var(--bg3); padding:.45rem .6rem; text-align:left; vertical-align:top;}
+th{background:var(--bg2); color:var(--yellow);}
+td code{color:var(--aqua);}
+.jump{
+  color:var(--blue); cursor:pointer; text-decoration:underline dotted;
+  text-underline-offset:3px;
+}
+.jump:hover{color:var(--aqua);}
+.chips-row{display:flex; flex-wrap:wrap; gap:.4rem; margin:.8rem 0;}
+.roadmap{display:flex; flex-wrap:wrap; gap:.5rem; margin:.8rem 0;}
+.roadmap .jump{
+  background:var(--bg2); border:1px solid var(--bg3); padding:.4rem .7rem;
+  border-radius:6px; text-decoration:none; font-size:.83rem;
+}
+.roadmap .jump:hover{border-color:var(--aqua);}
+
+/* ---- responsive diagrams ---- */
+.flow{margin:1rem 0;}
+.flow-stage{display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; justify-content:center;}
+.fbox{background:var(--bg1); border:1px solid var(--bg3); border-left:3px solid var(--blue); border-radius:6px; padding:.55rem .8rem; font-size:.86rem; color:var(--fg2); text-align:center;}
+.fbox.center{max-width:440px; margin:0 auto;}
+.fbox span{display:block; color:var(--grey2); font-size:.76rem; margin-top:.2rem; font-weight:400;}
+.fbox.accent-grey{border-left-color:var(--grey);}
+.fbox.accent-yellow{border-left-color:var(--yellow);}
+.fbox.accent-purple{border-left-color:var(--purple);}
+.fedge{font-size:.76rem; color:var(--grey2); white-space:nowrap;}
+.farrow{text-align:center; color:var(--grey); font-size:1.1rem; margin:.35rem 0;}
+.farrow .fsub{display:block; font-size:.74rem; color:var(--grey2);}
+.fnote{font-size:.74rem; color:var(--grey2); margin-top:.3rem; font-weight:400;}
+.fbranches{display:flex; flex-direction:column; gap:.5rem; margin:.6rem auto 0; max-width:580px;}
+.fbranch{background:var(--bg0); border:1px solid var(--bg3); border-radius:6px; padding:.45rem .7rem; font-size:.82rem;}
+.btag{font-size:.72rem; font-weight:700; padding:.08rem .4rem; border-radius:4px; margin-right:.4rem; display:inline-block;}
+.btag.in{background:#243a3a; color:var(--blue);}
+.btag.out{background:#3a3524; color:var(--yellow);}
+.btag.err{background:#3a2020; color:var(--red);}
+.rc{display:flex; flex-wrap:wrap; gap:.8rem; margin:1rem 0;}
+.rc-panel{flex:1; min-width:280px; background:var(--bg1); border:1px solid var(--bg3); border-left:3px solid var(--blue); border-radius:6px; padding:.8rem;}
+.rc-panel.accent-aqua{border-left-color:var(--aqua);}
+.rc-title{font-weight:700; color:var(--fg2); font-size:.92rem; margin-bottom:.2rem;}
+.rc-tag{font-size:.76rem; color:var(--grey2); margin-bottom:.6rem;}
+.rc-step{font-size:.82rem; margin:.35rem 0; padding:.35rem .5rem; background:var(--bg0); border-radius:5px; word-break:break-word;}
+.rc-step b{color:var(--aqua);}
+.rc-step .dim{color:var(--grey);}
+.rc-ok{font-size:.8rem; color:var(--green); margin-top:.5rem;}
+.rc-no{font-size:.8rem; color:var(--red); margin-top:.25rem;}
+.rc-note{font-size:.76rem; color:var(--grey2); margin-top:.4rem;}
+.bad{color:var(--red); font-weight:700;}
+.good{color:var(--green); font-weight:700;}
+/* ---- stepper ---- */
+.sim{background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:1rem; margin:1rem 0;}
+.sim-ctrl{display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-bottom:.6rem;}
+.sim-ctrl button, .modebtn{
+  font-family:inherit; font-size:.8rem; padding:.4rem .6rem; border-radius:6px;
+  border:1px solid var(--bg3); background:var(--bg2); color:var(--fg); cursor:pointer;
+}
+.sim-ctrl button:hover, .modebtn:hover{border-color:var(--grey);}
+.modebtn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.steplabel{color:var(--grey2); font-size:.8rem; margin-left:auto;}
+.sim-mode{font-size:.82rem; color:var(--grey2); margin-bottom:.8rem; display:flex; flex-wrap:wrap; gap:.4rem; align-items:center;}
+.sim-cols{display:flex; gap:.8rem; flex-wrap:wrap;}
+.sim-col{
+  flex:1; min-width:260px; background:var(--bg0); border:1px solid var(--bg3);
+  border-radius:6px; padding:.8rem;
+}
+.sim-col.diverge{border-color:var(--red); box-shadow:0 0 0 1px var(--red) inset;}
+.col-title{font-weight:700; color:var(--fg2); font-size:.9rem; margin-bottom:.6rem; text-align:center; border-bottom:1px dashed var(--bg3); padding-bottom:.4rem;}
+.col-row{display:flex; align-items:center; gap:.5rem; margin:.5rem 0; min-height:1.9rem;}
+.rlabel{font-size:.72rem; color:var(--grey); width:82px; flex-shrink:0;}
+.chips{display:flex; gap:.3rem; flex-wrap:wrap;}
+.chip{padding:.15rem .5rem; border-radius:4px; font-size:.78rem; font-weight:700; color:var(--bg0);}
+.chip.p1{background:var(--blue);}
+.chip.p2{background:var(--yellow);}
+.chip.p3{background:var(--purple);}
+.empty{color:var(--grey); font-size:.78rem;}
+.badges{display:flex; gap:.35rem; flex-wrap:wrap;}
+.badge{font-size:.7rem; padding:.12rem .45rem; border-radius:4px; border:1px solid;}
+.badge.ok{color:var(--green); border-color:var(--green); background:#243024;}
+.badge.off{color:var(--grey); border-color:var(--bg3);}
+.badge.edge{color:var(--purple); border-color:var(--purple); background:#302430;}
+.badge.noedge{color:var(--grey); border-color:var(--bg3);}
+.act{font-size:.8rem; color:var(--aqua);}
+.sim-desc{margin-top:.9rem; padding:.7rem .9rem; background:var(--bg2); border-radius:6px; font-size:.86rem; border-left:3px solid var(--blue);}
+.sim-desc.diverge{border-left-color:var(--red); background:#2a2020;}
+.sim-legend{margin-top:.7rem; font-size:.74rem; color:var(--grey2);}
+
+/* ---- followups ---- */
+.chain{background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:.4rem 1rem 1rem; margin:1.2rem 0;}
+.chain > .qhead{font-weight:700; color:var(--fg2); margin:.8rem 0 .3rem; font-size:.98rem;}
+.lvl{border-left:2px solid var(--bg3); padding:.2rem 0 .2rem .9rem; margin:.7rem 0 .7rem .2rem;}
+.lvl .lb{font-size:.72rem; font-weight:700; padding:.05rem .4rem; border-radius:4px; margin-right:.4rem;}
+.lb.l1{background:#243a3a; color:var(--blue);}
+.lb.l2{background:#3a3524; color:var(--yellow);}
+.lb.l3{background:#3a2438; color:var(--purple);}
+.lvl .q{color:var(--fg2); font-weight:500;}
+.lvl .a{color:var(--fg); font-size:.9rem; margin-top:.25rem;}
+
+/* ---- quiz ---- */
+details{background:var(--bg1); border:1px solid var(--bg3); border-radius:8px; padding:.7rem 1rem; margin:.9rem 0;}
+details[open]{border-color:var(--grey);}
+summary{cursor:pointer; font-weight:700; color:var(--fg2); font-size:.95rem;}
+summary::marker{color:var(--yellow);}
+details .ans{margin-top:.7rem; padding-top:.6rem; border-top:1px dashed var(--bg3); font-size:.9rem;}
+.kbd{background:var(--bg3); border:1px solid var(--grey); border-radius:4px; padding:.05rem .35rem; font-size:.8em; color:var(--fg2);}
+ul{margin:.5rem 0; padding-left:1.4rem;}
+li{margin:.3rem 0;}
+.small{font-size:.8rem; color:var(--grey2);}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>epoll readiness 模型 × std-only event loop</h1>
+  <div class="sub">LT vs ET · 從零搭單執行緒 network event loop（Rust, std + libc FFI）· 為什麼 file IO 是另一回事</div>
+  <div class="tabs">
+    <button class="tab active" data-jump="panel-overview">0 · 總覽</button>
+    <button class="tab" data-jump="panel-ltet">1 · LT vs ET 推導</button>
+    <button class="tab" data-jump="panel-stepper">2 · 互動並排 stepper</button>
+    <button class="tab" data-jump="panel-skeleton">3 · event loop 骨架</button>
+    <button class="tab" data-jump="panel-advanced">4 · 進階機制</button>
+    <button class="tab" data-jump="panel-fileio">5 · file IO 的區別</button>
+    <button class="tab" data-jump="panel-followup">6 · 面試追問</button>
+    <button class="tab" data-jump="panel-quiz">7 · self-quiz</button>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- ================= 0 OVERVIEW ================= -->
+<section id="panel-overview" class="panel active">
+  <h2>這份教材要打通的兩個核心</h2>
+  <p>epoll 是 Linux 的 <strong>readiness notifier</strong>:你把一堆 fd 丟進去,它在某個 fd「可以不阻塞地做 IO」時通知你。整份教材圍繞兩件事,兩件都是面試高頻踩雷點:</p>
+  <div class="chips-row">
+    <div class="card info" style="flex:1; min-width:280px; margin:.4rem 0;">
+      <span class="t">① readiness 模型:LT vs ET</span>
+      kernel 說「ready」跟你「做了多少 IO」之間會錯位。ET 只在<strong>邊緣</strong>通知一次,沒 drain 乾淨就<strong>事件餓死</strong>。
+      <span class="jump" data-jump="panel-stepper">→ 看並排模擬</span>
+    </div>
+    <div class="card info" style="flex:1; min-width:280px; margin:.4rem 0;">
+      <span class="t">② file IO 是另一種模型</span>
+      epoll 對 regular file <strong>沒用</strong>(永遠 report ready,<code class="inl">epoll_ctl</code> 直接 EPERM)。readiness ≠ completion。
+      <span class="jump" data-jump="panel-fileio">→ 看誠實區別</span>
+    </div>
+  </div>
+
+  <div class="card warn">
+    <span class="t">面試開場的第一個 clarify(高信號)</span>
+    <p style="margin-top:.2rem;">題目說「std-only,不得用外部 crate」。<strong>libc 算不算 external library?</strong> 這決定了你能不能做 epoll,務必先問清楚:</p>
+    <ul>
+      <li><strong>若允許連系統 libc</strong>(多數 systems 面試的意思):Rust 程式本來就 link glibc,你用 <code class="inl">extern "C"</code> 宣告 <code class="inl">epoll_*</code> 符號即可,<strong>不需要任何 crate</strong>。這條路可行,本教材走的就是它。</li>
+      <li><strong>若「純 std、連 FFI 都不行」</strong>:std 沒有 epoll binding —— 你<strong>做不出 epoll</strong>。此時誠實回退到 thread-per-connection 阻塞模型,或跟面試官確認範圍。能主動講出這個邊界本身就是加分。</li>
+    </ul>
+  </div>
+
+  <h3>std 給了你一半</h3>
+  <p>socket 這半,std 幾乎湊齊了:</p>
+  <ul>
+    <li><code class="inl">TcpListener</code> / <code class="inl">TcpStream</code> 建立與收發;</li>
+    <li><code class="inl">.set_nonblocking(true)</code> —— ET 的前提,沒它 drain loop 會阻塞整個 event loop;</li>
+    <li><code class="inl">std::os::fd::AsRawFd</code> 拿 raw fd 註冊進 epoll;<code class="inl">OwnedFd</code> 幫你在 drop 時關 fd。</li>
+  </ul>
+  <p>缺的那半只有 <strong>epoll 本身</strong>(create / ctl / wait)和 <strong>eventfd / timerfd</strong> —— 這幾個用 libc FFI 補。所以 socket event loop = <span class="jump" data-jump="panel-skeleton">「std::net 拿 fd + libc FFI 做 epoll」</span>。</p>
+
+  <div class="card good">
+    <span class="t">本教材的代碼都是真的編過的 <span class="tag v">verified</span></span>
+    骨架與所有片段在 <strong>x86_64 Linux, rustc 1.91.1, edition 2024</strong> 上編譯<strong>零 warning</strong>,並跑過 5 項功能測試(見<span class="jump" data-jump="panel-skeleton">骨架分頁</span>)。<code class="inl">sizeof(struct epoll_event)==12</code>、以及 regular file 進 epoll 會回 EPERM,都是本機實測而非憑記憶。<p class="small" style="margin-top:.5rem;"><strong>版本誠實說明:</strong>CoderPad 跑的是 <strong>1.92.0</strong>,我這邊能取得的最新是 <strong>1.91.1</strong>(官方 dist 站台在此環境被擋,只能用套件庫版本)。<span class="tag u">unverified</span> 1.92 沒實測 —— 但本教材只用到 edition 2024 + std + FFI,沒有任何 1.92 專屬特性,<strong>edition 才是真正影響語法的變數</strong>,而 edition 2024 是完整驗證過的。</p>
+  </div>
+
+  <div class="card info">
+    <span class="t">那 thread::park 呢?能不能不用 epoll?</span>
+    <p style="margin-top:.2rem;"><code class="inl">park</code> / <code class="inl">unpark</code> 解的是<strong>另一個問題</strong>:「把這條 thread 睡著,直到別的 thread 叫醒它」。它是你手刻 <code class="inl">block_on</code> executor 時、future 回 <code class="inl">Pending</code> 就 park、Waker 觸發就 unpark 的那個機制 —— 屬於<strong>排程層</strong>。</p>
+    <p><code class="inl">park</code> <strong>看不到 fd 的就緒狀態</strong>。socket 何時可讀只有 kernel 知道(epoll / select / poll / io_uring)。你沒法「park 等一個 socket 變可讀」,因為在正確的時機<strong>沒有東西會 unpark 你</strong>。所以 std-only 又不准 FFI 時,唯一能得知 readiness 的辦法是:每條連線開一條 thread 做 <strong>blocking read</strong>(讀到資料再 unpark 主 thread)—— 這其實就是 thread-per-connection / offload,能用,但<strong>不是 epoll 那種單執行緒多工幾千個 fd</strong>。</p>
+    <p class="small">一句話:<code class="inl">park</code> = executor 的睡/醒;<code class="inl">epoll</code> = IO 的就緒通知。真實 runtime 兩者疊在一起(mio 用 epoll 做 readiness、executor 用 park 做排程)。少了 epoll 那半,network IO 就退回 blocking threads。</p>
+  </div>
+
+  <h3>路線圖</h3>
+  <div class="roadmap">
+    <span class="jump" data-jump="panel-ltet">1 · 先把 LT/ET 的失敗模式推出來</span>
+    <span class="jump" data-jump="panel-stepper">2 · 一步步看事件餓死</span>
+    <span class="jump" data-jump="panel-skeleton">3 · register→wait→dispatch→drain 骨架</span>
+    <span class="jump" data-jump="panel-advanced">4 · nonblocking / ONESHOT / eventfd / timer</span>
+    <span class="jump" data-jump="panel-fileio">5 · file IO 為何要換模型</span>
+    <span class="jump" data-jump="panel-followup">6 · 3 層深追問</span>
+    <span class="jump" data-jump="panel-quiz">7 · 自測 5 題</span>
+  </div>
+</section>
+
+<!-- ================= 1 LT vs ET ================= -->
+<section id="panel-ltet" class="panel">
+  <h2>從 naive 心智模型推到 LT/ET 的失敗</h2>
+  <div class="card note">
+    <span class="t">先定義:「drain 到 EAGAIN」是什麼</span>
+    在 nonblocking socket 上,<strong>反覆呼叫 <code class="inl">read()</code>,直到它回傳 <code class="inl">EAGAIN</code> / <code class="inl">EWOULDBLOCK</code> 這個錯誤為止</strong>。這個錯誤的意思是「kernel recv buffer 此刻已經空了」。所以「drain 到 EAGAIN」= 一口氣把接收緩衝區<strong>讀乾</strong>,拿 EAGAIN 當停止信號。(blocking socket 做不到:讀空時那次 <code class="inl">read()</code> 會就地卡住,而不是回 EAGAIN —— 這也是為何 ET 必須配 nonblocking。)
+  </div>
+
+  <div class="card">
+    <span class="t">① naive 心智模型</span>
+    「<code class="inl">epoll_wait</code> 告訴我 socket 可讀 → 我 <code class="inl">read()</code> 一次、處理、回去等下一次。」
+    <p class="small" style="margin-top:.4rem;">直覺上一次通知配一次讀,對稱又乾淨。問題是這個直覺<strong>只在 LT 成立</strong>,而且 LT 自己也有另一個坑。</p>
+  </div>
+
+  <div class="card warn">
+    <span class="t">② 失敗模式 A —— ET 下的「事件餓死」</span>
+    <p style="margin-top:.2rem;">ET(edge-triggered)只在 fd 狀態<strong>發生變化的那一瞬間</strong>通知你一次。假設三個封包 P1 P2 P3 連續到達,你只 <code class="inl">read()</code> 一次拿走 P1 就返回:</p>
+    <ul>
+      <li>recv buffer 還躺著 P2、P3;</li>
+      <li>但「有資料可讀」這件事<strong>沒有再變化</strong> —— 沒有新的邊緣;</li>
+      <li>下一次 <code class="inl">epoll_wait</code> 對這個 fd <strong>什麼都不回報</strong>;</li>
+      <li>P2、P3 就此卡死,除非碰巧有<strong>全新</strong>資料到達製造下一個邊緣。</li>
+    </ul>
+    <p>這就是 ET 的核心陷阱。<span class="jump" data-jump="panel-stepper">在 stepper 裡一步步看它發生 →</span></p>
+  </div>
+
+  <div class="card warn">
+    <span class="t">② 失敗模式 B —— naive LT 的「空轉風暴」</span>
+    <p style="margin-top:.2rem;">LT 很寬容,但反過來會咬你:只要條件成立就<strong>每次</strong>都回報。兩個典型災難:</p>
+    <ul>
+      <li><strong>沒讀完就一直被叫醒</strong>:consumer 慢時,每輪 <code class="inl">epoll_wait</code> 都回報同一個 fd 可讀 → CPU 空轉、syscall 爆量。</li>
+      <li><strong>EPOLLOUT 常駐 = writable storm</strong>:socket 幾乎永遠可寫,若你把 <code class="inl">EPOLLOUT</code> 一直掛著,每輪 wait 都被喚醒寫 → 100% CPU。這是新手最常見的 100% CPU bug。</li>
+    </ul>
+  </div>
+
+  <div class="card good">
+    <span class="t">③ 修法</span>
+    <ul>
+      <li><strong>ET:每次事件都 drain 到 EAGAIN</strong>。loop <code class="inl">read()</code> 直到回 <code class="inl">EWOULDBLOCK</code>,把 buffer 讀乾。前提是 fd 必須 <strong>nonblocking</strong> —— 否則最後那次「其實沒資料」的 read 會<strong>阻塞整個 event loop</strong>(<span class="jump" data-jump="panel-advanced">為何 nonblocking 是 ET 前提,細節在進階機制 →</span>)。</li>
+      <li><strong>EPOLLOUT 要按需開關</strong>(LT/ET 皆然):只有當你「有殘量寫不出去(write 回 EAGAIN)」時才 <code class="inl">MOD</code> 掛上 <code class="inl">EPOLLOUT</code>;寫完立刻 <code class="inl">MOD</code> 取消。這就是背壓(backpressure)。</li>
+    </ul>
+  </div>
+
+  <h3>把狀態變數先立起來(之後 stepper 與骨架都用這幾個)</h3>
+  <div class="card info">
+    <ul style="margin:0;">
+      <li><code class="inl">recv buffer</code> —— kernel 端每個 socket 的接收佇列。LT 看它「非空 = 可讀」;ET 只看它的「變化」。</li>
+      <li><code class="inl">edge&nbsp;pending</code>(僅 ET 概念)—— 是否有一個「尚未被消費的邊緣通知」。被通知後若沒新資料到達,它就失效。</li>
+      <li><code class="inl">out_buf: Vec&lt;u8&gt;</code> —— 每條連線「已收下、但 socket 暫時寫不出去」的殘量。背壓的存放處。</li>
+      <li><code class="inl">out_armed: bool</code> —— 這個 fd 目前有沒有掛 <code class="inl">EPOLLOUT</code>。控制上面「按需開關」。</li>
+    </ul>
+    <p class="small" style="margin-top:.5rem;">stepper 用前兩個把 LT/ET 的錯位演出來;<span class="jump" data-jump="panel-skeleton">骨架的 <code class="inl">Conn</code> 結構</span>用後兩個實作背壓。變數不會憑空冒出來,都是這裡定義的。</p>
+  </div>
+
+  <h3>LT vs ET 語意對照</h3>
+  <table>
+    <tr><th>面向</th><th>LT(level-triggered,預設)</th><th>ET(edge-triggered,<code>EPOLLET</code>)</th></tr>
+    <tr><td>觸發條件</td><td>條件成立就回報(可讀 = buffer 非空)</td><td>只在條件<strong>轉變</strong>時回報一次</td></tr>
+    <tr><td>「讀一次就返回」</td><td>可以,下輪會被再通知</td><td><strong>會餓死</strong>殘留資料</td></tr>
+    <tr><td>是否必須 drain 到 EAGAIN</td><td>不強制(但建議)</td><td><strong>強制</strong></td></tr>
+    <tr><td>nonblocking</td><td>建議</td><td><strong>必要前提</strong></td></tr>
+    <tr><td>喚醒/syscall 次數</td><td>較多(重複回報)</td><td>較少(高負載下優勢明顯)</td></tr>
+    <tr><td>心智負擔</td><td>低,容錯高</td><td>高,漏 drain 直接錯</td></tr>
+    <tr><td>常見搭配</td><td>簡單 server、原型</td><td>高吞吐、<code>EPOLLONESHOT</code>+多執行緒</td></tr>
+  </table>
+</section>
+
+<!-- ================= 2 STEPPER ================= -->
+<section id="panel-stepper" class="panel">
+  <h2>互動:同一串封包,LT vs ET 並排播放</h2>
+  <p class="small">同一組到達序列 P1→P2→P3(app 被排到 CPU 之前就都到齊了)。切換 handler 行為,看 kernel ready 狀態與使用者行為如何錯位。<strong>預設「讀一次」= 故意的 bug</strong>,重點在第 6 步的分岔。</p>
+
+  <div class="sim">
+    <div class="sim-ctrl">
+      <button id="btnPrev">◀ 上一步</button>
+      <button id="btnPlay">▶ 播放</button>
+      <button id="btnNext">下一步 ▶</button>
+      <button id="btnReset">↺ 重置</button>
+      <span id="stepLabel" class="steplabel"></span>
+    </div>
+    <div class="sim-mode">
+      <span>handler 行為:</span>
+      <button class="modebtn active" data-mode="once">讀一次(lazy bug)</button>
+      <button class="modebtn" data-mode="drain">drain 到 EAGAIN(正解)</button>
+    </div>
+    <div class="sim-cols">
+      <div class="sim-col" id="colLT"></div>
+      <div class="sim-col" id="colET"></div>
+    </div>
+    <div id="simDesc" class="sim-desc"></div>
+    <div class="sim-legend">
+      <span class="chip p1">P1</span> <span class="chip p2">P2</span> <span class="chip p3">P3</span> = recv buffer 內的封包 ·
+      <span class="badge ok" style="display:inline-block;">READABLE</span> = 下次 <code class="inl">epoll_wait</code> 會回報此 fd ·
+      <span class="badge edge" style="display:inline-block;">edge●pending</span> = ET 有未消費的邊緣。
+    </div>
+  </div>
+
+  <div class="card note">
+    <span class="t">看完該帶走的三句</span>
+    <ul style="margin:0;">
+      <li>LT 靠「被通知就讀、讀完自然停」自我修復,即使你每次只讀一點。</li>
+      <li>ET 通知只發一次;沒 drain 乾淨 = 殘料永久餓死(要等下一次全新到達才有救)。</li>
+      <li>切到「drain 正解」:小場景下 LT/ET 打平(都 1 次喚醒);ET 的優勢在<strong>持續高負載/部分讀取</strong>時才顯現 —— 那時 LT 會為你正在處理的資料重複回報。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= 3 SKELETON ================= -->
+<section id="panel-skeleton" class="panel">
+  <h2>從零搭 event loop:結構 + 可編譯骨架</h2>
+
+  <h3>結構(這是重點,epoll 綠地時的心智地圖)</h3>
+<div class="flow">
+  <div class="flow-stage">
+    <div class="fbox">register(fd, interest)</div>
+    <div class="fedge">— epoll_ctl ADD/MOD →</div>
+    <div class="fbox accent-grey">事件源(都是 fd)<span>listener · conn socket · eventfd · timerfd</span></div>
+  </div>
+  <div class="farrow">↓</div>
+  <div class="fbox center accent-yellow">epoll_wait<div class="fnote">timeout = −1,或改用 min-heap 最近 deadline;eventfd 被別的 thread 寫入 → 叫醒它</div></div>
+  <div class="farrow">↓<span class="fsub">ready events[](每個 event 帶 fd + 就緒的 bitmask)</span></div>
+  <div class="fbox center accent-purple">dispatch by fd / events</div>
+  <div class="fbranches">
+    <div class="fbranch"><span class="btag in">EPOLLIN</span>read() 直到 EAGAIN(drain 讀乾)</div>
+    <div class="fbranch"><span class="btag out">EPOLLOUT</span>flush 殘量(out_buf);寫不完 → arm EPOLLOUT,寫完 → 取消</div>
+    <div class="fbranch"><span class="btag err">EPOLLERR / HUP</span>先 drain 剩餘資料,再 DEL + drop fd(關閉連線)</div>
+  </div>
+</div>
+
+  <div class="card note">
+    <span class="t">edition 2024 的第一個坑:<code class="inl">unsafe extern "C"</code> <span class="tag v">verified</span></span>
+    <p style="margin-top:.2rem;">CoderPad 的 pad 跑 <strong>Rust 1.92 / edition 2024</strong>。在 edition 2024,<code class="inl">extern</code> block <strong>必須寫成 <code class="inl">unsafe extern "C"</code></strong> —— 舊寫法直接是<strong>編譯錯誤</strong>,不是 warning:</p>
+<pre><code><span class="tok-cmt">// edition 2021 寫法,丟進 edition 2024 會直接爆:</span>
+error: extern blocks must be unsafe
+  --&gt; main.rs:28:1
+   |
+28 | / extern <span class="tok-str">"C"</span> {
+29 | |     fn epoll_create1(flags: i32) -&gt; i32;
+...</code></pre>
+    <p class="small">實測:同一份 code 用 <code class="inl">--edition 2024</code> 編,三個 extern block 各噴一個 error。這是「直覺會寫錯、compiler 會擋住」的類型 —— 現場真寫錯了,看到這個 error 就知道補 <code class="inl">unsafe</code>。block 裡的個別 fn 預設仍是 unsafe,呼叫端照樣要包 <code class="inl">unsafe { }</code>。</p>
+    <p class="small">順帶一提,骨架的 <code class="inl">handle_readable</code> 用了 <strong>let-chain</strong>(<code class="inl">if eof &amp;&amp; let Some(c) = ...</code>)—— 這也是 edition 2024 才有的(實測 edition 2021 會噴 <code class="inl">let chains are only allowed in Rust 2024 or later</code>)。在 pad 上可以放心用。</p>
+  </div>
+
+  <div class="card warn">
+    <span class="t">packed struct:x86_64 上的 FFI 陷阱 <span class="tag v">verified</span></span>
+    <p style="margin-top:.2rem;">x86_64 的 glibc/kernel 把 <code class="inl">struct epoll_event</code> 宣告成 <code class="inl">__attribute__((packed))</code>:<code class="inl">{ u32 events; u64 data; }</code> 是 <strong>12 bytes 而非 16</strong>(自然對齊會在 events 後補 4 bytes padding)。實測 <code class="inl">sizeof(struct epoll_event)==12</code>。若你在 Rust 用非 packed 的 <code class="inl">#[repr(C)]</code>,<code class="inl">data</code> 欄位 offset 會從 kernel 期望的 4 變成 8 → 記憶體錯位、資料損毀。所以下面 gate 在 <code class="inl">target_arch</code>:x86_64 用 <code class="inl">#[repr(C, packed)]</code>,其他架構自然對齊。</p>
+    <p class="small" style="margin-top:.4rem;">packed 的連帶規矩:<strong>不能對 packed 欄位取參考</strong>(<code class="inl">&ev.events</code> 是 UB / 編譯錯誤,連 <code class="inl">println!("{}", ev.events)</code> 都會踩到,因為格式化會隱式借用)。對策:先把整個 struct 或欄位<strong>複製</strong>成 local 再用(<code class="inl">let ev = events[i];</code> 然後 <code class="inl">ev.events</code>)。骨架裡就是這樣做的。</p>
+  </div>
+
+  <div class="cap"><b>片段 A</b> — imports</div>
+<pre class="rust"><code><span class="tok-kw">use</span> std::collections::<span class="tok-type">HashMap</span>;
+<span class="tok-kw">use</span> std::io::{<span class="tok-kw">self</span>, <span class="tok-type">ErrorKind</span>, <span class="tok-type">Read</span>, <span class="tok-type">Write</span>};
+<span class="tok-kw">use</span> std::net::{<span class="tok-type">TcpListener</span>, <span class="tok-type">TcpStream</span>};
+<span class="tok-kw">use</span> std::os::fd::{<span class="tok-type">AsRawFd</span>, <span class="tok-type">FromRawFd</span>, <span class="tok-type">OwnedFd</span>, <span class="tok-type">RawFd</span>};</code></pre>
+
+  <div class="cap"><b>片段 B</b> — libc 最小簽名 + packed struct + 常數(面試要能默寫這三個 extern)</div>
+<pre class="rust"><code><span class="tok-cmt">// ---------- libc FFI: the minimal epoll signatures ----------</span>
+<span class="tok-cmt">// EDITION 2024: `extern` blocks must be written `unsafe extern`. Plain</span>
+<span class="tok-cmt">// `extern "C" { ... }` is a hard error: "extern blocks must be unsafe".</span>
+<span class="tok-cmt">//</span>
+<span class="tok-cmt">// x86_64 glibc/kernel declare `struct epoll_event` with __attribute__((packed)):</span>
+<span class="tok-cmt">//   { uint32_t events; uint64_t data; }  =&gt; 12 bytes, NOT 16.</span>
+<span class="tok-cmt">// On non-x86_64 the ABI struct is naturally aligned; gate on target_arch for a</span>
+<span class="tok-cmt">// real cross-arch impl.</span>
+<span class="tok-attr">#[cfg(target_arch = "x86_64")]</span>
+<span class="tok-attr">#[repr(C, packed)]</span>
+<span class="tok-attr">#[derive(Clone, Copy)]</span>
+<span class="tok-kw">struct</span> <span class="tok-type">EpollEvent</span> {
+    events: <span class="tok-type">u32</span>,
+    data: <span class="tok-type">u64</span>,
+}
+<span class="tok-attr">#[cfg(not(target_arch = "x86_64"))]</span>
+<span class="tok-attr">#[repr(C)]</span>
+<span class="tok-attr">#[derive(Clone, Copy)]</span>
+<span class="tok-kw">struct</span> <span class="tok-type">EpollEvent</span> {
+    events: <span class="tok-type">u32</span>,
+    data: <span class="tok-type">u64</span>,
+}
+
+<span class="tok-kw">unsafe</span> <span class="tok-kw">extern</span> <span class="tok-str">"C"</span> {
+    <span class="tok-kw">fn</span> <span class="tok-fn">epoll_create1</span>(flags: <span class="tok-type">i32</span>) -&gt; <span class="tok-type">i32</span>;
+    <span class="tok-kw">fn</span> <span class="tok-fn">epoll_ctl</span>(epfd: <span class="tok-type">i32</span>, op: <span class="tok-type">i32</span>, fd: <span class="tok-type">i32</span>, event: *<span class="tok-kw">mut</span> <span class="tok-type">EpollEvent</span>) -&gt; <span class="tok-type">i32</span>;
+    <span class="tok-kw">fn</span> <span class="tok-fn">epoll_wait</span>(epfd: <span class="tok-type">i32</span>, events: *<span class="tok-kw">mut</span> <span class="tok-type">EpollEvent</span>, maxevents: <span class="tok-type">i32</span>, timeout: <span class="tok-type">i32</span>) -&gt; <span class="tok-type">i32</span>;
+}
+
+<span class="tok-kw">const</span> <span class="tok-type">EPOLL_CLOEXEC</span>: <span class="tok-type">i32</span> = <span class="tok-num">0x8_0000</span>; <span class="tok-cmt">// == O_CLOEXEC (octal 02000000)</span>
+<span class="tok-kw">const</span> <span class="tok-type">EPOLL_CTL_ADD</span>: <span class="tok-type">i32</span> = <span class="tok-num">1</span>;
+<span class="tok-kw">const</span> <span class="tok-type">EPOLL_CTL_DEL</span>: <span class="tok-type">i32</span> = <span class="tok-num">2</span>;
+<span class="tok-kw">const</span> <span class="tok-type">EPOLL_CTL_MOD</span>: <span class="tok-type">i32</span> = <span class="tok-num">3</span>;
+
+<span class="tok-kw">const</span> <span class="tok-type">EPOLLIN</span>: <span class="tok-type">u32</span> = <span class="tok-num">0x001</span>;
+<span class="tok-kw">const</span> <span class="tok-type">EPOLLOUT</span>: <span class="tok-type">u32</span> = <span class="tok-num">0x004</span>;
+<span class="tok-kw">const</span> <span class="tok-type">EPOLLERR</span>: <span class="tok-type">u32</span> = <span class="tok-num">0x008</span>;
+<span class="tok-kw">const</span> <span class="tok-type">EPOLLHUP</span>: <span class="tok-type">u32</span> = <span class="tok-num">0x010</span>;
+<span class="tok-kw">const</span> <span class="tok-type">EPOLLET</span>: <span class="tok-type">u32</span> = <span class="tok-num">1</span> &lt;&lt; <span class="tok-num">31</span>; <span class="tok-cmt">// 0x8000_0000</span>
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">const</span> <span class="tok-type">EPOLLONESHOT</span>: <span class="tok-type">u32</span> = <span class="tok-num">1</span> &lt;&lt; <span class="tok-num">30</span>; <span class="tok-cmt">// 0x4000_0000</span>
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">const</span> <span class="tok-type">EPOLLRDHUP</span>: <span class="tok-type">u32</span> = <span class="tok-num">0x2000</span>;</code></pre>
+
+  <div class="cap"><b>片段 C</b> — epoll 薄封裝(<code>OwnedFd</code> 負責 drop 時關 fd,所以連 <code>close</code> FFI 都省了)</div>
+<pre class="rust"><code><span class="tok-cmt">// ---------- thin safe-ish wrapper over the epoll fd ----------</span>
+<span class="tok-kw">struct</span> <span class="tok-type">Epoll</span> {
+    fd: <span class="tok-type">OwnedFd</span>, <span class="tok-cmt">// OwnedFd::drop closes it — no manual close() FFI needed</span>
+}
+
+<span class="tok-kw">impl</span> <span class="tok-type">Epoll</span> {
+    <span class="tok-kw">fn</span> <span class="tok-fn">new</span>() -&gt; io::<span class="tok-type">Result</span>&lt;<span class="tok-kw">Self</span>&gt; {
+        <span class="tok-kw">let</span> raw = <span class="tok-kw">unsafe</span> { epoll_create1(<span class="tok-type">EPOLL_CLOEXEC</span>) };
+        <span class="tok-kw">if</span> raw &lt; <span class="tok-num">0</span> {
+            <span class="tok-kw">return</span> <span class="tok-type">Err</span>(io::<span class="tok-type">Error</span>::last_os_error());
+        }
+        <span class="tok-cmt">// SAFETY: epoll_create1 handed us a fresh, exclusively-owned fd.</span>
+        <span class="tok-kw">let</span> fd = <span class="tok-kw">unsafe</span> { <span class="tok-type">OwnedFd</span>::from_raw_fd(raw) };
+        <span class="tok-type">Ok</span>(<span class="tok-type">Epoll</span> { fd })
+    }
+
+    <span class="tok-kw">fn</span> <span class="tok-fn">ctl</span>(&amp;<span class="tok-kw">self</span>, op: <span class="tok-type">i32</span>, fd: <span class="tok-type">RawFd</span>, interest: <span class="tok-type">u32</span>) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+        <span class="tok-kw">let</span> <span class="tok-kw">mut</span> ev = <span class="tok-type">EpollEvent</span> { events: interest, data: fd <span class="tok-kw">as</span> <span class="tok-type">u64</span> };
+        <span class="tok-kw">let</span> rc = <span class="tok-kw">unsafe</span> { epoll_ctl(<span class="tok-kw">self</span>.fd.as_raw_fd(), op, fd, &amp;<span class="tok-kw">mut</span> ev) };
+        <span class="tok-kw">if</span> rc &lt; <span class="tok-num">0</span> {
+            <span class="tok-kw">return</span> <span class="tok-type">Err</span>(io::<span class="tok-type">Error</span>::last_os_error());
+        }
+        <span class="tok-type">Ok</span>(())
+    }
+
+    <span class="tok-kw">fn</span> <span class="tok-fn">add</span>(&amp;<span class="tok-kw">self</span>, fd: <span class="tok-type">RawFd</span>, interest: <span class="tok-type">u32</span>) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+        <span class="tok-kw">self</span>.ctl(<span class="tok-type">EPOLL_CTL_ADD</span>, fd, interest)
+    }
+    <span class="tok-kw">fn</span> <span class="tok-fn">modify</span>(&amp;<span class="tok-kw">self</span>, fd: <span class="tok-type">RawFd</span>, interest: <span class="tok-type">u32</span>) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+        <span class="tok-kw">self</span>.ctl(<span class="tok-type">EPOLL_CTL_MOD</span>, fd, interest)
+    }
+    <span class="tok-kw">fn</span> <span class="tok-fn">delete</span>(&amp;<span class="tok-kw">self</span>, fd: <span class="tok-type">RawFd</span>) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+        <span class="tok-cmt">// Modern kernels accept a NULL event for DEL.</span>
+        <span class="tok-kw">let</span> rc =
+            <span class="tok-kw">unsafe</span> { epoll_ctl(<span class="tok-kw">self</span>.fd.as_raw_fd(), <span class="tok-type">EPOLL_CTL_DEL</span>, fd, std::ptr::null_mut()) };
+        <span class="tok-kw">if</span> rc &lt; <span class="tok-num">0</span> {
+            <span class="tok-kw">return</span> <span class="tok-type">Err</span>(io::<span class="tok-type">Error</span>::last_os_error());
+        }
+        <span class="tok-type">Ok</span>(())
+    }
+
+    <span class="tok-kw">fn</span> <span class="tok-fn">wait</span>(&amp;<span class="tok-kw">self</span>, events: &amp;<span class="tok-kw">mut</span> [<span class="tok-type">EpollEvent</span>], timeout_ms: <span class="tok-type">i32</span>) -&gt; io::<span class="tok-type">Result</span>&lt;<span class="tok-type">usize</span>&gt; {
+        <span class="tok-kw">let</span> n = <span class="tok-kw">unsafe</span> {
+            epoll_wait(
+                <span class="tok-kw">self</span>.fd.as_raw_fd(),
+                events.as_mut_ptr(),
+                events.len() <span class="tok-kw">as</span> <span class="tok-type">i32</span>,
+                timeout_ms,
+            )
+        };
+        <span class="tok-kw">if</span> n &lt; <span class="tok-num">0</span> {
+            <span class="tok-kw">return</span> <span class="tok-type">Err</span>(io::<span class="tok-type">Error</span>::last_os_error());
+        }
+        <span class="tok-type">Ok</span>(n <span class="tok-kw">as</span> <span class="tok-type">usize</span>)
+    }
+}</code></pre>
+
+  <div class="cap"><b>片段 D</b> — <code>Conn</code>(背壓狀態)+ 主迴圈:wait → dispatch → 依 bitmask 分派</div>
+<pre class="rust"><code><span class="tok-cmt">// ---------- per-connection state (backpressure + half-close live here) ----------</span>
+<span class="tok-kw">struct</span> <span class="tok-type">Conn</span> {
+    stream: <span class="tok-type">TcpStream</span>,
+    out_buf: <span class="tok-type">Vec</span>&lt;<span class="tok-type">u8</span>&gt;,  <span class="tok-cmt">// bytes accepted from peer but not yet writable to the socket</span>
+    out_armed: <span class="tok-type">bool</span>,   <span class="tok-cmt">// is EPOLLOUT currently registered for this fd?</span>
+    read_closed: <span class="tok-type">bool</span>, <span class="tok-cmt">// peer sent FIN: nothing more will arrive, but we may still owe bytes</span>
+}
+
+<span class="tok-kw">fn</span> <span class="tok-fn">main</span>() -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+    <span class="tok-kw">let</span> listener = <span class="tok-type">TcpListener</span>::bind(<span class="tok-str">"127.0.0.1:9000"</span>)?;
+    run_event_loop(listener)
+}
+
+<span class="tok-kw">fn</span> <span class="tok-fn">run_event_loop</span>(listener: <span class="tok-type">TcpListener</span>) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+    listener.set_nonblocking(<span class="tok-kw">true</span>)?;
+    <span class="tok-kw">let</span> listener_fd = listener.as_raw_fd();
+
+    <span class="tok-kw">let</span> epoll = <span class="tok-type">Epoll</span>::new()?;
+    <span class="tok-cmt">// Edge-triggered listener =&gt; MUST drain accept() to EAGAIN.</span>
+    epoll.add(listener_fd, <span class="tok-type">EPOLLIN</span> | <span class="tok-type">EPOLLET</span>)?;
+
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> conns: <span class="tok-type">HashMap</span>&lt;<span class="tok-type">RawFd</span>, <span class="tok-type">Conn</span>&gt; = <span class="tok-type">HashMap</span>::new();
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> events = <span class="tok-mac">vec</span>![<span class="tok-type">EpollEvent</span> { events: <span class="tok-num">0</span>, data: <span class="tok-num">0</span> }; <span class="tok-num">1024</span>];
+
+    <span class="tok-kw">loop</span> {
+        <span class="tok-kw">let</span> n = <span class="tok-kw">match</span> epoll.wait(&amp;<span class="tok-kw">mut</span> events, -<span class="tok-num">1</span>) {
+            <span class="tok-type">Ok</span>(n) =&gt; n,
+            <span class="tok-type">Err</span>(e) <span class="tok-kw">if</span> e.kind() == <span class="tok-type">ErrorKind</span>::<span class="tok-type">Interrupted</span> =&gt; <span class="tok-kw">continue</span>, <span class="tok-cmt">// EINTR: just retry</span>
+            <span class="tok-type">Err</span>(e) =&gt; <span class="tok-kw">return</span> <span class="tok-type">Err</span>(e),
+        };
+
+        <span class="tok-kw">for</span> i <span class="tok-kw">in</span> <span class="tok-num">0</span>..n {
+            <span class="tok-kw">let</span> ev = events[i];    <span class="tok-cmt">// copy the packed struct out by value first</span>
+            <span class="tok-kw">let</span> ready = ev.events; <span class="tok-cmt">// reading Copy fields off the copy is packed-safe</span>
+            <span class="tok-kw">let</span> fd = ev.data <span class="tok-kw">as</span> <span class="tok-type">RawFd</span>;
+
+            <span class="tok-kw">if</span> fd == listener_fd {
+                accept_all(&amp;listener, &amp;epoll, &amp;<span class="tok-kw">mut</span> conns)?;
+                <span class="tok-kw">continue</span>;
+            }
+
+            <span class="tok-cmt">// EPOLLERR = socket error; EPOLLHUP = BOTH directions gone. Either way: drop it.</span>
+            <span class="tok-cmt">// (A peer that only half-closes shows up as EPOLLIN + read()==0, not EPOLLHUP.)</span>
+            <span class="tok-kw">if</span> ready &amp; (<span class="tok-type">EPOLLERR</span> | <span class="tok-type">EPOLLHUP</span>) != <span class="tok-num">0</span> {
+                close_conn(&amp;epoll, &amp;<span class="tok-kw">mut</span> conns, fd);
+                <span class="tok-kw">continue</span>;
+            }
+            <span class="tok-kw">if</span> ready &amp; <span class="tok-type">EPOLLIN</span> != <span class="tok-num">0</span> &amp;&amp; handle_readable(&amp;epoll, &amp;<span class="tok-kw">mut</span> conns, fd)? {
+                <span class="tok-kw">continue</span>; <span class="tok-cmt">// connection finished inside the handler</span>
+            }
+            <span class="tok-kw">if</span> ready &amp; <span class="tok-type">EPOLLOUT</span> != <span class="tok-num">0</span> {
+                handle_writable(&amp;epoll, &amp;<span class="tok-kw">mut</span> conns, fd)?;
+            }
+        }
+    }
+}</code></pre>
+
+  <div class="cap"><b>片段 E</b> — accept loop 到 EAGAIN(ET listener 必 drain,否則漏 backlog)</div>
+<pre class="rust"><code><span class="tok-cmt">/// ET listener: accept until EAGAIN, else you can miss backlog'd connections.</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">accept_all</span>(
+    listener: &amp;<span class="tok-type">TcpListener</span>,
+    epoll: &amp;<span class="tok-type">Epoll</span>,
+    conns: &amp;<span class="tok-kw">mut</span> <span class="tok-type">HashMap</span>&lt;<span class="tok-type">RawFd</span>, <span class="tok-type">Conn</span>&gt;,
+) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+    <span class="tok-kw">loop</span> {
+        <span class="tok-kw">match</span> listener.accept() {
+            <span class="tok-type">Ok</span>((stream, _addr)) =&gt; {
+                stream.set_nonblocking(<span class="tok-kw">true</span>)?; <span class="tok-cmt">// accepted sockets are NOT auto-nonblocking</span>
+                <span class="tok-kw">let</span> fd = stream.as_raw_fd();
+                epoll.add(fd, <span class="tok-type">EPOLLIN</span> | <span class="tok-type">EPOLLET</span>)?;
+                conns.insert(
+                    fd,
+                    <span class="tok-type">Conn</span> { stream, out_buf: <span class="tok-type">Vec</span>::new(), out_armed: <span class="tok-kw">false</span>, read_closed: <span class="tok-kw">false</span> },
+                );
+            }
+            <span class="tok-type">Err</span>(e) <span class="tok-kw">if</span> e.kind() == <span class="tok-type">ErrorKind</span>::<span class="tok-type">WouldBlock</span> =&gt; <span class="tok-kw">break</span>, <span class="tok-cmt">// backlog drained</span>
+            <span class="tok-type">Err</span>(e) <span class="tok-kw">if</span> e.kind() == <span class="tok-type">ErrorKind</span>::<span class="tok-type">Interrupted</span> =&gt; <span class="tok-kw">continue</span>,
+            <span class="tok-type">Err</span>(e) =&gt; <span class="tok-kw">return</span> <span class="tok-type">Err</span>(e),
+        }
+    }
+    <span class="tok-type">Ok</span>(())
+}</code></pre>
+
+  <div class="card warn">
+    <span class="t">read()==0 ≠ 「馬上關」:我自己踩到的 bug <span class="tag v">verified</span></span>
+    <p style="margin-top:.2rem;">這份骨架的<strong>第一版真的寫錯了</strong>,而且在舊 toolchain 上<strong>矇混過關</strong>,換 1.91 跑才炸出來 —— 值得完整講一次,因為這正是 dry-run 該抓到的東西。</p>
+    <p><strong>錯的寫法:</strong><code class="inl">handle_readable</code> 的 drain loop 讀到 <code class="inl">Ok(0)</code>(FIN)就 <code class="inl">close_conn</code> 直接關。</p>
+    <p><strong>為什麼錯:</strong>drain loop 的離開有<strong>兩個</strong>出口 —— <code class="inl">EAGAIN</code>(讀乾了)和 <code class="inl">Ok(0)</code>(對端關了寫端)。如果 client 把資料<strong>連同 FIN 一起送到</strong>,drain loop 會一路讀到 <code class="inl">Ok(0)</code> 才停,<strong>從頭到尾沒經過 try_flush</strong>。此時 <code class="inl">out_buf</code> 裡是滿的 echo 資料,你一關 → <strong>全部靜默丟失</strong>。實測:2&nbsp;MB payload 回來 <strong>0 bytes</strong>。</p>
+    <p><strong>為什麼舊版沒抓到:</strong>這是 race。舊測試讓 client 併發讀,<code class="inl">out_buf</code> 幾乎總是即時排空,EOF 到達時剛好沒殘量 → 綠燈。<span class="bad">測試通過 ≠ 沒有 bug</span>,只是那天運氣好。</p>
+    <p><strong>修法:</strong><code class="inl">Ok(0)</code> 只代表<strong>對端不會再送了</strong>(half-close),不代表<strong>你不欠它</strong>。所以加一個 <code class="inl">read_closed: bool</code>,EOF 時只<strong>標記</strong>;真正的關閉條件交給 <code class="inl">try_flush</code>:<strong><code class="inl">out_buf</code> 排空 且 <code class="inl">read_closed</code></strong> 才關。</p>
+    <p class="small">這是他們 prep doc 第 5 條「Dry-Run Before You Run」的實體版:<strong>離開迴圈有幾個出口?每個出口的後續處理都對嗎?</strong> —— 一個 loop 兩個 exit,只想到一個,就是這種 bug。</p>
+  </div>
+
+  <div class="cap"><b>片段 F</b> — 每條連線 read 到 EAGAIN;<code>Ok(0)</code>=EOF、<code>WouldBlock</code>=drain 完、<code>Interrupted</code>=重試</div>
+<pre class="rust"><code><span class="tok-cmt">/// ET socket: read until EAGAIN.</span>
+<span class="tok-cmt">///</span>
+<span class="tok-cmt">/// Ok(0) means the peer sent FIN — it will send nothing more. That is NOT the same</span>
+<span class="tok-cmt">/// as "close now": we may still owe it bytes sitting in out_buf. Closing here would</span>
+<span class="tok-cmt">/// silently drop them. Mark read_closed and let try_flush decide when it is safe.</span>
+<span class="tok-cmt">/// Returns Ok(true) if the connection is gone.</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">handle_readable</span>(epoll: &amp;<span class="tok-type">Epoll</span>, conns: &amp;<span class="tok-kw">mut</span> <span class="tok-type">HashMap</span>&lt;<span class="tok-type">RawFd</span>, <span class="tok-type">Conn</span>&gt;, fd: <span class="tok-type">RawFd</span>) -&gt; io::<span class="tok-type">Result</span>&lt;<span class="tok-type">bool</span>&gt; {
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> buf = [0<span class="tok-type">u8</span>; <span class="tok-num">4096</span>];
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> eof = <span class="tok-kw">false</span>;
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> hard_err = <span class="tok-kw">false</span>;
+    <span class="tok-kw">loop</span> {
+        <span class="tok-kw">let</span> res = <span class="tok-kw">match</span> conns.get_mut(&amp;fd) {
+            <span class="tok-type">Some</span>(c) =&gt; c.stream.read(&amp;<span class="tok-kw">mut</span> buf),
+            <span class="tok-type">None</span> =&gt; <span class="tok-kw">return</span> <span class="tok-type">Ok</span>(<span class="tok-kw">true</span>),
+        };
+        <span class="tok-kw">match</span> res {
+            <span class="tok-type">Ok</span>(<span class="tok-num">0</span>) =&gt; {
+                eof = <span class="tok-kw">true</span>; <span class="tok-cmt">// FIN — peer half-closed its write side</span>
+                <span class="tok-kw">break</span>;
+            }
+            <span class="tok-type">Ok</span>(nread) =&gt; {
+                <span class="tok-kw">if</span> <span class="tok-kw">let</span> <span class="tok-type">Some</span>(c) = conns.get_mut(&amp;fd) {
+                    c.out_buf.extend_from_slice(&amp;buf[..nread]); <span class="tok-cmt">// echo: queue it back</span>
+                }
+            }
+            <span class="tok-type">Err</span>(e) <span class="tok-kw">if</span> e.kind() == <span class="tok-type">ErrorKind</span>::<span class="tok-type">WouldBlock</span> =&gt; <span class="tok-kw">break</span>, <span class="tok-cmt">// recv buffer drained</span>
+            <span class="tok-type">Err</span>(e) <span class="tok-kw">if</span> e.kind() == <span class="tok-type">ErrorKind</span>::<span class="tok-type">Interrupted</span> =&gt; <span class="tok-kw">continue</span>, <span class="tok-cmt">// EINTR: retry read</span>
+            <span class="tok-type">Err</span>(_) =&gt; {
+                hard_err = <span class="tok-kw">true</span>;
+                <span class="tok-kw">break</span>;
+            }
+        }
+    }
+    <span class="tok-kw">if</span> hard_err {
+        close_conn(epoll, conns, fd);
+        <span class="tok-kw">return</span> <span class="tok-type">Ok</span>(<span class="tok-kw">true</span>);
+    }
+    <span class="tok-kw">if</span> eof &amp;&amp; <span class="tok-kw">let</span> <span class="tok-type">Some</span>(c) = conns.get_mut(&amp;fd) {
+        c.read_closed = <span class="tok-kw">true</span>;
+    }
+    try_flush(epoll, conns, fd) <span class="tok-cmt">// closes iff read_closed AND nothing left to write</span>
+}</code></pre>
+
+  <div class="cap"><b>片段 G</b> — write 塞住時緩存殘量 + 掛 <code>EPOLLOUT</code>;寫完取消。DEL 必須在 close 之前</div>
+<pre class="rust"><code><span class="tok-cmt">/// EPOLLOUT fired =&gt; socket became writable again; push more of out_buf.</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">handle_writable</span>(epoll: &amp;<span class="tok-type">Epoll</span>, conns: &amp;<span class="tok-kw">mut</span> <span class="tok-type">HashMap</span>&lt;<span class="tok-type">RawFd</span>, <span class="tok-type">Conn</span>&gt;, fd: <span class="tok-type">RawFd</span>) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+    try_flush(epoll, conns, fd)?;
+    <span class="tok-type">Ok</span>(())
+}
+
+<span class="tok-cmt">/// Write out_buf until EAGAIN. Arm EPOLLOUT iff bytes remain; disarm when empty.</span>
+<span class="tok-cmt">/// Returns Ok(true) if the connection was closed (everything flushed AND peer done).</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">try_flush</span>(epoll: &amp;<span class="tok-type">Epoll</span>, conns: &amp;<span class="tok-kw">mut</span> <span class="tok-type">HashMap</span>&lt;<span class="tok-type">RawFd</span>, <span class="tok-type">Conn</span>&gt;, fd: <span class="tok-type">RawFd</span>) -&gt; io::<span class="tok-type">Result</span>&lt;<span class="tok-type">bool</span>&gt; {
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> hard_err = <span class="tok-kw">false</span>;
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> finished = <span class="tok-kw">false</span>;
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> new_interest: <span class="tok-type">Option</span>&lt;<span class="tok-type">u32</span>&gt; = <span class="tok-type">None</span>;
+    {
+        <span class="tok-kw">let</span> conn = <span class="tok-kw">match</span> conns.get_mut(&amp;fd) {
+            <span class="tok-type">Some</span>(c) =&gt; c,
+            <span class="tok-type">None</span> =&gt; <span class="tok-kw">return</span> <span class="tok-type">Ok</span>(<span class="tok-kw">true</span>),
+        };
+        <span class="tok-kw">let</span> <span class="tok-kw">mut</span> written = 0<span class="tok-type">usize</span>;
+        <span class="tok-kw">while</span> written &lt; conn.out_buf.len() {
+            <span class="tok-kw">match</span> conn.stream.write(&amp;conn.out_buf[written..]) {
+                <span class="tok-type">Ok</span>(<span class="tok-num">0</span>) =&gt; <span class="tok-kw">break</span>,
+                <span class="tok-type">Ok</span>(n) =&gt; written += n,
+                <span class="tok-type">Err</span>(e) <span class="tok-kw">if</span> e.kind() == <span class="tok-type">ErrorKind</span>::<span class="tok-type">WouldBlock</span> =&gt; <span class="tok-kw">break</span>, <span class="tok-cmt">// kernel send buffer full</span>
+                <span class="tok-type">Err</span>(e) <span class="tok-kw">if</span> e.kind() == <span class="tok-type">ErrorKind</span>::<span class="tok-type">Interrupted</span> =&gt; <span class="tok-kw">continue</span>,
+                <span class="tok-type">Err</span>(_) =&gt; {
+                    hard_err = <span class="tok-kw">true</span>;
+                    <span class="tok-kw">break</span>;
+                }
+            }
+        }
+        conn.out_buf.drain(..written); <span class="tok-cmt">// drop the flushed prefix</span>
+
+        <span class="tok-kw">if</span> conn.out_buf.is_empty() {
+            <span class="tok-kw">if</span> conn.read_closed {
+                finished = <span class="tok-kw">true</span>; <span class="tok-cmt">// owe nothing + peer done =&gt; NOW it is safe to close</span>
+            } <span class="tok-kw">else</span> <span class="tok-kw">if</span> conn.out_armed {
+                conn.out_armed = <span class="tok-kw">false</span>;
+                new_interest = <span class="tok-type">Some</span>(<span class="tok-type">EPOLLIN</span> | <span class="tok-type">EPOLLET</span>); <span class="tok-cmt">// nothing pending: stop asking for writable</span>
+            }
+        } <span class="tok-kw">else</span> <span class="tok-kw">if</span> !conn.out_armed {
+            conn.out_armed = <span class="tok-kw">true</span>;
+            <span class="tok-cmt">// backpressure: ask to be told when writable again.</span>
+            new_interest = <span class="tok-type">Some</span>(<span class="tok-kw">if</span> conn.read_closed {
+                <span class="tok-type">EPOLLOUT</span> | <span class="tok-type">EPOLLET</span> <span class="tok-cmt">// peer is done talking; only the drain-out matters now</span>
+            } <span class="tok-kw">else</span> {
+                <span class="tok-type">EPOLLIN</span> | <span class="tok-type">EPOLLOUT</span> | <span class="tok-type">EPOLLET</span>
+            });
+        }
+    }
+    <span class="tok-kw">if</span> hard_err || finished {
+        close_conn(epoll, conns, fd);
+        <span class="tok-kw">return</span> <span class="tok-type">Ok</span>(<span class="tok-kw">true</span>);
+    }
+    <span class="tok-kw">if</span> <span class="tok-kw">let</span> <span class="tok-type">Some</span>(i) = new_interest {
+        epoll.modify(fd, i)?;
+    }
+    <span class="tok-type">Ok</span>(<span class="tok-kw">false</span>)
+}
+
+<span class="tok-kw">fn</span> <span class="tok-fn">close_conn</span>(epoll: &amp;<span class="tok-type">Epoll</span>, conns: &amp;<span class="tok-kw">mut</span> <span class="tok-type">HashMap</span>&lt;<span class="tok-type">RawFd</span>, <span class="tok-type">Conn</span>&gt;, fd: <span class="tok-type">RawFd</span>) {
+    <span class="tok-kw">let</span> _ = epoll.delete(fd); <span class="tok-cmt">// DEL before the fd is closed (dropping the stream closes it)</span>
+    conns.remove(&amp;fd);        <span class="tok-cmt">// Drop&lt;TcpStream&gt; closes the fd</span>
+}</code></pre>
+
+  <div class="card good">
+    <span class="t">這份骨架的驗證 <span class="tag v">verified</span></span>
+    以上片段合成單一 binary,在 x86_64 Linux / <strong>rustc 1.91.1 / edition 2024</strong> 編譯<strong>零 warning</strong>。測試 harness 用 <code class="inl">include!</code> <strong>原封不動引入這份骨架</strong>(只抽掉 <code class="inl">fn main</code>),所以<strong>跑的就是你上面看到的這份 code</strong>,不是另寫的等價品。5 項全過:①小訊息 echo;②3 條並發連線無串話;③<strong>2&nbsp;MB + FIN 且不併發讀</strong>(強制 half-close 時 out_buf 有殘量);④2&nbsp;MB 併發讀(背壓路徑);⑤小 payload half-close。<p class="small" style="margin-top:.5rem;">而且是<strong>差分測試</strong>:把 half-close 修法還原成「EOF 就關」,測試 ③ 立刻炸(<code class="inl">lost data: 0 vs 2000000</code>)—— 證明這個測試真的抓得到那個 bug,不是空跑。</p>
+  </div>
+</section>
+
+<!-- ================= 4 ADVANCED ================= -->
+<section id="panel-advanced" class="panel">
+  <h2>進階機制</h2>
+
+  <div class="card">
+    <span class="t">nonblocking 為什麼是 ET 的前提</span>
+    <p style="margin-top:.2rem;">ET 要求你 <strong>drain 到 EAGAIN</strong> —— loop <code class="inl">read()</code> 直到回 <code class="inl">EWOULDBLOCK</code> 才停。這個 loop 的<strong>終止條件</strong>就是「read 回 EAGAIN」。若 fd 是 blocking 的,當 buffer 讀空時,那次 <code class="inl">read()</code> 不會回 EAGAIN,而是<strong>就地阻塞</strong> —— 你的單執行緒 event loop 整個卡死,其他所有 fd 一起陪葬。所以 <code class="inl">set_nonblocking(true)</code> 不是優化,是 ET 的正確性前提。(LT 因為容許「一次一讀」,勉強能用 blocking,但一旦你也想 drain 就同樣需要 nonblocking。)</p>
+  </div>
+
+  <div class="card info">
+    <span class="t">EPOLLONESHOT:多執行緒共用一個 epfd 時防重入</span>
+    <p style="margin-top:.2rem;">場景:一個 thread pool,多條 worker 都對<strong>同一個</strong> epfd 呼叫 <code class="inl">epoll_wait</code>。連線 X 來了新資料 → 若沒保護,thread A 正在處理 X 的 handler,thread B 又被喚醒去處理 X 的新事件 → <strong>兩條 thread 同時碰同一個 fd 的狀態</strong>,data race、亂序。</p>
+    <p><code class="inl">EPOLLONESHOT</code> 的語意:某 fd 的事件被<strong>投遞一次後,該 fd 自動停用</strong>,不再產生任何事件,直到你用 <code class="inl">epoll_ctl(MOD)</code> <strong>重新 arm</strong>。於是每個 fd 同一時間只會有一條 thread 在處理 → per-fd 串行化。處理完再 re-arm。</p>
+    <p class="small">對照 <code class="inl">EPOLLEXCLUSIVE</code>(不同機制):解的是「多 waiter 等同一個 listener,一個連線來了驚群喚醒全部」,讓 kernel 只喚醒其中一個。ONESHOT 管 per-fd 串行,EXCLUSIVE 管 accept 驚群 —— 別搞混。</p>
+  </div>
+
+  <div class="card">
+    <span class="t">eventfd self-wake:loop 睡在別的 thread,怎麼叫醒它</span>
+    <p style="margin-top:.2rem;">event loop 阻塞在 <code class="inl">epoll_wait(-1)</code>。另一條 thread 想注入工作(「連線 X 該寫了」「該關機了」「某 blocking 任務完成了」)。它既不能安全亂碰 loop 的資料結構,而且 loop 正在睡。解法是經典 self-pipe trick 的現代版:把一個 <code class="inl">eventfd</code> 註冊進 epoll。別的 thread 把工作丟進一個(mutex 保護的)佇列,然後<strong>寫 8 bytes 到 eventfd</strong> → <code class="inl">epoll_wait</code> 立刻醒 → loop 把 eventfd 讀乾(ET → drain)、處理佇列。</p>
+    <div class="cap"><b>片段 H</b> — eventfd self-wake(注意:ET 的 waker 也要 drain 到 EAGAIN)</div>
+<pre class="rust"><code><span class="tok-cmt">// ---- eventfd self-wake ----</span>
+<span class="tok-kw">use</span> std::ffi::c_void;
+
+<span class="tok-kw">unsafe</span> <span class="tok-kw">extern</span> <span class="tok-str">"C"</span> {
+    <span class="tok-kw">fn</span> <span class="tok-fn">eventfd</span>(initval: <span class="tok-type">u32</span>, flags: <span class="tok-type">i32</span>) -&gt; <span class="tok-type">i32</span>;
+    <span class="tok-kw">fn</span> <span class="tok-fn">read</span>(fd: <span class="tok-type">i32</span>, buf: *<span class="tok-kw">mut</span> c_void, count: <span class="tok-type">usize</span>) -&gt; <span class="tok-type">isize</span>;
+    <span class="tok-kw">fn</span> <span class="tok-fn">write</span>(fd: <span class="tok-type">i32</span>, buf: *<span class="tok-kw">const</span> c_void, count: <span class="tok-type">usize</span>) -&gt; <span class="tok-type">isize</span>;
+}
+<span class="tok-kw">const</span> <span class="tok-type">EFD_CLOEXEC</span>: <span class="tok-type">i32</span> = <span class="tok-num">0x8_0000</span>;
+<span class="tok-kw">const</span> <span class="tok-type">EFD_NONBLOCK</span>: <span class="tok-type">i32</span> = <span class="tok-num">0x800</span>; <span class="tok-cmt">// == O_NONBLOCK (octal 04000)</span>
+
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">make_waker</span>() -&gt; io::<span class="tok-type">Result</span>&lt;<span class="tok-type">OwnedFd</span>&gt; {
+    <span class="tok-kw">let</span> raw = <span class="tok-kw">unsafe</span> { eventfd(<span class="tok-num">0</span>, <span class="tok-type">EFD_CLOEXEC</span> | <span class="tok-type">EFD_NONBLOCK</span>) };
+    <span class="tok-kw">if</span> raw &lt; <span class="tok-num">0</span> {
+        <span class="tok-kw">return</span> <span class="tok-type">Err</span>(io::<span class="tok-type">Error</span>::last_os_error());
+    }
+    <span class="tok-cmt">// SAFETY: fresh owned fd.</span>
+    <span class="tok-type">Ok</span>(<span class="tok-kw">unsafe</span> { <span class="tok-type">OwnedFd</span>::from_raw_fd(raw) })
+}
+
+<span class="tok-cmt">/// Called from ANOTHER thread after it pushes work onto a shared queue.</span>
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">wake</span>(wake_fd: <span class="tok-type">RawFd</span>) -&gt; io::<span class="tok-type">Result</span>&lt;()&gt; {
+    <span class="tok-kw">let</span> one: <span class="tok-type">u64</span> = <span class="tok-num">1</span>;
+    <span class="tok-kw">let</span> rc = <span class="tok-kw">unsafe</span> { write(wake_fd, &amp;one <span class="tok-kw">as</span> *<span class="tok-kw">const</span> <span class="tok-type">u64</span> <span class="tok-kw">as</span> *<span class="tok-kw">const</span> c_void, <span class="tok-num">8</span>) };
+    <span class="tok-kw">if</span> rc &lt; <span class="tok-num">0</span> {
+        <span class="tok-kw">return</span> <span class="tok-type">Err</span>(io::<span class="tok-type">Error</span>::last_os_error());
+    }
+    <span class="tok-type">Ok</span>(())
+}
+
+<span class="tok-cmt">/// The loop drains the eventfd when it becomes readable (ET =&gt; read to EAGAIN).</span>
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">drain_waker</span>(wake_fd: <span class="tok-type">RawFd</span>) {
+    <span class="tok-kw">let</span> <span class="tok-kw">mut</span> sink: <span class="tok-type">u64</span> = <span class="tok-num">0</span>;
+    <span class="tok-kw">loop</span> {
+        <span class="tok-kw">let</span> rc = <span class="tok-kw">unsafe</span> { read(wake_fd, &amp;<span class="tok-kw">mut</span> sink <span class="tok-kw">as</span> *<span class="tok-kw">mut</span> <span class="tok-type">u64</span> <span class="tok-kw">as</span> *<span class="tok-kw">mut</span> c_void, <span class="tok-num">8</span>) };
+        <span class="tok-kw">if</span> rc &lt; <span class="tok-num">0</span> {
+            <span class="tok-kw">break</span>; <span class="tok-cmt">// EAGAIN once fully drained (nonblocking)</span>
+        }
+    }
+}</code></pre>
+  </div>
+
+  <div class="card">
+    <span class="t">timer 的兩條路</span>
+    <p style="margin-top:.2rem;"><strong>路 A — timerfd 掛進 epoll:</strong>建一個 <code class="inl">timerfd</code>,設到期時間,以 <code class="inl">EPOLLIN</code> 註冊。到期時 fd 變可讀,<code class="inl">epoll_wait</code> 回報它,你 read 出「到期次數」(u64)再跑 callback。優點:一切皆 fd,<code class="inl">epoll_wait</code> 可以無限期阻塞(timeout=-1),模型統一。</p>
+    <div class="cap"><b>片段 I(路 A)</b> — timerfd 的 libc 簽名與 itimerspec 結構</div>
+<pre class="rust"><code><span class="tok-cmt">// ---- timer path A: timerfd hooked into epoll (FFI signatures) ----</span>
+<span class="tok-attr">#[repr(C)]</span>
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">struct</span> <span class="tok-type">Timespec</span> {
+    tv_sec: <span class="tok-type">i64</span>,
+    tv_nsec: <span class="tok-type">i64</span>,
+}
+<span class="tok-attr">#[repr(C)]</span>
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">struct</span> <span class="tok-type">Itimerspec</span> {
+    it_interval: <span class="tok-type">Timespec</span>, <span class="tok-cmt">// 0 =&gt; one-shot</span>
+    it_value: <span class="tok-type">Timespec</span>,    <span class="tok-cmt">// initial expiration</span>
+}
+<span class="tok-kw">unsafe</span> <span class="tok-kw">extern</span> <span class="tok-str">"C"</span> {
+    <span class="tok-attr">#[allow(dead_code)]</span>
+    <span class="tok-kw">fn</span> <span class="tok-fn">timerfd_create</span>(clockid: <span class="tok-type">i32</span>, flags: <span class="tok-type">i32</span>) -&gt; <span class="tok-type">i32</span>;
+    <span class="tok-attr">#[allow(dead_code)]</span>
+    <span class="tok-kw">fn</span> <span class="tok-fn">timerfd_settime</span>(
+        fd: <span class="tok-type">i32</span>,
+        flags: <span class="tok-type">i32</span>,
+        new_value: *<span class="tok-kw">const</span> <span class="tok-type">Itimerspec</span>,
+        old_value: *<span class="tok-kw">mut</span> <span class="tok-type">Itimerspec</span>,
+    ) -&gt; <span class="tok-type">i32</span>;
+}
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">const</span> <span class="tok-type">CLOCK_MONOTONIC</span>: <span class="tok-type">i32</span> = <span class="tok-num">1</span>;
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">const</span> <span class="tok-type">TFD_CLOEXEC</span>: <span class="tok-type">i32</span> = <span class="tok-num">0x8_0000</span>;
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">const</span> <span class="tok-type">TFD_NONBLOCK</span>: <span class="tok-type">i32</span> = <span class="tok-num">0x800</span>;</code></pre>
+    <p style="margin-top:.6rem;"><strong>路 B — min-heap + epoll_wait timeout:</strong>timers 放進以 deadline 為鍵的 min-heap。每輪 wait 前,算「最近 deadline − now」當成 <code class="inl">epoll_wait</code> 的 timeout(ms)傳進去。wait 返回後(IO 或逾時)掃 heap、觸發所有到期的 timer。優點:不用多開 fd。這也是多數 event loop(如 libuv,以及 tokio 用 timing wheel 的變體)走的路。</p>
+    <div class="cap"><b>片段 J(路 B)</b> — 用最近 deadline 算出 epoll_wait 的 timeout(純 std,無 FFI)</div>
+<pre class="rust"><code><span class="tok-cmt">// ---- timer path B: min-heap deadline -&gt; epoll_wait timeout (pure std) ----</span>
+<span class="tok-kw">use</span> std::cmp::<span class="tok-type">Reverse</span>;
+<span class="tok-kw">use</span> std::collections::<span class="tok-type">BinaryHeap</span>;
+<span class="tok-kw">use</span> std::time::<span class="tok-type">Instant</span>;
+
+<span class="tok-cmt">/// Compute the timeout (ms) to pass to epoll_wait from the nearest deadline.</span>
+<span class="tok-attr">#[allow(dead_code)]</span>
+<span class="tok-kw">fn</span> <span class="tok-fn">next_timeout_ms</span>(timers: &amp;<span class="tok-type">BinaryHeap</span>&lt;<span class="tok-type">Reverse</span>&lt;(<span class="tok-type">Instant</span>, <span class="tok-type">u64</span>)&gt;&gt;, now: <span class="tok-type">Instant</span>) -&gt; <span class="tok-type">i32</span> {
+    <span class="tok-kw">match</span> timers.peek() {
+        <span class="tok-type">None</span> =&gt; -<span class="tok-num">1</span>, <span class="tok-cmt">// no timers =&gt; block indefinitely</span>
+        <span class="tok-type">Some</span>(<span class="tok-type">Reverse</span>((deadline, _id))) =&gt; {
+            <span class="tok-kw">if</span> *deadline &lt;= now {
+                <span class="tok-num">0</span> <span class="tok-cmt">// already due =&gt; don't block, fire on return</span>
+            } <span class="tok-kw">else</span> {
+                <span class="tok-kw">let</span> ms = deadline.duration_since(now).as_millis();
+                ms.min(<span class="tok-type">i32</span>::<span class="tok-type">MAX</span> <span class="tok-kw">as</span> <span class="tok-type">u128</span>) <span class="tok-kw">as</span> <span class="tok-type">i32</span> <span class="tok-cmt">// saturate into epoll's i32 ms</span>
+            }
+        }
+    }
+}</code></pre>
+    <table style="margin-top:.8rem;">
+      <tr><th>面向</th><th>路 A:timerfd 掛 epoll</th><th>路 B:min-heap 算 timeout</th></tr>
+      <tr><td>額外 fd</td><td>每個 timer(或一個 re-arm)佔一個 fd</td><td>0 個</td></tr>
+      <tr><td>精度</td><td><code>itimerspec</code> 可到 ns(投遞仍受排程限制)</td><td>受 <code>epoll_wait</code> 的 ms 粒度限制</td></tr>
+      <tr><td>syscall</td><td>每次 arm 一個 <code>timerfd_settime</code></td><td>幾乎 0(只是算個數字)</td></tr>
+      <tr><td>模型</td><td>統一成 fd,wait 可 -1</td><td>timer 管理集中在 userspace 一處</td></tr>
+      <tr><td>常見於</td><td>需要與其他 fd 一致處理時</td><td>libuv / tokio 風格,主流</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 5 FILE IO ================= -->
+<section id="panel-fileio" class="panel">
+  <h2>file IO 的誠實區別(高分點,也是最常見的誤解)</h2>
+
+  <div class="card warn">
+    <span class="t">誤解:「把 file fd 塞進 epoll 就有 async file IO」<span class="tag v">verified</span></span>
+    <p style="margin-top:.2rem;">錯,而且錯得很直接。regular file 在 readiness 模型裡<strong>永遠算 ready</strong> —— 它沒有「會不會 block」的概念,kernel 遲早會完成 read(page cache miss 就阻塞你的 thread)。實測:</p>
+<table class="epr">
+  <tr><th>epoll_ctl ADD 的目標 fd</th><th>結果(本機實測)</th></tr>
+  <tr><td>regular file(如 /etc/hostname)</td><td><span class="bad">rc = −1,errno = EPERM</span>(Operation not permitted)</td></tr>
+  <tr><td>/dev/null(不支援 poll 的 device)</td><td><span class="bad">rc = −1,errno = EPERM</span></td></tr>
+  <tr><td>pipe 的讀端</td><td><span class="good">rc = 0</span>(成功 → 證明是 regular file 特例,不是 epoll 壞了)</td></tr>
+</table>
+    <p>換句話說,你<strong>連加都加不進去</strong>:<code class="inl">epoll_ctl</code> 對不支援 polling 的 fd(regular file、以及像 <code class="inl">/dev/null</code> 這類)直接回 <strong>EPERM</strong>。就算它讓你加,epoll 回報「ready」也毫無意義 —— 後面那個 <code class="inl">read()</code> 照樣阻塞在 disk IO。readiness 模型只對「有真正 blocked↔ready 轉變」的 fd 有效:socket、pipe、tty、eventfd、timerfd。</p>
+  </div>
+
+  <h3>兩種模型:readiness vs completion</h3>
+<div class="rc">
+  <div class="rc-panel">
+    <div class="rc-title">readiness(epoll / kqueue)</div>
+    <div class="rc-tag">「你來做 IO,我只告訴你何時不會 block」</div>
+    <div class="rc-step"><b>你</b> →(epoll_wait)→ <b>kernel</b>:「socket X 可讀」</div>
+    <div class="rc-step"><b>你</b> → read(X) → kernel 複製資料　<span class="dim">← IO 是你自己做的</span></div>
+    <div class="rc-ok">✓ socket · pipe · tty · eventfd · timerfd</div>
+    <div class="rc-no">✗ regular file(永遠 ready;epoll_ctl → EPERM)</div>
+  </div>
+  <div class="rc-panel accent-aqua">
+    <div class="rc-title">completion(io_uring / IOCP)</div>
+    <div class="rc-tag">「我幫你把整個 IO 做完,做完再通知你」</div>
+    <div class="rc-step"><b>你</b> → submit read(F) →(SQE 進 SQ ring)→ kernel 執行整個 read</div>
+    <div class="rc-step"><b>kernel</b>:「好了,N bytes」→(CQE 進 CQ ring)→ 你收結果　<span class="dim">← IO 是 kernel 做的</span></div>
+    <div class="rc-ok">✓ 所有東西,包含 regular file</div>
+    <div class="rc-note">SQ / CQ 兩個環是 mmap 共享 → 還能省 syscall</div>
+  </div>
+</div>
+
+  <div class="card info">
+    <span class="t">正解 (a):io_uring —— Linux 的現代解</span>
+    <p style="margin-top:.2rem;">completion-based。你把讀寫「操作」提交到 submission queue(SQE),kernel 完成後在 completion queue 貼出結果(CQE)。兩個 queue 用 mmap 跟 kernel 共享,能批次提交、大幅省 syscall。對 <strong>file 和 socket 都是真 async</strong>。<span class="tag u">unverified</span> 具體落地版本我不逐一背;要點是它需要 libc/專門 crate 或大量手寫 syscall + mmap ring setup —— <strong>std-only 場景做不出來,提及即可,不實作。</strong></p>
+  </div>
+
+  <div class="card good">
+    <span class="t">正解 (b):thread-pool offload —— std-only 場景的答案</span>
+    <p style="margin-top:.2rem;">既然沒法讓 file read 本身變 async,就把 <strong>blocking 的 file 讀寫丟到一個 <code class="inl">std::thread</code> pool</strong> 上跑。worker thread 阻塞在 disk IO 是可以的(它不是 event loop thread)。做完之後,把結果<strong>送回 event loop</strong>:worker 把結果丟進一個 completion 佇列,再<strong>寫 eventfd 叫醒 loop</strong>(正是前面 self-wake 的用途),loop 醒來收結果、跑 continuation。</p>
+    <p class="small">這正是 tokio <code class="inl">spawn_blocking</code> / <code class="inl">tokio::fs</code> 的做法:它的檔案操作跑在一個 blocking thread pool 上,而非某種魔法 async file syscall。std-only 你手刻的就是這條:<code class="inl">thread pool + mpsc 佇列 + eventfd 回收</code>。</p>
+  </div>
+
+  <table>
+    <tr><th>fd 類型 / 需求</th><th>epoll(readiness)</th><th>std-only 該怎麼辦</th></tr>
+    <tr><td>TCP/UDP socket、pipe、tty</td><td>✓ 適用</td><td>直接 epoll + nonblocking + drain</td></tr>
+    <tr><td>eventfd、timerfd</td><td>✓ 適用</td><td>self-wake / timer 掛進 epoll</td></tr>
+    <tr><td>regular file 的 async 讀寫</td><td>✗ EPERM,永遠 ready</td><td><strong>thread-pool offload</strong>(結果經 eventfd 回 loop)</td></tr>
+    <tr><td>file + socket 都要真 async + 省 syscall</td><td>✗</td><td>io_uring(需 FFI/crate,超出 std-only)</td></tr>
+  </table>
+</section>
+
+<!-- ================= 6 FOLLOWUPS ================= -->
+<section id="panel-followup" class="panel">
+  <h2>面試追問(每條鏈至少 3 層深)</h2>
+  <p class="small">L4 modal 通常是「medium 題 + follow-up」。這裡把你搭完 ET echo 之後可能被層層追進去的四條鏈攤開。</p>
+
+  <div class="chain">
+    <div class="qhead">鏈 A — accept 的擴展性</div>
+    <div class="lvl"><span class="lb l1">L1</span><span class="q">你的 listener 用 ET,accept 到 EAGAIN。現在開 10 條 worker thread 都 <code class="inl">epoll_wait</code> 同一個 listener,一個連線進來,會醒幾條?</span>
+      <div class="a">預設(LT listener)會<strong>驚群</strong>:多條被喚醒去 accept,只有一條拿到連線,其餘 accept 回 EAGAIN 空跑。ET 能減少但不保證只醒一條。乾淨解:<code class="inl">EPOLLEXCLUSIVE</code> 讓 kernel 只喚醒一個 waiter。</div>
+    </div>
+    <div class="lvl"><span class="lb l2">L2</span><span class="q"><code class="inl">EPOLLEXCLUSIVE</code> 跟 <code class="inl">SO_REUSEPORT</code> 分片,你選哪個?差別?</span>
+      <div class="a"><code class="inl">EPOLLEXCLUSIVE</code>:單一 listen socket,kernel 挑一個 waiter 喚醒,簡單。<code class="inl">SO_REUSEPORT</code>:每條 thread 各 bind <strong>自己的</strong> listen socket(同 port),kernel 用 4-tuple hash 把新連線分派到不同 socket → 天生分流、無驚群、cache locality 好。</div>
+    </div>
+    <div class="lvl"><span class="lb l3">L3</span><span class="q"><code class="inl">SO_REUSEPORT</code> 的隱藏代價是什麼?什麼時候會咬你?</span>
+      <div class="a">分派靠 hash 而非負載 → <strong>負載不均</strong>:某條 thread 恰好接到一堆長命/重連線,其他閒著,沒有 work-stealing。且連線與 socket <strong>綁定</strong>,某條 worker 卡住時它的連線無法被別人接手。連線壽命差異大、或需要動態均衡時,<code class="inl">EPOLLEXCLUSIVE</code> + 共享 accept 佇列反而更平。</div>
+    </div>
+  </div>
+
+  <div class="chain">
+    <div class="qhead">鏈 B — ET 正確性延伸到公平性</div>
+    <div class="lvl"><span class="lb l1">L1</span><span class="q">ET 為什麼一定要 drain 到 EAGAIN?不 drain 會怎樣?</span>
+      <div class="a">ET 只在邊緣通知一次。沒讀乾,殘料不會再觸發事件 → 事件餓死(見 <span class="jump" data-jump="panel-stepper">stepper</span>)。drain loop 的終止靠 read 回 EAGAIN,故 fd 必 nonblocking。</div>
+    </div>
+    <div class="lvl"><span class="lb l2">L2</span><span class="q">好,你在單一 fd 上 drain 到 EAGAIN。但如果一個又快又壞的 client 一直灌資料,你的 handler 在它身上 drain 個沒完 —— 其他 fd 怎麼辦?</span>
+      <div class="a">單 fd drain-to-EAGAIN 會<strong>餓死其他 fd</strong>:公平性問題。對策是給每個 fd 每輪一個<strong>預算</strong>(讀 N 次或 N bytes 就先收手),把該 fd 標記「還沒讀完」放回一個 ready queue,下輪再輪它 → round-robin 公平。</div>
+    </div>
+    <div class="lvl"><span class="lb l3">L3</span><span class="q">但 ET 下你「主動停手」了,下輪 <code class="inl">epoll_wait</code> 不會再回報這個 fd(沒新邊緣),你怎麼記得回來讀它?這跟 <code class="inl">EPOLLONESHOT</code> 又怎麼交互?</span>
+      <div class="a">關鍵:ET + 預算式停手時,<strong>不能靠 epoll 再通知你</strong> —— 你得自己維護一個「已就緒但未讀完」的<strong>應用層 ready list</strong>,下輪優先處理它,不進 <code class="inl">epoll_wait</code> 就直接讀。多執行緒 + <code class="inl">EPOLLONESHOT</code> 時更微妙:fd 投遞後即停用,你 re-arm 的<strong>時機</strong>決定會不會漏掉「你停手期間到達」的資料 —— 正解是 re-arm 前先做一次「試讀」確認確實 EAGAIN,再 arm;或把未讀完狀態交給擁有該 fd 的那條 thread 續讀。</div>
+    </div>
+  </div>
+
+  <div class="chain">
+    <div class="qhead">鏈 C — 連線生命週期與關閉</div>
+    <div class="lvl"><span class="lb l1">L1</span><span class="q"><code class="inl">epoll_wait</code> 回了 <code class="inl">EPOLLERR</code> / <code class="inl">EPOLLHUP</code> / <code class="inl">EPOLLRDHUP</code>,各代表什麼?</span>
+      <div class="a"><code class="inl">EPOLLERR</code>:fd 有錯誤(如 socket error),<strong>總是</strong>會回報、不用你 arm。<code class="inl">EPOLLHUP</code>:掛斷(雙向都關)。<code class="inl">EPOLLRDHUP</code>:對端關了<strong>寫方向</strong>(half-close),你還能寫、但讀會到 EOF。</div>
+    </div>
+    <div class="lvl"><span class="lb l2">L2</span><span class="q">收到 <code class="inl">EPOLLHUP</code> 就馬上 close 嗎?buffer 裡還沒讀的資料怎麼辦?</span>
+      <div class="a">別急著關,而且有<strong>兩個方向</strong>都會漏。<strong>讀的方向:</strong><code class="inl">HUP</code> 之後 recv buffer 裡仍可能有資料,要先 drain 讀乾再關。<strong>寫的方向(更常被忘記):</strong>就算讀完了、對端也送了 FIN,<strong>你的 <code class="inl">out_buf</code> 可能還欠著沒寫出去</strong> —— 這時關掉就是靜默丟資料。正解是 <code class="inl">read_closed</code> 標記 + <strong>out_buf 排空才關</strong>(<span class="jump" data-jump="panel-skeleton">骨架分頁有我自己踩到這個 bug 的完整案例</span>)。</div>
+    </div>
+    <div class="lvl"><span class="lb l3">L3</span><span class="q">你 close 了 fd,但沒先 <code class="inl">EPOLL_CTL_DEL</code>。epoll 集合裡那個 entry 會自動消失嗎?什麼情況不會?</span>
+      <div class="a">一般情況 close 會自動把 fd 從所有 epoll 集合移除 —— <strong>但前提是沒有其他 fd 指向同一個 open file description</strong>。若之前 <code class="inl">dup()</code> 過(或 fork 後共享),close 一個 fd 不會移除該 description,epoll 集合裡的 stale entry 還在,可能繼續回報幽靈事件或 <code class="inl">data</code> 對到已回收的物件。安全習慣:<strong>永遠先 <code class="inl">DEL</code> 再 close</strong>(骨架的 <code class="inl">close_conn</code> 就是這順序),不要依賴 close 的自動清理。</div>
+    </div>
+  </div>
+
+  <div class="chain">
+    <div class="qhead">鏈 D — 為什麼 file IO 要換模型</div>
+    <div class="lvl"><span class="lb l1">L1</span><span class="q">你的 event loop 現在要讀一個本地檔案回應請求。直接把 file fd 加進 epoll?</span>
+      <div class="a">不行。<code class="inl">epoll_ctl</code> 對 regular file 回 <strong>EPERM</strong>(實測);就算能加,file 永遠 report ready,<code class="inl">read()</code> 照樣阻塞在 disk。readiness 模型對 file 無效(見 <span class="jump" data-jump="panel-fileio">file IO 分頁</span>)。</div>
+    </div>
+    <div class="lvl"><span class="lb l2">L2</span><span class="q">那 async file IO 的正確模型是什麼?跟 epoll 差在哪?</span>
+      <div class="a">completion(io_uring)vs readiness(epoll)。epoll 告訴你「可以做了、你去做」;io_uring 是「你提交、我做完再通知你」。file 沒有 readiness 轉變,只能用 completion,或把 blocking read offload 到 thread pool。</div>
+    </div>
+    <div class="lvl"><span class="lb l3">L3</span><span class="q">std-only 只能 thread-pool offload。這條路本身有什麼代價?什麼時候 io_uring 明顯較好?</span>
+      <div class="a">thread-pool 的代價:每次 offload 有 <strong>context switch</strong>、資料要在 worker 與 loop 之間搬(memcpy / 所有權轉移)、以及大量小 IO 時 thread 數與排隊延遲成本、還有回收結果的 eventfd 喚醒開銷。高 IOPS、大量小檔案讀寫時,io_uring <strong>批次提交 + 零額外 thread + 共享 ring 省 syscall</strong> 完勝。反過來,若只是偶爾讀個設定檔,thread-pool 簡單夠用,不值得引 io_uring 的複雜度與 sandbox 相容性問題。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 7 QUIZ ================= -->
+<section id="panel-quiz" class="panel">
+  <h2>Self-quiz(先想再展開)</h2>
+
+  <details>
+    <summary>Q1 · <code class="inl">read()</code> 回傳 <span class="kbd">0</span> / <span class="kbd">EAGAIN</span> / <span class="kbd">EINTR</span> 各代表什麼、各怎麼處理?</summary>
+    <div class="ans">
+      <ul>
+        <li><strong><code class="inl">Ok(0)</code>(read 回 0)</strong>= 對端送出 <strong>FIN</strong>(half-close):它<strong>不會再送資料</strong>了。但這<strong>不等於「馬上關連線」</strong> —— 你可能還欠它 <code class="inl">out_buf</code> 裡沒寫完的資料,直接關會<strong>靜默丟失</strong>。正解:標記 <code class="inl">read_closed = true</code>,先把 <code class="inl">out_buf</code> 寫乾,<strong>寫完了才</strong> <code class="inl">DEL</code> + drop fd。注意這跟 EAGAIN 完全不同,別混。</li>
+        <li><strong><code class="inl">EAGAIN</code> / <code class="inl">EWOULDBLOCK</code></strong>(Rust:<code class="inl">Err(e)</code> 且 <code class="inl">e.kind()==WouldBlock</code>)= 此刻<strong>沒資料</strong>,recv buffer 讀乾了。ET 下這是<strong>停止 drain loop</strong> 的信號、等下一個邊緣;<strong>不要關連線</strong>。</li>
+        <li><strong><code class="inl">EINTR</code></strong>(Rust:<code class="inl">e.kind()==Interrupted</code>)= syscall 在傳資料前被<strong>信號打斷</strong>,不是錯誤 → <strong>直接重試</strong>(loop/continue)。骨架的 read/write/accept 都有這一 arm。</li>
+      </ul>
+      <p class="small">口訣:0 = 對端<strong>說完了</strong>(標記 read_closed,寫乾再關);EAGAIN = <strong>沒料了</strong>(停手等邊緣);EINTR = <strong>被打斷</strong>(retry)。</p><p class="small">陷阱:drain loop 有 <strong>兩個</strong>出口(EAGAIN 和 Ok(0))。只想到 EAGAIN 那個,就會寫出「EOF 直接關、丟掉 out_buf」的 bug —— <span class="jump" data-jump="panel-skeleton">骨架分頁有完整案例</span>。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q2 · 為什麼不能把 regular file 塞進 epoll 做 async file IO,正解是什麼?</summary>
+    <div class="ans">
+      <p><strong>為什麼不行:</strong>regular file 在 readiness 模型裡沒有「會不會 block」的概念,<strong>永遠算 ready</strong>。<code class="inl">poll()/select()</code> 會把 file 一律回報為可讀可寫(對 async 毫無幫助,因為 <code class="inl">read()</code> 仍阻塞在 disk);epoll 更直接 —— <code class="inl">epoll_ctl</code> 對 regular file 回 <strong>EPERM</strong>(實測 rc=-1),你連加都加不進去。readiness 只對有真正 blocked↔ready 轉變的 fd 有效(socket/pipe/tty/eventfd/timerfd)。</p>
+      <p><strong>正解:</strong></p>
+      <ul>
+        <li><strong>(a) io_uring</strong> —— completion-based:提交操作(SQE),kernel 做完貼 CQE,SQ/CQ 是 mmap 共享環,對 file+socket 都真 async 且省 syscall。需 FFI/crate,超出 std-only。</li>
+        <li><strong>(b) thread-pool offload</strong> —— std-only 的答案:把 blocking file 讀寫丟到 <code class="inl">std::thread</code> pool,做完把結果經<strong>completion 佇列 + eventfd 喚醒</strong>送回 event loop。等同 tokio <code class="inl">spawn_blocking</code>。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q3 · 「一次通知只 <code class="inl">read()</code> 一次就返回」在 LT 與 ET 下各會怎樣?為什麼?</summary>
+    <div class="ans">
+      <p><strong>LT:沒事。</strong>只要 buffer 還非空,下一輪 <code class="inl">epoll_wait</code> 會<strong>再次</strong>回報可讀,你多輪把它讀完,自我修復。</p>
+      <p><strong>ET:殘料餓死。</strong>ET 只在狀態<strong>轉變</strong>時通知一次;你讀一次就走,剩下的資料沒有製造新邊緣 → 下輪 wait 對此 fd 沉默 → 殘料卡死,除非有全新資料到達。</p>
+      <p>所以 ET 的鐵律是<strong>每次事件都 drain 到 EAGAIN</strong>,而 drain loop 需要 fd 是 nonblocking(否則最後一次 read 阻塞整個 loop)。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q4 · 為什麼不能把 <code class="inl">EPOLLOUT</code> 一直掛著?正確的做法是?</summary>
+    <div class="ans">
+      <p><strong>問題:</strong>socket 幾乎<strong>永遠可寫</strong>(kernel 送出緩衝通常有空間)。若 <code class="inl">EPOLLOUT</code> 常駐,每一輪 <code class="inl">epoll_wait</code> 都因為「可寫」把你叫醒 → busy loop、100% CPU。這是新手最常見的 CPU 爆掉 bug。</p>
+      <p><strong>正解(按需 arm/disarm,背壓):</strong></p>
+      <ul>
+        <li>平常<strong>不掛</strong> <code class="inl">EPOLLOUT</code>,直接嘗試 write。</li>
+        <li>只有當 write 回 <code class="inl">EAGAIN</code>(送出緩衝滿、寫不完)時,把殘量存進 <code class="inl">out_buf</code>,並 <code class="inl">MOD</code> <strong>掛上</strong> <code class="inl">EPOLLOUT</code> —— 請 kernel 在「重新可寫」時通知我。</li>
+        <li>下次 <code class="inl">EPOLLOUT</code> 觸發時把 <code class="inl">out_buf</code> 繼續寫;<strong>寫完立刻 <code class="inl">MOD</code> 取消</strong> <code class="inl">EPOLLOUT</code>。</li>
+      </ul>
+      <p class="small">骨架的 <code class="inl">try_flush</code> 用 <code class="inl">out_armed</code> 這個 bool 精確控制開關,2 MB 測試就是走這條路徑驗證的。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q5 · event loop 睡在 <code class="inl">epoll_wait</code> 時,別的 thread 要注入工作,怎麼叫醒它?為什麼要 drain?</summary>
+    <div class="ans">
+      <p><strong>做法(eventfd self-wake):</strong>把一個 <code class="inl">eventfd</code> 註冊進 epoll(<code class="inl">EPOLLIN</code>)。別的 thread 把工作丟進一個 mutex 保護的佇列,然後<strong>寫 8 bytes(u64=1)到 eventfd</strong> → <code class="inl">epoll_wait</code> 立刻返回 → loop 醒來、讀乾 eventfd、處理佇列。這是 self-pipe trick 的現代版。</p>
+      <p><strong>為什麼要 drain eventfd:</strong>若 waker 用 ET,而多條 thread 在 loop 處理之前寫了多次,你只讀一次會漏掉後續喚醒(甚至計數器留值導致下次不觸發)→ <strong>讀到 EAGAIN 為止</strong>(nonblocking eventfd)才乾淨。這正是 ET drain 鐵律在 waker 上的體現。</p>
+      <p class="small">延伸用途:thread-pool offload 的 file IO 完成後,worker 也是<strong>寫這個 eventfd</strong> 把結果回收信號送回 loop。</p>
+    </div>
+  </details>
+</section>
+
+</div>
+
+<script>
+/* ---------- delegated navigation: 禁用 <a href="#id">,一律 data-jump ---------- */
+document.addEventListener('click', function(e){
+  var j = e.target.closest('[data-jump]');
+  if(!j) return;
+  activate(j.getAttribute('data-jump'));
+});
+function activate(id){
+  var panels = document.querySelectorAll('.panel');
+  for(var i=0;i<panels.length;i++){ panels[i].classList.toggle('active', panels[i].id===id); }
+  var tabs = document.querySelectorAll('.tab');
+  for(var k=0;k<tabs.length;k++){ tabs[k].classList.toggle('active', tabs[k].getAttribute('data-jump')===id); }
+  window.scrollTo(0,0);
+}
+
+/* ---------- LT vs ET stepper ---------- */
+function buildFrames(mode){
+  var F=[];
+  F.push({desc:'初始:兩個 socket 的 kernel recv buffer 皆空,event loop 阻塞在 epoll_wait。',
+    lt:{buf:[],readable:false,act:'—'}, et:{buf:[],readable:false,edge:false,act:'—'}, div:false});
+  F.push({desc:'P1 到達。LT:buffer 空→非空,readable。ET:同樣的空→非空邊緣觸發一次,edge pending。',
+    lt:{buf:['P1'],readable:true,act:'—'}, et:{buf:['P1'],readable:true,edge:true,act:'—'}, div:false});
+  F.push({desc:'P2 到達(app 還沒被排到 CPU)。LT 持續 readable;ET 已有 pending edge,新資料併入同一次通知。',
+    lt:{buf:['P1','P2'],readable:true,act:'—'}, et:{buf:['P1','P2'],readable:true,edge:true,act:'—'}, div:false});
+  F.push({desc:'P3 到達。三個封包都躺在 recv buffer 裡,尚未有人讀。',
+    lt:{buf:['P1','P2','P3'],readable:true,act:'—'}, et:{buf:['P1','P2','P3'],readable:true,edge:true,act:'—'}, div:false});
+  F.push({desc:'app 進入 epoll_wait 並返回:兩邊都拿到「socket 可讀」一次,handler 準備執行。',
+    lt:{buf:['P1','P2','P3'],readable:true,act:'epoll_wait → [readable]'},
+    et:{buf:['P1','P2','P3'],readable:true,edge:true,act:'epoll_wait → [readable]'}, div:false});
+  if(mode==='once'){
+    F.push({desc:'handler 各讀「一次」就返回(← 這就是 bug)。各拿走 P1。ET 的 edge 在被通知後即失效——沒有新到達 = 沒有新邊緣。',
+      lt:{buf:['P2','P3'],readable:true,act:'read() ×1 → P1,返回'},
+      et:{buf:['P2','P3'],readable:false,edge:false,act:'read() ×1 → P1,返回'}, div:false});
+    F.push({desc:'再次 epoll_wait —— 分岔點。LT:buffer 還有料 → 再次回報可讀。ET:沒有新邊緣 → 什麼都不回報。P2、P3 卡在 ET 的 buffer 裡。',
+      lt:{buf:['P2','P3'],readable:true,act:'epoll_wait → [readable]'},
+      et:{buf:['P2','P3'],readable:false,edge:false,act:'epoll_wait → [ ]  ← 沉默'}, div:true});
+    F.push({desc:'LT:handler 第二次被喚醒,讀走 P2。ET:loop 在別的 fd 上打轉,P2、P3 無人處理。',
+      lt:{buf:['P3'],readable:true,act:'read() ×1 → P2'},
+      et:{buf:['P2','P3'],readable:false,edge:false,act:'idle(starving)'}, div:false});
+    F.push({desc:'LT:又一次 epoll_wait 仍可讀(還有 P3)。ET:依舊沉默。',
+      lt:{buf:['P3'],readable:true,act:'epoll_wait → [readable]'},
+      et:{buf:['P2','P3'],readable:false,edge:false,act:'—'}, div:false});
+    F.push({desc:'LT:讀走 P3,buffer 清空。ET:P2、P3 已被「事件餓死」——除非有全新資料製造新邊緣,否則永不再被通知。',
+      lt:{buf:[],readable:false,act:'read() ×1 → P3'},
+      et:{buf:['P2','P3'],readable:false,edge:false,act:'STARVED'}, div:true});
+    F.push({desc:'結局:LT 靠「被通知就讀、讀完自然停」把三個封包全數處理完;ET 因 handler 沒 drain-to-EAGAIN,永久漏掉 2 個封包。這就是 ET 的核心陷阱。',
+      lt:{buf:[],readable:false,act:'✓ 全部處理完'},
+      et:{buf:['P2','P3'],readable:false,edge:false,act:'✗ 永久餓死 P2, P3'}, div:true});
+  } else {
+    F.push({desc:'正確 handler:進入 drain loop。read() 拿到 P1,不返回、繼續讀。',
+      lt:{buf:['P2','P3'],readable:true,act:'read() → P1(loop 繼續)'},
+      et:{buf:['P2','P3'],readable:true,edge:true,act:'read() → P1(loop 繼續)'}, div:false});
+    F.push({desc:'read() 拿到 P2,仍在同一次 handler 內繼續 drain。',
+      lt:{buf:['P3'],readable:true,act:'read() → P2(loop 繼續)'},
+      et:{buf:['P3'],readable:true,edge:true,act:'read() → P2(loop 繼續)'}, div:false});
+    F.push({desc:'read() 拿到 P3,buffer 見底。',
+      lt:{buf:[],readable:false,act:'read() → P3(loop 繼續)'},
+      et:{buf:[],readable:false,edge:true,act:'read() → P3(loop 繼續)'}, div:false});
+    F.push({desc:'read() 回 EAGAIN 才收手——recv buffer 確認清空。ET 需要 nonblocking 正是為了這一步:最後一次 read 必須回 EAGAIN 而非阻塞整個 loop。',
+      lt:{buf:[],readable:false,act:'read() → EAGAIN → 停止 drain'},
+      et:{buf:[],readable:false,edge:false,act:'read() → EAGAIN → 停止 drain'}, div:true});
+    F.push({desc:'兩邊都乾淨。在「有 drain」的前提下,LT 與 ET 在這個小場景表現相同(都 1 次喚醒)。ET 真正的優勢在持續高負載/部分讀取時 —— 那時 LT 會為你已在處理的資料重複回報 readiness,ET 不會。代價:ET 要你自律 drain,否則就是左邊 lazy 模式的餓死。',
+      lt:{buf:[],readable:false,act:'epoll_wait → [ ]（clean）'},
+      et:{buf:[],readable:false,edge:false,act:'epoll_wait → [ ]（clean,1 次喚醒搞定）'}, div:false});
+  }
+  return F;
+}
+
+var frames = buildFrames('once');
+var idx = 0, mode = 'once', timer = null;
+
+function chip(p){ return '<span class="chip '+p.toLowerCase()+'">'+p+'</span>'; }
+function renderCol(el, s, isET){
+  var buf = s.buf.length ? s.buf.map(chip).join('') : '<span class="empty">（空）</span>';
+  var badges = s.readable ? '<span class="badge ok">READABLE</span>' : '<span class="badge off">— not ready</span>';
+  if(isET){ badges += ' ' + (s.edge ? '<span class="badge edge">edge●pending</span>' : '<span class="badge noedge">no edge</span>'); }
+  el.innerHTML =
+    '<div class="col-title">'+(isET?'ET（edge-triggered）':'LT（level-triggered）')+'</div>'+
+    '<div class="col-row"><span class="rlabel">recv buffer</span><div class="chips">'+buf+'</div></div>'+
+    '<div class="col-row"><span class="rlabel">epoll 狀態</span><div class="badges">'+badges+'</div></div>'+
+    '<div class="col-row"><span class="rlabel">handler 動作</span><div class="act">'+s.act+'</div></div>';
+}
+function render(){
+  var f = frames[idx];
+  renderCol(document.getElementById('colLT'), f.lt, false);
+  var etCol = document.getElementById('colET');
+  renderCol(etCol, f.et, true);
+  etCol.className = 'sim-col' + (f.div ? ' diverge' : '');
+  var d = document.getElementById('simDesc');
+  d.innerHTML = f.desc;
+  d.className = 'sim-desc' + (f.div ? ' diverge' : '');
+  document.getElementById('stepLabel').textContent =
+    '步驟 ' + (idx+1) + ' / ' + frames.length + '（' + (mode==='once'?'讀一次':'drain 正解') + '）';
+}
+function stopPlay(){
+  if(timer){ clearInterval(timer); timer=null; document.getElementById('btnPlay').textContent='▶ 播放'; }
+}
+document.getElementById('btnNext').onclick = function(){ if(idx<frames.length-1){ idx++; render(); } };
+document.getElementById('btnPrev').onclick = function(){ if(idx>0){ idx--; render(); } };
+document.getElementById('btnReset').onclick = function(){ idx=0; stopPlay(); render(); };
+document.getElementById('btnPlay').onclick = function(){
+  if(timer){ stopPlay(); return; }
+  this.textContent='⏸ 暫停';
+  timer = setInterval(function(){ if(idx<frames.length-1){ idx++; render(); } else { stopPlay(); } }, 1200);
+};
+var mbtns = document.querySelectorAll('.modebtn');
+for(var m=0;m<mbtns.length;m++){
+  mbtns[m].onclick = function(){
+    mode = this.getAttribute('data-mode');
+    for(var n=0;n<mbtns.length;n++){ mbtns[n].classList.toggle('active', mbtns[n]===this); }
+    frames = buildFrames(mode); idx=0; stopPlay(); render();
+  };
+}
+render();
+</script>
+</body>
+</html>

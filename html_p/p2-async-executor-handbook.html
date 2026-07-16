@@ -1,0 +1,1996 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>async fn 底下發生什麼 · std-only mini executor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/base16/gruvbox-dark-medium.min.css">
+<style>
+:root{
+  --bg-dim:#1d2021; --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg:#d4be98; --fg-dim:#a89984; --gray:#928374;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+  --mono:'JetBrains Mono',ui-monospace,'Cascadia Code','Fira Code',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{-webkit-text-size-adjust:100%;margin:0;padding:0;background:var(--bg-dim);color:var(--fg);font-family:var(--mono);font-size:15px;line-height:1.7}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:20px;color:var(--yellow);margin:0 0 4px;font-weight:700}
+h2{font-size:17px;color:var(--aqua);margin:26px 0 10px;border-bottom:1px solid var(--bg3);padding-bottom:6px;font-weight:700}
+h3{font-size:15px;color:var(--orange);margin:20px 0 8px;font-weight:700}
+.sub{color:var(--fg-dim);font-size:13px;margin-bottom:16px}
+p{margin:10px 0}
+code:not(.hljs){background:var(--bg1);color:var(--aqua);padding:1px 5px;border-radius:4px;font-size:.92em}
+b,strong{color:var(--yellow);font-weight:700}
+em{color:var(--purple);font-style:normal;font-weight:500}
+a{color:var(--blue)}
+ul,ol{margin:8px 0;padding-left:22px}
+li{margin:5px 0}
+hr{border:none;border-top:1px solid var(--bg3);margin:18px 0}
+
+/* tabs */
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 18px;position:sticky;top:0;background:var(--bg-dim);padding:8px 0;z-index:10;border-bottom:1px solid var(--bg2)}
+.tab{font-family:var(--mono);font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid var(--bg3);background:var(--bg0);color:var(--fg-dim);padding:6px 11px;border-radius:6px;transition:.12s}
+.tab:hover{background:var(--bg2);color:var(--fg)}
+.tab.active{background:var(--yellow);color:var(--bg-dim);border-color:var(--yellow);font-weight:700}
+.panel{display:none;animation:fade .15s}
+.panel.active{display:block}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+/* cards */
+.card{background:var(--bg0);border:1px solid var(--bg3);border-radius:8px;padding:14px 16px;margin:14px 0}
+.card.naive{border-left:3px solid var(--gray)}
+.card.fail{border-left:3px solid var(--red)}
+.card.fix{border-left:3px solid var(--green)}
+.card.key{border-left:3px solid var(--yellow);background:var(--bg1)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:10px;margin-bottom:8px;letter-spacing:.5px}
+.tag.naive{background:var(--gray);color:var(--bg-dim)}
+.tag.fail{background:var(--red);color:var(--bg-dim)}
+.tag.fix{background:var(--green);color:var(--bg-dim)}
+.tag.key{background:var(--yellow);color:var(--bg-dim)}
+.tag.v{background:var(--aqua);color:var(--bg-dim)}
+.intuition{background:var(--bg1);border:1px dashed var(--blue);border-radius:8px;padding:12px 14px;margin:12px 0;color:var(--fg)}
+.intuition::before{content:"一句話 ▸ ";color:var(--blue);font-weight:700}
+
+/* code + diagrams */
+pre{-webkit-text-size-adjust:100%;overflow-x:auto;background:var(--bg-dim)!important;border:1px solid var(--bg3);border-radius:8px;padding:12px 14px;margin:12px 0;font-family:var(--mono);font-size:13px;line-height:1.55;tab-size:4}
+pre code.hljs{background:transparent!important;padding:0}
+pre.diagram{color:var(--fg-dim);white-space:pre}
+.svgfig .bar-bad{fill:var(--red);opacity:.55;stroke:var(--red);stroke-width:1}
+.svgfig .bar-ok{fill:var(--green);opacity:.55;stroke:var(--green);stroke-width:1}
+.svgfig .bar-lock{fill:var(--yellow)}
+.svgfig .axis{stroke:var(--bg3);stroke-width:1;fill:none}
+.svgfig .xs{font-size:9px;fill:var(--fg-dim);font-family:"JetBrains Mono",monospace}
+.svgfig{display:block;width:100%;max-width:560px;margin:14px auto}
+.svgfig text{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;fill:var(--fg)}
+.svgfig .ttl{font-weight:700;font-size:12.5px}
+.svgfig .sm{font-size:10.5px;fill:var(--fg-dim)}
+.svgfig .t-green{fill:var(--green)}
+.svgfig .t-red{fill:var(--red)}
+.svgfig .t-aqua{fill:var(--aqua)}
+.svgfig .t-dim{fill:var(--fg-dim)}
+.svgfig .box{fill:var(--bg-dim);stroke:var(--bg3);stroke-width:1.4}
+.svgfig .box-ok{stroke:var(--green)}
+.svgfig .box-bad{stroke:var(--red)}
+.svgfig .divln{stroke:var(--bg3);stroke-width:1}
+.svgfig .arrow{fill:none;stroke:var(--fg-dim);stroke-width:1.6}
+.svgfig .arrow-ok{stroke:var(--green)}
+.svgfig .arrow-bad{stroke:var(--red)}
+.svgfig .arrow-wake{stroke:var(--aqua)}
+.svgfig .dash{stroke-dasharray:3 3}
+.svgfig .ah{fill:var(--fg-dim)}
+.svgfig .ah-ok{fill:var(--green)}
+.svgfig .ah-bad{fill:var(--red)}
+.svgfig .ah-wake{fill:var(--aqua)}
+.hljs{color:var(--fg)}
+.hljs-keyword,.hljs-selector-tag{color:var(--red)}
+.hljs-title,.hljs-title.function_,.hljs-section{color:var(--green)}
+.hljs-title.class_,.hljs-type,.hljs-built_in{color:var(--yellow)}
+.hljs-string,.hljs-attr{color:var(--green)}
+.hljs-number,.hljs-literal{color:var(--purple)}
+.hljs-comment{color:var(--gray);font-style:italic}
+.hljs-meta,.hljs-symbol{color:var(--aqua)}
+.hljs-punctuation,.hljs-operator{color:var(--fg-dim)}
+
+/* verified box */
+.verified{background:var(--bg1);border:1px solid var(--green);border-radius:8px;padding:10px 13px;margin:12px 0;font-size:13px}
+.verified b{color:var(--green)}
+.out{background:var(--bg-dim);border:1px solid var(--bg3);border-left:3px solid var(--aqua);border-radius:6px;padding:8px 12px;margin:8px 0;font-size:12.5px;color:var(--aqua);white-space:pre-wrap}
+
+/* stepper */
+.stepper{background:var(--bg0);border:1px solid var(--bg3);border-radius:10px;padding:14px;margin:16px 0}
+.sc-toggle{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.sc-btn{font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--bg4);background:var(--bg1);color:var(--fg-dim);padding:6px 12px;border-radius:6px}
+.sc-btn.active{background:var(--aqua);color:var(--bg-dim);border-color:var(--aqua);font-weight:700}
+.lanes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
+.lane{background:var(--bg-dim);border:1px solid var(--bg3);border-radius:8px;padding:10px 8px;text-align:center;transition:.15s;opacity:.45}
+.lane.hot{opacity:1;border-color:var(--yellow);box-shadow:0 0 0 1px var(--yellow) inset}
+.lane .lname{font-size:11px;color:var(--fg-dim);font-weight:700;margin-bottom:4px}
+.lane .licon{font-size:20px}
+.step-cap{background:var(--bg1);border-radius:6px;padding:9px 12px;margin:10px 0;min-height:56px}
+.step-cap .stitle{color:var(--orange);font-weight:700;font-size:13.5px}
+.step-cap.crux{border:1px solid var(--red)}
+.step-cap.crux .stitle{color:var(--red)}
+.step-desc{font-size:13px;color:var(--fg);margin-top:4px}
+.state-panel{margin:10px 0;border:1px solid var(--bg3);border-radius:8px;overflow:hidden}
+.srow{display:grid;grid-template-columns:120px 1fr;border-top:1px solid var(--bg2);font-size:12.5px}
+.srow:first-child{border-top:none}
+.srow .sk{background:var(--bg1);padding:7px 10px;color:var(--fg-dim);font-weight:500}
+.srow .sv{padding:7px 10px;display:flex;align-items:center;gap:6px}
+.srow.changed .sv{background:rgba(216,166,87,.12)}
+.chip{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11.5px;font-weight:700}
+.chip.ok{background:var(--green);color:var(--bg-dim)}
+.chip.bad{background:var(--red);color:var(--bg-dim)}
+.chip.warn{background:var(--orange);color:var(--bg-dim)}
+.chip.neutral{background:var(--bg4);color:var(--fg)}
+.chip.info{background:var(--aqua);color:var(--bg-dim)}
+.chip.purple{background:var(--purple);color:var(--bg-dim)}
+.ctrls{display:flex;gap:8px;align-items:center;margin-top:12px}
+.ctrls button{font-family:var(--mono);font-weight:700;cursor:pointer;border:1px solid var(--bg4);background:var(--bg1);color:var(--fg);padding:7px 16px;border-radius:6px}
+.ctrls button:hover:not(:disabled){background:var(--bg3)}
+.ctrls button:disabled{opacity:.35;cursor:not-allowed}
+.progress{color:var(--fg-dim);font-size:12px;margin-left:auto}
+
+/* followup */
+.chain{border:1px solid var(--bg3);border-radius:10px;margin:16px 0;overflow:hidden}
+.chain-head{background:var(--bg2);padding:10px 14px;font-weight:700;color:var(--yellow);font-size:14px}
+.layer{padding:12px 14px;border-top:1px solid var(--bg2)}
+.layer .q{color:var(--blue);font-weight:700;font-size:13.5px}
+.layer .lv{display:inline-block;background:var(--purple);color:var(--bg-dim);font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:8px;margin-right:6px}
+.layer .a{font-size:13px;margin-top:6px}
+
+/* quiz */
+details{background:var(--bg0);border:1px solid var(--bg3);border-radius:8px;margin:12px 0;padding:0}
+details summary{cursor:pointer;padding:12px 14px;font-weight:700;color:var(--aqua);list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ ";color:var(--orange)}
+details[open] summary::before{content:"▾ "}
+details[open] summary{border-bottom:1px solid var(--bg3)}
+.ans{padding:12px 14px;font-size:13.5px}
+.must{display:inline-block;background:var(--red);color:var(--bg-dim);font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:6px}
+.jump{color:var(--blue);cursor:pointer;text-decoration:underline dotted;font-weight:500}
+.foot{margin-top:30px;padding-top:14px;border-top:1px solid var(--bg3);color:var(--gray);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>async fn 底下發生什麼 · 純 std 手搓 mini executor</h1>
+<div class="sub">Rust / std-only / <b>edition 2024</b> · 全部代碼在 <b>rustc 1.91.1</b> 實際編譯+執行 · 對齊 CoderPad 的 1.92.0 · 給 std-only systems 面試用</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" data-tab="intro">導讀</button>
+  <button class="tab" data-tab="sm">① async→狀態機</button>
+  <button class="tab" data-tab="pin">① 借用跨await→Pin</button>
+  <button class="tab" data-tab="life">② 生命週期 stepper</button>
+  <button class="tab" data-tab="exec">block_on 完整代碼</button>
+  <button class="tab" data-tab="park">park token 語意</button>
+  <button class="tab" data-tab="chain">tokio 全鏈路</button>
+  <button class="tab" data-tab="case">實戰 log collector</button>
+  <button class="tab" data-tab="pool">實戰 thread pool</button>
+  <button class="tab" data-tab="followup">③ 面試追問</button>
+  <button class="tab" data-tab="quiz">④ Self-quiz</button>
+</div>
+
+<!-- ================= INTRO ================= -->
+<section class="panel active" data-panel="intro">
+  <div class="intuition"><code>async fn</code> 不是「非同步執行的函式」。它是編譯器吐出來的一台<b>狀態機</b>;<code>.await</code> 是暫停點;executor 反覆呼叫 <code>poll</code> 把它往前推,直到 <code>Ready</code>。整個非同步世界只有三個角色。</div>
+
+  <h2>三個角色(整份教材就繞這三個)</h2>
+  <ul>
+    <li><b>Future</b> — 一台可以被 <code>poll</code> 的狀態機。<code>poll</code> 回 <code>Pending</code>(還沒好)或 <code>Ready(v)</code>(好了,值是 v)。</li>
+    <li><b>Waker</b> — 一個「我可以繼續了」的回呼。Future 回 <code>Pending</code> 前把它存起來,資源就緒時呼叫它。</li>
+    <li><b>Executor</b> — 一個迴圈:反覆 <code>poll</code> root future;沒事做時<b>睡覺</b>,被 Waker 叫醒再 poll。</li>
+  </ul>
+  <p>你要手搓的 <code>block_on</code> 就是最小的 executor:單執行緒、驅動一個 future 到完成、沒事做時 <code>thread::park()</code> 睡覺、Waker 用 <code>unpark()</code> 叫醒。</p>
+
+  <h2>版本註記(已查證,來源 rust-lang/rust <code>RELEASES.md</code>)</h2>
+  <div class="verified">
+    <span class="tag v">verified</span>
+    <ul style="margin-top:4px">
+      <li><code>std::task::Wake</code> trait — stable since <b>1.51.0</b>(2021-03-25)。讓你只寫安全的 <code>wake(self: Arc&lt;Self&gt;)</code>,不必手刻 <code>RawWakerVTable</code>。</li>
+      <li><code>std::pin::pin!</code> macro — stable since <b>1.68.0</b>(2023-03-09)。stack pinning 的安全包裝。</li>
+      <li><code>Context::from_waker</code> — 核心 task API 一路都在(基本形式 ≤1.36);1.82 起可用於 <code>const</code>。</li>
+    </ul>
+    本檔完整代碼在 <b>rustc 1.91.1</b> 以 <code>rustc --edition 2024 -O</code> 編譯 + 執行通過,零 warning 零 error。最低需要 <b>1.85</b>(edition 2024 的門檻);語法層面最低 <b>1.68</b>(因為用了 <code>pin!</code>),1.51–1.67 把 <code>pin!(f)</code> 換成 <code>Box::pin(f)</code> 也一樣跑。
+  </div>
+  <div class="card key"><span class="tag key">CoderPad 環境備忘(2026-07 查證)</span>
+    <ul>
+      <li><b>CoderPad 跑 1.92.0</b>(released <b>2025-12-11</b>);目前 stable 是 <b>1.97.0</b>(2026-07-09)。<b>落後 5 個版本 / 約 7 個月</b> —— 別在面試裡用 1.93+ 才穩的東西。(來源:<code>rust-lang/rust</code> <code>RELEASES.md</code>)</li>
+      <li><b><code>std::sync::mpmc</code> 到 1.97 都還沒 stable</b>(<code>RELEASES.md</code> 全文零命中)。所以 std-only thread pool <b>不能</b> clone Receiver,只能 <code>Arc&lt;Mutex&lt;Receiver&lt;T&gt;&gt;&gt;</code> 讓 worker 搶鎖取任務。這題會被問到,先想好講法。</li>
+      <li><b><code>Waker::noop()</code> stable since 1.85</b> —— 想單獨 poll 一個 Future 而不搭 executor 時直接用它建 <code>Context</code>,不用手刻假 waker。</li>
+      <li>本檔代碼<b>零改動</b>就過 edition 2024。四個常見 2024 破壞點都沒踩到:無 <code>gen</code> 識別字、無 <code>unsafe fn</code>(<code>unsafe_op_in_unsafe_fn</code>)、無 <code>extern</code> block、無 <code>static mut</code> 引用。</li>
+      <li>1.91&#8594;1.92 的 Compatibility Notes 逐條看過,唯一沾到本檔的是 <b>PR 145838</b>(<code>pin!</code> 的 temporary lifetime)。它只影響 <code>f(pin!({ &amp;temp() }))</code> 這種「<code>pin!</code> 在非延伸位置、參數是含臨時引用的 block」;本檔兩處都是 <code>let x = pin!(local);</code>(延伸位置 + 參數是 path),<b>不受影響</b>。</li>
+    </ul>
+  </div>
+
+
+  <h2>路線圖</h2>
+  <ol>
+    <li><span class="jump" data-jump="sm">① async fn 怎麼變狀態機</span> — 每個 await 一個狀態;跨 await 的 local 為何要存進狀態機。</li>
+    <li><span class="jump" data-jump="pin">① 借用跨 await → self-referential → 為何 move 會壞 → Pin</span>。</li>
+    <li><span class="jump" data-jump="life">② 一個 future 的生命週期互動 stepper</span>(含 wake 先於 park 的 race)。</li>
+    <li><span class="jump" data-jump="exec">mini <code>block_on</code> 結構圖 + 完整可編譯代碼</span>。</li>
+    <li><span class="jump" data-jump="park">park token 語意</span> — 為什麼 unpark 先於 park 不丟喚醒(附實測)。</li>
+    <li><span class="jump" data-jump="followup">③ 面試追問 3 條鏈 × 3 層</span> · <span class="jump" data-jump="quiz">④ self-quiz 5 題</span>。</li>
+  </ol>
+</section>
+
+<!-- ================= STATE MACHINE ================= -->
+<section class="panel" data-panel="sm">
+  <h2>① async fn → 狀態機</h2>
+  <div class="intuition">一個 async fn 被編譯成一台狀態機:<b>每個 <code>.await</code> 點 = 一個狀態</b>。<code>poll</code> 一次,就從當前狀態往前推到下一個 await(或結束)。跨越 await 還要活著的 local,必須被<b>存進狀態機的欄位</b>——不然暫停後就沒了。</div>
+
+  <div class="card naive"><span class="tag naive">naive 心智模型</span>
+    <p>「<code>async fn</code> 就是一個晚點跑的函式——呼叫它,它就在背景跑起來。」</p>
+  </div>
+  <div class="card fail"><span class="tag fail">為什麼壞</span>
+    <p>它<b>沒有</b>「背景」。呼叫一個 async fn 只是<b>建構一個 Future 值,body 一行都還沒跑</b>。誰來跑?必須有人拿著它一直 <code>poll</code>。沒有 executor,async fn 就是一坨永遠不動的狀態。</p>
+  </div>
+
+  <h3>推導:一個 async fn 長成什麼狀態機</h3>
+  <pre><code class="language-rust">async fn read_two() -&gt; u32 {
+    let a = read().await;   // await #1
+    let b = read().await;   // await #2
+    a + b
+}</code></pre>
+  <p>兩個 await = 兩個暫停點 = 狀態機有這些狀態。編譯器生一個匿名型別,概念上像:</p>
+  <pre><code class="language-rust">// 示意,非編譯器真實輸出(真實 layout 更精巧、會挑哪些 local 要存)
+enum ReadTwo {
+    Start,
+    AwaitingA { fut_a: ReadFut },            // 停在 await #1
+    AwaitingB { a: u32, fut_b: ReadFut },    // 停在 await #2,a 要跨 await 活著 → 存進來
+    Done,
+}</code></pre>
+  <p><code>poll</code> 的邏輯:<code>match</code> 當前狀態 → poll 內層子 future → 子 future 回 <code>Pending</code> 就整個回 <code>Pending</code>(狀態不變,下次從同一個狀態繼續)→ 子 future 回 <code>Ready</code> 就存下結果、<b>推進狀態</b>、繼續往下跑到下一個 await 或 <code>return Ready</code>。</p>
+
+  <div class="card key"><span class="tag key">關鍵伏筆</span>
+    <p>注意 <code>AwaitingB</code> 裡存了 <code>a: u32</code>——因為 <code>a</code> 在 await #1 之後還要用,必須跨越暫停點活著。<b>凡是跨 await 還活著的 local,都得成為狀態機的欄位。</b></p>
+    <p>如果那個 local 是一個<b>借用</b>(指向另一個 local)呢?那狀態機就會有一個欄位指向<b>自己另一個欄位</b>——self-referential。這正是下一頁 <span class="jump" data-jump="pin">Pin</span> 的起點。</p>
+  </div>
+
+  <div class="card fix"><span class="tag fix">executor 那條線(修法預告)</span>
+    <p>既然 future 要有人一直 poll,最 naive 的 executor 是 <code>loop { poll(future) }</code> 忙輪詢。它有兩個問題:(1) future 回 <code>Pending</code> 時你狂 poll = 100% CPU;(2) 更根本——future 怎麼告訴你「現在可以繼續了」?</p>
+    <p>答案:future 回 <code>Pending</code> 前,把 <code>cx</code> 給的一個 <b>Waker</b> 存起來;資源就緒時呼叫 <code>waker.wake()</code> 通知 executor。這條線在 <span class="jump" data-jump="life">生命週期 stepper</span> 與 <span class="jump" data-jump="exec">block_on 代碼</span> 完成。</p>
+  </div>
+</section>
+
+<!-- ================= PIN ================= -->
+<section class="panel" data-panel="pin">
+  <h2>① 借用跨 await → self-referential → Pin</h2>
+  <div class="intuition">只要有一個 local <b>借用活過 await 點</b>,狀態機就得同時存「那個值」和「指向那個值的參考」。這兩個欄位在同一個 struct 裡互指 = self-referential。而 Rust 的 move 是 <b>memcpy</b>,一 memcpy 位址就變,內部指標就懸空。<code>Pin</code> 就是用型別系統禁止這個 memcpy。</div>
+
+  <div class="card naive"><span class="tag naive">naive 心智模型</span>
+    <p>「Future 是個值,跟別的值一樣可以隨便 move、塞進 <code>Vec</code>、回傳、<code>mem::swap</code>。」</p>
+  </div>
+
+  <h3>把 borrow-across-await 攤開</h3>
+  <pre><code class="language-rust">async fn borrow_across() {
+    let buf = [0u8; 4];
+    let r = &amp;buf;             // 借用進 buf
+    yield_now().await;        // 暫停,但 r 要跨過去
+    println!("{:?}", r);      // await 之後還要用 r
+}</code></pre>
+  <p>暫停時,狀態機必須同時保住 <code>buf</code>(值本體)和 <code>r</code>(指向 buf 的參考)。概念上:</p>
+  <pre><code class="language-rust">// 示意,非真實 layout
+struct BorrowAcross {
+    buf: [u8; 4],
+    r: *const [u8; 4],   // 指向「同一個 struct 裡的 buf」 ← self-referential
+    inner: YieldNow,
+}</code></pre>
+
+  <div class="card fail"><span class="tag fail">為什麼 move 會壞(具體演示)</span>
+    <svg class="svgfig" viewBox="0 0 400 400" role="img" aria-label="move 導致內部指標懸空的結構圖">
+  <defs>
+    <marker id="a_ok" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah-ok" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+    <marker id="a_bad" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah-bad" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+    <marker id="a_dim" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+  </defs>
+
+  <!-- ===== BEFORE ===== -->
+  <text class="ttl t-green" x="16" y="26">BEFORE move</text>
+  <text class="sm" x="112" y="26">struct @ 0x1000 &#183; r 有效</text>
+  <rect class="box box-ok" x="16" y="40" width="214" height="76" rx="8"/>
+  <line class="divln" x1="16" y1="78" x2="230" y2="78"/>
+  <text x="30" y="65">buf : bytes</text>
+  <text x="30" y="103">r&#160;&#160; : 0x1000</text>
+  <rect class="box box-ok" x="284" y="58" width="100" height="42" rx="8"/>
+  <text class="t-green" x="296" y="76">0x1000</text>
+  <text class="sm" x="296" y="92">buf 在這</text>
+  <path class="arrow arrow-ok" d="M230,99 C255,99 262,82 282,80" marker-end="url(#a_ok)"/>
+
+  <!-- ===== AFTER ===== -->
+  <text class="ttl t-red" x="16" y="176">AFTER move</text>
+  <text class="sm" x="104" y="176">memcpy &#8594; 0x2000</text>
+  <rect class="box box-bad" x="16" y="190" width="214" height="76" rx="8"/>
+  <line class="divln" x1="16" y1="228" x2="230" y2="228"/>
+  <text x="30" y="215">buf : @0x2000 (已搬)</text>
+  <text class="t-red" x="30" y="253">r&#160;&#160; : 0x1000 (沒變)</text>
+  <rect class="box box-bad" x="284" y="196" width="100" height="52" rx="8"/>
+  <text class="t-red" x="296" y="214">0x1000</text>
+  <text class="sm t-red" x="296" y="230">已非 buf</text>
+  <text class="sm t-red" x="296" y="244">deref=UB</text>
+  <path class="arrow arrow-bad" d="M230,249 C255,249 262,224 282,222" marker-end="url(#a_bad)"/>
+  <rect class="box box-ok" x="16" y="300" width="164" height="44" rx="8"/>
+  <text class="t-green" x="28" y="320">0x2000</text>
+  <text class="sm" x="28" y="336">buf 現在在這 (r 指不到)</text>
+  <path class="arrow dash" d="M96,266 L96,300" marker-end="url(#a_dim)"/>
+  <text class="sm" x="16" y="372">buf 往下搬到 0x2000,r 仍指 0x1000 &#8594; 指到別人的東西 = UB</text>
+</svg>
+    <p>move = 把整個 struct memcpy 到新位址 <code>0x2000</code>。<code>buf</code> 的內容跟著搬到 <code>0x2000</code>,但 <code>r</code> 的值還是舊位址 <code>0x1000</code>——現在指向一塊<b>不再是 buf</b> 的記憶體。之後 <code>deref r</code> = 讀到已失效/被覆寫的東西 = <b>UB</b>。</p>
+  </div>
+
+  <div class="card fix"><span class="tag fix">修法:Pin</span>
+    <p><code>Future::poll</code> 的簽名是 <code>fn poll(self: Pin&lt;&amp;mut Self&gt;, cx)</code>。<code>Pin&lt;&amp;mut T&gt;</code> 對 <code>!Unpin</code> 的 <code>T</code> 承諾:<b>pointee 不會再被 move</b>。</p>
+    <p>為什麼這樣就安全:只要在狀態機開始自我指涉<b>之前</b>就把它 pin 住,之後 executor 只能透過 <code>Pin&lt;&amp;mut Self&gt;</code> 碰它——拿不到裸的 <code>&amp;mut Self</code>(那會允許 <code>mem::swap</code>/move),所以 self-reference 永遠有效。</p>
+    <ul>
+      <li><b><code>Unpin</code></b>:auto trait,型別不含 self-ref 就自動是 Unpin。大多數手寫 future 是 Unpin,對它們 <code>Pin</code> 是 <b>no-op</b>(可 <code>Pin::get_mut</code> 拿回 <code>&amp;mut T</code>,零成本)。</li>
+      <li><b><code>!Unpin</code></b>:編譯器生成、含跨-await-借用的狀態機才是 <code>!Unpin</code>。<code>Pin</code> 對它們<b>真的鎖住 move</b>。</li>
+    </ul>
+    <p>這就是為什麼 <span class="jump" data-jump="exec"><code>block_on</code></span> 第一件事是 <code>let mut future = pin!(future);</code>——把 future 釘在 stack 上,而且 <code>pin!</code> 會 <b>shadow 掉原 binding</b>,讓你之後拿不到能 move 它的路徑。</p>
+  </div>
+</section>
+
+<!-- ================= LIFECYCLE STEPPER ================= -->
+<section class="panel" data-panel="life">
+  <h2>② 一個 future 的生命週期</h2>
+  <div class="intuition"><code>poll</code> → 沒就緒就<b>存 waker</b> + 回 <code>Pending</code> → executor <b>park</b> 睡覺 → 資源就緒 → <code>wake()</code> → <b>unpark</b> → executor 醒 → <b>再 poll</b> → <code>Ready</code>。下面可以逐步走,並切換「wake 先於 park」的 race。</div>
+
+  <div class="card key"><span class="tag key">先建立要追蹤的狀態變數</span>
+    <p>stepper 右側面板追蹤這 5 個變數,先各自定義(不讓它們突然冒出來):</p>
+    <ul>
+      <li><b>資源 resource</b> — leaf future 等的東西就緒了沒:<code>notready</code> / <code>ready</code>。</li>
+      <li><b>poll 結果</b> — 上一次 poll 回什麼:<code>—</code> / <code>Pending</code> / <code>Ready</code>。</li>
+      <li><b>stored waker</b> — leaf future 有沒有把 <code>cx</code> 的 waker 存起來:<code>none</code> / <code>stored</code> / <code>taken</code>(被 <code>.take()</code> 拿去 wake 了)。</li>
+      <li><b>exec thread</b> — executor 執行緒狀態:<code>running</code> / <code>parked</code>。</li>
+      <li><b>park token</b> — 該執行緒的一次性許可:<code>0</code> / <code>1</code>。unpark 設 1,park 消耗 1;<b>先設再 park 會立刻返回</b>(細節見 <span class="jump" data-jump="park">park token 語意</span>)。</li>
+    </ul>
+  </div>
+
+  <div class="stepper">
+    <div class="sc-toggle">
+      <button class="sc-btn active" data-scenario="A">Scenario A · wake 在 park 之後(正常)</button>
+      <button class="sc-btn" data-scenario="B">Scenario B · wake 先於 park(race)</button>
+    </div>
+
+    <div class="lanes">
+      <div class="lane" data-lane="exec"><div class="lname">Executor thread</div><div class="licon">🔁</div></div>
+      <div class="lane" data-lane="task"><div class="lname">Task(future)</div><div class="licon">🧩</div></div>
+      <div class="lane" data-lane="res"><div class="lname">Resource(背景)</div><div class="licon">⚙️</div></div>
+    </div>
+
+    <div class="step-cap" id="stepCap">
+      <div class="stitle" id="stepTitle"></div>
+      <div class="step-desc" id="stepDesc"></div>
+    </div>
+
+    <div class="state-panel" id="statePanel"></div>
+
+    <div class="ctrls">
+      <button id="prevBtn">◀ 上一步</button>
+      <button id="nextBtn">下一步 ▶</button>
+      <span class="progress" id="progress"></span>
+    </div>
+  </div>
+
+  <div class="card fix"><span class="tag fix">Scenario B 的重點</span>
+    <p>當 <code>wake()</code> 搶在 <code>park()</code> 之前發生:<code>unpark</code> 打在一個<b>還沒睡著</b>的執行緒上,不會空打——它把 <b>park token 設成 1 存起來</b>。executor 隨後 <code>park()</code> 看到 token=1,<b>立刻返回</b>,回頭再 poll。執行緒從沒真正睡著,也<b>沒漏掉喚醒</b>。這就是 naive executor 不用 condvar 也不丟 wakeup 的原因。</p>
+  </div>
+</section>
+
+<!-- ================= EXECUTOR CODE ================= -->
+<section class="panel" data-panel="exec">
+  <h2>mini <code>block_on</code> · 結構 + 完整可編譯代碼</h2>
+  <div class="intuition">整個 executor 就是:<code>pin!</code> 住 future → 造一個 <code>wake()=unpark</code> 的 Waker → <code>loop { poll; 若 Pending 就 park }</code>。Waker 用 <code>std::task::Wake</code> trait + <code>Arc</code> 造,<b>不手寫 <code>RawWakerVTable</code></b>。</div>
+
+  <h3>結構圖</h3>
+  <svg class="svgfig" viewBox="0 0 400 452" role="img" aria-label="mini block_on 結構圖">
+  <defs>
+    <marker id="b_dim" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+    <marker id="b_wake" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah-wake" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+  </defs>
+
+  <!-- block_on box -->
+  <rect class="box" x="18" y="16" width="300" height="126" rx="8"/>
+  <text class="ttl t-aqua" x="32" y="40">block_on(future)</text>
+  <text x="32" y="62">future = pin!(future)</text>
+  <text x="32" y="80">waker&#160; = Waker::from(Arc&lt;TW&gt;)</text>
+  <text x="32" y="98">cx&#160;&#160;&#160;&#160; = Context::from_waker(&amp;w)</text>
+  <text x="32" y="120">loop { poll(future);</text>
+  <text class="t-dim" x="32" y="136">&#160;&#160;&#160;&#160;&#160;&#160; Pending =&gt; park() }&#160; // 睡</text>
+
+  <!-- leaf future box -->
+  <rect class="box" x="18" y="200" width="300" height="80" rx="8"/>
+  <text class="ttl" x="32" y="224">leaf future (Timer)</text>
+  <text x="32" y="246">poll: 存 cx.waker().clone()</text>
+  <text x="32" y="266">ready: waker.wake()</text>
+
+  <!-- ThreadWaker box -->
+  <rect class="box" x="18" y="332" width="300" height="66" rx="8"/>
+  <text class="ttl" x="32" y="356">ThreadWaker (Arc) &#183; impl Wake</text>
+  <text x="32" y="378">wake &#8594; thread.unpark()</text>
+
+  <!-- poll arrow: block_on -> leaf -->
+  <path class="arrow" d="M96,142 L96,200" marker-end="url(#b_dim)"/>
+  <text class="sm" x="104" y="176">poll(cx)</text>
+
+  <!-- holds arrow: leaf -> waker -->
+  <path class="arrow" d="M96,280 L96,332" marker-end="url(#b_dim)"/>
+  <text class="sm" x="104" y="312">持有 waker (clone)</text>
+
+  <!-- wake return: waker -> block_on (right gutter, up) -->
+  <path class="arrow arrow-wake" d="M318,362 L360,362 L360,64 L318,64" marker-end="url(#b_wake)"/>
+  <text class="sm t-aqua" x="352" y="212" transform="rotate(-90 352 212)">wake() = unpark(thread)</text>
+</svg>
+
+  <div class="verified"><span class="tag v">verified</span> 以下整份代碼在 <b>rustc 1.91.1</b>(<code>rustc --edition 2024 -O</code>)實際編譯 + 執行通過,零 warning。executor core 與 demo leaf future 在同一檔,逐字可編。</div>
+
+  <h3>完整代碼</h3>
+  <pre><code class="language-rust">use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+use std::time::{Duration, Instant};
+
+// ── executor core ─────────────────────────────────────────────
+// wake() 的語意就是「對某個執行緒 unpark」
+struct ThreadWaker {
+    thread: Thread,
+}
+
+impl Wake for ThreadWaker {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.thread.unpark();
+    }
+    fn wake_by_ref(self: &amp;Arc&lt;Self&gt;) {
+        self.thread.unpark();
+    }
+}
+
+// 整個 executor:把一個 future 在「本執行緒」推到完成
+fn block_on&lt;F: Future&gt;(future: F) -&gt; F::Output {
+    // 釘在 stack;pin! 會 shadow 掉原 binding,之後拿不到能 move 它的路徑。
+    // 因此即使 F 是 !Unpin 的 self-referential 狀態機也安全。
+    let mut future = std::pin::pin!(future);
+
+    // 這個 Waker 的 wake() 會 unpark「當前」這個執行緒
+    let waker = Waker::from(Arc::new(ThreadWaker {
+        thread: thread::current(),
+    }));
+    let mut cx = Context::from_waker(&amp;waker);
+
+    loop {
+        match future.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(val) =&gt; return val,
+            // 現在推不動:睡到有人 unpark。
+            // 若 wake() 已在抵達這行「之前」發生,park token 已被設起,
+            // 這裡的 park() 會立刻返回 → 回頭重新 poll。不會漏喚醒。
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+// ── demo leaf future ──────────────────────────────────────────
+// 一個 Timer:dur 之後完成,由背景執行緒驅動就緒 + 喚醒
+struct Timer {
+    shared: Arc&lt;Mutex&lt;TimerState&gt;&gt;,
+}
+
+struct TimerState {
+    completed: bool,
+    waker: Option&lt;Waker&gt;,
+}
+
+impl Timer {
+    fn new(dur: Duration) -&gt; Self {
+        let shared = Arc::new(Mutex::new(TimerState {
+            completed: false,
+            waker: None,
+        }));
+        let bg = Arc::clone(&amp;shared);
+        thread::spawn(move || {
+            thread::sleep(dur);
+            let mut st = bg.lock().unwrap();
+            st.completed = true;
+            // 喚醒「最近一次 poll 我的人」
+            if let Some(w) = st.waker.take() {
+                w.wake();
+            }
+        });
+        Timer { shared }
+    }
+}
+
+impl Future for Timer {
+    type Output = ();
+    fn poll(self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;()&gt; {
+        let mut st = self.shared.lock().unwrap();
+        if st.completed {
+            Poll::Ready(())
+        } else {
+            // 每次回 Pending 都存「最新」的 waker（store-latest 契約）
+            st.waker = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+}
+
+fn main() {
+    let start = Instant::now();
+    block_on(async {
+        println!("[{:&gt;6?}] start", start.elapsed());
+        Timer::new(Duration::from_millis(100)).await;
+        println!("[{:&gt;6?}] after timer #1", start.elapsed());
+        Timer::new(Duration::from_millis(100)).await;
+        println!("[{:&gt;6?}] after timer #2", start.elapsed());
+    });
+    println!("[{:&gt;6?}] block_on returned", start.elapsed());
+}
+</code></pre>
+
+  <div class="out">實際執行輸出(兩個 100ms timer 串接 ≈ 200ms):
+[ 498ns] start
+[100.535969ms] after timer #1
+[200.714912ms] after timer #2
+[200.727529ms] block_on returned</div>
+
+  <div class="card key"><span class="tag key">為什麼用 <code>Wake</code> trait 而非手刻 <code>RawWakerVTable</code></span>
+    <ul>
+      <li><code>RawWaker</code>/<code>RawWakerVTable</code> 要你手寫 4 個 <code>unsafe</code> fn pointer(clone / wake / wake_by_ref / drop)+ 自己管 refcount。一個 UB 就爆(double-free / leak / use-after-free)。</li>
+      <li><code>std::task::Wake</code>(1.51+)讓你只寫<b>安全</b>的 <code>fn wake(self: Arc&lt;Self&gt;)</code>。<code>Waker::from(Arc&lt;W&gt;)</code> 自動用 <code>Arc</code> 的 refcount 幫你生 vtable:<code>clone</code> = refcount++(<b>no heap alloc</b>),<code>drop</code> = refcount--。</li>
+      <li>面試講得出「我知道底層是 <code>RawWakerVTable</code>,但 <code>Wake</code> trait 是 std 給的安全包裝」= 加分。</li>
+    </ul>
+  </div>
+
+  <div class="card key"><span class="tag key">兩個容易漏的點</span>
+    <ul>
+      <li><code>Waker::from(Arc&lt;W&gt;)</code> 要求 <code>W: Wake + Send + Sync + 'static</code>。<code>ThreadWaker { thread: Thread }</code> 滿足(<code>std::thread::Thread</code> 是 <code>Send + Sync</code> 的 handle)。</li>
+      <li><code>Timer::poll</code> <b>每次</b>回 <code>Pending</code> 都 <code>st.waker = Some(cx.waker().clone())</code>——這是 store-latest 契約。為什麼不能只存第一次?見 <span class="jump" data-jump="quiz">self-quiz Q3</span> 與 <span class="jump" data-jump="followup">追問鏈 3</span>。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= PARK TOKEN ================= -->
+<section class="panel" data-panel="park">
+  <h2>park token 語意</h2>
+  <div class="intuition"><code>thread::park</code>/<code>unpark</code> 背後是<b>每個執行緒一個一次性 token</b>(想成容量 1、單一 permit 的 semaphore)。這個 token 讓「unpark 先於 park」不會漏掉喚醒——正是 naive executor 不用 condvar 也不丟 wakeup 的原因。</div>
+
+  <h3>語意(逐條)</h3>
+  <ul>
+    <li><b><code>park()</code></b>:若 token=1 → 消耗成 0,<b>立刻返回</b>;若 token=0 → <b>阻塞</b>,直到有人 <code>unpark</code>。</li>
+    <li><b><code>unpark()</code></b>:把 token 設成 1(若已是 1,<b>維持 1,不累加</b>)。若目標執行緒正阻塞在 park → 喚醒它。</li>
+    <li><b>不 stack</b>:連續兩次 <code>unpark</code> 只留一個 token;下一次 <code>park</code> 立刻返回,<b>再</b>下一次 <code>park</code> 阻塞。</li>
+    <li><b>spurious wakeup</b>:<code>park</code> 允許<b>無故返回</b>(std 明文如此)。所以正確的 executor loop 一定要 park 返回後<b>重新 poll</b>,不能假設「park 返回 = 資源就緒」。<code>loop { poll; park }</code> 天生免疫。</li>
+  </ul>
+
+  <h3>實測佐證(rustc 1.91.1 / edition 2024 實跑)</h3>
+  <pre><code class="language-rust">use std::thread;
+use std::time::{Duration, Instant};
+
+fn main() {
+    let me = thread::current();
+
+    // case 1: 先 unpark 再 park。token 被存起來,park 必須立刻返回。
+    me.unpark();
+    let t = Instant::now();
+    thread::park();
+    println!("case1 (unpark 後才 park):{:?} 返回", t.elapsed());
+
+    // case 2: token 不累加。一次 unpark = 一個 token,case1 已消耗掉,
+    // 這次 park 會阻塞。開一條背景執行緒 80ms 後 unpark,好讓程式終止。
+    let handle = me.clone();
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(80));
+        handle.unpark();
+    });
+    let t2 = Instant::now();
+    thread::park();
+    println!("case2 (再 park,已無 token):{:?} 返回", t2.elapsed());
+}
+</code></pre>
+  <div class="out">case1 (unpark 後才 park):374ns 返回      &lt;- 幾乎瞬間,token 生效
+case2 (再 park,已無 token):80.33777ms 返回  &lt;- 阻塞到背景執行緒 unpark</div>
+  <p>這證明兩件事:(a) <b>unpark-before-park 立刻返回</b>(token 被存起來);(b) <b>token 不累加</b>(第二次 park 仍阻塞)。</p>
+
+  <div class="card fix"><span class="tag fix">為什麼這對 executor 正確性是關鍵</span>
+    <p>race timeline:executor <code>poll</code> → 回 <code>Pending</code> → <b>還沒走到 <code>park</code></b> → 背景執行緒 <code>wake()</code>→<code>unpark</code> → executor 才 <code>park</code>。</p>
+    <ul>
+      <li><b>沒有 token</b>(想像一個只會「喚醒正在睡的人」的原始 primitive):<code>unpark</code> 打在一個<b>還沒睡</b>的執行緒上 = 空打,之後 executor 一 <code>park</code> 就永遠睡死 = <b>lost wakeup / 掛住</b>。</li>
+      <li><b>有 token</b>:<code>unpark</code> 存下 token,executor 的 <code>park</code> 看到 token 立刻返回 → 回頭 poll → 這次資源已就緒 → <code>Ready</code>。沒漏。</li>
+    </ul>
+    <p>對照 <span class="jump" data-jump="life">Scenario B stepper</span>。</p>
+  </div>
+
+  <div class="card fail"><span class="tag fail">陷阱:token 是 per-thread 且全域共用的</span>
+    <p>同一執行緒上如果<b>別的地方</b>(不是你的 executor)也用 <code>park</code>/<code>unpark</code>,會互相干擾——吃掉你的 token,或被你吃掉。把 <code>park</code>/<code>unpark</code> 當 executor 私有喚醒機制時,不要在同一執行緒混用其他 park/unpark。這也呼應 wake 契約的不對稱:executor 收到<b>多餘</b>的 wake(spurious poll)無害,但<b>漏掉</b>一次 wake(lost wakeup)致命——所以寧可多 poll 一次。</p>
+  </div>
+</section>
+
+
+<!-- ================= TOKIO CHAIN ================= -->
+<section class="panel" data-panel="chain">
+  <h2>tokio 全鏈路 &#183; 你的 <code>block_on</code> 放大版</h2>
+  <div class="intuition">tokio 沒有發明新機制。骨架跟你的 <code>block_on</code> <b>完全一樣</b>:poll &#8594; 存 waker &#8594; 睡 &#8594; 被叫醒 &#8594; 重 poll。只有兩處被換掉:「睡」從 <code>park()</code> 換成 <code>epoll_wait</code>;「叫醒」從 <code>unpark()</code> 換成「把 task 推回 run queue」。</div>
+
+  <h3>為什麼這一頁從 <code>.await</code> 開始</h3>
+  <p>整條鏈要回答的第一個問題是:<b>誰呼叫 <code>poll</code>?<code>cx</code> 從哪來?</b> 呼叫 <code>poll</code> 的就是 <code>.await</code>。所以看懂鏈之前,得先確定 <code>.await</code> 到底編譯成什麼——這是鏈的第一環,錯在這裡,後面全歪。</p>
+
+  <div class="card naive"><span class="tag naive">你腦內大概是這個形狀</span>
+    <p>絕大多數人(包含我看過的多數筆記)對 <code>.await</code> 的心智模型是:「迴圈 poll 到 <code>Ready</code>,否則把 <code>Pending</code> 往外傳」。<b>形狀是對的</b>,鏈的骨架也確實長這樣。先不評價,往下建立正確版本,最後再回來 diff。</p>
+  </div>
+
+  <h3>① 官方 desugaring(primary source:Rust Reference <code>expr.await.desugar</code>)</h3>
+  <pre><code class="language-rust">match operand.into_future() {
+    mut pinned =&gt; loop {
+        let mut pin = unsafe { Pin::new_unchecked(&amp;mut pinned) };
+        match Pin::future::poll(Pin::borrow(&amp;mut pin), &amp;mut current_context) {
+            Poll::Ready(r) =&gt; break r,
+            Poll::Pending =&gt; yield Poll::Pending,
+        }
+    }
+}</code></pre>
+  <p>Reference 自己標明這是 non-normative(近似)。三個要注意的地方:</p>
+  <ul>
+    <li><code>operand.into_future()</code> — <code>.await</code> 的<b>第一步</b>,不是直接 poll。</li>
+    <li><code>Pin::new_unchecked</code> — unsafe,理由見下。</li>
+    <li><code>yield</code> 是 pseudo-code。Reference 的原話:它回傳 <code>Poll::Pending</code>,<b>再次被呼叫時從該點恢復執行</b>。<code>current_context</code> 就是外層 poll 時被塞進來的 <code>cx</code>——這是關鍵:<b><code>.await</code> 完全不知道 tokio 存在</b>,它只是把手上的 <code>cx</code> 往下遞。</li>
+  </ul>
+
+  <h3>② 「從該點恢復」是什麼機制?攤平成狀態機就看得見</h3>
+  <p><code>yield</code> 是 source level 的說法,編譯器不會真的產生一個會 yield 的東西。它把整個 async body <b>攤平成一個 <code>match state</code> 的狀態機</b>。攤平之後,<code>yield</code> 變成兩件具體的事:</p>
+  <div class="card key"><span class="tag key">yield 攤平後 = 存狀態 + return Pending</span>
+    <ol>
+      <li><b>狀態已經存好</b>(<code>st</code> 停在 <code>Awaiting</code> 這個 variant,而且被 await 的那個 future 就存在 variant 裡面)</li>
+      <li><b><code>return Poll::Pending</code></b></li>
+    </ol>
+    <p>「resume 點」不是什麼神祕的東西,<b>它就是 enum 的一個 variant</b>。下次 poll 進來,<code>match this.st</code> 直接跳回 <code>Awaiting</code> 臂 —— <code>Start</code> 臂不會再跑一次。<b>那個 <code>loop</code> 是靠「st 沒變 + 下次 poll 重新進來 match」來迭代的,一次 poll 只轉一圈。</b></p>
+  </div>
+  <div class="verified"><span class="tag v">verified</span> 下面把同一個 async fn 寫兩遍——<b>編譯器版</b>和<b>手寫狀態機版</b>——在 rustc 1.91.1 / edition 2024 實跑對照。手寫版<b>零 unsafe</b>,因為這個例子的欄位剛好都是 <code>Unpin</code>。</div>
+  <pre><code class="language-rust">// .await 到底變成什麼:async fn 版 vs 手寫狀態機版,行為對照
+// rustc --edition 2024 -O desugar.rs   (rustc 1.91.1 實跑;CoderPad 是 1.92.0,delta 已稽核)
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread;
+
+// 三個計數器:證明「哪一段程式碼跑了幾次」
+static A_RUNS: AtomicU32 = AtomicU32::new(0); // await 之前那段
+static B_RUNS: AtomicU32 = AtomicU32::new(0); // await 之後那段
+
+// ---- leaf future:前 3 次回 Pending,第 4 次 Ready ----
+struct Countdown(u32);
+impl Future for Countdown {
+    type Output = ();
+    fn poll(mut self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;()&gt; {
+        if self.0 == 0 {
+            Poll::Ready(())
+        } else {
+            self.0 -= 1;
+            cx.waker().wake_by_ref(); // 立刻自我喚醒,省掉背景 thread
+            Poll::Pending
+        }
+    }
+}
+
+// ================= 版本一:async fn =================
+async fn body() -&gt; u32 {
+    A_RUNS.fetch_add(1, Relaxed); // ← await 之前
+    Countdown(3).await;
+    B_RUNS.fetch_add(1, Relaxed); // ← await 之後
+    42
+}
+
+// ================= 版本二:手寫狀態機 =================
+// 這就是編譯器對上面那個 async fn 做的事(簡化版,但行為等價)。
+enum St {
+    Start,
+    Awaiting(Countdown), // ← 「resume 點」的真身:它是一個 enum variant
+    Done,
+}
+struct Body {
+    st: St,
+}
+
+impl Future for Body {
+    type Output = u32;
+    fn poll(self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;u32&gt; {
+        // Body 的欄位全是 Unpin,所以 get_mut() 可用,零 unsafe。
+        // 真實編譯器產生的狀態機通常是 !Unpin(借用跨 await 會自我參照),
+        // 那時就只能走 unsafe 的 get_unchecked_mut / Pin::new_unchecked。
+        let this = self.get_mut();
+
+        // ↓ 這個 loop 就是官方 desugaring 裡那個 loop。
+        //   它在「同一次 poll 內」只負責狀態直落(Start → Awaiting);
+        //   跨 poll 的迭代靠的是 st 沒變 + 下次 poll 重新進來 match。
+        loop {
+            match this.st {
+                St::Start =&gt; {
+                    A_RUNS.fetch_add(1, Relaxed);
+                    this.st = St::Awaiting(Countdown(3));
+                    // 不 return,直接 loop 回去進 Awaiting 臂
+                }
+                St::Awaiting(ref mut c) =&gt; {
+                    // Countdown 剛好是 Unpin,所以 Pin::new 能用。
+                    // 真實 async fn 的子 future 是 !Unpin → 編譯器只能用 Pin::new_unchecked。
+                    match Pin::new(c).poll(cx) {
+                        Poll::Ready(()) =&gt; {
+                            B_RUNS.fetch_add(1, Relaxed);
+                            this.st = St::Done;
+                            return Poll::Ready(42); // = desugaring 的 `break r`
+                        }
+                        // ↓↓ `yield Poll::Pending` 編譯後就是這兩件事:
+                        //    (1) st 已經是 Awaiting(狀態存好了)
+                        //    (2) return Poll::Pending
+                        //    resume 靠的是下次 poll 進來時 match 直接跳回 Awaiting 臂,
+                        //    Start 臂不會再跑一次。
+                        Poll::Pending =&gt; return Poll::Pending,
+                    }
+                }
+                St::Done =&gt; panic!("polled after Ready"),
+            }
+        }
+    }
+}
+
+// ---- 會數 poll 次數的 block_on ----
+struct ThreadWaker(thread::Thread);
+impl Wake for ThreadWaker {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+    fn wake_by_ref(self: &amp;Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+}
+
+fn block_on_counting&lt;F: Future&gt;(f: F) -&gt; (F::Output, u32) {
+    let mut f = std::pin::pin!(f);
+    let waker = Waker::from(Arc::new(ThreadWaker(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    let mut polls = 0u32;
+    loop {
+        polls += 1;
+        match f.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; return (v, polls),
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+fn run&lt;F: Future&lt;Output = u32&gt;&gt;(f: F) -&gt; (u32, u32, u32, u32) {
+    A_RUNS.store(0, Relaxed);
+    B_RUNS.store(0, Relaxed);
+    let (v, polls) = block_on_counting(f);
+    (v, polls, A_RUNS.load(Relaxed), B_RUNS.load(Relaxed))
+}
+
+fn main() {
+    let r1 = run(body());
+    let r2 = run(Body { st: St::Start });
+    // 標籤刻意等寬:"async fn  " 是 10 個半形,"手寫狀態機" 是 5 個全形 = 10 欄
+    let show = |tag: &amp;str, r: (u32, u32, u32, u32)| {
+        println!(
+            "{}: 回傳 {} | poll 了 {} 次 | await 前跑 {} 次 | await 後跑 {} 次",
+            tag, r.0, r.1, r.2, r.3
+        );
+    };
+    show("async fn  ", r1);
+    show("手寫狀態機", r2);
+
+    assert_eq!(r1, r2, "手寫狀態機與 async fn 行為不一致");
+    assert_eq!(r1.2, 1, "await 前的程式碼被重跑了");
+    assert!(r1.1 &gt; 1, "根本沒 Pending 過,這次測試沒有意義");
+
+    println!("\n兩者行為完全一致 —— 這就是 desugaring。");
+    println!(
+        "關鍵:poll 了 {} 次,但 await 前的程式碼只跑了 1 次。",
+        r1.1
+    );
+    println!(
+        "若 .await 真是「return Pending 然後從頭重跑」,它會跑 {} 次。",
+        r1.1
+    );
+}
+</code></pre>
+
+  <h3>③ 實測:poll 4 次,await 前的程式碼只跑 1 次</h3>
+  <div class="out">async fn  : 回傳 42 | poll 了 4 次 | await 前跑 1 次 | await 後跑 1 次
+手寫狀態機: 回傳 42 | poll 了 4 次 | await 前跑 1 次 | await 後跑 1 次
+
+兩者行為完全一致 —— 這就是 desugaring。
+關鍵:poll 了 4 次,但 await 前的程式碼只跑了 1 次。
+若 .await 真是「return Pending 然後從頭重跑」,它會跑 4 次。</div>
+  <div class="card key"><span class="tag key">這個 1 vs 4 就是整段的重點</span>
+    <p>如果心智模型是「<code>return Pending</code>,下次從頭重跑」,那 <code>A_RUNS</code> 應該是 4。<b>它是 1。</b> 執行是從 <code>Awaiting</code> 那一臂<b>接續</b>的,不是重來。</p>
+    <p>這不是學術細節。直接推論:<b>spurious wakeup(莫名其妙被多 poll 一次)不會把你的 async fn 從頭重跑</b>,所以 await 之前的副作用(送出請求、遞增 counter)<b>不會被重複執行</b>。這是面試會問的東西,而「return 從頭重跑」的模型會給出完全相反的答案。</p>
+  </div>
+
+  <h3>④ 現在回來 diff:那個形狀差在哪三處</h3>
+  <pre><code class="language-rust">loop {
+    match Future::poll(Pin::new(&amp;mut inner_future), cx) {   // (1) (2)
+        Poll::Ready(v) =&gt; break v,
+        Poll::Pending =&gt; return Poll::Pending,               // (3)
+    }
+}</code></pre>
+  <div class="card fail"><span class="tag fail">三處</span>
+    <ul>
+      <li><b>(1) <code>Pin::new</code> 編不過。</b> <code>Pin::new</code> 的簽章要求 <code>T: Unpin</code>。子 future 通常是編譯器生的狀態機,借用跨 await 就會自我參照 &#8594; <code>!Unpin</code> &#8594; <b>這行連編譯都過不了</b>。官方用 <code>Pin::new_unchecked</code>(unsafe),而 unsafe 的義務由「外層已被 pin 住、子 future 是它的欄位」擔保(structural pinning)。上面手寫版能用 <code>Pin::new</code>,<b>純粹因為 <code>Countdown</code> 剛好是 <code>Unpin</code></b>——這是例子的僥倖,不是通則。背景見 <span class="jump" data-jump="pin">借用跨 await &#8594; Pin</span>。</li>
+      <li><b>(2) 少了 <code>IntoFuture::into_future</code>。</b> <code>.await</code> 的第一步是對 operand 呼叫它,不是直接 poll。所以你可以 <code>.await</code> 一個<b>不是 Future</b> 但實作了 <code>IntoFuture</code> 的東西(builder pattern 常用)。(<code>future::IntoFuture</code> stable since <b>1.64.0</b>,2022-09-22,來源 <code>RELEASES.md</code>)</li>
+      <li><b>(3) <code>yield</code> 被寫成 <code>return</code> — 這處最要命,因為它剛好「看起來很合理」。</b>
+        <p>問題不是「<code>return Poll::Pending</code> 這行不存在」——攤平後的狀態機裡<b>確實</b>有這行(見手寫版 <code>Awaiting</code> 臂)。問題是<b>它把兩層壓成一層</b>:</p>
+        <ul>
+          <li><b>source level</b>(<code>.await</code> 的 desugaring):有 <code>loop</code>,有 <code>yield</code>,<b>沒有 return</b>。</li>
+          <li><b>machine level</b>(攤平後的 <code>poll</code>):有 <code>return Poll::Pending</code>,但配的是 <code>match st</code> 的 dispatch loop,<b>語意跟前者那個 loop 完全不同</b>。</li>
+        </ul>
+        <p>把 source 的 <code>loop</code> 配 machine 的 <code>return</code>,兩邊都不成立:<b>那個 <code>loop</code> 永遠轉不到第二圈,變成死碼</b>。更糟的是,<b><code>return</code> 掉了「存狀態」那一半</b>——而存狀態正是 resume 的全部機制。剩下一個沒有 state 的 return,自然只能腦補成「從頭重跑」,於是就推出上面那個被實測打臉的結論。</p>
+      </li>
+    </ul>
+  </div>
+
+  <h3>全鏈路閉環</h3>
+  <svg class="svgfig" viewBox="0 0 400 646" role="img" aria-label="tokio 全鏈路閉環">
+ <defs>
+  <marker id="c_d" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+  <marker id="c_w" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah-wake" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+ </defs>
+ <rect class="box" x="14" y="14" width="278" height="52" rx="8"/>
+ <text class="ttl t-aqua" x="26" y="34">&#9312; scheduler run queue</text>
+ <text class="sm" x="26" y="54">排隊中的 Notified task</text>
+
+ <rect class="box" x="14" y="100" width="278" height="66" rx="8"/>
+ <text class="ttl t-aqua" x="26" y="120">&#9313; harness.poll()</text>
+ <text class="sm" x="26" y="139">waker_ref(header) &#8594; Context::from_waker</text>
+ <text class="sm t-dim" x="26" y="156">harness.rs:207-210</text>
+
+ <rect class="box box-ok" x="14" y="200" width="278" height="52" rx="8"/>
+ <text class="ttl t-green" x="26" y="220">&#9314; 你的 async fn</text>
+ <text class="sm" x="26" y="240">.await &#8594; poll 子 future,cx 一路往下傳</text>
+
+ <rect class="box" x="14" y="286" width="278" height="66" rx="8"/>
+ <text class="ttl" x="26" y="306">&#9315; ScheduledIo (資源側)</text>
+ <text class="sm" x="26" y="325">存 cx.waker().clone() &#8594; Poll::Pending</text>
+ <text class="sm t-dim" x="26" y="342">scheduled_io.rs:317-325</text>
+
+ <rect class="box" x="14" y="386" width="278" height="66" rx="8"/>
+ <text class="ttl t-yellow" x="26" y="406">&#9316; 沒 task 可跑 &#8594; park()</text>
+ <text class="sm" x="26" y="425">mio::Poll::poll = epoll_wait(阻塞)</text>
+ <text class="sm t-dim" x="26" y="442">driver.rs:188</text>
+
+ <rect class="box" x="14" y="486" width="278" height="66" rx="8"/>
+ <text class="ttl t-yellow" x="26" y="506">&#9317; fd 就緒 &#8594; driver.turn()</text>
+ <text class="sm" x="26" y="525">io.set_readiness(); io.wake(ready)</text>
+ <text class="sm t-dim" x="26" y="542">driver.rs:218-219</text>
+
+ <path class="arrow" d="M70,66 L70,100" marker-end="url(#c_d)"/>
+ <text class="sm" x="80" y="88">next_task() &#8594; task.run()</text>
+ <path class="arrow" d="M70,166 L70,200" marker-end="url(#c_d)"/>
+ <text class="sm" x="80" y="188">poll(cx)</text>
+ <path class="arrow" d="M70,252 L70,286" marker-end="url(#c_d)"/>
+ <text class="sm" x="80" y="274">poll_readiness(cx)</text>
+ <path class="arrow" d="M70,352 L70,386" marker-end="url(#c_d)"/>
+ <text class="sm" x="80" y="374">Pending 往上傳 &#8594; task idle</text>
+ <path class="arrow" d="M70,452 L70,486" marker-end="url(#c_d)"/>
+ <text class="sm" x="80" y="474">kernel 通知</text>
+
+ <path class="arrow arrow-wake" d="M292,519 L364,519 L364,40 L292,40" marker-end="url(#c_w)"/>
+ <text class="sm t-aqua" x="358" y="280" transform="rotate(-90 358 280)">存的 waker.wake() &#8594; schedule()</text>
+</svg>
+  <div class="verified"><span class="tag v">verified</span> 以下行號逐一對照 <code>tokio-rs/tokio</code> master 原始碼查證(抓取於本次 session)。行號會隨版本漂移,概念不會。</div>
+  <ul>
+    <li><b>建 cx</b> &#183; <code>harness.rs:207-210</code> — <code>header_ptr()</code> &#8594; <code>waker_ref::&lt;S&gt;(&amp;header_ptr)</code> &#8594; <code>Context::from_waker</code> &#8594; <code>poll_future</code>。</li>
+    <li><b>waker vtable</b> &#183; <code>waker.rs:118-119</code> — <code>RawWakerVTable::new(clone_waker, wake_by_val, wake_by_ref, drop_waker)</code>。注意 tokio <b>手刻 vtable</b>,沒用 <code>Wake</code> trait——因為它要的 waker 資料就是「指向 task header 的裸指標」,不是 <code>Arc&lt;W&gt;</code>。你的 handbook 用 <code>Wake</code> + <code>Arc</code> 是對的簡化;tokio 為了省掉一層 <code>Arc</code> 才走 unsafe。</li>
+    <li><b>存 waker</b> &#183; <code>scheduled_io.rs:317-325</code> — <code>waiters.lock()</code> &#8594; <code>clone_from(cx.waker())</code> 或 <code>Some(cx.waker().clone())</code> &#8594; <code>Pending</code>。<code>clone_from</code> 是避免重複 alloc 的最佳化,語意仍是 <b>store-latest</b>,跟你的 <code>Timer</code> 同一個契約。</li>
+    <li><b>睡</b> &#183; <code>driver.rs:188</code> — <code>self.poll.poll(events, max_wait)</code>,底層 epoll/kqueue。</li>
+    <li><b>叫醒</b> &#183; <code>driver.rs:218-219</code> — <code>io.set_readiness(Tick::Set, ...)</code>;<code>io.wake(ready)</code>。</li>
+    <li><b>回 scheduler</b> &#183; <code>harness.rs:68</code>(<code>wake_by_val</code>)/ <code>:95</code>(<code>wake_by_ref</code>)— <code>transition_to_notified_by_*</code> &#8594; <code>Submit</code> &#8594; <code>self.schedule()</code>。</li>
+    <li><b>主迴圈</b> &#183; <code>current_thread/mod.rs:841-853</code> — <code>core.next_task(handle)</code>;拿不到 task &#8594; <code>context.park(core, handle)</code>。</li>
+  </ul>
+
+  <div class="card key"><span class="tag key">你的描述漏掉的一個 race(面試會問)</span>
+    <p><code>poll_readiness</code> 存完 waker 之後,<b>又 load 一次 readiness</b>:</p>
+    <pre><code class="language-rust">let mut waiters = self.waiters.lock();
+// ... *waker = Some(cx.waker().clone());
+
+// Try again, in case the readiness was changed while we were
+// taking the waiters lock
+let curr = self.readiness.load(Acquire);</code></pre>
+    <p>為什麼要這行:函式開頭 <code>load</code> 到「還沒 ready」,接著去搶 <code>waiters</code> 鎖。<b>搶鎖的空檔</b>裡,driver thread 可能已經 <code>set_readiness</code> + <code>wake()</code> 了——但那一刻 waker 還沒存進去,所以那次 wake <b>打在空氣上</b>。沒有這個 re-check,這個 future 就永遠 <code>Pending</code> = <b>lost wakeup</b>。</p>
+    <p>標準三段式:<b>check &#8594; store waker &#8594; re-check</b>。你的 <code>Timer</code> 天生沒這個洞,因為 check 和 store 在<b>同一個 <code>Mutex</code></b> 裡。但只要 readiness 是 atomic、waker 在另一個鎖裡(<b>兩個不同的同步物件</b>),re-check 就是強制的。</p>
+    <p>順帶:這裡的 <code>Acquire</code> 不是裝飾。它要跟 driver 側 <code>set_readiness</code> 的 <code>Release</code> 配對,才保證「看到 ready 旗標」蘊含「看到 ready 之前的所有寫入」。</p>
+  </div>
+
+  <h3>為什麼 park 叫不醒 epoll_wait</h3>
+  <svg class="svgfig" viewBox="0 0 400 268" role="img" aria-label="park 與 epoll_wait 是兩種不同的睡法">
+ <defs>
+  <marker id="s_ok" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah-ok" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+  <marker id="s_bad" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah-bad" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+ </defs>
+ <rect class="box box-ok" x="14" y="14" width="240" height="66" rx="8"/>
+ <text class="ttl t-green" x="26" y="34">你的 block_on 睡在這</text>
+ <text x="26" y="54">thread::park()</text>
+ <text class="sm t-dim" x="26" y="71">看的是 per-thread park token</text>
+ <path class="arrow arrow-ok" d="M382,47 L256,47" marker-end="url(#s_ok)"/>
+ <text class="sm t-green" x="268" y="36">unpark()</text>
+ <text class="sm t-green" x="268" y="66">叫得醒</text>
+
+ <rect class="box box-bad" x="14" y="112" width="240" height="66" rx="8"/>
+ <text class="ttl t-red" x="26" y="132">tokio driver 睡在這</text>
+ <text x="26" y="152">epoll_wait(fds)</text>
+ <text class="sm t-dim" x="26" y="169">看的是 epoll fd set</text>
+ <path class="arrow arrow-bad dash" d="M382,145 L256,145" marker-end="url(#s_bad)"/>
+ <text class="sm t-red" x="268" y="134">unpark()</text>
+ <text class="sm t-red" x="268" y="164">叫不醒</text>
+
+ <rect class="box box-ok" x="14" y="204" width="368" height="50" rx="8"/>
+ <text class="ttl t-aqua" x="26" y="224">所以 driver 的 unpark() = 寫 eventfd</text>
+ <text class="sm" x="26" y="243">mio::Waker + TOKEN_WAKEUP &#183; driver.rs:270-272</text>
+</svg>
+  <p><code>driver.rs:270-272</code> 的 <code>unpark()</code> 實作是 <code>self.waker.wake()</code>,而 <code>self.waker</code> 是 <code>mio::Waker</code>(<code>driver.rs:50</code> 宣告、<code>:120</code> 建構、綁 <code>TOKEN_WAKEUP</code> at <code>:103</code>)。Linux 上它是一個 <b>eventfd</b>。</p>
+  <p>為什麼不用 <code>thread::unpark</code>?因為 driver thread 此刻<b>睡在 <code>epoll_wait</code> 裡</b>,不在 park 裡。<code>unpark</code> 只會把 park token 設成 1,而 <code>epoll_wait</code> 根本不看那個 token。要戳醒 <code>epoll_wait</code>,唯一辦法是讓它監聽的某個 fd 變就緒 &#8594; 所以註冊一個 eventfd,寫它。</p>
+  <div class="card key"><span class="tag key">一句話</span>
+    <p>一個 thread 同時只能睡在<b>一個</b>地方。選了 <code>park</code> 就用 <code>unpark</code> 叫;選了 <code>epoll_wait</code> 就得用 fd 叫。<b>park 和 epoll 不是替代關係,是不同層的睡眠原語。</b></p>
+  </div>
+
+  <div class="card fix"><span class="tag fix">對你的意義:沒有 libc = reactor 層蓋不出來</span>
+    <p>沒有 <code>libc</code> 就沒有 <code>epoll_create1</code>/<code>epoll_ctl</code>/<code>epoll_wait</code>,std 也不 export 它們。<b>上圖的 &#9316;&#9317; 兩格你做不出來。</b></p>
+    <p>所以任何「async IO」題目你只有一條路:<b>thread-as-reactor</b>——拿一個 blocking thread 假裝 reactor,它做 blocking read,好了就 <code>waker.wake()</code>。這正是 handbook <span class="jump" data-jump="exec">Timer</span> 的形狀(背景 thread sleep &#8594; wake),不是玩具,是你唯一能蓋的 reactor。</p>
+    <p>代價要主動講出來:<b>一條連線一個 thread,C10K 不可能</b>(每 thread 預設 ~8MB 虛擬 stack、實際 RSS 看用量)。這就是「epoll 為什麼存在」的答案。面試官要聽的是你知道自己在付什麼代價,不是你能變出 epoll。</p>
+  </div>
+</section>
+
+<!-- ================= CASE STUDY ================= -->
+<section class="panel" data-panel="case">
+  <h2>實戰 &#183; std-only TCP log collector</h2>
+  <div class="intuition">需求:接連線、收資料、寫檔案,event loop 負責接收任務。<b>三層拆開</b>:accept thread 只 accept;conn thread 只讀;<b>單一 writer thread</b> 是唯一碰檔案的人,也是唯一的序列化點。全部 std,零 libc。</div>
+
+  <div class="card naive"><span class="tag naive">naive</span>
+    <pre><code class="language-rust">let listener = TcpListener::bind("127.0.0.1:9000")?;
+let mut file = File::create("collected.log")?;
+for stream in listener.incoming() {
+    let reader = BufReader::new(stream?);
+    for line in reader.lines() { writeln!(file, "{}", line?)?; }
+}</code></pre>
+  </div>
+  <div class="card fail"><span class="tag fail">為什麼壞</span>
+    <p>單 thread。client #1 只要不斷線,<code>reader.lines()</code> 就<b>永遠不結束</b> &#8594; 外層 <code>incoming()</code> 永遠不會再轉一圈 &#8594; client #2 永遠不被 accept。這不是「慢」,是<b>完全不會動</b>——head-of-line blocking 發生在<b>連線層級</b>。</p>
+  </div>
+
+  <h3>架構</h3>
+  <svg class="svgfig" viewBox="0 0 400 396" role="img" aria-label="log collector 架構">
+ <defs>
+  <marker id="g_d" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+  <marker id="g_bad" markerWidth="9" markerHeight="9" refX="6.4" refY="3.2" orient="auto"><path class="ah-bad" d="M0.6,0.6 L6.4,3.2 L0.6,5.8 Z"/></marker>
+ </defs>
+ <text class="sm t-dim" x="14" y="16">accept thread:只 accept + spawn,不碰 IO</text>
+ <rect class="box box-ok" x="14" y="26" width="86" height="52" rx="8"/>
+ <text class="ttl t-green" x="26" y="46">conn 0</text>
+ <text class="sm" x="26" y="65">blocking</text>
+ <rect class="box box-ok" x="114" y="26" width="86" height="52" rx="8"/>
+ <text class="ttl t-green" x="126" y="46">conn 1</text>
+ <text class="sm" x="126" y="65">blocking</text>
+ <rect class="box box-ok" x="214" y="26" width="86" height="52" rx="8"/>
+ <text class="ttl t-green" x="226" y="46">conn 2</text>
+ <text class="sm" x="226" y="65">blocking</text>
+ <text class="sm t-dim" x="312" y="56">&#8230; N</text>
+
+ <path class="arrow" d="M57,78 L57,104 L150,104 L150,130" marker-end="url(#g_d)"/>
+ <path class="arrow" d="M157,78 L157,130" marker-end="url(#g_d)"/>
+ <path class="arrow" d="M257,78 L257,104 L164,104 L164,130" marker-end="url(#g_d)"/>
+ <text class="sm" x="176" y="122">send(Record)</text>
+
+ <rect class="box" x="14" y="140" width="286" height="62" rx="8"/>
+ <text class="ttl t-yellow" x="26" y="160">sync_channel(1024) &#183; 有界</text>
+ <text class="sm" x="26" y="178">滿了 &#8594; send 阻塞 = 背壓傳回 TCP</text>
+ <text class="sm t-dim" x="26" y="195">無界 channel = 快 client 打爆記憶體</text>
+ <path class="arrow arrow-bad dash" d="M300,150 L340,150 L340,52 L302,52" marker-end="url(#g_bad)"/>
+ <text class="sm t-red" x="334" y="104" transform="rotate(-90 334 104)">背壓</text>
+
+ <path class="arrow" d="M157,202 L157,236" marker-end="url(#g_d)"/>
+ <text class="sm" x="167" y="224">recv() 空則阻塞 = event loop</text>
+
+ <rect class="box" x="14" y="246" width="286" height="66" rx="8"/>
+ <text class="ttl t-aqua" x="26" y="266">writer thread &#215; 1</text>
+ <text class="sm" x="26" y="284">唯一序列化點 &#8594; 到達順序 = 全域總序</text>
+ <text class="sm t-dim" x="26" y="301">批次 flush;明確 flush,不靠 Drop</text>
+
+ <path class="arrow" d="M157,312 L157,342" marker-end="url(#g_d)"/>
+ <rect class="box" x="14" y="352" width="150" height="36" rx="8"/>
+ <text class="ttl" x="26" y="375">collected.log</text>
+</svg>
+
+  <div class="verified"><span class="tag v">verified</span> 以下代碼在 <b>rustc 1.91.1</b>(<code>rustc --edition 2024 -O</code>)實際編譯 + 執行:開真 socket、3 條假 client、驗證 per-conn FIFO,輸出 <code>writer wrote 15 records</code> / <code>per-conn FIFO: OK</code>。</div>
+  <pre><code class="language-rust">// std-only TCP log collector:thread-per-conn 讀取 → 有界 channel → 單一 writer thread 落檔
+// 無 libc / 無 epoll。rustc --edition 2024 -O log_collector.rs
+use std::fs::File;
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
+use std::thread;
+
+struct Record {
+    conn: u64,
+    seq: u64, // per-connection 序號:producer-local,零競爭
+    line: String,
+}
+
+// ---- writer:整個系統唯一的序列化點(serialization point)----
+fn writer_loop(rx: Receiver&lt;Record&gt;, path: &amp;str) -&gt; std::io::Result&lt;u64&gt; {
+    let mut w = BufWriter::new(File::create(path)?);
+    let mut n = 0u64;
+    // recv() 空的時候 block —— 這就是 event loop;
+    // 所有 SyncSender drop 後 iterator 結束,是唯一的關機訊號。
+    for rec in rx {
+        writeln!(w, "conn{} #{} {}", rec.conn, rec.seq, rec.line)?;
+        n += 1;
+        if n % 64 == 0 {
+            w.flush()?; // flush policy:批次,不是每行一次 syscall
+        }
+    }
+    w.flush()?; // 明確 flush。不能靠 BufWriter 的 Drop:它會吞掉 flush 的 error
+    Ok(n)
+}
+
+// ---- 每條連線一個 thread:blocking read,per-conn 程式順序 = per-conn FIFO ----
+fn conn_loop(stream: TcpStream, conn: u64, tx: SyncSender&lt;Record&gt;) {
+    let reader = BufReader::new(stream);
+    let mut seq = 0u64;
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) =&gt; l,
+            Err(_) =&gt; break, // 對端斷線 / IO error:結束這條連線,不影響別人
+        };
+        let rec = Record { conn, seq, line };
+        seq += 1;
+        // 背壓策略在這裡做決定,而且必須是個「明講的決定」:
+        match tx.try_send(rec) {
+            Ok(()) =&gt; {}
+            Err(TrySendError::Full(rec)) =&gt; {
+                // 佇列滿了。兩條路:(a) blocking send = 背壓傳回 TCP,拖慢 client
+                //                    (b) 丟棄 = 保護記憶體,但掉 log
+                // log collector 通常選 (a),因為掉 log 是靜默的資料損失。
+                if tx.send(rec).is_err() {
+                    break;
+                }
+            }
+            Err(TrySendError::Disconnected(_)) =&gt; break, // writer 死了
+        }
+    }
+}
+
+fn main() -&gt; std::io::Result&lt;()&gt; {
+    let path = "/tmp/collected.log";
+    // 有界!mpsc::channel() 是無界的 → 快的 client 可以把你打到 OOM。
+    let (tx, rx) = sync_channel::&lt;Record&gt;(1024);
+
+    let writer = thread::spawn(move || writer_loop(rx, path));
+
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+    println!("listening on {}", addr);
+
+    // --- 假 client:3 條連線各送 5 行 ---
+    let mut clients = Vec::new();
+    for c in 0..3u64 {
+        clients.push(thread::spawn(move || {
+            let mut s = TcpStream::connect(addr).unwrap();
+            for i in 0..5 {
+                writeln!(s, "client{} msg{}", c, i).unwrap();
+            }
+        }));
+    }
+
+    // --- accept loop:只做 accept + spawn,不做任何 IO ---
+    let mut conn_threads = Vec::new();
+    for conn in 0..3u64 {
+        let (stream, _) = listener.accept()?;
+        let txc = tx.clone();
+        conn_threads.push(thread::spawn(move || conn_loop(stream, conn, txc)));
+    }
+
+    for c in clients {
+        c.join().unwrap();
+    }
+    for t in conn_threads {
+        t.join().unwrap();
+    }
+    // 關鍵:必須 drop 原始 tx,否則 rx 永遠不會結束 → writer 永遠不 return → join 卡死
+    drop(tx);
+    let n = writer.join().unwrap()?;
+    println!("writer wrote {} records", n);
+
+    let content = std::fs::read_to_string(path)?;
+    // 驗證 per-conn FIFO:每條連線的 seq 必須嚴格遞增
+    for c in 0..3u64 {
+        let seqs: Vec&lt;u64&gt; = content
+            .lines()
+            .filter(|l| l.starts_with(&amp;format!("conn{} ", c)))
+            .map(|l| l.split_whitespace().nth(1).unwrap()[1..].parse().unwrap())
+            .collect();
+        assert_eq!(seqs, (0..5).collect::&lt;Vec&lt;u64&gt;&gt;(), "conn{} FIFO broken", c);
+    }
+    println!("per-conn FIFO: OK (global order is arbitrary, and that is fine)");
+    Ok(())
+}
+</code></pre>
+
+  <div class="card key"><span class="tag key">四個要主動講的決定</span>
+    <ul>
+      <li><b>有界 channel</b>。<code>mpsc::channel()</code> 是<b>無界</b>的 &#8594; 一個快 client 就能把你打到 OOM。<code>sync_channel(1024)</code> 滿了會 block &#8594; 背壓一路傳回 TCP 接收視窗 &#8594; client 自己慢下來。這是<b>免費的 flow control</b>,不用自己寫。</li>
+      <li><b><code>drop(tx)</code> 是關機協定</b>。忘了 drop 原始 <code>tx</code> &#8594; <code>for rec in rx</code> 永遠不結束 &#8594; writer 不 return &#8594; <code>join()</code> 卡死。std mpsc 最常見的 deadlock,而且它<b>看起來像 hang,不像 bug</b>。</li>
+      <li><b>明確 <code>flush()</code></b>。<code>BufWriter</code> 的 <code>Drop</code> 會 flush,但<b>吞掉 error</b>。log collector 靜默掉資料是最糟的失敗模式——你不會知道。</li>
+      <li><b>flush policy 是 tradeoff,沒有正解</b>。每行 flush = 每行一次 syscall。批次 = crash 掉最近 N 筆。要講出你選哪個、為什麼。</li>
+    </ul>
+  </div>
+
+  <h3>Follow-up 1 &#183; 多個任務分開接收</h3>
+  <ul>
+    <li><b>A. 多個 accept thread</b>:<code>listener.try_clone()</code>(std)&#8594; N 個 thread 各自 <code>accept()</code>。kernel 序列化,一個贏。可行,但你無法控制誰拿到哪條連線。</li>
+    <li><b>B. 一個 acceptor + thread pool</b>:acceptor 把 <code>TcpStream</code> 丟進 channel,pool worker 撿。<b>這是 Etched prep doc 字面上要的</b>(architect a custom thread pool without external libraries)。</li>
+    <li><b>C. 按連線 sharding</b>:<code>conn_id % K</code> &#8594; worker k。per-worker locality,worker 之間零競爭。</li>
+  </ul>
+  <div class="card fail"><span class="tag fail">陷阱:固定 pool + blocking read = 並發上限就是 K</span>
+    <p>B 如果 worker 做 blocking read,<b>pool 大小 K 就是你的最大並發連線數</b>。一個慢/idle 的 client 永久占住一個 worker,其他連線<b>連被服務的機會都沒有</b>。thread-per-conn 至少不會互相餓死;固定 pool + blocking read 會。</p>
+    <p>沒有 epoll 的緩解:<code>stream.set_read_timeout(Some(d))</code>(std)&#8594; worker 卡不住,可以輪替。但這變成 poll-ish,而且 timeout 該設多少<b>沒有好答案</b>——設短=空轉,設長=延遲。</p>
+    <p><b>誠實結論</b>:blocking IO + 固定 pool 做不到 C10K。要嘛 thread-per-conn(吃記憶體),要嘛 epoll(要 libc)。面試時把這個講清楚,比硬掰一個「兩全其美」的方案值錢得多。</p>
+  </div>
+  <div class="card key"><span class="tag key">跟 Follow-up 3 的連動(先看這個再往下)</span>
+    <p><b>C(按連線 shard)保住 per-conn 順序;B 如果按「訊息」搶工作</b>(任一 worker 撿任一 conn 的下一筆)<b>,per-conn 順序當場消失。</b> 你在 Follow-up 1 選的分工粒度,直接決定 Follow-up 3 是免費還是昂貴。這是同一個決定的兩面。</p>
+  </div>
+
+  <h3>Follow-up 2 &#183; 把寫 log 變成 async</h3>
+  <div class="card key"><span class="tag key">先講真相</span>
+    <p>Linux 上<b>沒有真正的 async file IO</b>(io_uring 除外)。<code>tokio::fs</code> 的實作就是 <code>spawn_blocking</code>——一個 thread pool 套上 Future 門面。所以「把寫 log 變 async」= <b>你自己蓋那個門面</b>,而門面的骨架就是你已經會的 <code>Timer</code>。</p>
+  </div>
+  <div class="verified"><span class="tag v">verified</span> rustc 1.91.1 / edition 2024 編譯 + 執行通過,輸出 <code>first/second/third</code> 且 assert 順序正確。</div>
+  <pre><code class="language-rust">// Follow-up 2:把「寫 log」變成 async 操作(std-only)
+// 真相:Linux 上沒有真正的 async file IO(io_uring 除外)。tokio::fs 也是 spawn_blocking。
+// 所以「async 寫檔」= 把工作丟給 thread + 給呼叫端一個 Future 門面。
+// 這個 Future 的骨架 = handbook 裡的 Timer,一模一樣。
+use std::fs::File;
+use std::future::Future;
+use std::io::{BufWriter, Write};
+use std::pin::Pin;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread;
+
+// ---------- 最小 executor(與 handbook 同一份骨架)----------
+struct ThreadWaker(thread::Thread);
+impl Wake for ThreadWaker {
+    fn wake(self: Arc&lt;Self&gt;) { self.0.unpark(); }
+    fn wake_by_ref(self: &amp;Arc&lt;Self&gt;) { self.0.unpark(); }
+}
+fn block_on&lt;F: Future&gt;(f: F) -&gt; F::Output {
+    let mut f = std::pin::pin!(f);
+    let waker = Waker::from(Arc::new(ThreadWaker(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    loop {
+        match f.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; return v,
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+// ---------- async 門面 ----------
+struct WriteState {
+    done: Option&lt;std::io::Result&lt;()&gt;&gt;,
+    waker: Option&lt;Waker&gt;,
+}
+
+struct LogWrite(Arc&lt;Mutex&lt;WriteState&gt;&gt;);
+
+impl Future for LogWrite {
+    type Output = std::io::Result&lt;()&gt;;
+    fn poll(self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Self::Output&gt; {
+        let mut st = self.0.lock().unwrap();
+        if let Some(r) = st.done.take() {
+            return Poll::Ready(r);
+        }
+        // store-latest:每次 Pending 都覆蓋。理由同 handbook Q3。
+        st.waker = Some(cx.waker().clone());
+        Poll::Pending
+    }
+}
+
+enum Job {
+    Write(String, Arc&lt;Mutex&lt;WriteState&gt;&gt;),
+    Quit,
+}
+
+struct AsyncLogger(Sender&lt;Job&gt;);
+
+impl AsyncLogger {
+    fn log(&amp;self, line: &amp;str) -&gt; LogWrite {
+        let st = Arc::new(Mutex::new(WriteState { done: None, waker: None }));
+        self.0.send(Job::Write(line.to_string(), st.clone())).unwrap();
+        LogWrite(st)
+    }
+}
+
+fn spawn_logger(path: &amp;str) -&gt; (AsyncLogger, thread::JoinHandle&lt;()&gt;) {
+    let (tx, rx) = channel::&lt;Job&gt;();
+    let path = path.to_string();
+    let h = thread::spawn(move || {
+        let mut w = BufWriter::new(File::create(&amp;path).unwrap());
+        while let Ok(job) = rx.recv() {
+            match job {
+                Job::Quit =&gt; break,
+                Job::Write(line, st) =&gt; {
+                    let r = writeln!(w, "{}", line).and_then(|_| w.flush());
+                    // 順序關鍵:先發佈結果,再 wake。反過來 = lost wakeup。
+                    let waker = {
+                        let mut g = st.lock().unwrap();
+                        g.done = Some(r);
+                        g.waker.take()
+                    }; // guard 在這裡 drop —— 先放鎖再 wake,避免被喚醒的 thread 立刻撞鎖
+                    if let Some(wk) = waker { wk.wake(); }
+                }
+            }
+        }
+        w.flush().unwrap();
+    });
+    (AsyncLogger(tx), h)
+}
+
+fn main() {
+    let path = "/tmp/async.log";
+    let (logger, h) = spawn_logger(path);
+    let out = block_on(async {
+        logger.log("first").await.unwrap();
+        logger.log("second").await.unwrap();   // 這行保證在 first 之後:await 建立了 happens-before
+        logger.log("third").await.unwrap();
+        "done"
+    });
+    logger.0.send(Job::Quit).unwrap();
+    h.join().unwrap();
+    println!("block_on -&gt; {}", out);
+    print!("{}", std::fs::read_to_string(path).unwrap());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "first\nsecond\nthird\n");
+    println!("ordered because each await sequences the next send");
+}
+</code></pre>
+  <div class="card fail"><span class="tag fail">兩個順序陷阱</span>
+    <ul>
+      <li><b>先發佈結果,再 wake。</b> 反過來(先 wake 再填 <code>done</code>)&#8594; executor 被叫醒 &#8594; 重 poll &#8594; 看到 <code>done: None</code> &#8594; 又存 waker 回 <code>Pending</code> &#8594; 而那次 wake <b>已經被消耗掉了</b> &#8594; <b>永久掛住</b>。這就是 release-store-then-notify:<b>先發佈狀態,再通知</b>。</li>
+      <li><b><code>wake()</code> 要在鎖外。</b> 在鎖內 wake &#8594; 被喚醒的 thread 立刻 <code>lock()</code> &#8594; 撞上你還沒放的鎖。不會 deadlock(它會等),但白付一次 context switch。代碼用 <code>let waker = { ...; g.waker.take() };</code> 讓 guard 在 block 結束就 drop,再 <code>wake()</code>。</li>
+    </ul>
+  </div>
+  <div class="card fail"><span class="tag fail">值不值得?直說:多數情況不值得</span>
+    <p><b>如果你是 thread-per-conn,這個 async 化買不到任何東西。</b> conn thread 本來就 blocking,<code>block_on(logger.log(..))</code> 只是把 blocking 包一層再 blocking——多了 <code>Arc</code>、<code>Mutex</code>、waker clone,吞吐一模一樣。</p>
+    <p><b>async 的價值只有一個:用少量 thread 多工大量 task。</b> 沒有那個壓力,async 是純開銷。10 條連線的 log collector,thread-per-conn + 一個 writer 更簡單也更快。</p>
+    <p>真正回本的場景:conn 數 &gt;&gt; thread 數,且 handler 有很多 await 點(讀網路、寫檔、查 DB)。但那又需要 reactor &#8594; 又回到 libc 問題。<b>把這個循環講出來,就是這題的滿分答案。</b></p>
+  </div>
+
+  <h3>Follow-up 3 &#183; multithread、不在意誰先寫;沒有時間戳怎麼保序?</h3>
+  <div class="card key"><span class="tag key">Step 0:先問「哪一種順序」——這題不反問就答不對</span>
+    <ol>
+      <li><b>per-connection FIFO</b> — client A 的行,按 A 送出的順序出現。</li>
+      <li><b>全域總序</b> — 所有行有一個大家同意的順序。</li>
+      <li><b>因果序</b> — X 導致 Y,則 X 在前。</li>
+    </ol>
+    <p>這三個的難度差好幾個數量級,而且<b>多數人要的其實是 1</b>。</p>
+  </div>
+
+  <h4>1. per-conn FIFO:免費</h4>
+  <p>條件只有兩個:每條連線由<b>恰好一個 thread</b> 讀(程式順序即送出順序)、傳輸保 per-sender 順序。上面的代碼已經滿足,<code>assert</code> 也驗過。你什麼都不用做。</p>
+
+  <h4>2. 全域總序</h4>
+  <div class="card fail"><span class="tag fail">先戳破一個假設:時間戳不給你順序</span>
+    <ul>
+      <li><code>SystemTime</code> <b>不單調</b>(NTP 可以往回跳)&#8594; 要用 <code>Instant</code>。</li>
+      <li>解析度有限 &#8594; 會<b>平手</b>,平手就沒有序,還是得有 tiebreaker。</li>
+      <li>最根本:<b>打戳的那一刻 &#8800; 入列的那一刻</b>。thread A 在 t=5 打戳後被 deschedule;thread B 在 t=6 打戳並先入列。檔案裡 6 在 5 前面。要按戳排序就得<b>等</b>——等到確定沒有更早的戳會再來(watermark),而「還會不會來」<b>在一般情況下無法界定</b>。</li>
+    </ul>
+    <p>所以「訊息會標注時間」買到的是<b>離線 sort 的能力</b>,不是檔案的順序。而你說「不在意誰先寫入」——那這個組合<b>就是正確且最便宜的設計</b>:writer 任意順序寫,時間戳留給下游 sort。<b>不要蓋 sequencer。</b></p>
+  </div>
+  <div class="card fix"><span class="tag fix">沒有時間戳:writer 看到的到達順序就是一個順序</span>
+    <p>任何<b>單一序列化點</b>都免費給你一個全域總序:<code>Mutex&lt;BufWriter&gt;</code> 的鎖取得順序、單一 consumer channel 的 <code>recv()</code> 順序。</p>
+    <p>這個順序<b>任意,但一致</b>——所有人同意、可重現、就存在檔案裡。你只是不能宣稱它對應真實時間。而對<b>獨立的</b> client 來說,「真實時間順序」<b>本來就不存在</b>:兩個 client 在不同 core 上同時送,沒有 ground truth 說誰先。你不是失去了順序,而是那個順序從來沒有過。</p>
+  </div>
+
+  <h4>如果你需要序號(掉包偵測 / 下游重組)</h4>
+  <div class="card fail"><span class="tag fail">陷阱:拿號 &#8800; 依號入列</span>
+    <p><code>AtomicU64::fetch_add(1, Relaxed)</code> 給你唯一號碼,但<b>拿號</b>和<b>入列</b>之間有空隙。執行緒在空隙裡被搶佔 &#8594; 後拿號的先入列。實測(<code>rustc 1.91.1</code> / edition 2024 實跑):</p>
+    <div class="out">[陷阱] 拿號順序 = 0,1,2,3
+       實際到達 = [3, 2, 1, 0]   &lt;- 檔案就會長這樣</div>
+  </div>
+  <div class="verified"><span class="tag v">verified</span> rustc 1.91.1 / edition 2024 編譯 + 執行,三個修法都有 assert。</div>
+  <pre><code class="language-rust">// Follow-up 3:沒有時間戳時的「順序性」到底是什麼
+// 論點:全域總序需要一個序列化點(serialization point)。你只能選在哪裡付代價。
+use std::collections::BinaryHeap;
+use std::cmp::Reverse;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+
+// ===== 陷阱:拿號碼 != 依號碼寫入 =====
+// fetch_add 給你唯一號碼,但「拿號」和「入列」之間有空隙。
+// 執行緒在空隙裡被 deschedule → 後拿號的先入列 → 檔案順序 != 號碼順序。
+fn ticket_gap_demo() -&gt; Vec&lt;u64&gt; {
+    let counter = Arc::new(AtomicU64::new(0));
+    let (tx, rx) = channel::&lt;u64&gt;();
+    let mut hs = Vec::new();
+    for i in 0..4u64 {
+        let c = counter.clone();
+        let tx = tx.clone();
+        hs.push(thread::spawn(move || {
+            let seq = c.fetch_add(1, Ordering::Relaxed); // ← 拿號
+            thread::sleep(Duration::from_millis((3 - i % 4) * 20)); // ← 空隙(模擬被搶佔)
+            tx.send(seq).unwrap();                                  // ← 入列
+        }));
+    }
+    drop(tx);
+    for h in hs { h.join().unwrap(); }
+    rx.iter().collect()
+}
+
+// ===== 修法 A:reorder buffer(用號碼還原順序)=====
+// 代價:記憶體 + head-of-line blocking —— 一個卡住的 producer 卡住全部。
+fn reorder(arrivals: &amp;[u64]) -&gt; Vec&lt;u64&gt; {
+    let mut heap: BinaryHeap&lt;Reverse&lt;u64&gt;&gt; = BinaryHeap::new();
+    let mut next = 0u64;
+    let mut out = Vec::new();
+    for &amp;a in arrivals {
+        heap.push(Reverse(a));
+        while let Some(&amp;Reverse(top)) = heap.peek() {
+            if top == next { heap.pop(); out.push(top); next += 1; } else { break; }
+        }
+    }
+    while let Some(Reverse(v)) = heap.pop() { out.push(v); } // flush 尾巴
+    out
+}
+
+// ===== 修法 B:把「拿號 + 入列」放進同一個鎖 =====
+// 到達順序 == 號碼順序,不需要 reorder buffer。代價:producer 被序列化。
+fn locked_ticket_demo() -&gt; Vec&lt;u64&gt; {
+    let sink = Arc::new(Mutex::new(Vec::&lt;u64&gt;::new()));
+    let counter = Arc::new(AtomicU64::new(0));
+    let mut hs = Vec::new();
+    for _ in 0..4u64 {
+        let (s, c) = (sink.clone(), counter.clone());
+        hs.push(thread::spawn(move || {
+            let mut g = s.lock().unwrap();              // 鎖先拿
+            let seq = c.fetch_add(1, Ordering::Relaxed); // 拿號在鎖內
+            g.push(seq);                                 // 入列也在鎖內 → 原子
+        }));
+    }
+    for h in hs { h.join().unwrap(); }
+    let v = sink.lock().unwrap().clone(); v
+}
+
+// ===== 修法 C(推薦):根本不要全域號碼,用 per-producer 號碼 =====
+// 每個 producer 自己的 counter(thread-local,零競爭)。
+// 得到:per-conn 總序 + 掉包偵測。失去:全域總序 —— 但獨立 client 之間本來就沒有「真正的」順序。
+fn per_producer_demo() -&gt; Vec&lt;(u64, u64)&gt; {
+    let (tx, rx) = channel::&lt;(u64, u64)&gt;();
+    let mut hs = Vec::new();
+    for conn in 0..3u64 {
+        let tx = tx.clone();
+        hs.push(thread::spawn(move || {
+            for seq in 0..4u64 {                 // seq 是 local 變數,沒有 atomic,沒有鎖
+                tx.send((conn, seq)).unwrap();
+                thread::sleep(Duration::from_millis(1));
+            }
+        }));
+    }
+    drop(tx);
+    for h in hs { h.join().unwrap(); }
+    rx.iter().collect()
+}
+
+fn main() {
+    let arrivals = ticket_gap_demo();
+    println!("[陷阱] 拿號順序 = 0,1,2,3");
+    println!("       實際到達 = {:?}   &lt;- 檔案就會長這樣", arrivals);
+    assert_ne!(arrivals, vec![0, 1, 2, 3], "本次剛好沒亂序(race 本質如此)");
+
+    let fixed = reorder(&amp;arrivals);
+    println!("[修法A] reorder buffer 還原 = {:?}", fixed);
+    assert_eq!(fixed, vec![0, 1, 2, 3]);
+
+    let locked = locked_ticket_demo();
+    println!("[修法B] 拿號+入列同鎖 = {:?}  &lt;- 天生有序,不需 buffer", locked);
+    assert_eq!(locked, vec![0, 1, 2, 3]);
+
+    let pp = per_producer_demo();
+    println!("[修法C] per-producer 序號到達 = {:?}", pp);
+    for conn in 0..3u64 {
+        let seqs: Vec&lt;u64&gt; = pp.iter().filter(|(c, _)| *c == conn).map(|(_, s)| *s).collect();
+        assert_eq!(seqs, vec![0, 1, 2, 3], "conn{} 亂序", conn);
+    }
+    println!("       每條 conn 內部嚴格遞增 (全域交錯是任意的,而且無所謂)");
+}
+</code></pre>
+  <ul>
+    <li><b>A. reorder buffer</b>:min-heap 按 seq,湊齊連號才吐。代價:記憶體 + <b>head-of-line blocking</b>——一個卡住的 producer 卡住全部。你在連線層拚命擺脫的 HOL,在這裡原封不動長回來。</li>
+    <li><b>B. 拿號 + 入列同一個鎖</b>:到達序 == 號碼序,不用 buffer。代價:producer 被序列化,鎖就是瓶頸。<b>附帶一個 tell</b>:此時那個 <code>AtomicU64</code> 是<b>多餘</b>的——你已經持有鎖了,用普通 <code>u64</code> counter 就好。在鎖裡放 atomic 通常代表沒想清楚誰在保護什麼。</li>
+    <li><b>C. per-producer 序號(推薦)</b>:每條連線自己的 counter,是<b>區域變數</b>——零 atomic、零鎖、零競爭。得到:per-conn 總序 + 掉包偵測。失去:全域總序——<b>而你本來就不需要它</b>。</li>
+  </ul>
+  <div class="card key"><span class="tag key">不變式(這句就是整題的答案)</span>
+    <p><b>全域總序一定要有一個序列化點。你只能選在哪裡付代價:在點上付競爭(B),或在下游付重組(A)。沒有第三條路。</b></p>
+    <p>而 C 是唯一的「作弊」:<b>重新定義問題,讓你根本不需要那個點</b>。面試時先提 C,再說明 A/B 什麼時候才被迫用——順序是 signal。</p>
+  </div>
+  <div class="card fix"><span class="tag fix">因果序:講出「這裡不需要」比會實作更值錢</span>
+    <p>只有真的存在因果(X 的內容依賴 Y)才需要:<b>Lamport clock</b>(每個 producer 一個 counter,送出時 <code>max(local, received)+1</code>;保證 X&#8594;Y &#8658; L(X)&lt;L(Y),<b>反向不成立</b>)或 <b>vector clock</b>(反向成立,代價 O(N)/筆)。</p>
+    <p>log collector 的連線<b>彼此獨立</b> &#8594; 沒有因果 &#8594; 這是過度設計。能點名它並說明為何不用,比寫出來更能證明你懂。</p>
+  </div>
+</section>
+
+
+<!-- ================= THREAD POOL ================= -->
+<section class="panel" data-panel="pool">
+  <h2>實戰 &#183; acceptor + thread pool(std-only)</h2>
+  <div class="intuition">這是 <span class="jump" data-jump="case">log collector</span> Follow-up 1 的選項 B,也是 Etched prep doc 字面上要的:<i>architect a custom thread pool without relying on external libraries</i>。acceptor 只 accept,把工作丟進 channel,pool 的 worker 撿。<b>兩個經典陷阱都會編譯過、功能也正確</b> —— 只有量測抓得到。</div>
+
+  <h3>決策鏈:六個被逼出來的選擇</h3>
+  <p>每一步都不是「選擇」,是被上一步逼出來的。這是 clarify 那 5 分鐘要講完的東西。</p>
+  <div class="card key"><span class="tag key">&#9312; Job 的型別 &#8594; 先問面試官(pillar 1)</span>
+    <ul>
+      <li>只收連線 &#8594; <code>Sender&lt;TcpStream&gt;</code>,worker 做 <code>handle_conn(stream)</code>。無 Box、無 dyn,簡單得多。</li>
+      <li><b>通用 job pool</b> &#8594; <code>Box&lt;dyn FnOnce() + Send + 'static&gt;</code>。「architect a custom thread pool」字面上是這個。</li>
+      <li>開場問句:<b>「你要的是連線池還是通用 job 池?」</b> 兩個工作量差很多,不問就是賭。</li>
+    </ul>
+  </div>
+  <div class="card key"><span class="tag key">&#9313; 三個 bound 各自被誰逼出來</span>
+    <ul>
+      <li><code>FnOnce</code> — job 只跑一次。寫 <code>Fn</code> 會拒絕掉所有 move 捕獲的 closure。</li>
+      <li><code>Send</code> — 它要跨 thread 邊界。</li>
+      <li><code>'static</code> — worker thread 可能活得比呼叫端久,編譯器不接受任何借來的東西。</li>
+      <li><code>Box</code> — <code>dyn FnOnce()</code> 是 unsized,不裝箱塞不進 channel。</li>
+    </ul>
+  </div>
+  <div class="card fix"><span class="tag fix">&#9314; N 個 worker 共用 Receiver &#8594; <code>Arc&lt;Mutex&lt;Receiver&lt;Job&gt;&gt;&gt;</code>,而且是被逼的</span>
+    <p><code>mpsc::Receiver&lt;T&gt;</code> <b>不能 clone,也不是 <code>Sync</code></b>,而 std 到 <b>1.97 都沒有 <code>mpmc</code></b>(<code>RELEASES.md</code> 全文零命中)。只剩一條路:包 <code>Mutex</code> 讓 worker 搶鎖。</p>
+    <p><b>這句要能脫口而出</b>:「std 沒有 mpmc,Receiver 不能 clone 也不是 Sync,所以只能 <code>Arc&lt;Mutex&lt;&gt;&gt;</code> 讓 worker 搶鎖取任務。如果能用 crossbeam 就直接 clone receiver,不用這層。」面試官問「為什麼要包 Mutex」時,這就是答案。</p>
+  </div>
+  <div class="card key"><span class="tag key">&#9315; 有界 vs 無界 &#8594; 比 log collector 多一層</span>
+    <p><code>sync_channel(N)</code> 滿了 &#8594; <code>execute()</code> 阻塞 &#8594; <b>acceptor thread 被卡住</b> &#8594; accept backlog 滿 &#8594; client 被拒。過載時 fail fast,好過無界 OOM。要講出你選哪個。</p>
+  </div>
+  <div class="card fail"><span class="tag fail">&#9316; K 個 worker = K 個並發連線上限</span>
+    <p>worker 做 blocking read 的話,一個 idle client 永久占住一個 worker。這是 <span class="jump" data-jump="case">Follow-up 1</span> 講過的天花板,在 pool 版本更明顯,因為 K 是你自己寫死的。</p>
+  </div>
+
+  <h3>陷阱 1:鎖範圍 —— 這張圖就是那 4 倍</h3>
+  <svg class="svgfig" viewBox="0 0 400 292" role="img" aria-label="鎖範圍決定序列化或並行的時序圖">
+ <text class="ttl t-red" x="14" y="16">&#9679; while let 版:鎖握到 job 跑完</text>
+ <text class="sm t-dim" x="14" y="32">4 個 worker 輪流跑,實測 801ms</text>
+ <text class="sm" x="16" y="52">w0</text><rect class="bar-bad" x="56" y="42" width="38" height="12" rx="2"/><rect class="bar-bad" x="216" y="42" width="38" height="12" rx="2"/>
+ <text class="sm" x="16" y="70">w1</text><rect class="bar-bad" x="96" y="60" width="38" height="12" rx="2"/><rect class="bar-bad" x="256" y="60" width="38" height="12" rx="2"/>
+ <text class="sm" x="16" y="88">w2</text><rect class="bar-bad" x="136" y="78" width="38" height="12" rx="2"/><rect class="bar-bad" x="296" y="78" width="38" height="12" rx="2"/>
+ <text class="sm" x="16" y="106">w3</text><rect class="bar-bad" x="176" y="96" width="38" height="12" rx="2"/><rect class="bar-bad" x="336" y="96" width="38" height="12" rx="2"/>
+ <path class="axis" d="M56,118 L378,118"/>
+ <text class="xs t-dim" x="52" y="130">0</text><text class="xs t-dim" x="126" y="130">200</text><text class="xs t-dim" x="206" y="130">400</text><text class="xs t-dim" x="286" y="130">600</text><text class="xs t-dim" x="362" y="130">800ms</text>
+ <text class="sm t-red" x="120" y="148">任何時刻只有一個 bar &#8594; 池子退化成單執行緒</text>
+
+ <text class="ttl t-green" x="14" y="176">&#9679; block 版:recv 完就放鎖</text>
+ <text class="sm t-dim" x="14" y="192">4 個 worker 真並行,實測 200ms</text>
+ <text class="sm" x="16" y="212">w0</text><rect class="bar-lock" x="52" y="202" width="4" height="12"/><rect class="bar-ok" x="56" y="202" width="38" height="12" rx="2"/><rect class="bar-lock" x="94" y="202" width="4" height="12"/><rect class="bar-ok" x="98" y="202" width="38" height="12" rx="2"/>
+ <text class="sm" x="16" y="230">w1</text><rect class="bar-lock" x="52" y="220" width="4" height="12"/><rect class="bar-ok" x="56" y="220" width="38" height="12" rx="2"/><rect class="bar-lock" x="94" y="220" width="4" height="12"/><rect class="bar-ok" x="98" y="220" width="38" height="12" rx="2"/>
+ <text class="sm" x="16" y="248">w2</text><rect class="bar-lock" x="52" y="238" width="4" height="12"/><rect class="bar-ok" x="56" y="238" width="38" height="12" rx="2"/><rect class="bar-lock" x="94" y="238" width="4" height="12"/><rect class="bar-ok" x="98" y="238" width="38" height="12" rx="2"/>
+ <text class="sm" x="16" y="266">w3</text><rect class="bar-lock" x="52" y="256" width="4" height="12"/><rect class="bar-ok" x="56" y="256" width="38" height="12" rx="2"/><rect class="bar-lock" x="94" y="256" width="4" height="12"/><rect class="bar-ok" x="98" y="256" width="38" height="12" rx="2"/>
+ <path class="axis" d="M56,278 L138,278"/>
+ <text class="xs t-dim" x="52" y="290">0</text><text class="xs t-dim" x="88" y="290">100</text><text class="xs t-dim" x="126" y="290">200ms</text>
+ <text class="sm t-yellow" x="150" y="212">&#9474; = 握鎖(只有 recv 那一瞬間)</text>
+ <text class="sm t-green" x="150" y="248">4 個 bar 重疊 &#8594; 真的並行</text>
+</svg>
+  <div class="card fail"><span class="tag fail">為什麼 <code>while let</code> 會握著鎖</span>
+    <pre><code class="language-rust">while let Ok(job) = rx.lock().unwrap().recv() {
+    job();   // ← 鎖還握著
+}</code></pre>
+    <p>scrutinee 裡那個 <code>MutexGuard</code> 是 <b>temporary</b>,它的 drop 點是「<b>整個 <code>while let</code> 陳述式結束</b>」,不是 <code>recv()</code> 回傳的瞬間。所以 <code>job()</code> 執行期間鎖還在手上,N 個 worker 退化成 1 個。</p>
+    <p><b>edition 2024 沒有修掉這個。</b> 2024 改的是 <code>if let</code> 的 scrutinee 生命週期(讓它在 <code>else</code> 之前 drop),<code>while let</code> 不在其中。本檔在 <b>rustc 1.91.1 + edition 2024</b> 實測,801ms,原封不動。</p>
+    <p><b>自我檢查句</b>:寫完問自己 —— <b>「<code>job()</code> 執行的那一瞬間,鎖在誰手上?我指得出是哪一行放掉的嗎?」</b> 答不出「已經放掉了,而且是這一行」就是錯的。</p>
+  </div>
+
+  <h3>陷阱 2:關機順序 —— 反了就 deadlock</h3>
+  <div class="card fail"><span class="tag fail">先 join 再 drop sender = 永遠回不來</span>
+    <p>sender 還活著 &#8594; worker 的 <code>recv()</code> 永遠不回 <code>Err</code> &#8594; <code>join()</code> 永遠不回來。順序只能是 <b>drop sender &#8594; 再 join</b>。</p>
+    <p>而 <code>fn drop(&amp;mut self)</code> 讓你 move 不出任何東西,所以 sender 和 <code>JoinHandle</code> <b>都得包 <code>Option</code> 用 <code>take()</code></b>。<b>兩個 <code>Option</code> 不是品味,是被 <code>&amp;mut self</code> 逼的。</b></p>
+  </div>
+  <div class="card key"><span class="tag key">Terminate 訊息為什麼比 <code>drop(sender)</code> 差</span>
+    <p>如果面試官提到 <code>Message::Terminate</code>(舊版 Rust Book 的做法):它會排在<b>還沒做完的 job 後面</b>,而且一個 worker 可能一次撿走兩個 terminate,得另外寫一個迴圈補救。<code>drop(sender)</code> 靠 channel 自己的語意,乾淨得多。</p>
+    <p><b>實測確認的前提</b>:<code>drop(sender)</code> 之後,queue 裡的訊息<b>仍會被收完</b>,之後才回 <code>Err</code>。所以「關機不掉 job」是免費的 —— 只要你別自己發 terminate 去插隊。</p>
+  </div>
+
+  <h3>兩個陷阱的實測代碼</h3>
+  <div class="verified"><span class="tag v">verified</span> rustc 1.91.1 / edition 2024 實跑。兩個陷阱<b>都編譯乾淨、功能也正確</b> —— 只有量測與 timeout 抓得到。</div>
+  <div class="out">=== 陷阱 1:8 個 job × 100ms,4 個 worker ===
+  while let 版 : 801.16223ms   (理論序列化 = 800ms)
+  block 版     : 200.382017ms   (理論並行   = 200ms)
+  慢了 4.0x
+
+=== 陷阱 2:先 join 再 drop sender ===
+  400ms 內沒關掉 → deadlock 重現</div>
+  <pre><code class="language-rust">// ThreadPool 的兩個經典陷阱 —— 兩個都「編譯過、功能正確」,只有量測抓得到。
+// rustc --edition 2024 -O pool_traps.rs
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
+
+type Job = Box&lt;dyn FnOnce() + Send + 'static&gt;;
+
+// ===================== 陷阱 1:鎖被握到 job 跑完 =====================
+fn worker_buggy(rx: Arc&lt;Mutex&lt;Receiver&lt;Job&gt;&gt;&gt;) {
+    // scrutinee 裡那個 MutexGuard 是 temporary。
+    // 它的 drop 點是「整個 while let 陳述式結束」,不是 recv() 回傳的瞬間。
+    // 所以 job() 執行期間鎖還握著 → N 個 worker 退化成 1 個。
+    while let Ok(job) = rx.lock().unwrap().recv() {
+        job();
+    }
+}
+
+fn worker_fixed(rx: Arc&lt;Mutex&lt;Receiver&lt;Job&gt;&gt;&gt;) {
+    loop {
+        let job = {
+            let guard = rx.lock().unwrap();
+            guard.recv()
+        }; // ← guard 在這個 block 結束就 drop,job() 在鎖外跑
+        match job {
+            Ok(j) =&gt; j(),
+            Err(_) =&gt; break, // 所有 Sender 都沒了 = 關機訊號
+        }
+    }
+}
+
+fn measure(worker: fn(Arc&lt;Mutex&lt;Receiver&lt;Job&gt;&gt;&gt;), n_workers: usize, n_jobs: usize) -&gt; Duration {
+    let (tx, rx) = mpsc::channel::&lt;Job&gt;();
+    let rx = Arc::new(Mutex::new(rx));
+    let mut hs = Vec::new();
+    for _ in 0..n_workers {
+        let rx = Arc::clone(&amp;rx);
+        hs.push(thread::spawn(move || worker(rx)));
+    }
+    let t0 = Instant::now();
+    for _ in 0..n_jobs {
+        tx.send(Box::new(|| thread::sleep(Duration::from_millis(100))))
+            .unwrap();
+    }
+    drop(tx); // 先讓 sender 消失
+    for h in hs {
+        h.join().unwrap();
+    }
+    t0.elapsed()
+}
+
+// ===================== 陷阱 2:先 join 再 drop sender =====================
+fn deadlock_demo() {
+    let (done_tx, done_rx) = mpsc::channel::&lt;()&gt;();
+    thread::spawn(move || {
+        let (tx, rx) = mpsc::channel::&lt;Job&gt;();
+        let rx = Arc::new(Mutex::new(rx));
+        let mut hs = Vec::new();
+        for _ in 0..2 {
+            let rx = Arc::clone(&amp;rx);
+            hs.push(thread::spawn(move || worker_fixed(rx)));
+        }
+        tx.send(Box::new(|| {})).unwrap();
+        // ↓↓ 錯誤順序:tx 還活著 → worker 的 recv() 永遠不會回 Err → join 永遠不回來
+        for h in hs {
+            h.join().unwrap();
+        }
+        drop(tx); // 永遠執行不到
+        let _ = done_tx.send(());
+    });
+    match done_rx.recv_timeout(Duration::from_millis(400)) {
+        Ok(()) =&gt; println!("  關機完成 —— 不該發生"),
+        Err(RecvTimeoutError::Timeout) =&gt; println!("  400ms 內沒關掉 → deadlock 重現"),
+        Err(e) =&gt; println!("  {:?}", e),
+    }
+}
+
+fn main() {
+    println!("=== 陷阱 1:8 個 job × 100ms,4 個 worker ===");
+    let buggy = measure(worker_buggy, 4, 8);
+    let fixed = measure(worker_fixed, 4, 8);
+    println!("  while let 版 : {:?}   (理論序列化 = 800ms)", buggy);
+    println!("  block 版     : {:?}   (理論並行   = 200ms)", fixed);
+    println!("  慢了 {:.1}x", buggy.as_secs_f64() / fixed.as_secs_f64());
+    assert!(
+        buggy &gt; fixed * 3,
+        "陷阱 1 沒重現 —— 這台機器或這版編譯器行為不同,要重查"
+    );
+
+    println!("\n=== 陷阱 2:先 join 再 drop sender ===");
+    deadlock_demo();
+
+    println!("\n兩個陷阱都編譯乾淨、功能也「對」。只有量測和 timeout 抓得到。");
+}
+</code></pre>
+
+  <h3>&#9635; 空殼 &#183; 這一節是 drill,不是讀物</h3>
+  <div class="card fail"><span class="tag fail">讀完這頁 &#8800; 會寫</span>
+    <p>7/28 的 CoderPad 上沒有這份 handbook,沒有 AI,只有 45 分鐘裡的 25 分鐘。<b>唯一會轉移的是你手寫過的部分。</b></p>
+    <p>下面的空殼有 4 個洞。<code>worker_loop</code> 的解法上面那份 <code>pool_traps.rs</code> 已經洩了(<code>worker_fixed</code>),所以真正還沒破的是 <b><code>Drop</code> 的兩個 <code>Option</code> + 順序</b> —— 而那剛好是最有價值的一個。<b>本頁刻意不提供 <code>Drop</code> 的解答。</b></p>
+    <p>每個 TODO 上面有一個開口問題。<b>先用嘴巴答一遍再動手</b> —— 答不出來就是還沒懂,不要靠改到 assert 綠。</p>
+  </div>
+  <div class="card key"><span class="tag key">assert 的設計:為什麼有一條是「時間」</span>
+    <p>陷阱 1 那個 bug <b>編得過、跑得對、結果正確</b>,單元測試全綠。<b>只有量測抓得到。</b> 所以測 1 是 <code>assert!(dt &lt; 400ms)</code>。這件事本身就是一課:「功能正確」和「正確」不是同一回事,而你的測試套件通常只驗前者。</p>
+    <ul>
+      <li><b>測 1</b> 時間 &#8594; 打陷阱 1(鎖範圍)</li>
+      <li><b>測 2</b> 1000 個 job 一個都不能掉 &#8594; 打關機把排隊中的丟掉(含 Terminate 插隊)</li>
+      <li><b>測 3</b> 程式能印出最後一行 &#8594; 打陷阱 2(deadlock)。它沒有 assert,<b>hang 就是 fail</b>。</li>
+    </ul>
+  </div>
+  <div class="verified"><span class="tag v">verified</span> 空殼本身在 rustc 1.91.1 / edition 2024 編得過(<code>todo!()</code> 會 panic,不是編譯錯,所以你可以逐洞迭代)。我用參考解填過確認 assert 全綠、用錯版填過確認 assert 開火 —— 這題是可解的,不是無解的陷阱。</div>
+  <pre><code class="language-rust">// ============================================================================
+//  ThreadPool 空殼 — 填 TODO(1)..TODO(4)
+//  std only。rustc --edition 2024 -O thread_pool_skeleton.rs &amp;&amp; ./thread_pool_skeleton
+//
+//  規則:
+//    1. 每個 TODO 上面的「開口問題」先用嘴巴答一遍再動手。答不出來就是還沒懂,
+//       不要靠改到 assert 綠。
+//    2. 寫完先手動 trace 一遍再按 Run(pillar 5)。
+//    3. main() 的 assert 會判你。注意測 1 是「時間」assert ——
+//       因為那個 bug 編得過、跑得對、結果正確,只是慢 4 倍。功能測試抓不到它。
+// ============================================================================
+
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+type Job = Box&lt;dyn FnOnce() + Send + 'static&gt;;
+
+pub struct ThreadPool {
+    workers: Vec&lt;Worker&gt;,
+    sender: Option&lt;Sender&lt;Job&gt;&gt;,
+    // 開口問題 A:為什麼是 Option&lt;Sender&lt;Job&gt;&gt; 而不是 Sender&lt;Job&gt;?
+    //   線索:Drop::drop 的簽章是 fn drop(&amp;mut self)。你需要讓 sender「消失」,
+    //         但你不能從 &amp;mut self 裡 move 出東西。Option::take() 是幹嘛的?
+}
+
+struct Worker {
+    id: usize,
+    handle: Option&lt;JoinHandle&lt;()&gt;&gt;,
+    // 開口問題 B:為什麼是 Option&lt;JoinHandle&lt;()&gt;&gt;?
+    //   線索:JoinHandle::join(self) 吃 self by value,而你手上只有 &amp;mut Worker。
+}
+
+impl ThreadPool {
+    /// size = worker 數量。size == 0 直接 panic:契約寫死,不吞。
+    pub fn new(size: usize) -&gt; ThreadPool {
+        assert!(size &gt; 0, "pool size must be &gt; 0");
+
+        // TODO(1)
+        // 開口問題:Receiver 不能 clone、也不是 Sync,而 std 到 1.97 都沒有 mpmc。
+        //           那 N 個 worker 要怎麼共用同一個 Receiver?
+        //           (這題面試官很可能追問「為什麼要包那一層」,先想好講法)
+        todo!("建 channel、把 Receiver 包成能共用的形式、spawn size 個 worker")
+    }
+
+    pub fn execute&lt;F&gt;(&amp;self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        // TODO(2)
+        // 開口問題:FnOnce / Send / 'static 三個 bound 各自為什麼是必要的?
+        //           為什麼不是 Fn?為什麼一定要 Box?
+        let _ = f;
+        todo!("把 f 裝箱送進 channel")
+    }
+}
+
+/// worker thread 的主迴圈。全場最容易錯的地方。
+fn worker_loop(id: usize, rx: Arc&lt;Mutex&lt;Receiver&lt;Job&gt;&gt;&gt;) {
+    // TODO(3)   ←←← 測 1 打的就是這裡
+    // 開口問題:寫完之後問自己一句 ——
+    //           「job() 執行的那一瞬間,鎖在誰手上?」
+    //           如果答不出「已經放掉了,而且我指得出是哪一行放的」,就是錯的。
+    let _ = (id, rx);
+    todo!("取出 job 並執行,直到 channel 斷開為止")
+}
+
+impl Drop for ThreadPool {
+    fn drop(&amp;mut self) {
+        // TODO(4)   ←←← 測 2 + 測 3 打的就是這裡
+        // 開口問題:要做兩件事 —— 讓 sender 消失、join 每個 worker。
+        //           順序反了會怎樣?說得出「為什麼會卡死」再動手。
+        //           另一個問題:排隊中還沒做完的 job,關機時應該做完還是丟掉?
+        //                       你寫的版本是哪一種?那是你選的,還是不小心的?
+        todo!("關機:順序決定會不會 deadlock")
+    }
+}
+
+// ============================================================================
+//  以下不要改。這是你的 self-check。
+// ============================================================================
+fn main() {
+    // ---------- 測 1:真的並行嗎? ----------
+    let t0 = Instant::now();
+    {
+        let pool = ThreadPool::new(4);
+        for _ in 0..8 {
+            pool.execute(|| thread::sleep(Duration::from_millis(100)));
+        }
+    } // ← pool 在這裡 drop:關機 + join
+    let dt = t0.elapsed();
+    println!("[測1] 8 jobs x 100ms / 4 workers = {:?}", dt);
+    assert!(
+        dt &lt; Duration::from_millis(400),
+        "花了 {:?}。4 個 worker 跑 8 個 100ms 的 job 應該是 ~200ms,\
+         序列化才會是 ~800ms —— job() 執行時鎖還握著。回去看 TODO(3)。",
+        dt
+    );
+    assert!(
+        dt &gt;= Duration::from_millis(190),
+        "只花了 {:?},比理論下限還快 —— job 根本沒被執行?",
+        dt
+    );
+
+    // ---------- 測 2:排隊中的 job 一個都不能掉 ----------
+    let n = Arc::new(AtomicUsize::new(0));
+    {
+        let pool = ThreadPool::new(4);
+        for _ in 0..1000 {
+            let c = Arc::clone(&amp;n);
+            pool.execute(move || {
+                c.fetch_add(1, Relaxed);
+            });
+        }
+    } // ← drop 必須等到「排隊中的 job 全部做完」才回來
+    assert_eq!(
+        n.load(Relaxed),
+        1000,
+        "掉了 job。關機把還在排隊的丟掉了 —— 回去看 TODO(4)。\
+         (如果你用了 Terminate 訊息:它會插到排隊中的 job 前面被撿走)"
+    );
+    println!("[測2] 1000 jobs 全數執行");
+
+    // ---------- 測 3:關機不能 hang ----------
+    // 上面兩個 block 都正常離開了。能印出這行就是測 3 通過。
+    println!("[測3] 兩次關機都沒 hang");
+
+    println!("\n全部通過。");
+}
+</code></pre>
+  <div class="card fix"><span class="tag fix">填完之後:我會用這些邊界反例打(不是隨機 fuzz)</span>
+    <ul>
+      <li><code>ThreadPool::new(1)</code> — 單 worker,關機還對嗎?</li>
+      <li>建了 pool 但一個 <code>execute</code> 都沒呼叫就 drop</li>
+      <li>job 自己 <code>panic!</code> — worker 死掉之後,<code>Mutex</code> 中毒(poisoned),其他 worker 的 <code>lock().unwrap()</code> 會怎樣?整個池子會不會連鎖死光?</li>
+      <li>pool 已經 drop 之後才呼叫 <code>execute</code>(你的 <code>Option&lt;Sender&gt;</code> 是 <code>None</code> 了)</li>
+      <li>worker 數 &gt; job 數:多出來的 worker 卡在 <code>recv()</code>,關機時它們醒得來嗎?</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= FOLLOW-UP ================= -->
+<section class="panel" data-panel="followup">
+  <h2>③ 常見面試追問(3 條鏈 × 3 層深)</h2>
+
+  <div class="chain">
+    <div class="chain-head">鏈 1 · Pin 與 poll 簽名</div>
+    <div class="layer"><span class="lv">L1</span><span class="q">為什麼 <code>poll</code> 收 <code>Pin&lt;&amp;mut Self&gt;</code> 而不是 <code>&amp;mut Self</code>?</span>
+      <div class="a">因為含跨-await-借用的狀態機是 self-referential。<code>&amp;mut Self</code> 允許 move(<code>mem::swap</code>/<code>replace</code>)→ 內部指標懸空。<code>Pin&lt;&amp;mut Self&gt;</code> 對 <code>!Unpin</code> 禁止 move。</div>
+    </div>
+    <div class="layer"><span class="lv">L2</span><span class="q">可是絕大多數手寫 future 是 <code>Unpin</code>,<code>Pin</code> 對它們是 no-op,那整個 trait 為何還要 Pin?</span>
+      <div class="a">統一簽名:executor / combinator 必須能同時驅動 <code>Unpin</code> 的和編譯器生成的 <code>!Unpin</code> 的 future。對 <code>Unpin</code> 的,你隨時能 <code>Pin::get_mut</code> 拿回 <code>&amp;mut Self</code>,零成本;對 <code>!Unpin</code> 的,型別系統才擋得住 move。成本只放在真正需要的人身上。</div>
+    </div>
+    <div class="layer"><span class="lv">L3</span><span class="q">我手上有一個 own-by-value、<code>!Unpin</code> 的 future 在 stack 上,怎麼安全 poll?</span>
+      <div class="a"><code>std::pin::pin!(f)</code>:原地建 local 並 shadow 掉 binding,讓你之後拿不到能 move 它的路徑,得到 <code>Pin&lt;&amp;mut F&gt;</code>。或 <code>Box::pin(f)</code> 放 heap(需 alloc,但 std)。手刻 stack pin 要 <code>unsafe</code>(<code>Pin::new_unchecked</code> + 自證不再 move),<code>pin!</code> 就是它的安全包裝。</div>
+    </div>
+  </div>
+
+  <div class="chain">
+    <div class="chain-head">鏈 2 · lost wakeup 與 busy loop</div>
+    <div class="layer"><span class="lv">L1</span><span class="q">leaf future 回 <code>Pending</code> 但<b>從不存 waker</b>,會怎樣?</span>
+      <div class="a">executor <code>park</code> 之後永遠沒人 <code>unpark</code> → <b>掛死</b>(lost wakeup)。沒有存 waker = 沒有人握著叫醒你的把手。</div>
+    </div>
+    <div class="layer"><span class="lv">L2</span><span class="q">反過來,leaf 每次 poll 都在回 <code>Pending</code> 前<b>立刻</b> <code>wake()</code>,會怎樣?</span>
+      <div class="a"><code>wake</code>→<code>unpark</code> 設 token → executor 的 <code>park</code> 立刻返回 → 立刻再 poll → 又 wake…→ <b>100% CPU busy loop</b>。這其實正是 <code>yield_now</code> 的實作原理(故意讓出一輪給 executor 排程)。</div>
+    </div>
+    <div class="layer"><span class="lv">L3</span><span class="q">在一個有共享 run queue 的多 task executor 裡,這種立刻自我 wake 還會 busy loop 嗎?</span>
+      <div class="a">它把自己重新入列;若是唯一 task,還是 busy loop;有別的 task 時就變成公平讓出(cooperative yield)。引出 fairness——真實 executor(如 tokio)會給每個 task 一個 <b>coop budget</b>,每 poll N 次強制讓出,避免單一 task 餓死別人。</div>
+    </div>
+  </div>
+
+  <div class="chain">
+    <div class="chain-head">鏈 3 · waker clone 成本與 over-polling</div>
+    <div class="layer"><span class="lv">L1</span><span class="q">waker 為什麼用 <code>Arc</code>?</span>
+      <div class="a">共享所有權(資源端和 executor 端都要持有)+ clone 便宜(refcount++)+ <code>Send+Sync</code> 讓資源可在<b>別的執行緒</b> wake。</div>
+    </div>
+    <div class="layer"><span class="lv">L2</span><span class="q"><code>Waker::from(Arc&lt;ThreadWaker&gt;)</code> 的 clone 有 heap alloc 嗎?</span>
+      <div class="a">沒有,只有 atomic refcount++;drop 是 refcount--。對照手刻 <code>RawWakerVTable</code>:clone/drop 要你自己在 fn 裡管理(容易 leak 或 double-free)。<code>Wake</code> trait + <code>Arc</code> 把這塊變成安全且零額外配置。</div>
+    </div>
+    <div class="layer"><span class="lv">L3</span><span class="q"><code>join!</code> 裡多個子 future 各自 clone <b>同一個 task waker</b> 並存起來。某個資源就緒時,是整個 task 重 poll 還是只 poll 那支子 future?</span>
+      <div class="a">我們這種 <code>block_on</code> 是從 root 整棵重 poll:root 的 <code>join</code>/combinator 把所有還沒 ready 的子 future 再 poll 一遍(over-polling)。這是為什麼進階 executor 會給每個子 future 包一個 <b>per-child waker</b>(帶 index),wake 時只喚醒/只 poll 就緒那一支。引出「waker 其實可以攜帶 routing 資訊」這個更深的設計面。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= QUIZ ================= -->
+<section class="panel" data-panel="quiz">
+  <h2>④ Self-quiz(5 題,答案摺疊)</h2>
+
+  <details>
+    <summary>Q1 · self-referential 的 async 狀態機一旦被 move,為什麼是 UB?</summary>
+    <div class="ans">move = memcpy 到新位址,struct 內指向「自己另一個欄位」的指標仍指<b>舊</b>位址 → 懸空 → 後續 deref 讀到已失效/被覆寫的記憶體 = UB。<code>Pin</code> 存在就是用型別系統禁止對 <code>!Unpin</code> 型別做這個 memcpy。</div>
+  </details>
+
+  <details>
+    <summary>Q2 · <code>Pin&lt;&amp;mut T&gt;</code> 對 <code>T: Unpin</code> 提供什麼保證?為什麼幾乎所有手寫 future 都是 Unpin?</summary>
+    <div class="ans">對 <code>Unpin</code> 的 <code>T</code>,<code>Pin</code> <b>不提供任何額外保證</b>——可 <code>Pin::get_mut</code> 拿回 <code>&amp;mut T</code> 自由 move。原因:<code>Unpin</code> 是 auto trait,只要型別不含 self-reference 就自動實作。手寫 future 的欄位通常是普通值(彼此不互指),編譯器自動判定 Unpin。只有編譯器<b>生成</b>的、含跨-await-借用的 async 狀態機才 <code>!Unpin</code>。所以 <code>Pin</code> 的「鎖 move」能力只對後者生效,對手寫 future 是零成本的形式要求。</div>
+  </details>
+
+  <details>
+    <summary>Q3 · waker 為什麼每次 poll 都要存<b>最新</b>的 clone,不能只存第一次的?<span class="must">必答</span></summary>
+    <div class="ans">契約是「只有<b>最近一次</b> poll 傳進來的 waker 保證喚醒後有效」。executor 允許在不同 poll 之間<b>換 waker</b>——例如 future 被搬到另一個 task,或被 combinator 用 proxy waker 包起來。若你快取了舊 waker,資源就緒時你 wake 的是<b>過時的 waker</b>,喚醒到錯的/已死的 task,而當前真正在等的 task 永遠不會被重 poll → 掛死。所以每次回 <code>Pending</code> 前都 <code>cx.waker().clone()</code> 覆蓋舊的。<br><br>(在我們單執行緒 <code>block_on</code> 裡 waker 每次都一樣,所以這個 bug 不會顯現;但那是<b>巧合</b>,契約是為通用 executor 存在的——面試若寫「只存第一次」會被追問這點。)</div>
+  </details>
+
+  <details>
+    <summary>Q4 · wake 先於 park 發生時,為什麼不會丟失喚醒?<span class="must">必答</span></summary>
+    <div class="ans"><code>park</code>/<code>unpark</code> 背後是每執行緒一個<b>一次性 token</b>。<code>unpark</code> 打在「還沒 park 的執行緒」上不會空打——它把 token 設成 1 存起來。executor 隨後 <code>park</code> 時看到 token=1,<b>立刻返回</b>(消耗 token),回頭再 poll,這次資源已就緒 → <code>Ready</code>。<br><br>實測:unpark 後才 park 在 <b>374ns</b> 返回(≈瞬間,見 <span class="jump" data-jump="park">park token 語意</span>)。若用一個只會「喚醒正在睡的人」的原始 primitive(無 token),這個 race 就會 lost wakeup。</div>
+  </details>
+
+  <details>
+    <summary>Q5 · 為什麼 <code>block_on</code> 的迴圈在 <code>park()</code> 返回後必須<b>重新 poll</b>,不能把「park 返回」當成「資源就緒」?</summary>
+    <div class="ans">兩個理由。(1) <code>park</code> 允許 <b>spurious wakeup</b>(無故返回),std 明文如此。(2) 即使非 spurious,<code>park</code> 返回只代表「有人 <code>unpark</code> 了我」,不代表「我等的那個<b>特定</b>資源好了」——多個資源可能共用同一個 task waker,任何一個 wake 都會 unpark。所以唯一正確做法是回頭再 <code>poll</code>,由 future 自己重新檢查資源狀態。<code>loop { poll; park }</code> 天生滿足:park 返回就回到 loop 頂重 poll。</div>
+  </details>
+</section>
+
+<div class="foot">全部 Rust 代碼在 rustc 1.91.1 / edition 2024 / std-only 實際編譯執行 · 1.91→1.92 delta 已逐條稽核 · 版本號來源 rust-lang/rust RELEASES.md · Gruvbox Material dark · JetBrains Mono</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------- tab / jump: single delegated handler ----------
+  function activateTab(id){
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-tab')===id);
+    });
+    document.querySelectorAll('.panel').forEach(function(p){
+      p.classList.toggle('active', p.getAttribute('data-panel')===id);
+    });
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('[data-tab]');
+    if(t){ activateTab(t.getAttribute('data-tab')); return; }
+    var j = e.target.closest('[data-jump]');
+    if(j){ activateTab(j.getAttribute('data-jump')); window.scrollTo({top:0,behavior:'smooth'}); return; }
+  });
+
+  // ---------- stepper ----------
+  function chip(cls,txt){ return '<span class="chip '+cls+'">'+txt+'</span>'; }
+
+  // state -> chips for the panel
+  function renderState(st){
+    var rows = [
+      ['資源 resource', st.resource==='ready' ? chip('ok','ready') : chip('bad','not ready')],
+      ['poll 結果',     st.poll==='Ready' ? chip('ok','Ready') : (st.poll==='Pending' ? chip('warn','Pending') : (st.poll==='poll' ? chip('info','poll…') : chip('neutral','—')))],
+      ['stored waker',  st.waker==='stored' ? chip('info','stored') : (st.waker==='taken' ? chip('purple','taken → wake') : chip('neutral','none'))],
+      ['exec thread',   st.thread==='parked' ? chip('warn','parked 💤') : chip('ok','running')],
+      ['park token',    st.token===1 ? chip('purple','1') : chip('neutral','0')]
+    ];
+    return rows;
+  }
+
+  var lanesForActor = {
+    'exec':['exec'], 'task':['task'], 'res':['res'],
+    'exec->task':['exec','task'], 'task->exec':['task','exec']
+  };
+
+  // Scenario A: wake AFTER park (normal)
+  var A = [
+    {actor:'exec', title:'初始', desc:'executor 準備第一次 poll。資源尚未就緒,一切歸零。',
+      state:{resource:'notready',poll:'-',waker:'none',thread:'running',token:0}},
+    {actor:'exec->task', title:'poll #1', desc:'block_on 呼叫 future.as_mut().poll(&mut cx),把含 waker 的 cx 交給 future。',
+      state:{resource:'notready',poll:'poll',waker:'none',thread:'running',token:0}},
+    {actor:'task', title:'檢查資源', desc:'leaf future 檢查資源 → 尚未就緒。',
+      state:{resource:'notready',poll:'poll',waker:'none',thread:'running',token:0}},
+    {actor:'task', title:'存 waker', desc:'leaf 執行 st.waker = Some(cx.waker().clone()),存下「這次」的 waker。',
+      state:{resource:'notready',poll:'poll',waker:'stored',thread:'running',token:0}},
+    {actor:'task->exec', title:'回 Pending', desc:'leaf 回 Poll::Pending,一路傳回 root,block_on 收到 Pending。',
+      state:{resource:'notready',poll:'Pending',waker:'stored',thread:'running',token:0}},
+    {actor:'exec', title:'park', desc:'block_on 見 Pending → thread::park()。token=0 → 執行緒真的睡著。',
+      state:{resource:'notready',poll:'Pending',waker:'stored',thread:'parked',token:0}},
+    {actor:'res', title:'資源就緒', desc:'背景執行緒(如 Timer 的 sleep 結束)把資源標記為就緒。executor 仍 parked。',
+      state:{resource:'ready',poll:'Pending',waker:'stored',thread:'parked',token:0}},
+    {actor:'res', title:'wake()', desc:'背景呼叫 stored_waker.wake() → thread.unpark()。執行緒正 parked,token 設 1 準備喚醒。',
+      state:{resource:'ready',poll:'Pending',waker:'taken',thread:'parked',token:1}},
+    {actor:'exec', title:'park 返回', desc:'block_on 的執行緒從 park() 返回,消耗 token(1→0),回到 loop 頂。',
+      state:{resource:'ready',poll:'Pending',waker:'taken',thread:'running',token:0}},
+    {actor:'exec->task', title:'poll #2', desc:'block_on 再次 poll。leaf 檢查資源 → 已就緒。',
+      state:{resource:'ready',poll:'poll',waker:'taken',thread:'running',token:0}},
+    {actor:'task->exec', title:'回 Ready', desc:'leaf 回 Poll::Ready(val)。block_on 回傳 val,完成。',
+      state:{resource:'ready',poll:'Ready',waker:'taken',thread:'running',token:0}}
+  ];
+
+  // Scenario B: wake BEFORE park (race)
+  var B = [
+    {actor:'exec', title:'初始', desc:'executor 準備第一次 poll。資源尚未就緒。',
+      state:{resource:'notready',poll:'-',waker:'none',thread:'running',token:0}},
+    {actor:'exec->task', title:'poll #1', desc:'block_on 呼叫 future.poll(cx),交出含 waker 的 cx。',
+      state:{resource:'notready',poll:'poll',waker:'none',thread:'running',token:0}},
+    {actor:'task', title:'檢查資源', desc:'leaf future 檢查資源 → 尚未就緒。',
+      state:{resource:'notready',poll:'poll',waker:'none',thread:'running',token:0}},
+    {actor:'task', title:'存 waker', desc:'leaf 存下這次的 waker(st.waker = Some(cx.waker().clone()))。',
+      state:{resource:'notready',poll:'poll',waker:'stored',thread:'running',token:0}},
+    {actor:'task->exec', title:'回 Pending', desc:'leaf 回 Poll::Pending,傳回 block_on。',
+      state:{resource:'notready',poll:'Pending',waker:'stored',thread:'running',token:0}},
+    {actor:'res', title:'⚡ 資源搶先就緒', desc:'在 block_on 還沒走到 park 之前,背景就把資源標記為就緒。', crux:true,
+      state:{resource:'ready',poll:'Pending',waker:'stored',thread:'running',token:0}},
+    {actor:'res', title:'⚡ wake() 先於 park', desc:'背景 wake() → unpark。但 exec thread 此刻 running(還沒 park)→ 沒有真正喚醒動作,token 被「存起來」(0→1)。', crux:true,
+      state:{resource:'ready',poll:'Pending',waker:'taken',thread:'running',token:1}},
+    {actor:'exec', title:'park 立刻返回', desc:'block_on 現在才 thread::park()。token=1 → 立刻返回,消耗 token(1→0)。執行緒從沒真正睡著,也沒漏掉喚醒。', crux:true,
+      state:{resource:'ready',poll:'Pending',waker:'taken',thread:'running',token:0}},
+    {actor:'exec->task', title:'poll #2', desc:'block_on 再 poll → leaf 檢查資源 → 已就緒。',
+      state:{resource:'ready',poll:'poll',waker:'taken',thread:'running',token:0}},
+    {actor:'task->exec', title:'回 Ready', desc:'leaf 回 Poll::Ready(val),完成。沒有 lost wakeup。',
+      state:{resource:'ready',poll:'Ready',waker:'taken',thread:'running',token:0}}
+  ];
+
+  var scenarios = {A:A, B:B};
+  var cur = 'A';
+  var idx = 0;
+
+  function render(){
+    var steps = scenarios[cur];
+    var step = steps[idx];
+    var prev = idx>0 ? steps[idx-1] : null;
+
+    // lanes
+    var hot = lanesForActor[step.actor] || [];
+    document.querySelectorAll('.lane').forEach(function(l){
+      l.classList.toggle('hot', hot.indexOf(l.getAttribute('data-lane'))>=0);
+    });
+
+    // caption
+    var cap = document.getElementById('stepCap');
+    cap.classList.toggle('crux', !!step.crux);
+    document.getElementById('stepTitle').textContent = step.title;
+    document.getElementById('stepDesc').textContent = step.desc;
+
+    // state panel with change highlight
+    var rows = renderState(step.state);
+    var prevRows = prev ? renderState(prev.state) : null;
+    var keys = ['resource','poll','waker','thread','token'];
+    var html = '';
+    for(var i=0;i<rows.length;i++){
+      var changed = prev && (step.state[keys[i]] !== prev.state[keys[i]]);
+      html += '<div class="srow'+(changed?' changed':'')+'"><div class="sk">'+rows[i][0]+'</div><div class="sv">'+rows[i][1]+'</div></div>';
+    }
+    document.getElementById('statePanel').innerHTML = html;
+
+    // controls
+    document.getElementById('prevBtn').disabled = (idx===0);
+    document.getElementById('nextBtn').disabled = (idx===steps.length-1);
+    document.getElementById('progress').textContent = '步驟 '+(idx+1)+' / '+steps.length;
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', function(){ if(idx>0){idx--;render();} });
+  document.getElementById('nextBtn').addEventListener('click', function(){ if(idx<scenarios[cur].length-1){idx++;render();} });
+  document.querySelectorAll('.sc-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      cur = b.getAttribute('data-scenario');
+      idx = 0;
+      document.querySelectorAll('.sc-btn').forEach(function(x){ x.classList.toggle('active', x===b); });
+      render();
+    });
+  });
+  render();
+
+  // ---------- highlight.js ----------
+  if(window.hljs){
+    document.querySelectorAll('pre code.language-rust').forEach(function(el){
+      try{ hljs.highlightElement(el); }catch(e){}
+    });
+  }
+})();
+</script>
+</body>
+</html>
