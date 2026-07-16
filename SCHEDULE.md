@@ -50,8 +50,9 @@ SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
   「面試追問鏈(≥3 層)+ Self-quiz」形式,當天讀完 artifact 後翻對應篇的
   追問鏈自測。日子對映:7/16→p7(ring 節)|7/17→p1(atomic/SPSC)|
   7/18→p2(executor)|7/20→p3(epoll)|7/22→p8(hw_bridge)|
-  7/24→p6(telemetry,已排)|**7/25 口述底稿→p5-thread-safe-spectrum +
-  rust-five-axis(這兩份 repo 沒有對應物,光譜與 Send/Sync 推導表只住在這)**。
+  7/24→p6(telemetry,已排)|**7/25 口述底稿→`docs/thread-safe-spectrum.md` +
+  `docs/rust-five-axis.md`(已從 p5/five-axis 濃縮成 repo docs,含 repo 模組對映;
+  互動深挖版仍在 html_p)**。
 - **7/16 產出欄**:drills/ring_buffer 綠 ✓|卡#1|drills/iter_mutate 綠|
   手寫 wrap trace 拍照|aggregator 延伸綠(**含「未來 ts 清 window」case**,
   規格照 rehearsals 題目 f 的 contract,寫在 ring_buffer 同檔)。

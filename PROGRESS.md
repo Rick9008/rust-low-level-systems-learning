@@ -51,6 +51,8 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | mini_runtime(V0 scan → V1 epoll) | ☐ |
 | async_sync(AsyncMutex / Notify;有 drill 四洞,選練) | ☐ |
 | docs/async-runtime-anatomy.md | ☐ |
+| docs/thread-safe-spectrum.md(7/25 口述底稿) | ☐ |
+| docs/rust-five-axis.md(7/25 口述底稿;unsafe impl 辯護模板) | ☐ |
 
 ## rehearsal 計時紀錄
 

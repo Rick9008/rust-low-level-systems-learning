@@ -84,6 +84,11 @@ executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接�
 [`docs/async-runtime-anatomy.md`](docs/async-runtime-anatomy.md),
 互動版 [`docs/artifacts/async_runtime.html`](docs/artifacts/async_runtime.html)。
 
+兩份跨模組的口述底稿(面試選型題的骨架):
+[`docs/thread-safe-spectrum.md`](docs/thread-safe-spectrum.md)(把 X 變
+thread-safe 的七站光譜)、[`docs/rust-five-axis.md`](docs/rust-five-axis.md)
+(Send/Sync 推導表 + unsafe impl 三段式辯護);互動深挖版在 `html_p/`。
+
 (commit 歷史仍按難度分 stage,`git log --oneline --reverse` 是照 stage 走的另一種讀法;
 上面的順序是把 stage 順序按面試優先級重排過的版本。)
 

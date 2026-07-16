@@ -35,12 +35,47 @@ wait 之前到達就人間蒸發——lost wakeup,executor 永眠。
 另一半協定:`park` 允許**虛假返回**,所以醒來一律 re-poll,
 由 future 自己判斷完成與否。loop { poll; park } 的形狀因此是唯一正確形狀。
 
-## Pin,面試夠用的深度
+## Pin,面試夠用的深度(async fn → 狀態機 → 自引用,一條推導)
 
-async fn 編譯成的狀態機可能**自引用**(跨 await 的借用指向自身欄位),
-搬家(memmove)會讓內部指標懸空。`Pin` 的承諾:「這個值直到 drop 不再移動」。
-`std::pin::pin!` 把 future 釘在 stack frame(零配置);`Box::pin` 釘在 heap
-(要跨函式傳遞時用)。block_on 裡 `as_mut()` 每輪 re-borrow 同一個 pinned future。
+先破 naive 心智模型:「async fn = 晚點在背景跑的函式」——**沒有背景**。
+呼叫 async fn 只是建構一個 Future 值,body 一行都沒跑;沒人 poll 它就是
+一坨永遠不動的狀態。整個 async 世界只有三個角色:Future(可被 poll 的
+狀態機)、Waker(「我可以繼續了」的回呼)、Executor(poll 迴圈 + 沒事睡覺)。
+
+推導(每個 `.await` = 一個狀態;跨 await 活著的 local = 狀態機欄位):
+
+```rust
+async fn read_two() -> u32 {
+    let a = read().await;   // await #1
+    let b = read().await;   // await #2:a 還要用 → a 必須跨暫停點活著
+    a + b
+}
+// 編譯器概念上生成(示意):
+enum ReadTwo {
+    Start,
+    AwaitingA { fut_a: ReadFut },
+    AwaitingB { a: u32, fut_b: ReadFut }, // a 被存進狀態機
+    Done,
+}
+```
+
+關鍵一步:如果跨 await 活著的 local 是一個**借用**(指向另一個 local),
+狀態機就有欄位指向**自己的另一個欄位**——self-referential。而 Rust 的 move
+是 memcpy,一搬位址就變、內部指標懸空。`Pin` 用型別系統承諾「這個值直到
+drop 不再移動」(收掉安全的 `&mut`)。`std::pin::pin!` 釘在 stack(零配置)、
+`Box::pin` 釘在 heap(跨函式傳遞用);block_on 裡 `as_mut()` 每輪 re-borrow
+同一個 pinned future。深挖版(含生命週期 stepper 與追問鏈):
+`html_p/p2-async-executor-handbook.html`。
+
+## 版本備忘(pad = Rust 1.92 / edition 2024,查證自 RELEASES.md)
+
+- `std::task::Wake` trait:1.51 起 stable——不必手刻 `RawWakerVTable`。
+- `std::pin::pin!`:1.68 起;`Waker::noop()`:1.85 起(單獨 poll 一個 future
+  不搭 executor 時用它建 Context)。
+- **`std::sync::mpmc` 到 1.97 仍未 stable**:std-only thread pool 不能 clone
+  `Receiver`,只能 `Arc<Mutex<Receiver<T>>>` 讓 worker 搶鎖取任務——或像
+  本 repo `thread_pool` 那樣自己 `Mutex<VecDeque>` + Condvar。這格會被問。
+- pad 落後 stable 約 5 個版本:別用 1.93+ 才穩的 API。
 
 ## Delay:leaf future 的標準形狀
 
