@@ -20,6 +20,7 @@ challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 | 9 | hw_bridge(protocol+framer) | ☐ | ☐ | ☐ ★ | |
 | 10 | dsu | ☐ | ☐ | ☐ ★ | |
 | 11 | sharded_map | ☐ | ☐ | ☐ ★ | |
+| 12 | signal_pipeline | ☐ | ☐(2 洞) | ☐ ★ | JD 本尊圖;掛牌握手 = SeqCst 實戰位 |
 
 ### 次優先
 
@@ -39,7 +40,7 @@ challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 | event_loop | ☐ |
 | tcp_echo | ☐ |
 | file_io_offload | ☐ |
-| hw_bridge 四 server 對照組(threaded / inline壞 / evented / sharded) | ☐ |
+| hw_bridge 五 server 對照組(threaded / inline壞 / evented / sharded / spsc) | ☐ |
 | mini_runtime(V0 scan → V1 epoll) | ☐ |
 | async_sync(AsyncMutex / Notify;有 drill 四洞,選練) | ☐ |
 | docs/async-runtime-anatomy.md | ☐ |

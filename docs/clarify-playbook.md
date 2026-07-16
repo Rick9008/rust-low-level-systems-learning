@@ -37,6 +37,10 @@ network flakiness、跨 rack 規模)——面試官等你把線索變成問題,�
 (見 [cost-model](cost-model.md) 第四節)。
 硬體 / 行情推不回去 → 只剩 drop / aggregate 兩條路;TCP 對端推得回去 → backpressure 合法。
 
+結構陷阱:**SPSC ring 上做不到 drop-oldest**(`head` 是 consumer 單寫的,
+producer 動不了)——SPSC-safe 的是 drop-newest(push `Err` + 計數);
+要「新蓋舊」得換 per-key conflation slot(見 [signal_pipeline](signal_pipeline.md))。
+
 ### Q2:速率多少?(決定 queue size 與結構檔次)
 
 問法:*"What's the signal rate per node — hundreds per second, or millions?"*

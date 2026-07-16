@@ -27,6 +27,7 @@ pub mod iter_mutate;
 pub mod lru;
 pub mod ring_buffer;
 pub mod sharded_map;
+pub mod signal_pipeline;
 pub mod spsc_ring;
 pub mod thread_pool;
 pub mod tree;

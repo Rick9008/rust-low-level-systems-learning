@@ -11,8 +11,8 @@
 //!    (轉綠後把測試檔的 `#[ignore]` 移除)。
 //! 4. `diff` 對照 `reference/` 的完整解。
 //!
-//! 建議順序(★ = 先做):★ spsc_ring → ★ executor → ★ lru → ★ hw_bridge
-//! → dsu → sharded_map → tcp_echo。
+//! 建議順序(★ = 先做):★ spsc_ring → ★ signal_pipeline → ★ executor
+//! → ★ lru → ★ hw_bridge → dsu → sharded_map → tcp_echo。
 
 // 空殼狀態下簽名的參數/佔位欄位還沒被使用;動手寫時建議先拿掉這行自查。
 #![allow(unused_variables, dead_code)]
@@ -22,5 +22,6 @@ pub mod executor;
 pub mod hw_bridge;
 pub mod lru;
 pub mod sharded_map;
+pub mod signal_pipeline;
 pub mod spsc_ring;
 pub mod tcp_echo;

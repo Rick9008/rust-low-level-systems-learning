@@ -27,6 +27,8 @@ pub mod inplace_leetcode;
 
 // stage 4:atomic / lock-free(loom 驗證見 tests/loom_*.rs)
 pub mod arena_lockfree;
+// JD 本尊圖:訊號源 → SPSC → spin-then-park 消費(掛牌握手 = SeqCst 的實戰位)
+pub mod signal_pipeline;
 pub mod spsc_ring;
 pub(crate) mod sync_shim;
 

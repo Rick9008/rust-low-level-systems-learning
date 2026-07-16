@@ -89,6 +89,7 @@ async/pipeline 版:request-id → `HashMap<id, waker/channel>`。
 | `server_evented_inline`(⚠️ 反面教材) | IO thread 凍住:**所有**連線的 read/write/accept 停擺整段 delay | 永遠不是。它存在是為了讓你看到病徵 |
 | `server_evented`(offload,1 worker) | loop 不凍(IO 照跑),但延遲**跨連線傳染**——別人的命令在 worker 佇列陪排 | 下游只有一顆序列設備時(shard 沒意義,Mutex 照樣序列化) |
 | `server_evented_sharded`(shard by conn) | 同連線保序(同 shard 單 worker FIFO)、跨連線隔離 | 每 shard 有**自己的下游通道**時 |
+| `server_evented_spsc`(同 evented,換佇列) | 兩條 `Mutex` 佇列 → 兩條 SPSC ring + eventfd;handler 免鎖(worker 獨占) | SLA 是 p99.9 時——IO thread 不再被 worker 的鎖 preemption 拖累 |
 | tokio(rehearsals 題 d) | async handler 天然不凍 loop——`.await` 就是讓位點 | pad 上的實戰答案 |
 
 兩個設計句:

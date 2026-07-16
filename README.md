@@ -48,6 +48,8 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
    (半個 frame / 多個 frame 正確切分)★
 10. `dsu`:union-find,path compression + union by rank,α(n) ★
 11. `sharded_map`:per-shard Mutex 降鎖競爭,shard 選擇與整體不變量 ★
+12. `signal_pipeline`:JD 本尊圖——訊號源 → SPSC → spin-then-park 消費;
+    掛牌握手是 SeqCst 的實戰位(練完 5 再來)★
 
 次優先(CoderPad 做得了、一般面試常見,但非 TPS 核心考點,時間有限就往後排):
 `inplace_leetcode`(27/75/80/88/189 五道 in-place 題,`iter_mutate` 的實戰應用)、
@@ -71,10 +73,11 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
   複用 `fd_registry`
 - `async_sync`:blocking 原語 async 化——AsyncMutex + Notify(condvar 睡 →
   waker 睡的三部曲第三章;有 drill 四洞,選練)
-- `hw_bridge` 的四個 server:`server_threaded`(thread-per-conn)、
+- `hw_bridge` 的五個 server:`server_threaded`(thread-per-conn)、
   `server_evented_inline`(⚠️ 反面教材:阻塞 handler 凍住 loop)、
   `server_evented`(offload + eventfd 回程)、`server_evented_sharded`
-  (shard by conn:保序 × 跨連線隔離)——handler 要做 IO 時的完整對照組
+  (shard by conn:保序 × 跨連線隔離)、`server_evented_spsc`(同 evented
+  換佇列:兩條 SPSC + eventfd,買 p99.9)——handler 要做 IO 時的完整對照組
   (framer 本身在優先級,見上)
 
 executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接成一張圖:
@@ -200,8 +203,9 @@ cargo test -p challenges -- --include-ignored   # 同樣以 #[ignore] 保持 wor
 2. 從 public API 簽名開始整個自己寫,轉綠。
 3. `diff` 對照 `reference/` 對答案。
 
-順序照上方「學習路徑」優先級清單的 ★ 走:`spsc_ring` → `executor` → `lru` →
-`hw_bridge` → `dsu` → `sharded_map`。`tcp_echo` 的 challenge 屬 deep-dive 級,可跳過。
+順序照上方「學習路徑」優先級清單的 ★ 走:`spsc_ring` → `signal_pipeline` →
+`executor` → `lru` → `hw_bridge` → `dsu` → `sharded_map`。
+`tcp_echo` 的 challenge 屬 deep-dive 級,可跳過。
 
 範圍註記:`hw_bridge` challenge 聚焦 **`try_decode` + `FrameReader`**(45 分鐘可寫完的核心),
 server/client 用 reference 版接起來當整合測試 harness;`tcp_echo` challenge 同理,

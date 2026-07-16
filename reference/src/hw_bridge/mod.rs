@@ -29,6 +29,11 @@
 //! tokio 對照:`rehearsals/examples/sol_tokio_frame_server.rs`(async handler
 //! 天然不凍 loop——`.await` 就是讓位點)。
 //!
+//! **佇列對照**(同架構、換佇列):`server_evented_spsc.rs`——IO thread ×
+//! 單 worker 天然一產一消,兩條 `Mutex` 佇列換成兩條 SPSC ring + eventfd,
+//! handler 免鎖(worker 獨占),買 p99.9。與 `crate::signal_pipeline`
+//! 同一套掛牌握手。
+//!
 //! ## [Trade-offs] thread-per-conn vs event loop(§45 分鐘的核心問答)
 //! | | threaded | evented |
 //! |---|---|---|
@@ -58,6 +63,7 @@ pub mod protocol;
 pub mod server_evented;
 pub mod server_evented_inline;
 pub mod server_evented_sharded;
+pub mod server_evented_spsc;
 pub mod server_threaded;
 
 #[cfg(test)]
@@ -151,6 +157,37 @@ mod tests {
         let shutdown = server.shutdown_handle();
         let join = thread::spawn(move || server.run());
         exercise_server(addr);
+        shutdown.shutdown();
+        join.join().unwrap().unwrap();
+    }
+
+    /// SPSC evented server 跑同一套 client 行為測試 + pipeline 保序:
+    /// 換佇列不換行為。
+    #[test]
+    fn spsc_evented_server_passes_full_client_suite() {
+        use super::server_evented_spsc::SpscEventedServer;
+        let mut server = SpscEventedServer::bind("127.0.0.1:0", MockHardware::default()).unwrap();
+        let addr = server.local_addr().unwrap();
+        let shutdown = server.shutdown_handle();
+        let join = thread::spawn(move || {
+            let r = server.run();
+            drop(server); // Drop:worker drain + join
+            r
+        });
+        exercise_server(addr);
+
+        let mut c = HwClient::connect(addr).unwrap();
+        for id in 0..20u16 {
+            c.send_raw(&Command::ReadSensor { sensor_id: id }.encode())
+                .unwrap();
+        }
+        for id in 0..20u16 {
+            match c.recv_response().unwrap() {
+                Response::SensorValue { sensor_id, .. } => assert_eq!(sensor_id, id),
+                other => panic!("expected SensorValue, got {other:?}"),
+            }
+        }
+        drop(c);
         shutdown.shutdown();
         join.join().unwrap().unwrap();
     }
