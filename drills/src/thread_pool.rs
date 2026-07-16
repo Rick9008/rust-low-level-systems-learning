@@ -168,4 +168,49 @@ mod tests {
         assert!(caught.is_err());
         assert_eq!(pool.submit(|| 7).join(), 7);
     }
+
+    /// boundary:execute 的 job panic 不殺 worker——單 worker 最嚴格:
+    /// 沒 catch_unwind 的話,第二個 job 永遠不會跑。
+    #[test]
+    #[ignore = "填完 worker_loop/Drop 後移除"]
+    fn panicking_job_does_not_kill_worker() {
+        let ran_after = Arc::new(AtomicUsize::new(0));
+        {
+            let pool = ThreadPool::new(1);
+            pool.execute(|| panic!("boom (expected in test output)"));
+            let c = Arc::clone(&ran_after);
+            pool.execute(move || {
+                c.fetch_add(1, Ordering::Relaxed);
+            });
+        }
+        assert_eq!(ran_after.load(Ordering::Relaxed), 1);
+    }
+
+    /// boundary:drop 等慢 job 做完(drain 語意)——不是丟棄。
+    #[test]
+    #[ignore = "填完 worker_loop/Drop 後移除"]
+    fn drop_waits_for_slow_jobs() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        {
+            let pool = ThreadPool::new(2);
+            for _ in 0..6 {
+                let c = Arc::clone(&counter);
+                pool.execute(move || {
+                    thread::sleep(std::time::Duration::from_millis(20));
+                    c.fetch_add(1, Ordering::Relaxed);
+                });
+            }
+        }
+        assert_eq!(counter.load(Ordering::Relaxed), 6);
+    }
+
+    /// 並發多 handle:結果各歸各的收據,不串音。
+    #[test]
+    #[ignore = "填完 submit/join 後移除"]
+    fn submit_many_results_isolated() {
+        let pool = ThreadPool::new(4);
+        let handles: Vec<_> = (0..8).map(|i| pool.submit(move || i * i)).collect();
+        let results: Vec<i32> = handles.into_iter().map(JobHandle::join).collect();
+        assert_eq!(results, vec![0, 1, 4, 9, 16, 25, 36, 49]);
+    }
 }

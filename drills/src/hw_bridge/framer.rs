@@ -113,4 +113,31 @@ mod tests {
         }
         assert_eq!(got, 3);
     }
+
+    /// boundary:一個半 frame——完整的先出,殘料(半個)留在 buffer,
+    /// 補齊後第二個才出。pending_len 是可觀察的殘料量。
+    #[test]
+    #[ignore = "填完 next_frame 後移除"]
+    fn one_and_a_half_frames() {
+        let f1 = encode_frame(OP_PING, &[]);
+        let f2 = encode_frame(OP_READ_SENSOR, &[0, 25]);
+        let mut r = FrameReader::new();
+        let mut fed = f1.clone();
+        fed.extend(&f2[..3]); // 第二個只給 3 bytes
+        r.feed(&fed);
+        assert_eq!(drain_frames(&mut r).len(), 1);
+        assert_eq!(r.pending_len(), 3, "半個 frame 留存");
+        r.feed(&f2[3..]);
+        assert_eq!(drain_frames(&mut r).len(), 1);
+    }
+
+    /// boundary:malformed len(離譜大)——錯誤傳播給 caller
+    /// (framing 層致命:byte 流已不可信,caller 的正解是關線)。
+    #[test]
+    #[ignore = "填完 next_frame 後移除"]
+    fn malformed_len_propagates_error() {
+        let mut r = FrameReader::new();
+        r.feed(&u32::MAX.to_be_bytes());
+        assert!(r.next_frame().is_err());
+    }
 }

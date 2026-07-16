@@ -139,4 +139,43 @@ mod tests {
         r.register(5, 1);
         r.register(5, 2);
     }
+
+    /// dispatch 端用 get_mut 就地改狀態;fd 跳躍增長時 len 只數活著的。
+    #[test]
+    #[ignore = "填完 register/get 後移除"]
+    fn get_mut_and_sparse_growth() {
+        let mut r = FdRegistry::new();
+        let t0 = r.register(0, vec![1]);
+        let t100 = r.register(100, vec![2]); // 中間 slot 全空
+        r.get_mut(t0).unwrap().push(3);
+        assert_eq!(r.get(t0), Some(&vec![1, 3]));
+        assert_eq!(r.get(t100), Some(&vec![2]));
+        assert_eq!(r.len(), 2);
+    }
+
+    /// 規模 churn:200 個 fd 註冊、偶數位換代——舊 token 全滅、新的全活、
+    /// 奇數位第一代不受影響(單例測試抓不到的批量交錯)。
+    #[test]
+    #[ignore = "填完 register/unregister/get 後移除"]
+    fn churn_generations_isolated() {
+        let mut r = FdRegistry::new();
+        let gen0: Vec<Token> = (0..200).map(|fd| r.register(fd, fd)).collect();
+        for fd in (0..200).step_by(2) {
+            assert_eq!(r.unregister(gen0[fd]), Some(fd));
+        }
+        let gen1: Vec<Token> = (0..200)
+            .step_by(2)
+            .map(|fd| r.register(fd, fd + 1000))
+            .collect();
+        assert_eq!(r.len(), 200);
+        for fd in (0..200).step_by(2) {
+            assert_eq!(r.get(gen0[fd]), None, "換代後舊 token 必死");
+        }
+        for (i, fd) in (0..200).step_by(2).enumerate() {
+            assert_eq!(r.get(gen1[i]), Some(&(fd + 1000)));
+        }
+        for fd in (1..200).step_by(2) {
+            assert_eq!(r.get(gen0[fd]), Some(&fd));
+        }
+    }
 }

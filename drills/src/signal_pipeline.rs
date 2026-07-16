@@ -192,4 +192,23 @@ mod tests {
         assert_eq!(stats.count, 2);
         assert_eq!(stats.sum, 42);
     }
+
+    /// shutdown drain:push 完立刻 shutdown——殘料處理完才退,一筆不少。
+    #[test]
+    #[ignore = "填完 send/idle_park 後移除"]
+    fn shutdown_drains_backlog() {
+        let (mut tx, handle) = start(1024);
+        let mut accepted = 0u64;
+        for i in 0..500 {
+            if tx.send(Signal {
+                sensor_id: 0,
+                value: i,
+            }) {
+                accepted += 1;
+            }
+        }
+        drop(tx);
+        let stats = handle.shutdown();
+        assert_eq!(stats.count, accepted);
+    }
 }

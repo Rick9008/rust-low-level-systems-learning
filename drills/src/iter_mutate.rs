@@ -194,4 +194,47 @@ mod tests {
         assert!(m.contains_key("b")); // 20 ≤ 30 → 留
         assert!(m.contains_key("future")); // saturating_sub → 0 ≤ 30 → 留
     }
+
+    /// oracle 對照:偽隨機 300 組輸入,move_zeroes 與
+    /// 「filter 非零 + 尾補零」模型比對——寫指標的 off-by-one
+    /// 在隨機形狀下無所遁形。
+    #[test]
+    #[ignore = "填完 move_zeroes 後移除"]
+    fn move_zeroes_matches_oracle() {
+        let mut seed: u32 = 0x2026_0716;
+        let mut lcg = move || {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            seed
+        };
+        for _ in 0..300 {
+            let len = (lcg() % 20) as usize;
+            let mut v: Vec<i32> = (0..len).map(|_| (lcg() % 5) as i32 - 2).collect();
+            let mut expected: Vec<i32> = v.iter().copied().filter(|&x| x != 0).collect();
+            expected.resize(v.len(), 0);
+            move_zeroes(&mut v);
+            assert_eq!(v, expected);
+        }
+    }
+
+    /// oracle 對照:排序後的隨機輸入,dedup_sorted 與 std 的
+    /// `Vec::dedup` 比對(回傳的新長度也要一致)。
+    #[test]
+    #[ignore = "填完 dedup_sorted 後移除"]
+    fn dedup_sorted_matches_std() {
+        let mut seed: u32 = 7;
+        let mut lcg = move || {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            seed
+        };
+        for _ in 0..300 {
+            let len = (lcg() % 24) as usize;
+            let mut v: Vec<i32> = (0..len).map(|_| (lcg() % 6) as i32).collect();
+            v.sort_unstable();
+            let mut expected = v.clone();
+            expected.dedup();
+            let kept = dedup_sorted(&mut v);
+            assert_eq!(kept, expected.len());
+            assert_eq!(v, expected);
+        }
+    }
 }
