@@ -1,7 +1,9 @@
-//! drill:thread_pool —— 填 worker 迴圈與 shutdown。
+//! drill:thread_pool —— 填 worker 迴圈、shutdown,與有回傳值的 submit。
 //!
-//! 已給:結構、new、execute。
-//! 要填:`worker_loop`(醒來先查 stop!)與 `Drop`(join 全部)。
+//! 已給:結構、new、execute、JobHandle 的結構。
+//! 要填:`worker_loop`(醒來先查 stop!)、`Drop`(join 全部)、
+//! `submit` / `JobHandle::join`(one-shot rendezvous 的 condvar 版——
+//! async 版對照 reference 的 `file_io_offload::JoinFuture`)。
 //! 經典死法:predicate 忘了看 stop → drop 永久卡在 join。
 
 use std::collections::VecDeque;
@@ -49,6 +51,36 @@ impl ThreadPool {
         st.jobs.push_back(Box::new(job));
         drop(st);
         self.shared.cv.notify_one();
+    }
+
+    /// spec:execute 的有回傳版。
+    /// 1. 建 `Arc<(Mutex<Option<thread::Result<T>>>, Condvar)>`,slot 起始 None。
+    /// 2. clone 一份給 job;job 裡:`catch_unwind(AssertUnwindSafe(f))` 的結果
+    ///    放進 slot(`Some(result)`),然後 notify_one。
+    /// 3. 回 `JobHandle { state }`。
+    pub fn submit<T, F>(&self, f: F) -> JobHandle<T>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> T + Send + 'static,
+    {
+        todo!("spec: 建 rendezvous state; execute(放結果+notify); 回 JobHandle")
+    }
+}
+
+/// `submit` 的收據:一次性 rendezvous 的同步版(condvar 睡)。
+pub struct JobHandle<T> {
+    /// None:還沒好;Some(Ok):結果;Some(Err):worker 的 panic payload。
+    state: Arc<(Mutex<Option<thread::Result<T>>>, Condvar)>,
+}
+
+impl<T> JobHandle<T> {
+    /// spec:阻塞直到結果出現。
+    /// 1. `wait_while(slot, |s| s.is_none())`——「醒來重查」跟 bounded_queue
+    ///    的 predicate-wait 是同一顆肌肉。
+    /// 2. take 出來:Ok(v) → v;Err(panic) → `std::panic::resume_unwind(panic)`
+    ///    (錯誤跟著在乎它的人走,worker 不陪葬)。
+    pub fn join(self) -> T {
+        todo!("spec: wait_while None; take; Ok 回值 / Err resume_unwind")
     }
 }
 
@@ -112,5 +144,28 @@ mod tests {
             }
         }
         assert_eq!(*order.lock().unwrap(), (0..10).collect::<Vec<_>>());
+    }
+
+    /// submit 取值 + 先完成後 join(condvar 沒用上的路徑)。
+    #[test]
+    #[ignore = "填完 submit/join 後移除"]
+    fn submit_returns_value() {
+        let pool = ThreadPool::new(2);
+        assert_eq!(pool.submit(|| 6 * 7).join(), 42);
+
+        let h = pool.submit(|| "done");
+        thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(h.join(), "done");
+    }
+
+    /// boundary:job panic → join 端重拋,且 worker 活著。
+    #[test]
+    #[ignore = "填完 submit/join 後移除"]
+    fn submit_panic_rethrown_worker_survives() {
+        let pool = ThreadPool::new(1);
+        let h = pool.submit(|| panic!("kaboom (expected in test output)"));
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| h.join()));
+        assert!(caught.is_err());
+        assert_eq!(pool.submit(|| 7).join(), 7);
     }
 }

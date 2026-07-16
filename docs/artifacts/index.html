@@ -535,7 +535,8 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="note">
     下面的模組不再按 stage 排,改按面試優先級。難度順序(mutex → 資料結構 → atomics → executor → event loop)
     仍在 <code>git log --oneline --reverse</code>。<span class="mono">★</span> = 有 <code>challenges/</code> 空白手搓版。
-    第 1 課 <code>iter_mutate</code>(邊迭代邊修改六形狀)是純文字教材——<code>docs/iter_mutate.md</code>,無互動頁。
+    第 1 課 <code>iter_mutate</code> 與第 8 課 <code>fd_registry</code> 是文字/程式教材
+    (<code>docs/iter_mutate.md</code>、<code>docs/fd_registry.md</code>),無互動頁。
   </p>
 </section>
 
@@ -577,17 +578,17 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="hits">move-to-front · 淘汰 tail · 槽位回收</span>
     </a>
     <a class="card" href="hw_bridge.html">
-      <span class="name"><span class="ord">8</span>hw_bridge<span class="star">★</span></span>
+      <span class="name"><span class="ord">9</span>hw_bridge<span class="star">★</span></span>
       <span class="hook">framer:逐 byte 餵進 FrameReader,親眼看 <code>Ok(None)</code> 在等。TCP 是 byte stream,沒有 message 邊界。</span>
       <span class="hits">黏包切分 · framing 錯斷線 vs 語意錯續命</span>
     </a>
     <a class="card" href="dsu.html">
-      <span class="name"><span class="ord">9</span>dsu<span class="star">★</span></span>
+      <span class="name"><span class="ord">10</span>dsu<span class="star">★</span></span>
       <span class="hook">路徑壓縮把整條路上的節點直接指向根。關掉 union by rank 就退化成鏈表。</span>
       <span class="hits">α(n) ≤ 4 · 樹其實只是 parent[]</span>
     </a>
     <a class="card" href="sharded_map.html">
-      <span class="name"><span class="ord">10</span>sharded_map<span class="star">★</span></span>
+      <span class="name"><span class="ord">11</span>sharded_map<span class="star">★</span></span>
       <span class="hook">per-shard Mutex 不是消除競爭,是<strong>切分</strong>競爭。hot key 下它一點忙也幫不上。</span>
       <span class="hits">hash → shard · 全域操作不再原子</span>
     </a>

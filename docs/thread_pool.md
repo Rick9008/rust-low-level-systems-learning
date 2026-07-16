@@ -39,6 +39,20 @@ job 是 `FnOnce`,panic 後不會再被呼叫,無人能觀察到被撕一半的�
 - 池把 spawn 攤平成一次性成本;代價是佇列的鎖競爭(worker 數多時可考慮
   work-stealing,見 rayon)。
 
+## 回傳值:submit → JobHandle(one-shot rendezvous)
+
+面試常見 follow-up:「execute 沒有回傳值,要結果怎麼辦?」三層答案,
+本質都是同一個 one-shot rendezvous,差別只在「等的那端怎麼睡」:
+
+| 層次 | 做法 | 取捨 |
+|---|---|---|
+| caller 自帶 channel | `pool.execute(move ‖ { tx.send(f()); })` | 零改動、最短;panic 變成 `RecvError`,資訊丟失 |
+| **`submit` → `JobHandle::join`(本實作)** | `Mutex<Option<thread::Result<T>>>` + Condvar | 同步等;panic 在 join 端 `resume_unwind` 重拋;45 分鐘寫得完 |
+| `spawn_blocking` → `JoinFuture`([file_io_offload](file_io_offload.md)) | 同上,Condvar 換成 `Waker` | 可組合 `await`;與 async 生態同形 |
+
+condvar 睡 vs waker 睡——把這句講出來,兩個模組就縫成一張圖。
+每 job 成本:一次 Arc 配置 + 兩次鎖(~百 ns 級,對比 job 排隊 + 喚醒整趟 ~μs)。
+
 ## 邊界:execute-after-shutdown 為何不用處理
 
 `ThreadPool` 沒有 `Clone`,shutdown 只發生在 `Drop(&mut self)`——

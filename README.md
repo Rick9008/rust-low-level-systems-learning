@@ -41,11 +41,13 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 6. `executor`:mini `block_on`,`std::task::Wake` + Arc 做 Waker、
    thread::park/unpark 的 token 語意(wake 先於 park 不丟)★
 7. `lru`:HashMap<K, index> + 放在 Vec 裡的 index-based 雙向鏈表,O(1) get/put ★
-8. `hw_bridge` 的 **protocol + framer**:wire format `[u32 len(BE)][u8 opcode][payload]`、
+8. `fd_registry`:generational slot map——`(gen<<32)|fd` token、stale event 防禦
+   (JD 點名的 "event registry" sleeper;彩排題 e2)
+9. `hw_bridge` 的 **protocol + framer**:wire format `[u32 len(BE)][u8 opcode][payload]`、
    `try_decode` + `FrameReader` 的 read-buffer parse loop
    (半個 frame / 多個 frame 正確切分)★
-9. `dsu`:union-find,path compression + union by rank,α(n) ★
-10. `sharded_map`:per-shard Mutex 降鎖競爭,shard 選擇與整體不變量 ★
+10. `dsu`:union-find,path compression + union by rank,α(n) ★
+11. `sharded_map`:per-shard Mutex 降鎖競爭,shard 選擇與整體不變量 ★
 
 次優先(CoderPad 做得了、一般面試常見,但非 TPS 核心考點,時間有限就往後排):
 `inplace_leetcode`(27/75/80/88/189 五道 in-place 題,`iter_mutate` 的實戰應用)、
@@ -159,6 +161,7 @@ cargo run -p reference --example loom_vs_stress    # 見下節
 | `hw_bridge` | 橋接軟硬體 + 定義通訊協定:binary framing、並發模型取捨 |
 | `ring_buffer` `lru` `dsu` `graph` `trie` `tree` | systems-level data structures:index-based、O(1) 設計 |
 | `iter_mutate` `inplace_leetcode` | 借用規則下的邊迭代邊改:六形狀、寫指標、O(1) space in-place |
+| `fd_registry` | event registry(JD sleeper):fd-dense slots + generation 防 stale dispatch |
 
 邊寫邊講的數字底稿:[`docs/cost-model.md`](docs/cost-model.md)
 (ns/µs 數量級、queue 三型、poll vs epoll、並發模型轉折點)。
