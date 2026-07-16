@@ -58,6 +58,19 @@ Prompt 看起來像「build a runtime」(thread pool + executor + reactor 全都
 | 3(~3 分)| 講 | 真 IO:reactor thread + epoll + interest table;std 沒有多路等待原語,這層是 tokio(mio→epoll)接手 |
 | 4(~2 分)| 收 | 轉折點:何時要 work-stealing、何時 readiness 不夠要 completion(io_uring) |
 
+階段 3 的「講」配一個 stub 就夠(Abstract the Noise,詳見
+[`docs/coderpad-constraints.md`](../docs/coderpad-constraints.md)):
+
+```rust
+trait Poller {
+    fn register(&mut self, fd: RawFd, token: u64);
+    fn wait(&mut self, out: &mut Vec<(u64, Ready)>, timeout_ms: i32) -> usize;
+}
+```
+
+加一句「底層是 epoll,`epoll_event.data` 的 u64 就是我的 token,要的話可以展開」,
+然後回到主結構——**不要現場手搓 FFI**。
+
 背景知識見 [`docs/async-runtime-anatomy.md`](../docs/async-runtime-anatomy.md);
 邊講邊用的數字在 [`docs/cost-model.md`](../docs/cost-model.md)。
 

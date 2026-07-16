@@ -38,8 +38,8 @@ thiserror、itertools、bitflags、url、uuid(另列有 core)。
 - 但 epoll 一族(`epoll_sys`、`event_loop`、`tcp_echo`、`file_io_offload`)
   **仍不是 live coding 題**:單檔 + 45 分鐘內手搓 `epoll_event`
   (`repr(C, packed)` 的坑)+ 完整 event loop 是壞賭注,何況 tokio 就在清單裡。
-  它們維持 deep-dive 定位:概念題彈藥、看懂 tokio 底下發生什麼,
-  必要時現場 demo 幾行 syscall 綁定鎮場。
+  它們維持 deep-dive 定位:概念題彈藥、看懂 tokio 底下發生什麼。
+  **場上不要掏 FFI**——正確動作見下方「Abstract the Noise」節。
 - 沒有 loom / proptest:正確性只能靠自己當場寫的測試 + 腦內 dry-run。
   平時練習時 loom 幫你「證明」的那些 interleaving 直覺,面試時要內化成
   「我知道這裡為什麼對」的口頭論證。
@@ -72,10 +72,29 @@ CoderPad 有 Run 按鈕,隨時可以編譯執行。誘惑是寫兩行按一次,�
 - 這正是本 repo 5 pillars 的 [Dry-Run] 那一環;`rehearsals/` 計時彩排時
   請把「先 dry-run 再 Run」當成硬規則執行。
 
+## 面試動作:epoll 用 stub 帶過(Abstract the Noise)
+
+「不依賴外部函式庫」的目的,是看你知道 thread pool / queue **裡面**有什麼——
+別 import rayon / tokio / crossbeam;它不是在測你會不會寫 libc binding。
+epoll 相對於主結構(pool + ring)就是 rubric 說的那個次要 JSON parser:
+定義一個 API stub,然後往前走。
+
+```rust
+/// 底層是 epoll_wait;面試只需要這個 shape。
+trait Poller {
+    fn register(&mut self, fd: RawFd, token: u64);
+    fn wait(&mut self, out: &mut Vec<(u64, Ready)>, timeout_ms: i32) -> usize;
+}
+```
+
+台詞:「底層是 epoll,`epoll_event.data` 那個 u64 就是我的 token,需要的話可以展開。」
+三行 + 一句話,剩下的時間花在他們真正在評的東西上。**現場手搓 FFI 是負分動作**——
+時間燒在沒人評分的地方(2026-07-16 JD 攻略分析定案)。
+
 ## 一句話總結
 
 CoderPad = 單檔 + 固定 crate 清單(std 基本盤 + tokio,無 libc / mio)+
 新 toolchain(1.92 / 2024 Edition)+ 有 Run 按鈕(一次 ~7 秒)。
 能考的是:鎖/條件變數、atomic、執行緒生命週期、ring/framing/index-based
 資料結構,以及 tokio 層級的 async 題;raw syscall 實測連得上、epoll 技術上
-可行,但時限內手搓不划算——維持深讀定位。
+可行,但時限內手搓不划算——維持深讀定位,場上以 `Poller` stub 三行帶過。

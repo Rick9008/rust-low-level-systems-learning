@@ -22,28 +22,33 @@ std-only 的 low-level systems 面試學習教材:concurrency、event loop、bin
 自寫 `unsafe extern "C"` 綁 raw syscall 實測**連得上**,epoll 技術上做得到;
 但單檔 + 45 分鐘手搓 epoll loop 是壞賭注、tokio 又在清單裡,
 所以 **epoll 一族仍分在 deep-dive**——拿來回答 readiness model / event loop
-概念題、看懂 tokio 底下發生什麼,必要時現場 demo 幾行綁定鎮場。
+概念題、看懂 tokio 底下發生什麼。場上遇到 epoll,正確動作是三行 `Poller` trait
+stub 帶過(Abstract the Noise,見 coderpad-constraints)——**不要現場掏 FFI,
+那是負分動作**:時間會燒在沒人評分的地方。
 
 ### 【TPS 直接相關 — 優先】
 
 CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序**,
 每個模組走三層:讀 `reference/` → 填 `drills/` → 有 ★ 的從 `challenges/` 空白手搓:
 
-1. `bounded_queue`:Mutex + Condvar 的 predicate-wait、close 語意、滿/空邊界
-2. `thread_pool`:worker 醒來先查 stop、drop 時 join 全部、graceful shutdown
-3. `ring_buffer`:bounded ring 的 head/tail/len 算術與 wrap 邊界
-4. `spsc_ring`:兩個 atomic index + acquire/release、power-of-2 mask、
+1. `iter_mutate`:邊迭代邊修改的六形狀(iter_mut / 寫指標 / retain_mut /
+   先收集再動手 / mem::take / split_at_mut)——之後每一題的手感基礎
+2. `bounded_queue`:Mutex + Condvar 的 predicate-wait、close 語意、滿/空邊界
+3. `thread_pool`:worker 醒來先查 stop、drop 時 join 全部、graceful shutdown
+4. `ring_buffer`:bounded ring 的 head/tail/len 算術與 wrap 邊界
+5. `spsc_ring`:兩個 atomic index + acquire/release、power-of-2 mask、
    `#[repr(align(64))]` 防 false sharing ★
-5. `executor`:mini `block_on`,`std::task::Wake` + Arc 做 Waker、
+6. `executor`:mini `block_on`,`std::task::Wake` + Arc 做 Waker、
    thread::park/unpark 的 token 語意(wake 先於 park 不丟)★
-6. `lru`:HashMap<K, index> + 放在 Vec 裡的 index-based 雙向鏈表,O(1) get/put ★
-7. `hw_bridge` 的 **protocol + framer**:wire format `[u32 len(BE)][u8 opcode][payload]`、
+7. `lru`:HashMap<K, index> + 放在 Vec 裡的 index-based 雙向鏈表,O(1) get/put ★
+8. `hw_bridge` 的 **protocol + framer**:wire format `[u32 len(BE)][u8 opcode][payload]`、
    `try_decode` + `FrameReader` 的 read-buffer parse loop
    (半個 frame / 多個 frame 正確切分)★
-8. `dsu`:union-find,path compression + union by rank,α(n) ★
-9. `sharded_map`:per-shard Mutex 降鎖競爭,shard 選擇與整體不變量 ★
+9. `dsu`:union-find,path compression + union by rank,α(n) ★
+10. `sharded_map`:per-shard Mutex 降鎖競爭,shard 選擇與整體不變量 ★
 
 次優先(CoderPad 做得了、一般面試常見,但非 TPS 核心考點,時間有限就往後排):
+`inplace_leetcode`(27/75/80/88/189 五道 in-place 題,`iter_mutate` 的實戰應用)、
 `graph`(BFS / DFS / Kahn's topo / Dijkstra)、`trie`、`tree`。
 
 優先級練完 → `rehearsals/` 計時彩排(見下方「rehearsals 使用法」)。
@@ -73,7 +78,7 @@ executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接�
 
 ## 互動教材
 
-`docs/artifacts/` 有 18 份互動教材——17 份每個模組一份,加一份跨模組的
+`docs/artifacts/` 有 18 份互動教材——17 個核心模組各一份,加一份跨模組的
 async runtime 總圖(executor × reactor × proactor)——瀏覽器直接開,無需 build:
 
 ```sh
@@ -152,6 +157,7 @@ cargo run -p reference --example loom_vs_stress    # 見下節
 | `file_io_offload` | event loop 邊界:readiness vs completion(io_uring) |
 | `hw_bridge` | 橋接軟硬體 + 定義通訊協定:binary framing、並發模型取捨 |
 | `ring_buffer` `lru` `dsu` `graph` `trie` `tree` | systems-level data structures:index-based、O(1) 設計 |
+| `iter_mutate` `inplace_leetcode` | 借用規則下的邊迭代邊改:六形狀、寫指標、O(1) space in-place |
 
 邊寫邊講的數字底稿:[`docs/cost-model.md`](docs/cost-model.md)
 (ns/µs 數量級、queue 三型、poll vs epoll、並發模型轉折點)。

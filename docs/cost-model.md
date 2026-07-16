@@ -30,6 +30,12 @@
 **標準答案的形狀**:「Mutex 版和 lockless 版都是 O(1)——差別在常數與競爭行為:
 contended lock 是 µs 級且隨核心數劣化,SPSC 是 ns 級且 per-signal 隔離。」
 
+**lockless 買什麼**:不是吞吐——uncontended push ~20ns,對比一次 syscall
+數百 ns、context switch µs 級,queue 只是總成本的零頭。它買的是 **tail**:
+mutex holder 被 scheduler preempt 的那一刻,所有 waiter 陪卡一整個 timeslice
+(ms 級)→ p99.9 爆掉。把這講成 trade-off(而非 gotcha)是滿分答案;
+JD 寫「lockless 更快」時,你補上「更快的是 p99.9,不是平均」。
+
 ## 三、event registry:poll vs epoll
 
 | | 每次呼叫 | 登記 | N=10,000、ready=10 時 |

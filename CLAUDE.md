@@ -31,14 +31,14 @@ cargo test -p challenges -- --include-ignored    # show which challenge tests ar
 
 ## Architecture
 
-Four workspace crates; the first three share module names:
+Four workspace crates; the first three share module names (exceptions: the single-threaded idiom modules don't span all layers — `iter_mutate` has no challenge, `inplace_leetcode` exists only in reference):
 
 - **`reference/`** — complete implementations + tests + teaching comments. The answer key.
 - **`drills/`** — same module tree, but core functions are hollowed to `todo!("spec: ...")` with a spec doc comment above each. Skeleton, helpers, and `#[ignore]`d tests are provided.
 - **`challenges/`** — only public API signatures + test files + interview-prompt-style module docs (constraints and clarify points, no how). Blank-slate live-coding conditions.
 - **`rehearsals/`** — eight timed rehearsal problems simulating the real interview environment (CoderPad: single file, fixed crate list — see `docs/coderpad-constraints.md`). Problems a–c and e–h are std-only; problem d (tokio_frame_server) uses tokio, the crate's sole dependency. Problems e–h map to predicted question types Q4–Q7 and default to recognition practice rather than full 45-minute runs. The user writes their own tests in-file during rehearsal; `tests/<name>_test.rs` are reference boundary tests, opened only afterward. Verified solutions live in `rehearsals/examples/sol_<name>.rs` (compiled by the gates so they can't rot) — **do not reveal or paste solution content while the user is mid-rehearsal** unless they explicitly ask.
 
-The verified interview environment (user tested the real pad, 2026-07-15) is Rust 1.92 / edition 2024 with tokio available but no libc/mio crates. Hand-written `unsafe extern "C"` raw syscalls do link and run on the pad (verified: epoll_create1/eventfd return fds), so epoll is technically possible there — but impractical to hand-roll in a 45-minute single-file interview, so the epoll-family modules remain deep-dive reading material, not practice targets. The README's 學習路徑 section encodes this two-tier priority and the recommended reading order.
+The verified interview environment (user tested the real pad, 2026-07-15) is Rust 1.92 / edition 2024 with tokio available but no libc/mio crates. Hand-written `unsafe extern "C"` raw syscalls do link and run on the pad (verified: epoll_create1/eventfd return fds), so epoll is technically possible there — but impractical to hand-roll in a 45-minute single-file interview, so the epoll-family modules remain deep-dive reading material, not practice targets. In the interview itself the correct move is a 3-line `Poller` trait stub (Abstract the Noise — see `docs/coderpad-constraints.md`), never live FFI. The README's 學習路徑 section encodes this two-tier priority and the recommended reading order.
 
 `drills` and `challenges` depend on `reference` **only as a test harness** (e.g. the tcp_echo challenge uses reference's event_loop as its base; hw_bridge uses reference's server to validate your framer). Challenge/drill bodies must never copy reference code.
 
