@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    18 個互動模組,加 8 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    18 個互動模組、1 間 clarify 決策室,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -529,11 +529,13 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
     <strong>有 tokio、無 libc / mio</strong>。自寫 <code>unsafe extern "C"</code> 綁 raw syscall 連得上,
     epoll 技術上做得到;但 45 分鐘單檔手搓 epoll loop 是壞賭注、tokio 又在清單裡——
     所以 epoll 一族分在 <strong>deep-dive</strong>:拿來答 readiness model / event loop 概念題、
-    看懂 tokio 底下發生什麼,讀懂即可,不手搓。
+    看懂 tokio 底下發生什麼,讀懂即可,不手搓。場上遇到 epoll,三行 <code>Poller</code> trait
+    stub 帶過(Abstract the Noise)——不掏 FFI。
   </p>
   <p class="note">
     下面的模組不再按 stage 排,改按面試優先級。難度順序(mutex → 資料結構 → atomics → executor → event loop)
     仍在 <code>git log --oneline --reverse</code>。<span class="mono">★</span> = 有 <code>challenges/</code> 空白手搓版。
+    第 1 課 <code>iter_mutate</code>(邊迭代邊修改六形狀)是純文字教材——<code>docs/iter_mutate.md</code>,無互動頁。
   </p>
 </section>
 
@@ -545,47 +547,47 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   </div>
   <div class="cards">
     <a class="card" href="bounded_queue.html">
-      <span class="name"><span class="ord">1</span>bounded_queue</span>
+      <span class="name"><span class="ord">2</span>bounded_queue</span>
       <span class="hook">Condvar 的 predicate-wait。把 <code>while</code> 換成 <code>if</code>,看被喚醒的 consumer 從空佇列取值。</span>
       <span class="hits">wakeup 是提示,不是保證 · close 語意</span>
     </a>
     <a class="card" href="thread_pool.html">
-      <span class="name"><span class="ord">2</span>thread_pool</span>
+      <span class="name"><span class="ord">3</span>thread_pool</span>
       <span class="hook">shutdown 才是難的部分。worker 先阻塞再查 stop 旗標,就永遠醒不來。</span>
       <span class="hits">檢查順序 · notify_all · Drop 時 join</span>
     </a>
     <a class="card" href="ring_buffer.html">
-      <span class="name"><span class="ord">3</span>ring_buffer</span>
+      <span class="name"><span class="ord">4</span>ring_buffer</span>
       <span class="hook">head + len 的 wrap 算術。也解釋為什麼 len 一進入並發就活不下去。</span>
       <span class="hits">滿/空邊界 · 不浪費一格</span>
     </a>
     <a class="card" href="spsc_ring.html">
-      <span class="name"><span class="ord">4</span>spsc_ring<span class="star">★</span></span>
+      <span class="name"><span class="ord">5</span>spsc_ring<span class="star">★</span></span>
       <span class="hook">兩個自由跑計數器,無 CAS。把 Release/Acquire 降成 Relaxed,看那條 happens-before 邊消失。</span>
       <span class="hits">壓 2,000,000 次抓不到 · loom 379µs 抓到</span>
     </a>
     <a class="card" href="executor.html">
-      <span class="name"><span class="ord">5</span>executor<span class="star">★</span></span>
+      <span class="name"><span class="ord">6</span>executor<span class="star">★</span></span>
       <span class="hook">poll → Pending → park → wake → unpark → Ready。park 的 <strong>token</strong> 語意:wake 先於 park 也不會丟。</span>
       <span class="hits">Waker = Arc&lt;Wake&gt; · 沒有 token 就死鎖</span>
     </a>
     <a class="card" href="lru.html">
-      <span class="name"><span class="ord">6</span>lru<span class="star">★</span></span>
+      <span class="name"><span class="ord">7</span>lru<span class="star">★</span></span>
       <span class="hook">HashMap 與 arena 雙結構同步。O(1) 的關鍵是 index-based 侵入式雙向鏈表。</span>
       <span class="hits">move-to-front · 淘汰 tail · 槽位回收</span>
     </a>
     <a class="card" href="hw_bridge.html">
-      <span class="name"><span class="ord">7</span>hw_bridge<span class="star">★</span></span>
+      <span class="name"><span class="ord">8</span>hw_bridge<span class="star">★</span></span>
       <span class="hook">framer:逐 byte 餵進 FrameReader,親眼看 <code>Ok(None)</code> 在等。TCP 是 byte stream,沒有 message 邊界。</span>
       <span class="hits">黏包切分 · framing 錯斷線 vs 語意錯續命</span>
     </a>
     <a class="card" href="dsu.html">
-      <span class="name"><span class="ord">8</span>dsu<span class="star">★</span></span>
+      <span class="name"><span class="ord">9</span>dsu<span class="star">★</span></span>
       <span class="hook">路徑壓縮把整條路上的節點直接指向根。關掉 union by rank 就退化成鏈表。</span>
       <span class="hits">α(n) ≤ 4 · 樹其實只是 parent[]</span>
     </a>
     <a class="card" href="sharded_map.html">
-      <span class="name"><span class="ord">9</span>sharded_map<span class="star">★</span></span>
+      <span class="name"><span class="ord">10</span>sharded_map<span class="star">★</span></span>
       <span class="hook">per-shard Mutex 不是消除競爭,是<strong>切分</strong>競爭。hot key 下它一點忙也幫不上。</span>
       <span class="hits">hash → shard · 全域操作不再原子</span>
     </a>
@@ -659,9 +661,24 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
 
 <section class="stage-block">
   <div class="stage-head">
+    <span class="stage-num pri">clarify</span>
+    <span class="stage-title">開場五問決策室</span>
+    <span class="stage-sub">pillar 1 的操作介面;卡片練習在 rehearsals/clarify-cards.md</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="clarify_playbook.html">
+      <span class="name">clarify_playbook</span>
+      <span class="hook">五問(掉不掉/速率/規模/SLA/偵測)選答案,右側設計即時跟著變——同一個 ring,三種 full policy。</span>
+      <span class="hits">六張情境卡 canonical 檔案 · 容量算式 · 開寫前的台詞</span>
+    </a>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
     <span class="stage-num pri">rehearsals</span>
-    <span class="stage-title">8 題計時彩排</span>
-    <span class="stage-sub">模擬 CoderPad;題 a–d 主菜全程 45 分,題 e–h 對應 Q4–Q7 做 recognition</span>
+    <span class="stage-title">9 題計時彩排</span>
+    <span class="stage-sub">模擬 CoderPad;題 a–d 主菜全程 45 分,題 e–h 對應 Q4–Q7 做 recognition;e2(fd_registry)是 JD sleeper,值得全程跑</span>
   </div>
   <p class="oneliner">串流是無限的,你的記憶體不是。界在哪?</p>
   <p>

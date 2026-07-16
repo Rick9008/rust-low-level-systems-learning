@@ -94,6 +94,11 @@ window、capacity、heap)。
 
 認不出來就問。開場永遠是:*"Before I start, let me make sure I understand the constraints."*
 
+問什麼、答案怎麼變成設計:[`docs/clarify-playbook.md`](../docs/clarify-playbook.md)
+(互動版 [`docs/artifacts/clarify_playbook.html`](../docs/artifacts/clarify_playbook.html))。
+專門練這一步的六張情境卡:[`clarify-cards.md`](clarify-cards.md),每張 5 分鐘;
+答案在 `clarify-answers.md`,**寫完才開**。
+
 ## 對答案
 
 每題有一份**已對參考測試驗證全綠**的 solution:`examples/sol_<name>.rs`。

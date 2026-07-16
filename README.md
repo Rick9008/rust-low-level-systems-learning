@@ -78,8 +78,9 @@ executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接�
 
 ## 互動教材
 
-`docs/artifacts/` 有 18 份互動教材——17 個核心模組各一份,加一份跨模組的
-async runtime 總圖(executor × reactor × proactor)——瀏覽器直接開,無需 build:
+`docs/artifacts/` 有 19 份互動教材——17 個核心模組各一份、一份跨模組的
+async runtime 總圖(executor × reactor × proactor)、一間 clarify 決策室
+(開場五問 → 設計即時推導)——瀏覽器直接開,無需 build:
 
 ```sh
 xdg-open docs/artifacts/index.html
@@ -204,6 +205,9 @@ epoll 綁定已提供,只從頭寫 accept/read/write 迴圈。
 對應題型預測的 Q4–Q7,預設做 recognition 練習(讀題 → 定界宣言 → 口述 arc);
 題 e2(fd_registry,generation 防 stale event)是 JD 點名的 sleeper,建議完整跑。
 題目在 [`rehearsals/README.md`](rehearsals/README.md),面試 prompt 風格、不給提示。
+開場 clarify(pillar 1)另有專門練法:[`docs/clarify-playbook.md`](docs/clarify-playbook.md)
+五問決策表 + [`rehearsals/clarify-cards.md`](rehearsals/clarify-cards.md) 六張情境卡
+(每張 5 分鐘;答案分檔,寫完才開)。
 
 1. 計時 45 分鐘一題。實作與**你自己寫的測試**都放 `src/<name>.rs` 同一個檔案
    (`#[cfg(test)] mod tests` 在底部)——CoderPad 就是全部擠一個 buffer。

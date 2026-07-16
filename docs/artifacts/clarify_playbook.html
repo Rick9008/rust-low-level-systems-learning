@@ -1,0 +1,471 @@
+<title>clarify — 開場五問,答案決定設計</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216;
+  --surface: #151a20;
+  --raised: #1d232b;
+  --line: #2b333d;
+  --line-soft: #212831;
+  --ink: #dee4eb;
+  --ink-2: #a5afbb;
+  --muted: #7b8593;
+  --producer: #d99a45;
+  --consumer: #49b8c9;
+  --danger: #dc6a80;
+  --ok: #6cbc8c;
+  --accent: #8ea4e6;
+  --producer-bg: #33260f;
+  --consumer-bg: #10333a;
+  --danger-bg: #3a1a22;
+  --ok-bg: #16321f;
+  --accent-bg: #1e2646;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--ground); }
+body {
+  font-family: var(--serif);
+  color: var(--ink);
+  line-height: 1.65;
+  padding: 2rem 1rem 5rem;
+}
+.wrap { max-width: 68rem; margin: 0 auto; }
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+header .eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+header h1 { font-size: 1.9rem; margin: 0.2rem 0 0.6rem; }
+header .lede { max-width: 46rem; color: var(--ink-2); }
+section { margin-top: 2.2rem; }
+h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+p.note { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; }
+
+/* ── 情境預設 ─────────────────────────────────────────────── */
+.presets { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.presets button {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.presets button:hover { border-color: var(--accent); color: var(--accent); }
+.presets button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+#preset-blurb {
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  min-height: 1.5rem;
+}
+
+/* ── 五問 + 設計面板 ──────────────────────────────────────── */
+.layout { display: grid; grid-template-columns: 1fr; gap: 1.4rem; }
+@media (min-width: 58rem) {
+  .layout { grid-template-columns: 7fr 6fr; align-items: start; }
+  .design-panel { position: sticky; top: 1rem; }
+}
+.q {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.9rem;
+}
+.q .q-title { font-weight: 700; }
+.q .q-title .qno {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--accent);
+  margin-right: 0.4rem;
+}
+.q .ask {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+  margin: 0.15rem 0 0.55rem;
+}
+.q .opts { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.q .opts button {
+  font-family: inherit;
+  font-size: 0.86rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--raised);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.q .opts button:hover { border-color: var(--accent); }
+.q .opts button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.design-panel {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+.design-panel h3 {
+  font-size: 0.95rem;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+.field { padding: 0.55rem 0; border-top: 1px dashed var(--line-soft); }
+.field:first-of-type { border-top: 0; }
+.field .k {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  display: block;
+}
+.field .v { font-size: 0.92rem; }
+.field .v .num { font-family: var(--mono); font-size: 0.85em; color: var(--consumer); }
+.field.warn .v { color: var(--danger); }
+.line-quote {
+  margin-top: 0.7rem;
+  border-left: 3px solid var(--ok);
+  background: var(--ok-bg);
+  border-radius: 0 8px 8px 0;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.92rem;
+}
+.line-quote .k {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--ok);
+  display: block;
+  margin-bottom: 0.15rem;
+}
+.unanswered { color: var(--muted); font-style: italic; }
+
+/* ── 靜態表格 ─────────────────────────────────────────────── */
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.45rem 0.6rem; border: 1px solid var(--line-soft); vertical-align: top; }
+th { background: var(--surface); font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.04em; }
+.phrase { font-family: var(--mono); font-size: 0.82rem; }
+.discipline {
+  border-left: 3px solid var(--danger);
+  background: var(--danger-bg);
+  border-radius: 0 8px 8px 0;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.92rem;
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">rehearsals · pillar 1 · clarify</p>
+  <h1>開場五問,答案決定設計</h1>
+  <p class="lede">
+    JD 把線索寫給你(node 限制、network flakiness、跨 rack 規模),面試官等你把線索變成問題。
+    下面選一組答案,右邊的設計會跟著變——<strong>同一個 ring buffer,三種 full policy,
+    差別全在你問出來的答案</strong>。卡片練習在 <code>rehearsals/clarify-cards.md</code>。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>情境預設(六張卡的 canonical 檔案)</h2>
+  <div class="presets" id="presets"></div>
+  <p id="preset-blurb"></p>
+  <p class="note">先自己選五問的答案,再按預設對照——差在哪一問,那一問就是你的盲點。</p>
+</section>
+
+<section>
+  <h2>五問 → 你的設計</h2>
+  <div class="layout">
+    <div id="questions"></div>
+    <div class="design-panel" id="panel">
+      <h3>你的設計(隨答案即時推導)</h3>
+      <div class="field"><span class="k">FULL POLICY(Q1)</span><span class="v" id="f-policy"></span></div>
+      <div class="field"><span class="k">容量與記憶體(Q1 × Q2)</span><span class="v" id="f-capacity"></span></div>
+      <div class="field"><span class="k">結構與執行緒(Q2 × Q3)</span><span class="v" id="f-threads"></span></div>
+      <div class="field"><span class="k">鎖策略(Q4)</span><span class="v" id="f-lock"></span></div>
+      <div class="field"><span class="k">失敗偵測(Q5)</span><span class="v" id="f-death"></span></div>
+      <div class="line-quote"><span class="k">開寫前的一句台詞</span><span id="f-quote"></span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>JD 線索 → 該問的問題</h2>
+  <table>
+    <tr><th>JD 裡的字眼</th><th>觸發哪一問</th><th>為什麼</th></tr>
+    <tr><td>"thousands of nodes" / "per rack"</td><td>Q3、Q2</td><td>thread 數、shard 策略</td></tr>
+    <tr><td>"network flakiness"</td><td>Q5、Q1</td><td>資料會遲到、亂序、斷流</td></tr>
+    <tr><td>"can't store them all"</td><td>Q1</td><td>這是 space complexity 題</td></tr>
+    <tr><td>"real-time" / "dashboards"</td><td>Q4、Q1</td><td>新鮮度 vs 完整性</td></tr>
+    <tr><td>"hardware signals" / "interrupts"</td><td>Q1、Q3</td><td>上游推不回去 → backpressure 不存在</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>紀律</h2>
+  <p class="discipline">
+    0–5 分鐘問完 → 30 秒定界宣言(假設 + 結構 + full policy + shutdown)→
+    <strong>鎖 contract,之後不中途改設計</strong>。面試官糾正 → 當場改一次 → 再鎖。
+    開場句永遠是:<span class="phrase">"Before I start, let me make sure I understand the constraints."</span>
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+"use strict";
+
+/* ── 題目定義 ── */
+var QUESTIONS = [
+  { id: "q1", no: "Q1", title: "資料掉不掉?", ask: '"Under pressure, can we drop or aggregate, or is every sample required?"',
+    opts: [ ["must_keep", "一筆不能掉"], ["latest_wins", "新資料比舊值錢"], ["stats_only", "只要統計"] ] },
+  { id: "q2", no: "Q2", title: "速率多少?", ask: '"What\'s the signal rate per node — hundreds per second, or millions?"',
+    opts: [ ["low", "< 10k/s"], ["high", "100k–1M/s"], ["extreme", "> 1M/s"] ] },
+  { id: "q3", no: "Q3", title: "幾個 producer / node?", ask: '"How many producers hit this path — one device, or the whole rack?"',
+    opts: [ ["one", "1 個"], ["hundreds", "數十~數百"], ["thousands", "數千+"] ] },
+  { id: "q4", no: "Q4", title: "SLA 是 p50 還是 p99.9?", ask: '"Are we optimizing average throughput, or tail latency?"',
+    opts: [ ["p50", "p50 / 吞吐"], ["tail", "p99.9 tail"] ] },
+  { id: "q5", no: "Q5", title: "節點死掉怎麼知道?", ask: '"How do we learn a node died — does TCP tell us, or do we own heartbeats?"',
+    opts: [ ["tcp", "TCP 對端"], ["hw", "硬體 / UDP"], ["self", "自己排程 probe"] ] }
+];
+
+/* ── 六張情境卡的 canonical 檔案 ── */
+var PRESETS = [
+  { key: "telemetry", label: "telemetry hub",
+    ans: { q1: "stats_only", q2: "extreme", q3: "thousands", q4: "tail", q5: "hw" },
+    blurb: "儀表板只要統計 → 直接聚合,queue 深度問題整個消失;數千 node 的連線才是主戰場。" },
+  { key: "rpc", label: "RPC gateway",
+    ans: { q1: "must_keep", q2: "high", q3: "thousands", q4: "tail", q5: "tcp" },
+    blurb: "必答 → backpressure 唯一合法;bounded + timeout 把失敗變可預期,unbounded 把失敗變 OOM。" },
+  { key: "market", label: "market data feed",
+    ans: { q1: "latest_wins", q2: "extreme", q3: "hundreds", q4: "tail", q5: "tcp" },
+    blurb: "只要最新價 → conflation(capacity=1 覆蓋寫)。讀端慢不是問題——它醒來永遠拿到最新。" },
+  { key: "logs", label: "log shipper",
+    ans: { q1: "latest_wins", q2: "high", q3: "one", q4: "p50", q5: "tcp" },
+    blurb: "「app 不能卡」×「網路會斷」相乘 → 極端下必須能掉:bounded + drop-oldest + dropped 計數。" },
+  { key: "sensor", label: "sensor bridge",
+    ans: { q1: "latest_wins", q2: "extreme", q3: "one", q4: "tail", q5: "hw" },
+    blurb: "單產單消 + 裝置推不回去:SPSC overwriting ring 的教科書入場。" },
+  { key: "prober", label: "health prober",
+    ans: { q1: "must_keep", q2: "low", q3: "hundreds", q4: "p50", q5: "self" },
+    blurb: "工作自己排 → rate 可控,bounded + blocking submit 就是正解;力氣花在 timeout 與抖動抑制。" }
+];
+
+var state = { q1: null, q2: null, q3: null, q4: null, q5: null };
+
+/* ── 推導 ── */
+var RATE = { low: { n: 1e4, s: "10k/s" }, high: { n: 1e5, s: "100k/s" }, extreme: { n: 1e6, s: "1M/s" } };
+
+function fmtBytes(b) {
+  if (b >= 1 << 30) return (b / (1 << 30)).toFixed(1) + " GB";
+  if (b >= 1 << 20) return (b / (1 << 20)).toFixed(1) + " MB";
+  if (b >= 1024) return (b / 1024).toFixed(0) + " KB";
+  return b + " B";
+}
+
+function derive() {
+  var d = {};
+  var q1 = state.q1, q2 = state.q2, q3 = state.q3, q4 = state.q4, q5 = state.q5;
+
+  d.policy = !q1 ? null :
+    q1 === "must_keep" ? "<strong>backpressure</strong>:bounded queue;上游是自己人 → blocking submit;是 TCP 對端 → <code>EPOLL_CTL_MOD</code> 關 EPOLLIN,消化完再開。排隊要有上限 + timeout(fail fast)。" :
+    q1 === "latest_wins" ? "<strong>drop-oldest</strong>:overwriting ring + <code>dropped</code> 計數器——掉多少要看得見。極端形是 conflation(per-key capacity=1 覆蓋寫)。" :
+    "<strong>就地聚合</strong>:per-window count/sum/min/max,記憶體 O(#windows),與樣本數脫鉤。原始值不落地,queue 深度問題直接消失。";
+
+  if (!q1 || !q2) { d.capacity = null; }
+  else if (q1 === "stats_only") {
+    d.capacity = "1440 個 minute-bucket × 32B ≈ <span class=\"num\">46 KB/天</span>——對比 unbounded 原始值 " + RATE[q2].s + " × 16B × 落後 60s ≈ <span class=\"num\">" + fmtBytes(RATE[q2].n * 16 * 60) + "</span>。";
+  } else {
+    var cap = RATE[q2].n * 0.1;
+    d.capacity = "capacity = rate × 容忍落後 = " + RATE[q2].s + " × 100ms = <span class=\"num\">" + (cap >= 1000 ? (cap / 1000) + "k" : cap) + " slots</span> ≈ <span class=\"num\">" + fmtBytes(cap * 16) + "</span>(16B/筆)。unbounded 的下場:落後 60s ≈ <span class=\"num\">" + fmtBytes(RATE[q2].n * 16 * 60) + "</span>。";
+  }
+
+  d.threads = !q3 ? null :
+    q3 === "one" ? "單一 producer → 恰好一產一消,<strong>SPSC ring</strong> 的入場券;消費端一條 thread 批次 drain。" :
+    q3 === "hundreds" ? "數十~數百 → 固定 pool + 共享 <code>Mutex&lt;VecDeque&gt;</code> 先上,量了再說;thread-per-connection 在這個量級還活得下去。" :
+    "數千+ → <strong>per-producer SPSC shard</strong>(每個 index 單寫者)或 sharded map;連線端 thread-per-connection 到頭(2 MiB stack/條)→ event loop / tokio。";
+
+  d.lock = !q4 ? null :
+    q4 === "p50" ? "<code>Mutex&lt;VecDeque&gt;</code> + Condvar 就贏了:uncontended ~20ns,syscall(數百 ns)才是大頭。<strong>不要炫技</strong>。" :
+    "lock-free 的理由成立:mutex holder 被 preempt → 全體 waiter 陪卡一整個 timeslice(ms 級)→ p99.9 爆。<strong>先寫 mutex 版,把這段講成升級理由</strong>。";
+
+  d.death = !q5 ? null :
+    q5 === "tcp" ? "<code>read() == 0</code> = 對端正常關;<strong>半開連線</strong>(對端斷電)TCP 不會說 → heartbeat + idle timeout(timer queue)。" :
+    q5 === "hw" ? "沒有連線概念:heartbeat deadline 進 min-heap timer queue;<code>epoll_wait</code> 的 timeout = 下一個 deadline。斷流本身就是訊號。" :
+    "timer queue 決定「下一個該 probe 誰」;worker pool 大小 = 併發上限(天然限流);連續 N 次失敗才標紅(抖動抑制)。";
+
+  d.quote =
+    q1 === "stats_only" ? "「unbounded 在這裡是 O(rate × 落後);我直接聚合,記憶體變 O(#windows),掉資料的問題不存在。」" :
+    q1 === "latest_wins" && q4 === "tail" ? "「上游推不回去,full policy 只剩 drop 或聚合;我用 overwriting ring,dropped 計數做成可觀測的。lockless 買的是 p99.9,不是吞吐。」" :
+    q1 === "latest_wins" ? "「新資料比舊值錢:overwriting ring,滿了蓋最舊,dropped 計數是一級公民。」" :
+    q1 === "must_keep" && q5 === "self" ? "「rate 是我自己排的,結構上任何優化都不值得——bounded + blocking submit,力氣花在 timeout。」" :
+    q1 === "must_keep" ? "「不能 drop,但可以拒絕:bounded + timeout 把失敗變可預期的,unbounded 把失敗變 OOM。」" :
+    null;
+
+  return d;
+}
+
+function render() {
+  var d = derive();
+  var un = "<span class=\"unanswered\">(還沒問——先問再設計)</span>";
+  document.getElementById("f-policy").innerHTML = d.policy || un;
+  document.getElementById("f-capacity").innerHTML = d.capacity || un;
+  document.getElementById("f-threads").innerHTML = d.threads || un;
+  document.getElementById("f-lock").innerHTML = d.lock || un;
+  document.getElementById("f-death").innerHTML = d.death || un;
+  document.getElementById("f-quote").innerHTML = d.quote || "<span class=\"unanswered\">Q1 是台詞的骨架——先答它。</span>";
+}
+
+/* ── UI 組裝 ── */
+var qRoot = document.getElementById("questions");
+QUESTIONS.forEach(function (q) {
+  var div = document.createElement("div");
+  div.className = "q";
+  var opts = q.opts.map(function (o) {
+    return '<button data-q="' + q.id + '" data-v="' + o[0] + '" aria-pressed="false">' + o[1] + "</button>";
+  }).join("");
+  div.innerHTML = '<div class="q-title"><span class="qno">' + q.no + "</span>" + q.title +
+    '</div><div class="ask">' + q.ask + '</div><div class="opts">' + opts + "</div>";
+  qRoot.appendChild(div);
+});
+
+qRoot.addEventListener("click", function (e) {
+  var btn = e.target.closest("button[data-q]");
+  if (!btn) return;
+  var q = btn.getAttribute("data-q"), v = btn.getAttribute("data-v");
+  state[q] = state[q] === v ? null : v; // 再按一次取消
+  qRoot.querySelectorAll('button[data-q="' + q + '"]').forEach(function (b) {
+    b.setAttribute("aria-pressed", state[q] === b.getAttribute("data-v") ? "true" : "false");
+  });
+  clearPresetHighlight();
+  render();
+});
+
+var pRoot = document.getElementById("presets");
+PRESETS.forEach(function (p) {
+  var b = document.createElement("button");
+  b.textContent = p.label;
+  b.setAttribute("data-preset", p.key);
+  b.setAttribute("aria-pressed", "false");
+  pRoot.appendChild(b);
+});
+
+function clearPresetHighlight() {
+  pRoot.querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+  document.getElementById("preset-blurb").textContent = "";
+}
+
+pRoot.addEventListener("click", function (e) {
+  var btn = e.target.closest("button[data-preset]");
+  if (!btn) return;
+  var p = PRESETS.find(function (x) { return x.key === btn.getAttribute("data-preset"); });
+  Object.keys(p.ans).forEach(function (q) { state[q] = p.ans[q]; });
+  qRoot.querySelectorAll("button[data-q]").forEach(function (b) {
+    b.setAttribute("aria-pressed", state[b.getAttribute("data-q")] === b.getAttribute("data-v") ? "true" : "false");
+  });
+  clearPresetHighlight();
+  btn.setAttribute("aria-pressed", "true");
+  document.getElementById("preset-blurb").textContent = p.blurb;
+  render();
+});
+
+render();
+})();
+</script>
