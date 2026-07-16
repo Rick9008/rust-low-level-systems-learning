@@ -9,6 +9,19 @@ network flakiness、跨 rack 規模)——面試官等你把線索變成問題,�
 卡片練習:`rehearsals/clarify-cards.md`(6 張情境卡;答案在
 `rehearsals/clarify-answers.md`,**寫完才開**)。
 
+## 五問速記表(縮寫圖例 + 面試英文問法)
+
+全 repo 的「掉不掉/速率/規模/SLA/偵測」五類縮寫,對照如下——
+面試時**用英文問**,右欄背到能脫口:
+
+| 縮寫 | 完整問題 | 英文問法 |
+|---|---|---|
+| **掉不掉** | 資料掉不掉得起?(決定 full policy) | *"Under pressure, can we drop or aggregate, or is every sample required?"* |
+| **速率** | 每個源頭每秒幾筆?(決定容量算式) | *"What's the signal rate per node — hundreds per second, or millions?"* |
+| **規模** | 幾個 producer / node / rack?(決定 thread/shard) | *"How many producers hit this path — one device, or the whole rack?"* |
+| **SLA** | 追平均還是尾延遲?(決定 lock-free 值不值) | *"Are we optimizing average throughput, or tail latency?"* |
+| **偵測** | 對端死了怎麼知道?(決定 heartbeat/timer) | *"How do we learn a node died — does TCP tell us, or do we own heartbeats?"* |
+
 ## JD 線索 → 該問的問題
 
 | JD 裡的字眼 | 觸發哪一問 | 為什麼 |

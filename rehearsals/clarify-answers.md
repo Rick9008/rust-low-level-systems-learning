@@ -1,8 +1,20 @@
 # clarify 情境卡答案 —— 寫完才開
 
 每卡:該問的五問(具體化)→ 關鍵分支 → canonical 設計 → 一句 killer trade-off
-→ 常見錯誤。五問的順序固定:**掉不掉 / 速率 / 規模 / SLA / 偵測**——
+→ 常見錯誤。五問的順序固定:**掉不掉 / 速率 / 規模 / SLA / 偵測**
+(縮寫圖例與英文問法:`docs/clarify-playbook.md` 開頭的速記表)——
 漏掉哪一問,回去 playbook 補那一節。
+
+## 卡 → 對應 code(對完答案後想看實作,從這進)
+
+| 卡 | canonical 的可執行版 |
+|---|---|
+| 1 telemetry hub | `reference/src/signal_pipeline.rs`(扇入 `start_fan_in`)+ 彩排 f telemetry_aggregator |
+| 2 RPC gateway | `hw_bridge::server_evented`(bounded + eventfd 回程;EPOLLIN 關閉的 backpressure 用講的)+ 彩排 h(deadline/timeout) |
+| 3 market data | conflation slot——repo 無專模組;思路見 `docs/signal_pipeline.md` 的 drop-newest vs conflation 節 |
+| 4 log shipper | 彩排 a ring_drop_oldest(bounded + drop-oldest + dropped 計數) |
+| 5 sensor bridge | `reference/src/signal_pipeline.rs` 單源版(教科書本尊) |
+| 6 health prober | 彩排 h timer_queue + `thread_pool`(bounded submit 天然限流) |
 
 ---
 
