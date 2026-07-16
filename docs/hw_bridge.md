@@ -79,6 +79,25 @@ pending map)——「協定設計決定並發上限」的活教材。`in_flight`
 echo 的 sensor_id——一行換到「回應錯位立即爆炸」而非靜默錯資料。
 async/pipeline 版:request-id → `HashMap<id, waker/channel>`。
 
+## handler-IO 對照組:handler 內部要做阻塞 IO 時的三種下場
+
+`SlowHardware`(ReadSensor 走慢速匯流排,sleep 模擬)接上三種 server,
+可執行證據在 `mod.rs::slow_handler_latency_contrast`:
+
+| server | 慢命令發生時 | 何時是正解 |
+|---|---|---|
+| `server_evented_inline`(⚠️ 反面教材) | IO thread 凍住:**所有**連線的 read/write/accept 停擺整段 delay | 永遠不是。它存在是為了讓你看到病徵 |
+| `server_evented`(offload,1 worker) | loop 不凍(IO 照跑),但延遲**跨連線傳染**——別人的命令在 worker 佇列陪排 | 下游只有一顆序列設備時(shard 沒意義,Mutex 照樣序列化) |
+| `server_evented_sharded`(shard by conn) | 同連線保序(同 shard 單 worker FIFO)、跨連線隔離 | 每 shard 有**自己的下游通道**時 |
+| tokio(rehearsals 題 d) | async handler 天然不凍 loop——`.await` 就是讓位點 | pad 上的實戰答案 |
+
+兩個設計句:
+- **保序約束只有同連線才需要**——跨連線本來就沒有順序語意,所以平行單位是連線
+  (`token % N`)。這是「協定沒有 request-id → FIFO 對應 → 並發上限被協定決定」
+  這條因果鏈的出口。
+- **shard 的前提是下游也能平行**。單顆硬體時 N 個 worker 還是在同一把 Mutex
+  排隊——clarify 五問的 Q3(幾個 producer)要連著「下游長什麼樣」一起問。
+
 ## Production 對照
 
 tokio + `tokio_util::codec`(`LengthDelimitedCodec` 就是 FrameReader 的

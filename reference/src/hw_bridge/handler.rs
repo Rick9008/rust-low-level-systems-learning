@@ -44,6 +44,35 @@ impl CommandHandler for MockHardware {
     }
 }
 
+/// 「handler 內部要做阻塞 IO」的模擬硬體:ReadSensor 走慢速匯流排
+/// (sleep 模擬),Ping / SetFan 快路徑。
+///
+/// 用途:handler-IO 對照組的教具——inline 執行時它毒死整個 event loop
+/// (所有連線陪等),offload / shard 之後只有自己的連線等。
+/// 見 `server_evented_inline`(反面教材)與 `server_evented_sharded`。
+pub struct SlowHardware {
+    delay: std::time::Duration,
+    inner: MockHardware,
+}
+
+impl SlowHardware {
+    pub fn new(delay: std::time::Duration) -> Self {
+        Self {
+            delay,
+            inner: MockHardware::default(),
+        }
+    }
+}
+
+impl CommandHandler for SlowHardware {
+    fn handle(&mut self, cmd: Command) -> Response {
+        if matches!(cmd, Command::ReadSensor { .. }) {
+            std::thread::sleep(self.delay); // 模擬慢速匯流排 / 磁碟 / 下游 RPC
+        }
+        self.inner.handle(cmd)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

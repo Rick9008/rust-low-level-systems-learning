@@ -18,6 +18,17 @@
 //! 4. `server_evented.rs`——event loop + command worker:scale 版
 //! 5. `client.rs`——sync 請求/回應(async 版的 request-id 設計見其 doc)
 //!
+//! **handler-IO 對照組**(handler 內部要做阻塞 IO 時,三種下場):
+//! - `server_evented_inline.rs`——⚠️ 反面教材:handler 在 IO thread 上跑,
+//!   一條慢命令凍住所有連線
+//! - `server_evented.rs`——offload 到單 worker:loop 不凍,但延遲跨連線傳染
+//!   (worker 佇列陪排)
+//! - `server_evented_sharded.rs`——shard by connection:同連線保序、
+//!   跨連線隔離(前提:每 shard 有自己的下游通道)
+//!
+//! tokio 對照:`rehearsals/examples/sol_tokio_frame_server.rs`(async handler
+//! 天然不凍 loop——`.await` 就是讓位點)。
+//!
 //! ## [Trade-offs] thread-per-conn vs event loop(§45 分鐘的核心問答)
 //! | | threaded | evented |
 //! |---|---|---|
@@ -45,18 +56,22 @@ pub mod framer;
 pub mod handler;
 pub mod protocol;
 pub mod server_evented;
+pub mod server_evented_inline;
+pub mod server_evented_sharded;
 pub mod server_threaded;
 
 #[cfg(test)]
 mod tests {
     use super::client::{ClientError, HwClient};
-    use super::handler::MockHardware;
+    use super::handler::{MockHardware, SlowHardware};
     use super::protocol::{Command, ERR_UNKNOWN_OPCODE, Response, encode_frame};
     use super::server_evented::EventedServer;
+    use super::server_evented_inline::InlineServer;
+    use super::server_evented_sharded::ShardedServer;
     use super::server_threaded::ThreadedServer;
     use std::net::SocketAddr;
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     /// 兩個 server 共用的整套 client 行為測試。
     /// 任何 server 實作只要能過這套,協定層面就等價。
@@ -138,6 +153,106 @@ mod tests {
         exercise_server(addr);
         shutdown.shutdown();
         join.join().unwrap().unwrap();
+    }
+
+    /// sharded server 跑同一套 client 行為測試:協定層面與其他 server 等價。
+    #[test]
+    fn sharded_server_passes_full_client_suite() {
+        let handlers = (0..4).map(|_| MockHardware::default()).collect();
+        let mut server = ShardedServer::bind("127.0.0.1:0", handlers).unwrap();
+        let addr = server.local_addr().unwrap();
+        let shutdown = server.shutdown_handle();
+        let join = thread::spawn(move || server.run());
+        exercise_server(addr);
+        shutdown.shutdown();
+        join.join().unwrap().unwrap();
+    }
+
+    /// 保序不因 shard 而破:同一連線 → 同一 shard → 單 worker FIFO。
+    #[test]
+    fn sharded_pipelined_commands_stay_in_order() {
+        let handlers = (0..4).map(|_| MockHardware::default()).collect();
+        let mut server = ShardedServer::bind("127.0.0.1:0", handlers).unwrap();
+        let addr = server.local_addr().unwrap();
+        let shutdown = server.shutdown_handle();
+        let join = thread::spawn(move || server.run());
+
+        let mut c = HwClient::connect(addr).unwrap();
+        for id in 0..20u16 {
+            c.send_raw(&Command::ReadSensor { sensor_id: id }.encode())
+                .unwrap();
+        }
+        for id in 0..20u16 {
+            match c.recv_response().unwrap() {
+                Response::SensorValue { sensor_id, .. } => assert_eq!(sensor_id, id),
+                other => panic!("expected SensorValue, got {other:?}"),
+            }
+        }
+        shutdown.shutdown();
+        join.join().unwrap().unwrap();
+    }
+
+    /// handler-IO 對照組的可執行證據(模組 doc 的三種下場,量兩端):
+    ///
+    /// 場景:client A 發慢 ReadSensor(SlowHardware sleep 300ms),
+    /// 50ms 後 client B 發 Ping(快路徑,handler 不 sleep)。
+    ///
+    /// - inline 版:handler 在 IO thread 上 sleep,B 的 Ping 讀都讀不進來
+    ///   → B 延遲 ≈ 整段 delay(斷言 ≥150ms)。
+    /// - sharded 版:A、B token 不同 → 不同 shard → B 不陪等
+    ///   (斷言 <150ms)。閾值取 delay 的一半,留 CI 抖動空間。
+    #[test]
+    fn slow_handler_latency_contrast() {
+        let delay = Duration::from_millis(300);
+
+        // ── inline(反面教材):B 陪 A 凍整段 ──
+        let mut server = InlineServer::bind("127.0.0.1:0", SlowHardware::new(delay)).unwrap();
+        let addr = server.local_addr().unwrap();
+        let shutdown = server.shutdown_handle();
+        let join = thread::spawn(move || server.run());
+
+        let mut a = HwClient::connect(addr).unwrap();
+        let mut b = HwClient::connect(addr).unwrap();
+        b.ping().unwrap(); // 先確認兩條連線都 accept 完成
+        let slow = thread::spawn(move || {
+            a.read_sensor(1).unwrap();
+        });
+        thread::sleep(Duration::from_millis(50)); // 讓 A 的慢命令先進 loop
+        let t0 = Instant::now();
+        b.ping().unwrap();
+        let inline_ping = t0.elapsed();
+        slow.join().unwrap();
+        shutdown.shutdown();
+        join.join().unwrap().unwrap();
+        assert!(
+            inline_ping >= Duration::from_millis(150),
+            "inline 版 B 的 Ping 應被 A 的慢命令拖住,實測 {inline_ping:?}"
+        );
+
+        // ── sharded:B 在自己的 shard,不陪等 ──
+        let handlers = (0..4).map(|_| SlowHardware::new(delay)).collect();
+        let mut server = ShardedServer::bind("127.0.0.1:0", handlers).unwrap();
+        let addr = server.local_addr().unwrap();
+        let shutdown = server.shutdown_handle();
+        let join = thread::spawn(move || server.run());
+
+        let mut a = HwClient::connect(addr).unwrap();
+        let mut b = HwClient::connect(addr).unwrap();
+        b.ping().unwrap();
+        let slow = thread::spawn(move || {
+            a.read_sensor(1).unwrap();
+        });
+        thread::sleep(Duration::from_millis(50));
+        let t0 = Instant::now();
+        b.ping().unwrap();
+        let sharded_ping = t0.elapsed();
+        slow.join().unwrap();
+        shutdown.shutdown();
+        join.join().unwrap().unwrap();
+        assert!(
+            sharded_ping < Duration::from_millis(150),
+            "sharded 版 B 的 Ping 不該陪等,實測 {sharded_ping:?}"
+        );
     }
 
     /// 順序保證:同一連線連發 20 條不同命令(不等回應),回應必須

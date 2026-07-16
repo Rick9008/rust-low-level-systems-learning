@@ -66,8 +66,11 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 - `event_loop`:register / epoll_wait / dispatch;LT 與 ET 都示範;eventfd self-wake
 - `tcp_echo`:nonblocking TCP echo;write 塞住 → 緩存 + EPOLLOUT
 - `file_io_offload`:file IO 用 thread pool offload(readiness vs completion)
-- `hw_bridge` 的 `server_threaded` / `server_evented`:thread-per-connection 與
-  event-loop 兩種並發模型並存對照(framer 本身在優先級,見上)
+- `hw_bridge` 的四個 server:`server_threaded`(thread-per-conn)、
+  `server_evented_inline`(⚠️ 反面教材:阻塞 handler 凍住 loop)、
+  `server_evented`(offload + eventfd 回程)、`server_evented_sharded`
+  (shard by conn:保序 × 跨連線隔離)——handler 要做 IO 時的完整對照組
+  (framer 本身在優先級,見上)
 
 executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接成一張圖:
 [`docs/async-runtime-anatomy.md`](docs/async-runtime-anatomy.md),
