@@ -99,12 +99,21 @@ double-register 是 caller bug;doc 明寫)。
   (「同一個 one-shot rendezvous,condvar 睡 vs waker 睡」)。
 - `drills/src/thread_pool.rs` 挖 submit/join 洞 + `#[ignore]` 測試;README drills 節提及。
 
-## Phase 5 — 凍結至面試後(僅 roadmap,不動工)
+## Phase 5 — pipeline 教材(排在 1-4 之後動工;使用者面試後再練)
+
+材料照做、不凍結;凍結的只有使用者的練習時間(7/28 前彩排優先)。
 
 1. handler-IO 對照組(接在 `hw_bridge`):evented server 裡 inline blocking(示範壞)→
    offload 到 pool + eventfd 回寫 → tokio 對照;drills/challenges 對應層。
-2. mini-runtime:executor × reactor 縫合(AsyncTcpStream read future 登記 waker 給
-   reactor thread,epoll_wait 醒來 wake task;executor 升級成多 task run queue)。
+2. mini-runtime,**兩階 reactor 梯子**(2026-07-16 使用者提議 O(n) 輪詢前置版):
+   - **V0 scan reactor(std-only,pad 可寫)**:registry 複用 `FdRegistry<Waker>`;
+     executor 無 ready task 時對全部註冊的 nonblocking fd 做 O(n) 掃描
+     (`try_read` 判 `WouldBlock`),ready → `wake()`,掃完 sleep 一個 tick。
+     成本:每輪 n 次 syscall + tick 延遲(接 cost-model 的 poll vs epoll 節)。
+   - **V1 epoll reactor**:同一個 `Poller` trait 換 `epoll_sys` 實作,O(ready) 喚醒;
+     executor 與 future 程式碼零改動——「Abstract the Noise」的可執行示範,
+     trait 形狀與 coderpad-constraints 的面試 stub 完全一致。
+   - executor 升級成多 task run queue(`Arc<Task>`,wake = push 回 queue)。
 
 ## 品質閘門與慣例
 
@@ -118,4 +127,4 @@ double-register 是 caller bug;doc 明寫)。
 - 不重寫 `event_loop` 去使用 `FdRegistry`(僅 docs 交叉引用)。
 - 不做 io_uring / completion model 實作(維持 repo 既有聲明)。
 - 不為 `iter_mutate` / `inplace_leetcode` 補互動 artifact(措辭改掉即可,面試後再議)。
-- Phase 5 在 2026-07-28 前不動工。
+- Phase 5 不搶 1-4 的工期,但材料本身照做(使用者的彩排時間 7/28 前不分給它)。
