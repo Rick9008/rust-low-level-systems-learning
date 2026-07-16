@@ -54,6 +54,67 @@ network flakiness、跨 rack 規模)——面試官等你把線索變成問題,�
 producer 動不了)——SPSC-safe 的是 drop-newest(push `Err` + 計數);
 要「新蓋舊」得換 per-key conflation slot(見 [signal_pipeline](signal_pipeline.md))。
 
+#### 「就地聚合」到底在做什麼
+
+上表第三列是個**答案**,不是個方法。答不出「怎麼做」就選不下去,所以把它攤開——
+以下都是 clarify 階段講得出口的層次,實作的邊界在彩排 f。
+
+**關鍵是換索引。** ring buffer 的索引是「第幾個到的」,所以亂序是災難。
+window 的索引是**樣本自己的時間屬於哪一格**:
+
+```
+window_index = ts / W        ← 整數除法,W = window 長度
+```
+
+這是個**只看樣本自己的純函數**。同一筆 ts,不管現在到、晚三秒到、還是跟五百筆
+擠在一起到,算出來永遠是同一格。業界術語:你用 **event time** 分格,不用
+**processing time**。「亂序怎麼辦」的答案是**不辦**——你根本沒在看到達順序。
+
+**格子裡不存樣本,只折進四個數字**:
+
+```
+count += 1;  sum += v;  min = min(min, v);  max = max(max, v);
+```
+
+每筆 O(1)。記憶體跟**進來幾筆無關**,只跟你留幾格有關——這就是「與樣本數脫鉤」。
+亂序無害的真正理由是這四個運算**可交換**:先折 A 再折 B 等於先折 B 再折 A。
+
+順帶兩個一定被追問的點:
+
+- **average 要存 `sum` + `count`,不能存 running average**——兩個平均沒辦法合併。
+- **min/max 只在 tumbling(固定)window 是 O(1)**。sum 有反元素(樣本離開時
+  `sum -= v` 就還原),min/max 沒有——你不能「減掉」一個 min。固定 window 從不移除
+  樣本(時間到就關格、開新的),所以不需要反元素;**sliding window 的 min/max**
+  只能重掃或上 monotonic deque。這不是實作技巧問題,是代數結構問題。
+
+**什麼時候聚合才划算:每格樣本數 ≫ 1。** 這條沒人講但很致命——
+
+| 每 node 速率 | 存原始值(覆蓋 60s) | 聚合(1 秒格 × 60) |
+|---|---|---|
+| 1 Hz | **4.3 MB** ← 原始值贏 | 8.6 MB |
+| 1 kHz | 4.3 GB | **8.6 MB** |
+| 1 MHz | 4.3 TB | **8.6 MB** |
+
+1 Hz 下每格只有 1 筆,你花 4 個數字去記 1 筆——聚合是把資料**變大**的有損壓縮。
+crossover 在**每格約 2 筆**。所以正確的說法不是「聚合比較省」,是
+**「聚合的成本與速率無關」**;哪條划算由 Q2 的數字決定,這也是為什麼
+**Q1 要等 Q2 的答案才能定案**。
+
+兩條式子背起來:
+
+```
+存原始值:memory = rate × T × size      ← rate 在式子裡
+聚合:    memory = (T / W) × 固定        ← rate 不在式子裡
+```
+
+代價講清楚才叫 trade-off:**聚合之後你永遠答不了「14:03:22 那筆讀數是多少」**。
+所以切點是產品需求不是效能——儀表板只要統計 → 聚合;要看得到原始波形 → 退回
+drop-oldest ring,並把 `rate × 保留秒數 × size` 算給面試官看,讓他決定付不付這個記憶體。
+
+實作的三個邊界(只保留 N 格時:格子住哪個 slot、落在已淘汰的過去怎麼判、ts 跳到
+未來時中間那些格裡的舊資料誰清)——那是**彩排 f `telemetry_aggregator`**,
+排在 `SCHEDULE.md` 的 7/24,別在這裡先看答案。
+
 ### Q2:速率多少?(決定 queue size 與結構檔次)
 
 問法:*"What's the signal rate per node — hundreds per second, or millions?"*
@@ -66,6 +127,19 @@ producer 動不了)——SPSC-safe 的是 drop-newest(push `Err` + 計數);
 | < 10k/s | `Mutex<VecDeque>` + Condvar,**不要炫技** |
 | 100k–1M/s | bounded ring;開始考慮批次(chunk 化 = prefetch 友善,見 cost-model) |
 | > 1M/s per producer | SPSC ring per producer + 批次消費 |
+
+**算完立刻反推:這個數字有沒有把題目消滅掉?** 卡 1 實測會踩到——
+1 Hz × 3000 nodes × 8 B = **24 KB/s**,但題幹說「遠超過你能存的記憶體」。
+24 KB/s 你當然存得下,所以要嘛速率不是 1 Hz,要嘛他要的是**長期保留**;
+讓 unbounded 成立的乘數是**時間軸**(`O(rate × 保留時長)`),不是瞬時速率。
+
+發現這件事的正確反應是**當場講給面試官聽**,不是偷偷換一個假設繞過去:
+
+> *"At 1 Hz across 3000 nodes that's only 24 KB/s — that fits in memory easily.
+> So either the real rate is much higher, or you want long retention.
+> Which is it?"*
+
+這一句直接證明你在算,不是在猜——而且它把題目的真正約束逼出來了。
 
 ### Q3:幾個 producer / node / rack?(決定 thread 與 shard)
 

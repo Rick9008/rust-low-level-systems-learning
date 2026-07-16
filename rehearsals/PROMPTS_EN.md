@@ -176,20 +176,54 @@ Clarify question:
 1. how many actual nodes we will have
    maybe 1 <= nodes <= 3000? then we should use event loop for this problem
 2. how big the report telemetry data we will have?
-   we just take (temperatures, voltages, error counts) and all as i8, then the data size of a report is 24 bytes
+   we just take (temperatures, voltages, error counts) and all as u8
+   and we need nodeid i8 and time u32
+   so total use: 8 bytes
 3. how long does a report comes back?
    maybe 1s?
 4. if the total data we cannot store, how do you expect that we handle this case?
    just discard old data?
-5. what do we need to express in dashboards?
+   or we can use a strategy aggregate the huge data?
+5. what do we aggregates in ingestion side and express in dashboards?
    maximum, minimum, average?
-6. how the data will get aggregates?
    list datas by node?
+6. how's the data range?
+   50 <= temperatures <= 200?
+   50 <= voltage <= 1000?
+   0 <= error counts <= 100?
+7. Are we optimizing average throughput, or tail latency?
+   average throughput
 
-if all take my assumption we need to calculate several things:
+if all take my assumption we have several observations:
 
 1. 1 _ 24 bytes _ 3000 nodes = 72000 bytes, 72000 bytes \* 3600 almost 100000000 bytes = 10^8 bytes = 100MB
-   1 hour data will have 100MB
+   1 hour data will have 100MB, and for 3000 nodes, 300 GB data
+   this is impossible to store whole data
+2. the data comes 72000 byes 1 seconds, and 3000 nodes comes in the same time
+
+I think we can use a ring buffer to collect i minutes' data because we are monitoring the device telemetry, so no need to check every data
+and for this problem we can use the average throughput
+time O(60), space O(60) to get minimum / maximum / average
+and need to handle O(3000\*60), this is acceptable
+
+> **重寫清單(7/17 批改;寫完就刪掉這塊)** — 方法論已進
+> [`clarify-playbook.md`](../docs/clarify-playbook.md):Q1 的「就地聚合到底在做什麼」
+> 與 Q2 的「反推題目有沒有被消滅」。自我批改五條在
+> [`clarify-cards.md`](clarify-cards.md) 規則 5。
+>
+> 1. **漏了「偵測」**——七題裡沒有一題問 node 怎麼判死。半開連線 TCP 不會告訴你。
+> 2. **`nodeid: i8` 裝不下 3000 台**(上限 127)→ `u16`。
+> 3. **`voltage: u8` 裝不下你自己給的 1000**(上限 255)→ `u16`。實際 record ≈ 10–12 B。
+> 4. **8 bytes 只改了一半**:Q2 說 8 B,observation 還寫 `24 bytes`;而 `almost 10^8`
+>    又是 8 B 的答案。同一段裡混了兩代算式。
+> 5. **`72000 × 3600 = 259 MB`,不是 100 MB**;而且 `× 3000` 已經在 72000 裡了,
+>    不能再乘一次得出 300 GB。
+> 6. **結構跟你自己的 Q5 答案打架**:只要 min/max/avg,卻留 60 筆原始樣本。
+> 7. **event loop 的理由要對**:不是速率(3000 events/s 一條 thread 就夠),
+>    是 fd 數 × 2 MiB stack ≈ 6 GB。
+> 8. **`O(3000*60)` 沒有主詞**:誰做這件事、多久做一次?
+> 9. **每問只寫了一個答案**,規則要 2 個 + 各自後果。
+> 10. **沒有 30 秒定界宣言**(假設 + 結構 + full policy + shutdown)。
 
 **Card 2 · RPC gateway** — A gateway accepts client requests and forwards
 them to a backend; every request must get a response. The backend gets slow
