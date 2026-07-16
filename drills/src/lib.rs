@@ -33,6 +33,7 @@ pub mod tree;
 pub mod trie;
 
 pub mod arena_lockfree;
+pub mod async_sync;
 pub mod epoll_sys;
 pub mod event_loop;
 pub mod executor;

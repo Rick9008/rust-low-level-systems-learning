@@ -69,6 +69,8 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 - `mini_runtime`:executor × reactor 縫起來的 mini-tokio——`Poller` trait 兩實作
   (V0 O(n) scan(pad 可寫)→ V1 epoll),runtime 一行不改;interest table
   複用 `fd_registry`
+- `async_sync`:blocking 原語 async 化——AsyncMutex + Notify(condvar 睡 →
+  waker 睡的三部曲第三章;有 drill 四洞,選練)
 - `hw_bridge` 的四個 server:`server_threaded`(thread-per-conn)、
   `server_evented_inline`(⚠️ 反面教材:阻塞 handler 凍住 loop)、
   `server_evented`(offload + eventfd 回程)、`server_evented_sharded`

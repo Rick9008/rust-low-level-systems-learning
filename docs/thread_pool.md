@@ -52,6 +52,8 @@ job 是 `FnOnce`,panic 後不會再被呼叫,無人能觀察到被撕一半的�
 
 condvar 睡 vs waker 睡——把這句講出來,兩個模組就縫成一張圖。
 每 job 成本:一次 Arc 配置 + 兩次鎖(~百 ns 級,對比 job 排隊 + 喚醒整趟 ~μs)。
+三部曲的第三章(可重複使用的原語:AsyncMutex / Notify)見
+[async_sync](async_sync.md)。
 
 ## 邊界:execute-after-shutdown 為何不用處理
 

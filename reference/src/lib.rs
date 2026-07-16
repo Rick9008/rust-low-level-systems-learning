@@ -32,6 +32,8 @@ pub(crate) mod sync_shim;
 
 // stage 5:async internals
 pub mod executor;
+// blocking 同步原語的 async 化(rendezvous 三部曲第三章):AsyncMutex + Notify
+pub mod async_sync;
 // executor × reactor 縫起來:兩階 reactor(V0 O(n) scan → V1 epoll)的 mini-tokio
 pub mod mini_runtime;
 
