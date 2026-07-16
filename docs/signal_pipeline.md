@@ -130,3 +130,11 @@ per-key conflation slot(market data 的答案,capacity=1 覆蓋寫)。
 crossbeam 的 `Parker`(掛牌握手的工業版,同款 SeqCst 處理)、
 rtrb / ringbuf(SPSC ring crate)、LMAX Disruptor(Java,batch +
 sequence barrier)、tokio 的 mpsc(async 世界的對應)。
+
+## 互動教材
+
+[artifacts/signal_pipeline.html](artifacts/signal_pipeline.html) ——
+五種睡法一張表(含「沒有 epoll 是不是只能 sleep」的按事件醒/按時間醒分類);
+掛牌握手 stepper:fence 與 re-check 兩個開關、四種組合逐步走交錯,
+拔掉 fence 看 consumer 帶著貨睡死(store buffer 的內容畫給你看);
+扇入隔離:按下爆源,看 dropped 只長在它自己的 ring 上。

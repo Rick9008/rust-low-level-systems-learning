@@ -91,7 +91,7 @@ executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接�
 
 ## 互動教材
 
-`docs/artifacts/` 有 19 份互動教材——17 個核心模組各一份、一份跨模組的
+`docs/artifacts/` 有 20 份互動教材——18 個核心模組各一份、一份跨模組的
 async runtime 總圖(executor × reactor × proactor)、一間 clarify 決策室
 (開場五問 → 設計即時推導)——瀏覽器直接開,無需 build:
 
@@ -112,6 +112,7 @@ xdg-open docs/artifacts/index.html
 | `executor` | park 沒有 token 的話,wake 先於 park 就永遠醒不來 |
 | `tree` | `Rc` 成環 → strong count 歸不了零,`Drop` 不執行 |
 | `hw_bridge` | 逐 byte 餵進 FrameReader,`Ok(None)` 一直等到最後一 byte |
+| `signal_pipeline` | 拔掉掛牌握手的 SeqCst fence,consumer 帶著貨睡死(x86 上真的會發生) |
 
 ## 跑起來看
 

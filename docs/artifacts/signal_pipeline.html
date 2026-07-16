@@ -1,0 +1,429 @@
+<title>signal_pipeline — 同一條 ring,五種睡法;掛牌握手的那道 fence</title>
+<style>
+:root {
+  --ground: #e9ecef;
+  --surface: #f5f7f9;
+  --raised: #fdfdfe;
+  --line: #cbd2da;
+  --line-soft: #dfe4ea;
+  --ink: #151a20;
+  --ink-2: #464f5b;
+  --muted: #6e7885;
+  --producer: #9c5c11;
+  --consumer: #106b78;
+  --danger: #9d2f46;
+  --ok: #326b4a;
+  --accent: #37509b;
+  --producer-bg: #f7ead5;
+  --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4;
+  --ok-bg: #dbecdf;
+  --accent-bg: #dee3f5;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e1216;
+    --surface: #151a20;
+    --raised: #1d232b;
+    --line: #2b333d;
+    --line-soft: #212831;
+    --ink: #dee4eb;
+    --ink-2: #a5afbb;
+    --muted: #7b8593;
+    --producer: #d99a45;
+    --consumer: #49b8c9;
+    --danger: #dc6a80;
+    --ok: #6cbc8c;
+    --accent: #8ea4e6;
+    --producer-bg: #33260f;
+    --consumer-bg: #10333a;
+    --danger-bg: #3a1a22;
+    --ok-bg: #16321f;
+    --accent-bg: #1e2646;
+  }
+}
+:root[data-theme="light"] {
+  --ground: #e9ecef; --surface: #f5f7f9; --raised: #fdfdfe; --line: #cbd2da;
+  --line-soft: #dfe4ea; --ink: #151a20; --ink-2: #464f5b; --muted: #6e7885;
+  --producer: #9c5c11; --consumer: #106b78; --danger: #9d2f46; --ok: #326b4a;
+  --accent: #37509b; --producer-bg: #f7ead5; --consumer-bg: #d8edf1;
+  --danger-bg: #f8dfe4; --ok-bg: #dbecdf; --accent-bg: #dee3f5;
+}
+:root[data-theme="dark"] {
+  --ground: #0e1216; --surface: #151a20; --raised: #1d232b; --line: #2b333d;
+  --line-soft: #212831; --ink: #dee4eb; --ink-2: #a5afbb; --muted: #7b8593;
+  --producer: #d99a45; --consumer: #49b8c9; --danger: #dc6a80; --ok: #6cbc8c;
+  --accent: #8ea4e6; --producer-bg: #33260f; --consumer-bg: #10333a;
+  --danger-bg: #3a1a22; --ok-bg: #16321f; --accent-bg: #1e2646;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--ground); }
+body { font-family: var(--serif); color: var(--ink); line-height: 1.65; padding: 2rem 1rem 5rem; }
+.wrap { max-width: 66rem; margin: 0 auto; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; padding: 0.05rem 0.3rem; }
+header .eyebrow { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; color: var(--muted); }
+header h1 { font-size: 1.9rem; margin: 0.2rem 0 0.6rem; }
+header .lede { max-width: 46rem; color: var(--ink-2); }
+section { margin-top: 2.4rem; }
+h2 { font-size: 1.15rem; margin-bottom: 0.7rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line-soft); }
+p.note { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; padding: 0.4rem 0.55rem; border: 1px solid var(--line-soft); vertical-align: top; }
+th { background: var(--surface); font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; }
+.quote { border-left: 3px solid var(--ok); background: var(--ok-bg); border-radius: 0 8px 8px 0; padding: 0.55rem 0.75rem; font-size: 0.9rem; margin-top: 0.7rem; }
+
+/* 選擇鈕 */
+.opts { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.5rem 0 0.8rem; }
+.opts button {
+  font-family: inherit; font-size: 0.86rem; padding: 0.32rem 0.7rem;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--raised);
+  color: var(--ink-2); cursor: pointer;
+}
+.opts button:hover { border-color: var(--accent); }
+.opts button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-bg); color: var(--ink); font-weight: 600; }
+
+/* 等待策略面板 */
+.panel { background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 0.9rem 1.1rem; }
+.panel .row { display: flex; gap: 1rem; flex-wrap: wrap; padding: 0.35rem 0; border-top: 1px dashed var(--line-soft); }
+.panel .row:first-child { border-top: 0; }
+.panel .k { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.06em; color: var(--muted); min-width: 8.5rem; }
+.panel .v { font-size: 0.9rem; flex: 1; min-width: 14rem; }
+.tag { font-family: var(--mono); font-size: 0.7rem; border-radius: 999px; padding: 0.08rem 0.5rem; border: 1px solid var(--line); }
+.tag.event { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+.tag.time { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+
+/* 握手 stepper */
+.toggles { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 0.7rem; font-size: 0.9rem; }
+.toggles label { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+.stepper { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 52rem) { .stepper { grid-template-columns: 5fr 4fr; align-items: start; } }
+.mem { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+.mem .box { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.5rem 0.6rem; min-height: 6.2rem; }
+.mem .box h4 { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.3rem; }
+.mem .box.cside { border-color: var(--consumer); }
+.mem .box.pside { border-color: var(--producer); }
+.mem .cell { font-family: var(--mono); font-size: 0.8rem; padding: 0.1rem 0; }
+.mem .cell.pending { color: var(--danger); }
+.log { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.6rem 0.8rem; min-height: 11rem; }
+.log .line { font-size: 0.86rem; padding: 0.14rem 0; border-bottom: 1px dashed var(--line-soft); }
+.log .line:last-child { border-bottom: 0; }
+.log .line .who { font-family: var(--mono); font-size: 0.72rem; font-weight: 700; margin-right: 0.4rem; }
+.log .line .who.c { color: var(--consumer); }
+.log .line .who.p { color: var(--producer); }
+.log .line.bad { color: var(--danger); font-weight: 600; }
+.log .line.good { color: var(--ok); font-weight: 600; }
+.controls { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+.controls button {
+  font-family: inherit; font-size: 0.9rem; padding: 0.35rem 0.9rem;
+  border: 1px solid var(--accent); border-radius: 7px;
+  background: var(--accent-bg); color: var(--ink); cursor: pointer; font-weight: 600;
+}
+.controls button:disabled { opacity: 0.4; cursor: default; }
+.verdict { margin-top: 0.6rem; font-size: 0.95rem; font-weight: 700; min-height: 1.6rem; }
+.verdict.bad { color: var(--danger); }
+.verdict.good { color: var(--ok); }
+
+/* 扇入 */
+pre.topo { font-family: var(--mono); font-size: 0.82rem; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.7rem 0.9rem; overflow-x: auto; }
+.rings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.7rem; }
+.ringbox { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.55rem 0.65rem; }
+.ringbox h4 { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-bottom: 0.3rem; }
+.slots { display: flex; gap: 3px; margin-bottom: 0.35rem; }
+.slot { width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 3px; background: var(--raised); }
+.slot.full { background: var(--producer-bg); border-color: var(--producer); }
+.ringbox .drops { font-family: var(--mono); font-size: 0.78rem; }
+.ringbox .drops.hot { color: var(--danger); font-weight: 700; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">reference / signal_pipeline &nbsp;·&nbsp; SPSC × 等待策略 × 扇入</p>
+  <h1>同一條 ring,五種睡法</h1>
+  <p class="lede">
+    SPSC ring 本身不帶通知——「沒貨時誰睡、誰叫醒」是一個獨立插槽。
+    這頁做三件事:比較五種睡法(含「沒有 epoll 是不是只能 sleep」的答案)、
+    <strong>親手走一遍掛牌握手壞掉的交錯</strong>(拔掉 fence,consumer 帶著貨睡死
+    ——x86 上真的會發生),以及多源扇入為什麼是 per-source SPSC 不是 MPSC。
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h2>① 等待策略階梯——「按事件醒」vs「按時間醒」</h2>
+  <p>
+    先分兩種睡:<span class="tag event">按事件醒</span> = kernel 幫你睡,事情發生時提早叫醒
+    (blocking read、condvar、park、epoll);<span class="tag time">按時間醒</span> =
+    <code>sleep</code>,時間到才醒,<strong>事件來了也叫不動你</strong>。
+    沒有 epoll ≠ 用 sleep:sleep 只在「多路 × 無多路原語 × 不開多 thread」三個條件
+    同時成立時出場,而且它買的是「別燒死 CPU」,不是「等到事件」。
+  </p>
+  <div class="opts" id="strategies"></div>
+  <div class="panel" id="strategy-panel">
+    <div class="row"><span class="k">類型</span><span class="v" id="s-kind"></span></div>
+    <div class="row"><span class="k">喚醒延遲</span><span class="v" id="s-latency"></span></div>
+    <div class="row"><span class="k">閒置成本</span><span class="v" id="s-idle"></span></div>
+    <div class="row"><span class="k">每筆熱路徑成本</span><span class="v" id="s-hot"></span></div>
+    <div class="row"><span class="k">誰在用</span><span class="v" id="s-who"></span></div>
+    <div class="row"><span class="k">repo 對應</span><span class="v" id="s-repo"></span></div>
+  </div>
+  <p class="quote">
+    口述版:<em>"Async buys you cheap idle waits — ten thousand mostly-quiet sockets
+    on a few threads. But a hardware signal stream isn't idle, it's continuous.
+    There I want pinned threads and SPSC rings: no runtime scheduling on the hot path,
+    predictable tail latency. Async is for the control plane; the data plane stays sync."</em>
+  </p>
+</section>
+
+<section>
+  <h2>② 掛牌握手:拔掉那道 fence,看它睡死</h2>
+  <p>
+    spin 額度用完後,consumer 想睡。producer 每筆 unpark = 每筆一次 syscall,
+    所以改成:consumer <strong>掛牌</strong>才睡、producer <strong>看到牌</strong>才 unpark。
+    但「掛牌 → 再查佇列」與「push → 查牌」是教科書 store-buffering:兩邊都<em>先寫後讀</em>,
+    寫還躺在各自的 store buffer 裡,讀就從旁邊繞過去了。
+    StoreLoad 重排是 <strong>x86-TSO 唯一允許的重排</strong>——這個 bug 在你筆電上就會發生。
+  </p>
+  <div class="toggles">
+    <label><input type="checkbox" id="t-fence" checked> <code>fence(SeqCst)</code>(兩邊)</label>
+    <label><input type="checkbox" id="t-recheck" checked> 掛牌後 re-check 佇列</label>
+  </div>
+  <div class="stepper">
+    <div>
+      <div class="mem">
+        <div class="box cside">
+          <h4>CONSUMER store buffer</h4>
+          <div id="m-cbuf"></div>
+        </div>
+        <div class="box">
+          <h4>共享記憶體</h4>
+          <div class="cell">parked = <span id="m-parked">false</span></div>
+          <div class="cell">ring = [<span id="m-ring"></span>]</div>
+          <div class="cell">park permit = <span id="m-permit">0</span></div>
+        </div>
+        <div class="box pside">
+          <h4>PRODUCER store buffer</h4>
+          <div id="m-pbuf"></div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="btn-step">下一步 ▸</button>
+        <button id="btn-reset">重來</button>
+      </div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+  <p class="note">
+    四種組合都走走看:fence+re-check 是唯一全綠的。fence 殺 SB 交錯;re-check 補
+    「push 發生在掛牌之前」的時窗——<strong>兩道獨立的防線,缺一就睡死</strong>。
+    park 的 token 救不了這裡:token 救「unpark 先於 park」,而這兩種壞法裡
+    producer <em>根本沒呼叫</em> unpark——沒發出的 unpark,token 存不了。
+  </p>
+</section>
+
+<section>
+  <h2>③ 扇入:多源就 per-source SPSC,不是 MPSC</h2>
+  <pre class="topo">source_0 thread ──SPSC ring_0──┐
+source_1 thread ──SPSC ring_1──┼──▶ consumer(round-robin 掃,每輪每條最多 B 筆)
+source_2 thread ──SPSC ring_2──┘</pre>
+  <p>
+    每源一條自己的 ring:每條仍是單寫者(零 CAS)、某源爆量只塞滿自己的 ring、
+    per-source FIFO 保住(跨源全域順序沒有——說出口,這是 clarify 的料)。
+    按下爆源,看隔離發生:
+  </p>
+  <div class="opts"><button id="btn-burst">source_0 爆量 ⚡</button><button id="btn-drain">consumer 消化一輪</button></div>
+  <div class="rings" id="rings"></div>
+  <p class="note">
+    公平性:bounded batch(每輪每條最多 B 筆)——熱源不能餓死其他源。
+    scale:source 靜態分片給多條 consumer;work-stealing 同時破壞單寫者與
+    per-source FIFO,不選。<strong>拓撲每一步都在守單寫者</strong>。
+    另外:SPSC 上做不到 drop-oldest(head 是 consumer 單寫的)——SPSC-safe 的
+    是 drop-newest + 計數;要「新蓋舊」換 per-key conflation slot。
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+"use strict";
+
+/* ── ① 等待策略 ── */
+var STRATS = [
+  { key: "spin", label: "busy-spin",
+    kind: '<span class="tag time">不睡</span>(tick = 0 的極端)',
+    latency: "~ns(最低)", idle: "燒滿一顆核(pinned)", hot: "零 syscall",
+    who: "HFT:寧燒不睡,躲 futex µs 與 preemption ms tail",
+    repo: "cost-model 第二節 SPSC 那行「永無 syscall」" },
+  { key: "stp", label: "spin-then-park",
+    kind: '<span class="tag event">按事件醒</span>(混合)',
+    latency: "熱路徑 ~ns;睡著後 ~µs(unpark)", idle: "spin 額度內燒,之後 0",
+    hot: "consumer 醒著時零 syscall(掛牌握手省掉每筆 unpark)",
+    who: "通用低延遲——本模組的選擇",
+    repo: "signal_pipeline::idle_park(掛牌握手見 ②)" },
+  { key: "park", label: "每筆 unpark / condvar",
+    kind: '<span class="tag event">按事件醒</span>',
+    latency: "~µs(futex + context switch)", idle: "0",
+    hot: "每筆一次 unpark syscall——SPSC 的零 syscall 白省",
+    who: "吞吐型、延遲不敏感",
+    repo: "bounded_queue(condvar 的 predicate-wait)" },
+  { key: "sleep", label: "sleep(tick) 輪詢",
+    kind: '<span class="tag time">按時間醒</span>——事件來了叫不動你',
+    latency: "上限 = tick(事件到達後最多等一整個 tick)", idle: "每 tick 醒一次 + O(n) 次 re-try syscall",
+    who: "多路 × 無 select/epoll × 不開多 thread,三條件同時成立才輪到它;角色是節流不是等待",
+    repo: "mini_runtime::ScanPoller(V0——升級到 epoll,executor 一行不改)" },
+  { key: "epoll", label: "epoll(按事件的多路)",
+    kind: '<span class="tag event">按事件醒</span>(多路)',
+    latency: "~µs", idle: "0(睡在 epoll_wait)",
+    hot: "O(n_ready) 喚醒;worker → loop 的「unpark」= eventfd",
+    who: "萬級連線的 IO 面;只等一個 fd 根本不需要它(blocking read 就是按事件醒)",
+    repo: "mini_runtime::EpollPoller、hw_bridge::server_evented_spsc" }
+];
+var stratRoot = document.getElementById("strategies");
+STRATS.forEach(function (s, i) {
+  var b = document.createElement("button");
+  b.textContent = s.label;
+  b.setAttribute("data-i", i);
+  b.setAttribute("aria-pressed", i === 1 ? "true" : "false");
+  stratRoot.appendChild(b);
+});
+function renderStrat(i) {
+  var s = STRATS[i];
+  document.getElementById("s-kind").innerHTML = s.kind;
+  document.getElementById("s-latency").textContent = s.latency;
+  document.getElementById("s-idle").textContent = s.idle;
+  document.getElementById("s-hot").textContent = s.hot;
+  document.getElementById("s-who").textContent = s.who;
+  document.getElementById("s-repo").innerHTML = "<code>" + s.repo + "</code>";
+  stratRoot.querySelectorAll("button").forEach(function (b) {
+    b.setAttribute("aria-pressed", Number(b.getAttribute("data-i")) === i ? "true" : "false");
+  });
+}
+stratRoot.addEventListener("click", function (e) {
+  var b = e.target.closest("button[data-i]");
+  if (b) renderStrat(Number(b.getAttribute("data-i")));
+});
+renderStrat(1);
+
+/* ── ② 掛牌握手 stepper ── */
+// 每步:{who, text, do(state), cls}
+// state:cbuf/pbuf(store buffer 內容)、parked、ring、permit
+function scenario(fence, recheck) {
+  if (fence && recheck) {
+    return [
+      { who: "C", text: "spin 額度用完,掛牌:parked ← true(SeqCst)", do: function (s) { s.cbuf.push("parked=true"); } },
+      { who: "C", text: "fence(SeqCst):強制把牌子刷進共享記憶體", do: function (s) { s.cbuf = []; s.parked = true; } },
+      { who: "P", text: "push(x):tail store", do: function (s) { s.pbuf.push("tail(x)"); } },
+      { who: "P", text: "fence(SeqCst):x 對所有人可見", do: function (s) { s.pbuf = []; s.ring.push("x"); } },
+      { who: "P", text: "load parked → 讀到 true → unpark!(permit 存下)", do: function (s) { s.permit = 1; } },
+      { who: "C", text: "re-check 佇列 → 看到 x,摘牌收貨(就算沒看到:park 會被 permit 直接穿過)", do: function (s) { s.ring = []; s.parked = false; }, cls: "good" },
+      { who: "—", text: "✅ 兩道防線都在:SB 交錯被 fence 禁掉,時窗被 re-check 補掉。", do: function () {}, cls: "good", verdict: "ok" }
+    ];
+  }
+  if (!fence && recheck) {
+    return [
+      { who: "C", text: "掛牌:parked ← true——但只躺進自己的 store buffer", do: function (s) { s.cbuf.push("parked=true"); } },
+      { who: "P", text: "push(x):tail store——也只躺進自己的 store buffer", do: function (s) { s.pbuf.push("tail(x)"); } },
+      { who: "C", text: "re-check 佇列:load tail → 從共享記憶體讀到舊 tail → 「空」", do: function () {}, cls: "bad" },
+      { who: "P", text: "load parked → 從共享記憶體讀到 false → 不 unpark", do: function () {}, cls: "bad" },
+      { who: "C", text: "park()——睡", do: function () {} },
+      { who: "—", text: "(store buffer 這才 flush:parked=true、ring=[x] 都到了共享記憶體——但沒人會再看)", do: function (s) { s.cbuf = []; s.pbuf = []; s.parked = true; s.ring.push("x"); } },
+      { who: "—", text: "💀 x 卡在 ring、consumer 睡死、producer 以為沒人在睡。這就是 store-buffering——acq/rel 允許、只有 SeqCst 禁止。", do: function () {}, cls: "bad", verdict: "dead" }
+    ];
+  }
+  if (fence && !recheck) {
+    return [
+      { who: "P", text: "push(x);fence;load parked → false(C 還沒掛牌)→ 不 unpark(此刻完全正確)", do: function (s) { s.ring.push("x"); } },
+      { who: "C", text: "(spin 中最後一次 pop 發生在 push 之前,看到的是空)", do: function () {} },
+      { who: "C", text: "掛牌:parked ← true;fence——牌子可見了,但 producer 已經查完走人", do: function (s) { s.parked = true; }, cls: "bad" },
+      { who: "C", text: "沒有 re-check,直接 park()——x 明明已經在 ring 裡", do: function () {}, cls: "bad" },
+      { who: "—", text: "💀 fence 沒救:這不是重排,是時窗——「push 與查牌」整段發生在「掛牌」之前。re-check 是第二道獨立防線。", do: function () {}, cls: "bad", verdict: "dead" }
+    ];
+  }
+  return [
+    { who: "C", text: "掛牌(躺在 store buffer)", do: function (s) { s.cbuf.push("parked=true"); } },
+    { who: "P", text: "push(x)(躺在 store buffer)", do: function (s) { s.pbuf.push("tail(x)"); } },
+    { who: "C", text: "沒有 re-check,直接 park()", do: function () {}, cls: "bad" },
+    { who: "P", text: "load parked → false → 不 unpark", do: function () {}, cls: "bad" },
+    { who: "—", text: "💀 兩道防線都沒有——SB 與時窗任一條路都通向睡死。", do: function (s) { s.cbuf = []; s.pbuf = []; s.parked = true; s.ring.push("x"); }, cls: "bad", verdict: "dead" }
+  ];
+}
+
+var st, steps, idx;
+function resetStepper() {
+  st = { cbuf: [], pbuf: [], parked: false, ring: [], permit: 0 };
+  steps = scenario(document.getElementById("t-fence").checked, document.getElementById("t-recheck").checked);
+  idx = 0;
+  document.getElementById("log").innerHTML = "";
+  var v = document.getElementById("verdict");
+  v.textContent = "";
+  v.className = "verdict";
+  document.getElementById("btn-step").disabled = false;
+  renderMem();
+}
+function renderMem() {
+  document.getElementById("m-cbuf").innerHTML = st.cbuf.map(function (x) { return '<div class="cell pending">' + x + " ⏳</div>"; }).join("") || '<div class="cell">(空)</div>';
+  document.getElementById("m-pbuf").innerHTML = st.pbuf.map(function (x) { return '<div class="cell pending">' + x + " ⏳</div>"; }).join("") || '<div class="cell">(空)</div>';
+  document.getElementById("m-parked").textContent = String(st.parked);
+  document.getElementById("m-ring").textContent = st.ring.join(", ");
+  document.getElementById("m-permit").textContent = String(st.permit);
+}
+document.getElementById("btn-step").addEventListener("click", function () {
+  if (idx >= steps.length) return;
+  var s = steps[idx++];
+  s.do(st);
+  renderMem();
+  var line = document.createElement("div");
+  line.className = "line" + (s.cls ? " " + s.cls : "");
+  line.innerHTML = '<span class="who ' + (s.who === "C" ? "c" : s.who === "P" ? "p" : "") + '">' + s.who + "</span>" + s.text;
+  document.getElementById("log").appendChild(line);
+  if (s.verdict) {
+    var v = document.getElementById("verdict");
+    v.textContent = s.verdict === "ok" ? "存活:貨被收走,或 park 被 permit 穿過。" : "睡死:資料在 ring 裡,永遠沒有人來叫。";
+    v.className = "verdict " + (s.verdict === "ok" ? "good" : "bad");
+    document.getElementById("btn-step").disabled = true;
+  }
+});
+document.getElementById("btn-reset").addEventListener("click", resetStepper);
+document.getElementById("t-fence").addEventListener("change", resetStepper);
+document.getElementById("t-recheck").addEventListener("change", resetStepper);
+resetStepper();
+
+/* ── ③ 扇入隔離 ── */
+var rings = [
+  { fill: 1, dropped: 0 },
+  { fill: 2, dropped: 0 },
+  { fill: 1, dropped: 0 }
+];
+var CAP = 8;
+function renderRings() {
+  document.getElementById("rings").innerHTML = rings.map(function (r, i) {
+    var slots = "";
+    for (var k = 0; k < CAP; k++) slots += '<div class="slot' + (k < r.fill ? " full" : "") + '"></div>';
+    return '<div class="ringbox"><h4>ring_' + i + "(source_" + i + ")</h4>" +
+      '<div class="slots">' + slots + "</div>" +
+      '<div class="drops' + (r.dropped > 0 ? " hot" : "") + '">dropped = ' + r.dropped + "</div></div>";
+  }).join("");
+}
+document.getElementById("btn-burst").addEventListener("click", function () {
+  // source_0 爆量:塞滿自己的 ring,溢出全進自己的 dropped——ring_1/2 一格不動
+  var incoming = 20;
+  var space = CAP - rings[0].fill;
+  rings[0].fill = CAP;
+  rings[0].dropped += incoming - space;
+  renderRings();
+});
+document.getElementById("btn-drain").addEventListener("click", function () {
+  // bounded batch:每輪每條最多 4 筆——爆滿的 ring_0 也不能獨占這一輪
+  rings.forEach(function (r) { r.fill = Math.max(0, r.fill - 4); });
+  renderRings();
+});
+renderRings();
+})();
+</script>
