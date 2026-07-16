@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、9 份深讀教材(html_p:追問鏈 + self-quiz),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -676,6 +676,61 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">clarify_playbook</span>
       <span class="hook">五問(掉不掉/速率/規模/SLA/偵測)選答案,右側設計即時跟著變——同一個 ring,三種 full policy。</span>
       <span class="hits">六張情境卡 canonical 檔案 · 容量算式 · 開寫前的台詞</span>
+    </a>
+  </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num deep">深讀教材</span>
+    <span class="stage-title">html_p:追問鏈(≥3 層)+ Self-quiz</span>
+    <span class="stage-sub">與上面模組頁互補——那邊是機制模擬器(壞給你看),這邊是教材推導 + 面試追問自測;日子照 SCHEDULE 日讀欄</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="../../html_p/p7-rust-std-ds-interview.html">
+      <span class="name">p7 · std 資料結構七合一</span>
+      <span class="hook">七個「面試真的會用」的 DS 一冊走完,各配 stepper 與 thread-safe 階梯。</span>
+      <span class="hits">日讀 7/16 · ring 節先讀</span>
+    </a>
+    <a class="card" href="../../html_p/p1-rust-atomic-spsc-ordering.html">
+      <span class="name">p1 · atomic ordering × SPSC</span>
+      <span class="hook">「全 SeqCst 寫對 → 逐點放鬆」的 Relax 之旅;每一步都要講出為什麼可以。</span>
+      <span class="hits">日讀 7/17 · edition 2024 版</span>
+    </a>
+    <a class="card" href="../../html_p/p2-async-executor-handbook.html">
+      <span class="name">p2 · executor handbook</span>
+      <span class="hook">async fn→狀態機→Pin 的完整推導 + tokio 全鏈路;mpmc 未 stable 那格會被問。</span>
+      <span class="hits">日讀 7/18 · 濃縮版在 docs/executor.md</span>
+    </a>
+    <a class="card" href="../../html_p/p3-epoll-readiness-event-loop.html">
+      <span class="name">p3 · epoll readiness</span>
+      <span class="hook">LT vs ET 同一串封包並排播放;file IO 的誠實區別是高分點。</span>
+      <span class="hits">日讀 7/20(通勤)</span>
+    </a>
+    <a class="card" href="../../html_p/p4-arena-index-lockfree-and-graph.html">
+      <span class="name">p4 · arena + index 兩用途</span>
+      <span class="hook">同一招,繞 reclamation(lock-free)與繞 borrow checker(單執行緒)是兩件事。ABA timeline 漫畫。</span>
+      <span class="hits">overflow 池配套讀物</span>
+    </a>
+    <a class="card" href="../../html_p/p8-hw_bridge_teaching.html">
+      <span class="name">p8 · hw_bridge 教材</span>
+      <span class="hook">wire format → framing 狀態機 → 兩種 server → async 版,45 分鐘增量順序。</span>
+      <span class="hits">日讀 7/22</span>
+    </a>
+    <a class="card" href="../../html_p/p6-telemetry-spsc-ring-reference.html">
+      <span class="name">p6 · telemetry pipeline</span>
+      <span class="hook">per-source ring → pool → 聚合;結尾的「開放設計追問」清單只列問題,留給你口頭作答。</span>
+      <span class="hits">日讀 7/24 · repo 可執行版 = signal_pipeline</span>
+    </a>
+    <a class="card" href="../../html_p/p5-thread-safe-spectrum.html">
+      <span class="name">p5 · thread-safe 光譜</span>
+      <span class="hook">七站 tradeoff 卡,核心心法:停在能滿足需求的最高站——開口就 lock-free 顯得沒判斷。</span>
+      <span class="hits">7/25 口述底稿 · 濃縮版 docs/thread-safe-spectrum.md</span>
+    </a>
+    <a class="card" href="../../html_p/rust-five-axis.html">
+      <span class="name">五軸 · Send/Sync × Ordering × Pin</span>
+      <span class="hook">推導表逐格實編驗證;軸 4 是唯一沒有攔截網的軸。unsafe impl 三段辯護 = 7/28 必答。</span>
+      <span class="hits">7/25 口述底稿 · 濃縮版 docs/rust-five-axis.md</span>
     </a>
   </div>
 </section>

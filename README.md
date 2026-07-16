@@ -98,7 +98,9 @@ thread-safe 的七站光譜)、[`docs/rust-five-axis.md`](docs/rust-five-axis.md
 
 `docs/artifacts/` 有 20 份互動教材——18 個核心模組各一份、一份跨模組的
 async runtime 總圖(executor × reactor × proactor)、一間 clarify 決策室
-(開場五問 → 設計即時推導)——瀏覽器直接開,無需 build:
+(開場五問 → 設計即時推導);index 另收錄 `html_p/` 的 9 份深讀教材
+(教材推導 + 面試追問鏈 + self-quiz,與模組頁的機制模擬互補)——
+瀏覽器直接開,無需 build:
 
 ```sh
 xdg-open docs/artifacts/index.html

@@ -55,6 +55,8 @@ pre{
 pre code{white-space:pre; font-family:inherit}
 .c-kw{color:var(--red)} .c-ty{color:var(--yellow)} .c-str{color:var(--green)}
 .c-cmt{color:var(--gray); font-style:italic} .c-num{color:var(--purple)}
+pre.err{border-left:3px solid var(--red); background:#2a2020}
+pre.err code{color:var(--fg-dim); font-size:12.5px}
 .codelabel{font-size:12px; color:var(--fg-dim); margin:14px 0 -4px}
 .codelabel b{color:var(--green)}
 .card{background:var(--bg1); border:1px solid var(--bg3); border-left:3px solid var(--blue);
@@ -132,7 +134,7 @@ kbd{background:var(--bg3); border:1px solid var(--bg4); border-radius:4px; paddi
 <body>
 <header class="top">
   <h1>arena + index:同一招,兩個毫不相干的用途</h1>
-  <div class="sub">std-only Rust · edition 2021 · 所有 code 已用 rustc 1.75 實際編譯 + 交叉驗證</div>
+  <div class="sub">std-only Rust · <b style="color:var(--yellow)">edition 2024</b> · 所有 code 已用 rustc 1.91.1 實際編譯 + 交叉驗證</div>
 </header>
 <nav class="tabs" id="tabs">
   <button class="active" data-tab="overview">總覽</button>
@@ -178,7 +180,7 @@ kbd{background:var(--bg3); border:1px solid var(--bg4); border-radius:4px; paddi
 
 <h3>① naive 版:AtomicPtr Treiber stack</h3>
 <p>先看最直白的 lock-free stack:head 是一個 <code class="ic">AtomicPtr&lt;Node&gt;</code>,push/pop 用 CAS 換 head。</p>
-<div class="codelabel"><b>可編譯</b> · <code>rustc --edition 2021 --crate-type lib</code> 通過</div>
+<div class="codelabel"><b>可編譯</b> · <code>rustc --edition 2024 --crate-type lib</code> 通過</div>
 <pre><code class="rust">// Use A intro: naive AtomicPtr Treiber stack.
 // Compiles and is memory-safe ONLY because it leaks (never frees).
 // The moment you add Box::from_raw to reclaim, the (*head).next read in
@@ -319,6 +321,39 @@ impl ArenaStack {
             }
         }
     }</code></pre>
+
+<div class="card warn">
+<h4>⚠️ edition 2024 陷阱:<code class="ic">gen</code> 是保留字</h4>
+<p>上面刻意把欄位命名成 <code class="ic">tag</code>。但這個概念的<b>自然命名是 <code class="ic">gen</code></b>(generation),而 <code class="ic">gen</code> 在 <b>edition 2024 是 reserved keyword</b>(給 <code class="ic">gen</code> block 用)。也就是說,你在 arena / generational-index 題目裡最順手的那個名字,<b>會直接 parse 失敗</b>:</p>
+<div class="codelabel">這段在 edition 2021 編得過、跑得出 <code>30064771075</code>;在 edition 2024 <b>直接爆</b></div>
+<pre><code class="rust">// The natural naming for a generation-tagged index arena:
+struct Slot { gen: u32, idx: u32 }
+
+fn pack(gen: u32, idx: u32) -&gt; u64 {
+    ((gen as u64) &lt;&lt; 32) | (idx as u64)
+}
+
+fn main() {
+    let gen = 7u32;
+    let s = Slot { gen, idx: 3 };
+    println!("{}", pack(s.gen, s.idx));
+}</code></pre>
+<div class="codelabel">rustc 1.91.1 / edition 2024 的<b>逐字原文</b></div>
+<pre class="err"><code>error: expected identifier, found reserved keyword `gen`
+ --&gt; /tmp/gen_test.rs:2:15
+  |
+2 | struct Slot { gen: u32, idx: u32 }
+  |        ----   ^^^ expected identifier, found reserved keyword
+  |        |
+  |        while parsing this struct
+  |
+help: escape `gen` to use it as an identifier
+  |
+2 | struct Slot { r#gen: u32, idx: u32 }
+  |               ++</code></pre>
+<p>修法:改名(<code class="ic">generation</code> / <code class="ic">g</code> / <code class="ic">tag</code>),或照 rustc 建議用 raw identifier <code class="ic">r#gen</code>。前者比較好 —— 面試時沒人想解釋 <code class="ic">r#</code>。</p>
+<p class="note">為什麼這條重要:CoderPad 的 Rust 是 edition 2024。45 分鐘的 pad 裡,在你最順手的變數名上吃一個 parse error,除了噴掉一兩分鐘,更會打亂節奏。這是本檔唯一「因為換 edition 而真的會咬人」的點,而它剛好落在 tagged-index 這題的正中央。</p>
+</div>
 
 <p>free list 自己也是一個 Treiber stack(<code class="ic">alloc</code> = pop、<code class="ic">dealloc</code> = push),所以<b>它也有 ABA</b> —— 上面 <code class="ic">alloc</code> 對 <code class="ic">self.free</code> 的 CAS 同樣掛了 tag。這不是可選項,是必須(<span class="jump" data-jump="followups">追問 L1 會打這裡</span>)。</p>
 
@@ -501,7 +536,7 @@ impl ArenaStack {
 <h3>① 為什麼 safe Rust 幾乎寫不出「兩個 node 互指」</h3>
 <p>Rust 的 <code class="ic">&amp;mut</code> 是<b>獨佔</b>的(aliasing XOR mutation)。想在 struct field 存 <code class="ic">&amp;mut Node</code> 來讓兩個 node 互指,會同時撞上「獨佔別名」和「self-referential 的 lifetime 無法命名」兩道牆。</p>
 
-<div class="codelabel"><span class="tag u">已編譯驗證會失敗</span> · 實際錯誤是 <code>E0506</code>(不是直覺以為的 E0499)</div>
+<div class="codelabel"><b>已編譯驗證會失敗</b> · ed2021/1.75 與 ed2024/1.91 <b>兩邊都吐</b> <code>E0506</code>(不是直覺以為的 E0499)</div>
 <pre><code class="rust">// Use B motivation: two nodes pointing to each other with &amp;mut is
 // forbidden by the borrow checker (&amp;mut is exclusive: aliasing XOR mutation).
 struct Node&lt;'a&gt; {
@@ -518,13 +553,21 @@ fn main() {
 
 <div class="card warn">
 <h4>編譯器實際吐的錯</h4>
-<pre><code class="rust">error[E0506]: cannot assign to `b.next` because it is borrowed
+<div class="codelabel">rustc 1.91.1 / edition 2024 的 <b>逐字原文</b>（非縮寫）</div>
+<pre class="err"><code>error[E0506]: cannot assign to `b.next` because it is borrowed
   --&gt; s3_borrow_fail.rs:12:5
    |
 11 |     a.next = Some(&amp;mut b);
    |                   ------ `b.next` is borrowed here
-12 |     b.next = Some(&amp;mut a);
-   |     ^^^^^^^^^^^^^^^^^^^^^ ... already borrowed</code></pre>
+12 |     b.next = Some(&amp;mut a); // cannot: a is already mutably borrowed via a.next
+   |     ^^^^^^^^^^^^^^^^^^^^^
+   |     |
+   |     `b.next` is assigned to here but it was already borrowed
+   |     borrow later used here
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0506`.</code></pre>
 <p>一旦 <code class="ic">&amp;mut b</code> 被存進 <code class="ic">a.next</code>,<code class="ic">b</code> 就被獨佔借走,你連 <code class="ic">b.next = ...</code> 都不能寫。互指?不可能。</p>
 </div>
 
@@ -874,7 +917,7 @@ fn main() {
 </div>
 <div class="card">
 <h4>L2 ── 「tag 是 32-bit,會 wrap。什麼情況下 wrap 讓 ABA 復活?」</h4>
-<p>某執行緒在 CAS 前被凍結,期間其他執行緒對<b>同一個 atomic</b> 做了剛好 2³² 次成功 CAS,讓 tag 繞回原值,<b>且</b> index 也回到同值 → 凍結的執行緒 CAS 誤成功。實務上 2³² 次操作 + 執行緒剛好卡那麼久,機率天文級低。緩解:(a) 用更寬的 tag —— 但 std 沒有穩定的 <code class="ic">AtomicU128</code> <span class="tag u">unverified,std 目前無 128-bit atomic 的可攜保證</span>,所以純 std 就是接受 32-bit tag;(b) 若 index 用不到滿 32-bit,可挪幾個 bit 給 tag。誠實講:純 std-only 下這是個可接受但真實存在的洞。</p>
+<p>某執行緒在 CAS 前被凍結,期間其他執行緒對<b>同一個 atomic</b> 做了剛好 2³² 次成功 CAS,讓 tag 繞回原值,<b>且</b> index 也回到同值 → 凍結的執行緒 CAS 誤成功。實務上 2³² 次操作 + 執行緒剛好卡那麼久,機率天文級低。緩解:(a) 用更寬的 tag —— 但 std 沒有 <code class="ic">AtomicU128</code>(<b>已編譯驗證</b>:rustc 1.91.1 下 <code class="ic">use std::sync::atomic::AtomicU128;</code> 吐 <code>E0432 unresolved import</code>),所以純 std 就是接受 32-bit tag;(b) 若 index 用不到滿 32-bit,可挪幾個 bit 給 tag。誠實講:純 std-only 下這是個可接受但真實存在的洞。</p>
 </div>
 <div class="card">
 <h4>L3 ── 「為什麼 arena 要 grow(動態擴容)且維持 lock-free 這麼難?走一遍哪裡爆。」</h4>
@@ -889,7 +932,7 @@ fn main() {
 <div class="card">
 <h4>L2' ── 「index-based 有個 <code class="ic">Rc&lt;RefCell&gt;</code> 沒有的 footgun。是什麼?production library 怎麼修?」</h4>
 <p><b>stale / dangling index</b>:你刪掉一個 node,它的 index 現在要嘛越界(panic)、要嘛(若用 swap-remove)指到<b>另一個 node</b> —— 型別系統不會擋,你拿到一個「看起來合法、其實指錯」的 index。<code class="ic">Rc</code> 天然不會:<code class="ic">Rc</code> 沒了就是沒了。</p>
-<p>production 解法:<b>generational index</b>(如 <code class="ic">slotmap</code> / <code class="ic">generational-arena</code> <span class="tag u">crate 名稱 unverified</span>)。index 變成 <code class="ic">[slot | generation]</code>,slot 每次重用 generation++,存取時比對 generation → 舊 handle 驗證失敗。<b>注意這跟用途 A 的 tagged index 是同一個機制</b> —— 都是「用 generation 讓重用被觀察到」。</p>
+<p>production 解法:<b>generational index</b>(<code class="ic">slotmap</code> 1.1.1 / <code class="ic">generational-arena</code> 0.2.9,<b>已向 crates.io API 查證</b>)。index 變成 <code class="ic">[slot | generation]</code>,slot 每次重用 generation++,存取時比對 generation → 舊 handle 驗證失敗。<b>注意這跟用途 A 的 tagged index 是同一個機制</b> —— 都是「用 generation 讓重用被觀察到」。</p>
 </div>
 <div class="card">
 <h4>L3' ── 「你說 generational index。但 generation 也是有限 bit,跟 ABA 的 tag wrap 是同一個問題嗎?」</h4>
@@ -929,13 +972,13 @@ fn main() {
 <details>
 <summary>Q4 ── tagged index 是 <code class="ic">[generation | index]</code> 的 64-bit。generation 有限、會 wrap。這個 wrap 在什麼情況讓 ABA 復活?為什麼實務上通常可接受?</summary>
 <p><b>復活條件:</b>某執行緒在 CAS 之前被凍結,期間其他執行緒對<b>同一個 atomic</b> 做了剛好 2³²(32-bit generation)次成功 CAS,使 generation 繞回原值,<b>並且</b> index 也回到同一值。此時凍結執行緒帶著舊的 <code class="ic">[gen|idx]</code> 做 CAS,會誤判成功。</p>
-<p><b>為何可接受:</b>要湊齊「同一 atomic 恰好 2³² 次操作」+「該執行緒剛好卡住這麼久」+「index 又回同值」,機率是天文數字級。純 std-only 下沒有可攜的更寬 atomic <span class="tag u">unverified</span>,所以通常就接受 32-bit generation;若 index 用不滿 32-bit,可挪 bit 加寬 generation 進一步壓低機率。誠實說:這是個真實但實務上可忽略的洞。</p>
+<p><b>為何可接受:</b>要湊齊「同一 atomic 恰好 2³² 次操作」+「該執行緒剛好卡住這麼久」+「index 又回同值」,機率是天文數字級。純 std-only 下沒有更寬的 atomic（<code class="ic">AtomicU128</code> 不存在，<b>已編譯驗證</b>）,所以通常就接受 32-bit generation;若 index 用不滿 32-bit,可挪 bit 加寬 generation 進一步壓低機率。誠實說:這是個真實但實務上可忽略的洞。</p>
 </details>
 
 <details>
 <summary>Q5 ── index-based arena 有個 <code class="ic">Rc&lt;RefCell&gt;</code> 沒有的 footgun(stale / dangling index)。它是什麼?production library 怎麼修?這跟用途 A 有什麼關係?</summary>
 <p><b>footgun:</b>刪掉一個 node 後,它的 index 要嘛越界(存取 panic)、要嘛(swap-remove)指到另一個 node —— 一個「看起來合法、實則指錯」的 index,型別系統不擋。<code class="ic">Rc</code> 天然沒這問題(<code class="ic">Rc</code> 沒了就是沒了)。</p>
-<p><b>修法:</b>generational index。index 變成 <code class="ic">[slot | generation]</code>,slot 每次重用 generation++,存取時比對 generation,舊 handle 驗證失敗即拒絕(<code class="ic">slotmap</code> / <code class="ic">generational-arena</code> 這類 <span class="tag u">crate 名稱 unverified</span>)。</p>
+<p><b>修法:</b>generational index。index 變成 <code class="ic">[slot | generation]</code>,slot 每次重用 generation++,存取時比對 generation,舊 handle 驗證失敗即拒絕(<code class="ic">slotmap</code> 1.1.1 / <code class="ic">generational-arena</code> 0.2.9,<b>已查證</b>)。</p>
 <p><b>跟用途 A 的關係:</b>這跟 A 的 tagged index 是<b>同一個機制</b> —— 都是用 generation 讓「slot 被重用」變得<b>可觀察</b>。也因此兩邊都繼承同一個 generation wrap 邊界(見 Q4)。這正是「index 只是機制、問題各異,但機制的性質共享」的最好例證。</p>
 </details>
 </section>
