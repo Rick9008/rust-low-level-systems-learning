@@ -65,7 +65,7 @@ impl<T> RingBuffer<T> {
         let cap = self.buf.len();
         if i >= 2 * cap {
             panic!(
-                "you using wrap wrong, it should not larger or equal than maximum size, undefined behavior, cap: {}, i: {}",
+                "you using wrap wrong, it should not larger or equal than maximum size, logic error, which might lead to out to bound, cap: {}, i: {}",
                 cap, i
             )
         }
@@ -118,8 +118,12 @@ impl<T> RingBuffer<T> {
         };
         // invariant: if it's full, we will pop
         // (expect 需要 E: Debug,這裡 E = T 無界——用 assert!(is_ok) 不碰 E)
-        //
-        assert!(self.push_back(item).is_ok(), "剛騰出空間,必有空位");
+        // expect need E: Debug, in here E is T, no trait boundary
+        // -> use aseert!(is_ok), don't touch return
+        assert!(
+            self.push_back(item).is_ok(),
+            "the invariant tells us it just pop, must ensure there is a empty slot"
+        );
         evicted
     }
 
@@ -256,5 +260,11 @@ mod tests {
             assert_eq!(rb.len(), model.len());
             assert!(rb.iter().eq(model.iter()), "step {step}: 內容或順序分歧");
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "wrap")]
+    fn wrap_guard_fires_out_of_domains() {
+        RingBuffer::<()>::new(3).wrap(6);
     }
 }
