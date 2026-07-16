@@ -227,7 +227,9 @@ epoll 綁定已提供,只從頭寫 accept/read/write 迴圈。
 題 e–h(event registry / telemetry aggregator / bounded channel / timer queue)
 對應題型預測的 Q4–Q7,預設做 recognition 練習(讀題 → 定界宣言 → 口述 arc);
 題 e2(fd_registry,generation 防 stale event)是 JD 點名的 sleeper,建議完整跑。
-題目在 [`rehearsals/README.md`](rehearsals/README.md),面試 prompt 風格、不給提示。
+題目在 [`rehearsals/README.md`](rehearsals/README.md),面試 prompt 風格、不給提示;
+**彩排時題幹讀英文版 [`rehearsals/PROMPTS_EN.md`](rehearsals/PROMPTS_EN.md)**
+(面試全程英文 I/O,中文版當對照)。
 開場 clarify(pillar 1)另有專門練法:[`docs/clarify-playbook.md`](docs/clarify-playbook.md)
 五問決策表 + [`rehearsals/clarify-cards.md`](rehearsals/clarify-cards.md) 六張情境卡
 (每張 5 分鐘;答案分檔,寫完才開)。
