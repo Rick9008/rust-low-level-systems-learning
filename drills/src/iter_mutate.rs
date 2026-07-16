@@ -139,7 +139,17 @@ impl EventLog {
         // 就地 trim 之後,`mem::take` 的前提就沒了:take 存在是因為 `into_iter()` 要
         // 所有權,而 trim 只需要 `&mut String`。不重配 String 就不必消費,形狀 5 塌回
         // 形狀 4(retain_mut)。實測 24 筆輸入:上面的 to_string 版每個保留元素各一次
-        // malloc,這版 0 次。
+        // malloc(18 allocs),這版 0 次。
+        //
+        // 整體 O(B) 時間 / O(1) 空間,B = 所有字串的總 bytes;零配置。
+        //
+        // 這個 0 是結構性的,不是運氣:**trim 是純粹縮小的操作,而縮小從來不需要跟
+        // allocator 講話**。truncate/drain 都只動 len、不動 capacity,被砍掉的 bytes
+        // 留在 buffer 裡變成餘裕(cap - len)。反過來,任何讓字串「長大」的需求都會
+        // 拆掉這個保證:例如規格若改成加前綴 `insert_str(0, "[log] ")`,配不配取決於
+        // `cap - trim後len >= 6`,而餘裕來自「前綴空白 + 後綴空白 + 出生 slack」——
+        // 也就是**配置行為會取決於輸入長什麼樣子**(髒資料零配置、乾淨資料每筆一次),
+        // 而輸出完全正確,測試抓不到。真要保證得建構時 reserve,或別把前綴存進 String。
         self.events.retain_mut(|s| {
             let end = s.trim_end().len();
             // 全空白 / 空字串。順便擋掉下面 start(== len)> end(== 0)、
@@ -149,16 +159,27 @@ impl EventLog {
             }
             let start = s.len() - s.trim_start().len();
 
-            // 砍尾:`String::truncate` 只設 len(bytes 是 Copy,沒東西要 drop),
-            // 不搬移、不重配。
+            // 砍尾。做的事只有兩件:assert 一次 char boundary(讀 end 那個 byte 看
+            // 是不是 UTF-8 continuation,單 byte 檢查、不掃描),然後把 len 設成 end。
+            // 底層 Vec<u8> 照理要 drop 掉 [end..],但 u8 沒有 Drop,那段會被完全
+            // 最佳化掉——尾巴的 bytes 只是不再算進 len,實體還躺在原地。
+            //
+            // 時間 O(1) / 空間 O(1),**與砍掉多少無關**(實測 N=4e7:砍掉 N-1 與
+            // 砍掉 1 都是 110ns)。不搬移、不重配、capacity 不變。
             s.truncate(end);
 
-            // 砍頭:`String::drain(range)` 把 range 內的 bytes 移除,尾巴往前
-            // memmove 壓實。它回傳的是一個會 yield 被移除 char 的迭代器,而
-            // **移除發生在那個迭代器 drop 的當下**,不是呼叫的當下——這裡當
-            // statement 寫、立刻 drop,所以效果就是純粹「砍掉前 start 個 bytes」。
-            // O(剩餘長度) 搬移,不重配、capacity 不變;start == 0(沒有前綴空白)
-            // 時是 no-op,連 memmove 都不會發生。
+            // 砍頭。`drain(range)` 回傳一個會 yield 被移除 char 的迭代器,而
+            // **移除發生在那個迭代器 drop 的當下**,不是呼叫的當下——這裡當 statement
+            // 寫、產生後立刻 drop,所以效果是純粹「砍掉前 start 個 bytes」。
+            //   呼叫時:正規化 range、兩端各 assert 一次 char boundary、建一個帶 lazy
+            //           chars() 的 Drain。一個 byte 都沒動。
+            //   drop 時:把尾巴 [end..len) 整段 ptr::copy 到 start 位置,再減 len。
+            //
+            // 時間 O(len - start) / 空間 O(1):**成本只跟「要保留的尾巴」成正比,跟
+            // 砍掉多少無關**(實測 N=4e7:砍掉 N-1 留 1 是 730ns,砍掉 1 留 N-1 是
+            // 946µs——砍得多反而快 1300 倍,因為沒剩什麼要搬;這也證明 drop 沒有去
+            // 解碼被砍掉那段的 chars)。start == 0 時搬 0 bytes,是 no-op。
+            // 不重配、capacity 不變。
             //
             // 兩個地雷:
             // 1. 順序不可反。先 drain 的話尾巴會整段前移,先算好的 end 就失效了
