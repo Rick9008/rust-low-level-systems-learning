@@ -1,7 +1,9 @@
 # 學習進度(手動勾選,git 追蹤)
 
-面試日:**2026-07-28**。三欄語意:讀 = reference 讀懂能講;drill = 填完轉綠;
+面試日:**2026-07-28**。逐日排程與砍序:[SCHEDULE.md](SCHEDULE.md)(2026-07-16 定)。
+三欄語意:讀 = reference 讀懂能講;drill = 填完轉綠;
 challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
+SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ring→a、pool→b、framer→c)。
 
 ## 模組 × 三層
 
@@ -9,20 +11,22 @@ challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 
 | # | 模組 | 讀 | drill | challenge | 備註 |
 |---|---|---|---|---|---|
-| 1 | iter_mutate | ☐ | ☐(7 洞) | — | 手感基礎,先做 |
+| 1 | iter_mutate | ☐ | ☐(7 洞) | — | 7/16 排定 |
 | 2 | bounded_queue | ☑ 2026-07-16 | ☑ 2026-07-16 | — | push/pop/close 已填,MPMC stress 過 |
-| 3 | thread_pool | ☐ | ☐(+submit/join 2 洞新增) | — | |
-| 4 | ring_buffer | ☐ | ☐ | — | |
-| 5 | spsc_ring | ☐ | ☐ | ☐ ★ | 目標:空白 20 分鐘、一次編過、寫三遍 |
-| 6 | executor | ☐ | ☐ | ☐ ★ | |
-| 7 | lru | ☐ | ☐ | ☐ ★ | |
-| 8 | fd_registry | ☐ | ☐ | — | JD sleeper;彩排 e2 |
-| 9 | hw_bridge(protocol+framer) | ☐ | ☐ | ☐ ★ | |
-| 10 | dsu | ☐ | ☐ | ☐ ★ | |
-| 11 | sharded_map | ☐ | ☐ | ☐ ★ | |
-| 12 | signal_pipeline | ☐ | ☐(2 洞) | ☐ ★ | JD 本尊圖;掛牌握手 = SeqCst 實戰位 |
+| 3 | thread_pool | ☐ | ☐(4 洞含 submit/join) | — | 7/17;challenge = 彩排 b |
+| 4 | ring_buffer | ☐ | ☐ | — | 7/16;challenge = 彩排 a |
+| 5 | spsc_ring | ☐ | ☐ | ☐ ★ | 7/17 drill、7/18 challenge;空白 20 分 ×3:7/19、7/22、7/26 |
+| 6 | executor | ☐ | ☐ | ☐ ★ | 7/18 drill+challenge |
+| 7 | lru | ☐ | ☐ | ☐ ★ | 降級:超前才寫 |
+| 8 | fd_registry | ☐ | ☐ | — | JD sleeper;7/19 drill;彩排 e2:7/21、7/24 |
+| 9 | hw_bridge(protocol+framer) | ☐ | ☐ | ~~☐ ★~~ | 7/18 drill;standalone challenge 砍——彩排 c 即 challenge |
+| 10 | dsu | ☐ | ☐ | ☐ ★ | **本輪砍**(doc 零訊號) |
+| 11 | sharded_map | ☐ | ☐ | ☐ ★ | 降級:讀 + 口述(跨 shard 鎖序用講的) |
+| 12 | signal_pipeline | ☐ | ☐(2 洞) | ☐ ★ | 7/23 drill + litmus 口述;challenge post-TPS |
 
 ### 次優先
+
+SCHEDULE 裁決:inplace_leetcode 選配暖手;graph / trie / tree **本輪砍**。
 
 | 模組 | 讀 | drill | challenge |
 |---|---|---|---|
@@ -32,6 +36,9 @@ challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 | tree | ☐ | ☐ | — |
 
 ### deep-dive(讀懂能講即可,不手搓)
+
+SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 通勤)、
+五 server 對照組 p99.9(7/25,餵 trade-off 口述)、async-runtime-anatomy(同 7/25)。
 
 | 模組 | 讀 |
 |---|---|
