@@ -6,6 +6,11 @@
 並補上 repo 沒有實作的第四塊:proactor(completion 版的「誰該醒」)。
 互動版:[`docs/artifacts/async_runtime.html`](artifacts/async_runtime.html)。
 
+> 2026-07 起,「接起來」不只在紙上:`reference/src/mini_runtime.rs` 把
+> executor × reactor 真的縫起來(多 task run queue + IO futures +
+> 可抽換 `Poller`:V0 O(n) scan → V1 epoll),取捨見
+> [`mini_runtime.md`](mini_runtime.md)。
+
 ## 1. 分工:誰該跑 vs 誰該醒
 
 - **Executor**:維護 run queue、poll task、把 `Waker` 塞進 `Context`;

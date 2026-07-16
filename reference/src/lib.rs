@@ -32,6 +32,8 @@ pub(crate) mod sync_shim;
 
 // stage 5:async internals
 pub mod executor;
+// executor × reactor 縫起來:兩階 reactor(V0 O(n) scan → V1 epoll)的 mini-tokio
+pub mod mini_runtime;
 
 // event loop 的 interest table 基底(std-only、平台無關):generational slot map
 pub mod fd_registry;

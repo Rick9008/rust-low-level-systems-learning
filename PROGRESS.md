@@ -39,7 +39,8 @@ challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 | event_loop | ☐ |
 | tcp_echo | ☐ |
 | file_io_offload | ☐ |
-| hw_bridge(server_threaded / server_evented) | ☐ |
+| hw_bridge 四 server 對照組(threaded / inline壞 / evented / sharded) | ☐ |
+| mini_runtime(V0 scan → V1 epoll) | ☐ |
 | docs/async-runtime-anatomy.md | ☐ |
 
 ## rehearsal 計時紀錄

@@ -66,6 +66,9 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 - `event_loop`:register / epoll_wait / dispatch;LT 與 ET 都示範;eventfd self-wake
 - `tcp_echo`:nonblocking TCP echo;write 塞住 → 緩存 + EPOLLOUT
 - `file_io_offload`:file IO 用 thread pool offload(readiness vs completion)
+- `mini_runtime`:executor × reactor 縫起來的 mini-tokio——`Poller` trait 兩實作
+  (V0 O(n) scan(pad 可寫)→ V1 epoll),runtime 一行不改;interest table
+  複用 `fd_registry`
 - `hw_bridge` 的四個 server:`server_threaded`(thread-per-conn)、
   `server_evented_inline`(⚠️ 反面教材:阻塞 handler 凍住 loop)、
   `server_evented`(offload + eventfd 回程)、`server_evented_sharded`
