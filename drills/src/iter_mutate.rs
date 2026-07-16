@@ -127,12 +127,47 @@ impl EventLog {
         //     "spec: let taken = mem::take(&mut self.events); self.events = taken.into_iter().map(trim).filter(非空).collect()"
         // )
 
-        let taken = std::mem::take(&mut self.events);
-        self.events = taken
-            .into_iter()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
+        // let taken = std::mem::take(&mut self.events);
+        // self.events = taken
+        //     .into_iter()
+        //     .map(|s| s.trim().to_string())
+        //     .filter(|s| !s.is_empty())
+        //     .collect();
+
+        // instead of use to_string to allocate new heap, we can use retain_mut and truncate / drain
+        //
+        // 就地 trim 之後,`mem::take` 的前提就沒了:take 存在是因為 `into_iter()` 要
+        // 所有權,而 trim 只需要 `&mut String`。不重配 String 就不必消費,形狀 5 塌回
+        // 形狀 4(retain_mut)。實測 24 筆輸入:上面的 to_string 版每個保留元素各一次
+        // malloc,這版 0 次。
+        self.events.retain_mut(|s| {
+            let end = s.trim_end().len();
+            // 全空白 / 空字串。順便擋掉下面 start(== len)> end(== 0)、
+            // truncate(0) 之後 drain(..len) 越界 panic 的情況。
+            if end == 0 {
+                return false;
+            }
+            let start = s.len() - s.trim_start().len();
+
+            // 砍尾:`String::truncate` 只設 len(bytes 是 Copy,沒東西要 drop),
+            // 不搬移、不重配。
+            s.truncate(end);
+
+            // 砍頭:`String::drain(range)` 把 range 內的 bytes 移除,尾巴往前
+            // memmove 壓實。它回傳的是一個會 yield 被移除 char 的迭代器,而
+            // **移除發生在那個迭代器 drop 的當下**,不是呼叫的當下——這裡當
+            // statement 寫、立刻 drop,所以效果就是純粹「砍掉前 start 個 bytes」。
+            // O(剩餘長度) 搬移,不重配、capacity 不變;start == 0(沒有前綴空白)
+            // 時是 no-op,連 memmove 都不會發生。
+            //
+            // 兩個地雷:
+            // 1. 順序不可反。先 drain 的話尾巴會整段前移,先算好的 end 就失效了
+            //    (得補成 end - start)。
+            // 2. range 兩端必須落在 char boundary,否則 panic。trim_start/trim_end
+            //    給的位置天生是 boundary,所以這裡安全;自己湊 byte index 就不一定。
+            s.drain(..start);
+            true
+        })
     }
 }
 
