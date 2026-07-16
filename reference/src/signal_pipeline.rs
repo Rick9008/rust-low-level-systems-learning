@@ -37,13 +37,31 @@
 //! - **誠實邊界**:掛牌握手的交錯靠手 trace + stress 測試把關;
 //!   loom 版要把 fence 與 park 都收進 shim,留作延伸。
 //!
+//! ## 扇入(多源版):per-source SPSC
+//!
+//! 多個訊號源時**不要**共用一條 MPSC——tail 上的 CAS 競爭把 SPSC 的
+//! 優勢全丟了。每源一條自己的 ring、一條 consumer 掃全部
+//! ([`start_fan_in`]):
+//! - 每條 ring 仍是單寫者 → 熱路徑零 CAS;
+//! - per-source 隔離:某源爆量只塞滿自己的 ring、觸發自己的 drop 計數;
+//! - per-source FIFO 保住,跨源全域順序沒有(telemetry 通常無所謂,
+//!   但要說出口——clarify 的料)。
+//!
+//! 接口細節:公平性靠 **bounded batch**(每輪每條 ring 最多收
+//! [`FAN_IN_BATCH`] 筆,熱源不能餓死其他源);park 條件變成
+//! 「**全部** ring 都空」(掛牌後 recheck 要掃完全部);scale 到多條
+//! consumer 用 source 靜態分片——work-stealing 會同時破壞單寫者與
+//! per-source FIFO,不選。一句收斂:**每一步都在守單寫者**。
+//!
 //! ## [Dry-Run]
 //! 測試:守恆(accepted + dropped == sent 且 count == accepted)、
 //! park 後被喚醒(lost wakeup 會讓測試卡死,顯性失敗)、
-//! shutdown drain(殘料處理完才退)。
+//! shutdown drain(殘料處理完才退);扇入版另有多源守恆、
+//! 慢源不被爆源拖累(隔離)、多源喚醒。
 //!
-//! 對應 docs/signal_pipeline.md:等待策略階梯、SB litmus 手 trace、
-//! drop-newest vs conflation、HFT 對照。
+//! 對應 docs/signal_pipeline.md:等待策略階梯、SB litmus 手 trace
+//! (含「x86 上真的會炸」與 park token 的精確分界)、
+//! drop-newest vs conflation、control plane vs data plane、HFT 對照。
 
 use crate::spsc_ring::{Consumer, Producer, channel};
 use std::sync::Arc;
@@ -167,6 +185,111 @@ pub fn start(capacity: usize) -> (SignalSender, PipelineHandle) {
 /// spin-then-park 的 spin 額度(示範值;HFT 直接 spin 到底)。
 const SPIN_LIMIT: u32 = 100;
 
+/// 扇入的公平性上限:每輪每條 ring 最多收這麼多筆,
+/// 熱源不能把一輪吃滿、餓死其他源。
+pub const FAN_IN_BATCH: usize = 32;
+
+/// 扇入版:每源一條 SPSC ring(單寫者不破),一條 consumer 掃全部。
+/// 回傳每源一個 [`SignalSender`](含各自的 dropped 計數)與控制把手。
+pub fn start_fan_in(num_sources: usize, capacity: usize) -> (Vec<SignalSender>, PipelineHandle) {
+    assert!(num_sources > 0, "至少一個源");
+    let mut txs = Vec::with_capacity(num_sources);
+    let mut rxs = Vec::with_capacity(num_sources);
+    for _ in 0..num_sources {
+        let (tx, rx) = channel(capacity);
+        txs.push(tx);
+        rxs.push(rx);
+    }
+    let parked = Arc::new(AtomicBool::new(false));
+    let stop = Arc::new(AtomicBool::new(false));
+    let (parked2, stop2) = (Arc::clone(&parked), Arc::clone(&stop));
+    let join = thread::Builder::new()
+        .name("fan-in-consumer".into())
+        .spawn(move || fan_in_consumer_loop(rxs, &parked2, &stop2))
+        .expect("spawn consumer");
+    let consumer = join.thread().clone();
+    let senders = txs
+        .into_iter()
+        .map(|tx| SignalSender {
+            tx,
+            dropped: 0,
+            parked: Arc::clone(&parked),
+            consumer: consumer.clone(),
+        })
+        .collect();
+    (
+        senders,
+        PipelineHandle {
+            stop,
+            consumer,
+            join,
+        },
+    )
+}
+
+/// 掃描迴圈:round-robin + bounded batch;全空才進 spin-then-park。
+/// 掛牌握手與單源版同款,差別只在 recheck 要掃**全部** ring。
+fn fan_in_consumer_loop(
+    mut rings: Vec<Consumer<Signal>>,
+    parked: &AtomicBool,
+    stop: &AtomicBool,
+) -> Stats {
+    let mut stats = Stats::new();
+    let mut spins: u32 = 0;
+    loop {
+        let mut got = false;
+        for rx in rings.iter_mut() {
+            // bounded batch:這條 ring 再熱,這一輪最多拿 FAN_IN_BATCH 筆,
+            // 然後換下一條——公平性是結構給的,不是排程給的。
+            for _ in 0..FAN_IN_BATCH {
+                match rx.pop() {
+                    Some(s) => {
+                        stats.record(&s);
+                        got = true;
+                    }
+                    None => break,
+                }
+            }
+        }
+        if got {
+            spins = 0;
+            continue;
+        }
+        // 這一輪全部 ring 都空 ⇒ stop 時殘料已 drain 完。
+        if stop.load(Ordering::Acquire) {
+            return stats;
+        }
+        if spins < SPIN_LIMIT {
+            spins += 1;
+            std::hint::spin_loop();
+            continue;
+        }
+        spins = 0;
+        // 掛牌握手(SB litmus 同單源版);recheck 範圍 = 全部 ring。
+        parked.store(true, Ordering::SeqCst);
+        fence(Ordering::SeqCst);
+        let mut found = None;
+        for rx in rings.iter_mut() {
+            if let Some(s) = rx.pop() {
+                found = Some(s);
+                break;
+            }
+        }
+        match found {
+            Some(s) => {
+                parked.store(false, Ordering::Release);
+                stats.record(&s);
+            }
+            None => {
+                if !stop.load(Ordering::Acquire) {
+                    thread::park();
+                }
+                parked.store(false, Ordering::Release);
+            }
+        }
+    }
+}
+
 fn consumer_loop(mut rx: Consumer<Signal>, parked: &AtomicBool, stop: &AtomicBool) -> Stats {
     let mut stats = Stats::new();
     let mut spins: u32 = 0;
@@ -286,5 +409,100 @@ mod tests {
         drop(tx);
         let stats = handle.shutdown();
         assert_eq!(stats.count, accepted);
+    }
+
+    /// 扇入守恆:3 源各自狂灌 30k(cap 8)——每源 accepted + dropped
+    /// == sent,聚合 count == Σaccepted。
+    #[test]
+    fn fan_in_conservation_three_sources() {
+        let (senders, handle) = start_fan_in(3, 8);
+        const N: u64 = 30_000;
+        let workers: Vec<_> = senders
+            .into_iter()
+            .map(|mut tx| {
+                std::thread::spawn(move || {
+                    let mut accepted = 0u64;
+                    for _ in 0..N {
+                        if tx.send(Signal {
+                            sensor_id: 0,
+                            value: 1,
+                        }) {
+                            accepted += 1;
+                        }
+                    }
+                    (accepted, tx.dropped())
+                })
+            })
+            .collect();
+        let mut total_accepted = 0u64;
+        for w in workers {
+            let (accepted, dropped) = w.join().unwrap();
+            assert_eq!(accepted + dropped, N);
+            total_accepted += accepted;
+        }
+        let stats = handle.shutdown();
+        assert_eq!(stats.count, total_accepted);
+        assert_eq!(stats.sum, total_accepted as i64);
+    }
+
+    /// per-source 隔離:爆源塞爆自己的 ring,慢源(每筆間隔 1ms,
+    /// consumer 一定跟得上)**一筆都不掉**——別人的爆量不觸發你的 drop。
+    #[test]
+    fn fan_in_slow_source_isolated_from_burst() {
+        let (mut senders, handle) = start_fan_in(2, 8);
+        let mut fast = senders.remove(0);
+        let mut slow = senders.remove(0);
+
+        let fast_t = std::thread::spawn(move || {
+            let mut accepted = 0u64;
+            for _ in 0..50_000u64 {
+                if fast.send(Signal {
+                    sensor_id: 0,
+                    value: 0,
+                }) {
+                    accepted += 1;
+                }
+            }
+            accepted
+        });
+        let slow_t = std::thread::spawn(move || {
+            for i in 0..10 {
+                assert!(
+                    slow.send(Signal {
+                        sensor_id: 1,
+                        value: i,
+                    }),
+                    "慢源不該掉:自己的 ring 從不滿"
+                );
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            slow.dropped()
+        });
+
+        let fast_accepted = fast_t.join().unwrap();
+        assert_eq!(slow_t.join().unwrap(), 0, "慢源 dropped 必須為 0");
+        let stats = handle.shutdown();
+        assert_eq!(stats.count, fast_accepted + 10);
+    }
+
+    /// 扇入的 park 路徑:兩源都安靜、consumer 睡著後,任一源的下一筆
+    /// 都必須叫醒它(每個 producer 都跑同一套查牌 + unpark)。
+    #[test]
+    fn fan_in_wakes_parked_consumer() {
+        let (mut senders, handle) = start_fan_in(2, 8);
+        assert!(senders[0].send(Signal {
+            sensor_id: 0,
+            value: 10,
+        }));
+        std::thread::sleep(Duration::from_millis(50)); // consumer 已掛牌睡著
+        assert!(senders[1].send(Signal {
+            sensor_id: 1,
+            value: 32,
+        }));
+        std::thread::sleep(Duration::from_millis(50));
+        drop(senders);
+        let stats = handle.shutdown();
+        assert_eq!(stats.count, 2);
+        assert_eq!(stats.sum, 42);
     }
 }

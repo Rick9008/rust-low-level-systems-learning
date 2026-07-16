@@ -45,7 +45,63 @@ consumer 沒看到貨(去睡)→ 帶著貨睡死。解法:兩邊寫讀之間各�
 
 面試裡把這個 trace 講出來,就是 pillar 5 對 lock-free 的「trace 兩條
 thread 交錯」滿分示範——而且它解釋了 SeqCst 存在的意義(不是「保險」,
-是 SB litmus 這一類交錯真的需要它)。
+是 SB litmus 這一類交錯真的需要它)。口述版:
+*"I relax the SPSC itself to acquire/release, but the parking handshake
+is a store-buffering pattern — that one needs SeqCst."*
+
+三個 deep-dive 加分點:
+
+1. **acquire/release 擋不住**:acq/rel 給的是單一變數上的 happens-before;
+   這裡是兩個獨立變數(牌子與 tail)交叉先寫後讀——SB 正是 acq/rel 允許、
+   只有 SeqCst 禁止的形狀。
+2. **這個 bug 在 x86 上是真的**:StoreLoad 是 x86-TSO 唯一允許的重排。
+   對照 `loom_vs_stress` 那個 Relaxed bug(x86 硬體不重排 store-store /
+   load-load,無物理表現、要 ARM 才炸)——掛牌握手這個在你的筆電上
+   就可能炸,只是時間窗小到 stress 測不出。
+3. **park token 救不了這裡**:token 救的是「unpark 先於 park」;
+   這個 race 是 producer **根本沒呼叫 unpark**(讀到 stale 的 false)。
+   沒發出的 unpark,token 存不了——這是它與 executor 那課的精確分界。
+
+## async 買什麼、sync 買什麼(control plane vs data plane)
+
+async 買的是**便宜的閒置等待**:萬條大多安靜的 socket 疊在幾條 thread 上。
+硬體訊號流不是閒置,是**連續**——這時 async 反而倒貼:executor 排程的
+latency jitter + 每筆訊號疊 poll/wake 開銷,p99.9 就是這樣被吃掉的。
+口述版:*"Async buys you cheap idle waits — ten thousand mostly-quiet
+sockets on a few threads. But a hardware signal stream isn't idle, it's
+continuous. There I want pinned threads and SPSC rings: no runtime
+scheduling on the hot path, predictable tail latency. Async is for the
+control plane; the data plane stays sync."*
+
+## 扇入:多源就 per-source SPSC,不是 MPSC
+
+每源一條自己的 ring、一條 consumer 掃全部(`start_fan_in`):
+
+```text
+source_0 thread ──SPSC ring_0──┐
+source_1 thread ──SPSC ring_1──┼──▶ consumer(round-robin 掃)
+source_2 thread ──SPSC ring_2──┘
+```
+
+三個可講的 trade-off:
+1. **保住 SPSC**:每條 ring 仍單寫者 → 零 CAS。全部打同一條 MPSC →
+   tail 上 CAS 競爭,SPSC 的優勢原地蒸發。
+2. **per-source 隔離**:某源爆量只塞滿自己的 ring、觸發自己的 drop 計數
+   ——「單一 source 爆量怎麼不拖垮全局」的答案,結構本身就是答案
+   (測試 `fan_in_slow_source_isolated_from_burst` 是可執行版)。
+3. **ordering 說清楚**:per-source FIFO 保住、跨源全域順序沒有——
+   telemetry 通常無所謂,但要說出口(clarify 的料)。
+
+三個 follow-up 必問區:
+- **公平性**:別把一條 ring 抽乾才換下一條(熱源餓死其他源)——
+  每輪每條最多 `FAN_IN_BATCH` 筆,round-robin。
+- **park 條件 = 全部都空**:掛牌後的 recheck 要掃完所有 ring;
+  每個 producer push 完都跑同一套 fence + 查牌 + unpark。
+- **一條 consumer 吃不動**:source 靜態分片給多條 consumer——每條 ring
+  仍 SPSC、per-source 順序仍保住;work-stealing 兩者都破壞,不選。
+
+一句收斂:**拓撲的每一步都在守單寫者**——守住單寫者,就守住零 CAS 與
+per-source FIFO;所有 scale 手段(分片)都繞著「不破壞單寫者」設計。
 
 ## full policy:SPSC 上只有 drop-newest
 

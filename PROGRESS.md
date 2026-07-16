@@ -22,7 +22,7 @@ SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ri
 | 9 | hw_bridge(protocol+framer) | ☐ | ☐ | ~~☐ ★~~ | 7/18 drill;standalone challenge 砍——彩排 c 即 challenge |
 | 10 | dsu | ☐ | ☐ | ☐ ★ | **本輪砍**(doc 零訊號) |
 | 11 | sharded_map | ☐ | ☐ | ☐ ★ | 降級:讀 + 口述(跨 shard 鎖序用講的) |
-| 12 | signal_pipeline | ☐ | ☐(2 洞) | ☐ ★ | 7/23 drill + litmus 口述;challenge post-TPS |
+| 12 | signal_pipeline | ☐ | ☐(2 洞) | ☐ ★ | 7/23 drill + litmus 口述;扇入(fan_in)讀+口述排 7/25;challenge post-TPS |
 
 ### 次優先
 
