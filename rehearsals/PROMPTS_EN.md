@@ -3,7 +3,7 @@
 面試是英文的:**認題、clarify、定界宣言、trade-off 收尾全程英文**。
 彩排規則改為:題幹只讀本檔(中文版留在 README 當對照與出處);
 clarify 卡的五問也用英文寫。開場句不變:
-*"Before I start, let me make sure I understand the constraints."*
+_"Before I start, let me make sure I understand the constraints."_
 
 ---
 
@@ -14,6 +14,7 @@ is unreliable — sometimes it stalls. Build a fixed-capacity buffer that sits
 between them.
 
 Requirements:
+
 - Fixed capacity, holds exactly `capacity` items (`capacity >= 1`).
 - When full, you may **not block and may not reject** the new reading —
   evict the oldest one to make room.
@@ -32,6 +33,7 @@ concurrently. Each check is a blocking call, handled by a fixed set of
 worker threads.
 
 Requirements:
+
 - `new(workers)` starts the pool; `submit(job)` queues work.
 - On termination the service calls `shutdown()`, which must be **graceful**:
   - every job that was **accepted** (submit returned `Ok`) must run to completion;
@@ -65,6 +67,7 @@ A device gateway: many devices connect over TCP, speaking the protocol from
 problem c — `[u32 len (BE)][payload]`, `len == 0` is a heartbeat.
 
 Requirements:
+
 - Write the server with tokio: `serve(listener, idle_timeout)`, runs until
   the listener errors out.
 - Connections are served concurrently and independently.
@@ -82,6 +85,7 @@ handlers on ids, dispatch events as they arrive. Thousands of distinct ids,
 high event rate.
 
 Requirements:
+
 - `register(id, handler)` — multiple handlers per id; `dispatch(id, payload)`
   runs all handlers for that id **in registration order**, returns how many ran.
 - After running, a handler reports its fate (`After::Keep` / `After::Remove`)
@@ -102,6 +106,7 @@ new connection — and stale events for the old connection may still be
 sitting in the event queue. Churn is high.
 
 Requirements:
+
 - `register(fd, state) -> Token`; the token must fit in a u64
   (`to_raw` / `from_raw` round-trip) — that's all the room the kernel gives you.
 - `get / get_mut(token)`: O(1) lookup; **a stale token (fd recycled and
@@ -115,6 +120,7 @@ A whole rack produces billions of signals — storing them all is off the
 table. Aggregate into a **fixed number** of time windows.
 
 Requirements:
+
 - `new(window_ms, num_windows)`: memory is O(num_windows), independent of
   sample count.
 - `record(ts, value)`; `stats(ts)` returns that window's current
@@ -132,6 +138,7 @@ Build a bounded channel from scratch: producers block when it's full, the
 consumer blocks when it's empty. std only.
 
 Requirements:
+
 - `channel(capacity)` (capacity ≥ 1) → `(Sender, Receiver)`;
   `Sender: Clone` (multiple producers), single consumer.
 - `send`: full → block until there's room; receiver dropped →
@@ -146,6 +153,7 @@ N nodes, each health-checked on its own periodic interval. Who runs next,
 and how long should we sleep?
 
 Requirements:
+
 - `schedule(id, first_at, interval)` (interval ≥ 1; id uniqueness is the
   caller's problem).
 - `next_deadline()`: the caller parks until that instant — **park, don't poll**.
@@ -162,6 +170,26 @@ Requirements:
 telemetry (temperatures, voltages, error counts) to one aggregation service
 that dashboards read from. The volume is far more than you can store.
 Design the ingestion side.
+
+Clarify question:
+
+1. how many actual nodes we will have
+   maybe 1 <= nodes <= 3000? then we should use event loop for this problem
+2. how big the report telemetry data we will have?
+   we just take (temperatures, voltages, error counts) and all as i8, then the data size of a report is 24 bytes
+3. how long does a report comes back?
+   maybe 1s?
+4. if the total data we cannot store, how do you expect that we handle this case?
+   just discard old data?
+5. what do we need to express in dashboards?
+   maximum, minimum, average?
+6. how the data will get aggregates?
+   list datas by node?
+
+if all take my assumption we need to calculate several things:
+
+1. 1 _ 24 bytes _ 3000 nodes = 72000 bytes, 72000 bytes \* 3600 almost 100000000 bytes = 10^8 bytes = 100MB
+   1 hour data will have 100MB
 
 **Card 2 · RPC gateway** — A gateway accepts client requests and forwards
 them to a backend; every request must get a response. The backend gets slow
