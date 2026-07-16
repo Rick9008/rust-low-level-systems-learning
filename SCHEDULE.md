@@ -73,6 +73,8 @@ SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
 4. **寫下 `unsafe impl` 的當下必唸三段式辯護**(模板:docs/rust-five-axis.md)。
 5. **20 頁 artifacts 不通讀**——動手到哪開到哪。例外:7/23 signal_pipeline 頁、
    每日 clarify 決策室。
+6. **彩排與卡片一律英文 I/O**:題幹讀 `rehearsals/PROMPTS_EN.md`,clarify 五問、
+   定界宣言、trade-off 收尾用英文寫/講(中文版只當對照)。
 
 ## Clarify 配方(最弱項的處方:高頻小塊,不開大 block)
 

@@ -96,6 +96,9 @@ window、capacity、heap)。
 
 認不出來就問。開場永遠是:*"Before I start, let me make sure I understand the constraints."*
 
+**彩排時題幹讀英文版:[`PROMPTS_EN.md`](PROMPTS_EN.md)**(面試是英文的——
+認題、clarify、定界、trade-off 全程英文;下方中文版當對照與出處)。
+
 問什麼、答案怎麼變成設計:[`docs/clarify-playbook.md`](../docs/clarify-playbook.md)
 (互動版 [`docs/artifacts/clarify_playbook.html`](../docs/artifacts/clarify_playbook.html))。
 專門練這一步的六張情境卡:[`clarify-cards.md`](clarify-cards.md),每張 5 分鐘;
