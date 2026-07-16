@@ -44,6 +44,20 @@ SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
 **永不砍**:e2 兩遍、c 兩遍、spsc 空白 ×3、每日 clarify 卡、7/27 taper。
 (排序邏輯:保你的弱點 e2 + 你的傷疤區 c/wrap,砍你已經最熟的 mutex/condvar 重複。)
 
+## v8 對齊(2026-07-16 晚定,常駐規則)
+
+- **P 編號已廢**:白天讀 = 當天模組的 artifacts(7/16 = ring_buffer + iter_mutate)。
+- **7/16 產出欄**:drills/ring_buffer 綠 ✓|卡#1|drills/iter_mutate 綠|
+  手寫 wrap trace 拍照|aggregator 延伸綠(**含「未來 ts 清 window」case**,
+  規格照 rehearsals 題目 f 的 contract,寫在 ring_buffer 同檔)。
+- **Overflow 池規則(每天適用)**:dsu / graph / trie / tree 只在三條件**全**成立時碰:
+  ①當天產出欄全勾(含卡、含錄音)②明天沒欠債 ③還有力氣。
+  優先序固定:spsc 空白加跑(20m)> 沒修完的彩排洞 > lru challenge >
+  才輪到 dsu → graph → trie/tree,每個 timebox 25m。
+  (這四題的家在 7/29 後的 coding rounds;graph 是 comfort-zone 陷阱。)
+- **Google 舊 block**(277/158/588、LRU/LFU、segtree):無日期 → 每週最多 1–2 題
+  維持手感;本週只挑 588 當暖手,其餘全停。
+
 ## Clarify 配方(最弱項的處方:高頻小塊,不開大 block)
 
 - 每天 session 開場一張卡(15m 含對答案),7/17–7/22 六張走完;7/25 六張快打重來
