@@ -14,6 +14,7 @@
 
 use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -86,7 +87,30 @@ impl<T> Producer<T> {
     /// 3. slot_write(tail, item)
     /// 4. store tail+1(wrapping_add,Ordering?)——發布給 consumer
     pub fn push(&mut self, item: T) -> Result<(), T> {
-        todo!("spec: Relaxed 讀自己 / Acquire 讀對方 / 寫槽位 / Release 發布")
+        // todo!("spec: Relaxed 讀自己 / Acquire 讀對方 / 寫槽位 / Release 發布")
+        // tail is running by the producer thread itself, so only relaxed is enough
+        let tail = self.ring.tail.0.load(Ordering::Relaxed);
+        // head is running on another thread so we need to use Acquire
+        let head = self.ring.head.0.load(Ordering::Acquire);
+        if tail.wrapping_sub(head) == self.ring.cap {
+            return Err(item);
+        }
+
+        let ring = &*self.ring;
+        let cell = &ring.buf[tail & ring.mask];
+
+        // unsafe {
+        //     // cell.get() is MaybeUninit
+        //     // we need to use MaybeUninit's write to update item
+        //     (*(cell.get())).write(item);
+        // }
+        // or just use
+        self.ring.slot_write(tail & self.ring.mask, item);
+        self.ring
+            .tail
+            .0
+            .store(tail.wrapping_add(1), Ordering::Release);
+        Ok(())
     }
 
     pub fn capacity(&self) -> usize {
@@ -101,7 +125,19 @@ impl<T> Consumer<T> {
     /// 3. slot_take(head)
     /// 4. store head+1(Ordering?)——告訴 producer 槽位可重用
     pub fn pop(&mut self) -> Option<T> {
-        todo!("spec: 對稱於 push——想清楚每個 Ordering 配對誰")
+        // todo!("spec: 對稱於 push——想清楚每個 Ordering 配對誰")
+
+        let head = self.ring.head.0.load(Ordering::Relaxed);
+        let tail = self.ring.tail.0.load(Ordering::Acquire);
+        if head == tail {
+            return None;
+        }
+        let item = self.ring.slot_take(head);
+        self.ring
+            .head
+            .0
+            .store(head.wrapping_add(1), Ordering::Release);
+        Some(item)
     }
 
     pub fn capacity(&self) -> usize {
@@ -132,7 +168,6 @@ mod tests {
 
     /// boundary:滿/空/歸還。
     #[test]
-    #[ignore = "填完 push/pop 後移除"]
     fn full_empty_roundtrip() {
         let (mut tx, mut rx) = channel(2);
         tx.push(1).unwrap();
@@ -145,7 +180,6 @@ mod tests {
 
     /// boundary:mask wrap 多輪。
     #[test]
-    #[ignore = "填完 push/pop 後移除"]
     fn wrap_many_rounds() {
         let (mut tx, mut rx) = channel(2);
         for i in 0..10 {
@@ -157,7 +191,6 @@ mod tests {
     /// 兩執行緒煙霧測試:100k 元素順序不亂一個不少。
     /// (真正的證明是 reference 的 loom 測試——這裡只是 sanity。)
     #[test]
-    #[ignore = "填完 push/pop 後移除"]
     fn two_thread_smoke() {
         const N: u64 = 100_000;
         let (mut tx, mut rx) = channel(8);
