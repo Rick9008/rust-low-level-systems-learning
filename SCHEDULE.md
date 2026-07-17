@@ -29,6 +29,27 @@
 彩排間隔(同題 ≥3 天,近了是背答案):a 7/19→7/23|b 7/20→7/26|e2 7/21→7/24|c 7/22→7/25|d 7/24 一遍。
 SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
 
+## 每日輸入(當天要開的檔案)
+
+v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開哪幾份」。
+彩排/卡片題幹一律 `rehearsals/PROMPTS_EN.md`(規則 6);`sol_*` 與 `clarify-answers.md` 寫完才開。
+已 publish 到 claude.ai 的鏡像(通勤讀)在 artifacts gallery:claude.ai/code/artifacts。
+
+| 日期 | 要開的檔案(依當天順序) |
+|---|---|
+| **7/17** | 掀牌:`drills/src/bounded_queue.rs`(移 `#[ignore]`)→ 卡#2:`rehearsals/PROMPTS_EN.md`(Card 2)+ `rehearsals/clarify-cards.md`(規則 5 自我批改)→ `drills/src/thread_pool.rs` → `drills/src/spsc_ring.rs` + 三段式 `docs/rust-five-axis.md`。日讀:`docs/artifacts/bounded_queue.html` → `docs/artifacts/ring_buffer.html`(§5 len 之死,spsc 前置)→ `docs/artifacts/spsc_ring.html` → `html_p/p1-rust-atomic-spsc-ordering.html`(追問鏈 + quiz) |
+| **7/18** | 卡#3(同兩檔)→ `challenges/src/spsc_ring.rs` + `reference/tests/loom_spsc.rs` → `drills/src/executor.rs` + `challenges/src/executor.rs` + `docs/artifacts/executor.html` → Q7:PROMPTS_EN(h 題)→ `drills/src/hw_bridge/`。日讀:`html_p/p2-async-executor-handbook.html` |
+| **7/19** | 卡#4 → a#1:PROMPTS_EN(a 題;寫完才開 `rehearsals/examples/sol_ring_drop_oldest.rs`)→ `docs/fd_registry.md` + `drills/src/fd_registry.rs` → spsc 空白(白紙) |
+| **7/20** | 卡#5 → 修 a#1(照漏洞清單)→ b#1:PROMPTS_EN(b 題)。通勤:`docs/event_loop.md` + `docs/mini_runtime.md` + `docs/artifacts/event_loop.html` + `html_p/p3-epoll-readiness-event-loop.html` |
+| **7/21** | 卡#6 → e2#1:PROMPTS_EN(e2 題)→ 修 b#1 |
+| **7/22** | c#1:PROMPTS_EN(c 題)→ 修 e2#1 → spsc 空白。晚尾日讀:`html_p/p8-hw_bridge_teaching.html`(c#1 回放後才開) |
+| **7/23** | signal_pipeline 110m:`docs/signal_pipeline.md` → `docs/artifacts/signal_pipeline.html`(SB stepper)→ `reference/src/signal_pipeline.rs`(`start_fan_in` 6 tests)→ `drills/src/signal_pipeline.rs` → a#2 → 修 c#1 |
+| **7/24** | e2#2 → d#1:PROMPTS_EN(d 題,tokio)。日讀:`html_p/p6-telemetry-spsc-ring-reference.html` → aggregator 延伸動手(f 題 contract,寫在 `drills/src/ring_buffer.rs` 同檔) |
+| **7/25** | 六卡快打:`rehearsals/clarify-cards.md` 全六張 → c#2 → 浮動#3 → 口述底稿:`docs/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/hw_bridge.md`(五 server 對照組)+ `docs/async-runtime-anatomy.md` + `docs/cost-model.md`(數字與「再快呢」三句) |
+| **7/26** | b#2 → e/f/g/h 題幹:PROMPTS_EN + 認題掃描表 `rehearsals/README.md` → 英文 I/O 唸出聲:PROMPTS_EN + `docs/clarify-playbook.md`(五問英文問法)→ spsc 空白 → 讀自己的 `challenges/src/` |
+| **7/27** | 只開兩份:`rehearsals/README.md`(45 分鐘 protocol + 時間預算)+ `docs/coderpad-constraints.md`(環境確認) |
+| **7/28** | 暖手小 drill 一題 + pillar-5 dry-run 清單(`rehearsals/README.md`)→ 上場 |
+
 ---
 
 ## 砍掉 / 降級(已裁,不用再想)
