@@ -9,6 +9,9 @@ _"Before I start, let me make sure I understand the constraints."_
 
 ## a · ring_drop_oldest
 
+> **用途**:Q1 預測題(認題:"continuous stream" / "most recent N")。🔴 主菜,全程 45+30 ×2(7/19、7/23)。
+> = ring_buffer→spsc 的 challenge(Part 2 就是 spsc)。第一個 clarify:**滿了怎麼辦**。寫完才開 `examples/sol_ring_drop_oldest.rs`。
+
 A sensor produces readings (`u32`) at a fixed rate. The downstream consumer
 is unreliable — sometimes it stalls. Build a fixed-capacity buffer that sits
 between them.
@@ -28,6 +31,9 @@ each) — make it thread-safe (`channel(capacity) -> (Producer, Consumer)`).
 
 ## b · pool_graceful_shutdown
 
+> **用途**:Q2 預測題(認題:"concurrently" / "health checks" / "no external libraries")。🔴 主菜 ×2(7/20、7/26)。
+> = thread_pool 的 challenge。考點在 **shutdown 語意**(accepted 必跑完、重複呼叫安全),不在 pool 本體。
+
 On startup the service runs health checks against a few hundred devices
 concurrently. Each check is a blocking call, handled by a fixed set of
 worker threads.
@@ -46,6 +52,9 @@ std only (`std::thread` / `std::sync`).
 
 ## c · frame_parser_heartbeat
 
+> **用途**:Q3 預測題(認題:"byte stream" / "protocol" / "frames")。🔴 主菜 ×2(7/22、7/25),**傷疤區,永不砍**。
+> = hw_bridge framer 的 challenge。第一個 clarify:**len 含不含 header?max frame size?**
+
 Devices send frames over TCP. Wire format:
 
 ```text
@@ -62,6 +71,9 @@ Heartbeats must be reported too. Assume the stream is well-formed (trusted
 peer — no malformed handling needed).
 
 ## d · tokio_frame_server(唯一可用 crate:tokio)
+
+> **用途**:「面試官說可用 crate」那條分支的**保險**,只跑一遍(7/24);預設路線仍 std-only + 陳述假設。
+> c 題 framer 的延伸(黏包邏輯直接重用)+ idle timeout / heartbeat 保活。
 
 A device gateway: many devices connect over TCP, speaking the protocol from
 problem c — `[u32 len (BE)][payload]`, `len == 0` is a heartbeat.
@@ -80,6 +92,8 @@ Requirements:
 
 ## e · event_registry(Q4)
 
+> **用途**:Q4 預測題(認題:"event id" / "handlers" / "thousands of signals")。**recognition 級**:讀題 → 30 秒定界 → 口述 arc,不計全程(7/26)。第一個 clarify:**id 密集還是稀疏?**
+
 Hardware signals come in tagged with an event id. Build a registry: hang
 handlers on ids, dispatch events as they arrive. Thousands of distinct ids,
 high event rate.
@@ -94,6 +108,9 @@ Requirements:
 - Nobody registers while a dispatch is in progress (caller guarantees it).
 
 ## e2 · fd_registry(Q4 進階,JD sleeper)
+
+> **用途**:JD 的 event registry 沉睡題(fd + generation),**你的弱點 → 例外升級為全程跑** 🔴 ×2(7/21、7/24),永不砍。
+> 第一個 clarify:**fd 會回收嗎?unregister 後佇列裡的舊 event 怎麼辦?**(= stale token 驗票)
 
 An event loop waits on tens of thousands of connections through the OS
 readiness API; when an event fires, the kernel hands you back a single u64.
@@ -116,6 +133,9 @@ Requirements:
 
 ## f · telemetry_aggregator(Q5)
 
+> **用途**:Q5 預測題(認題:"can't store them all" / "aggregate" / "windows")。recognition + **7/24 配套動手**(延伸寫在 `drills/src/ring_buffer.rs` 同檔)。
+> = 卡#1 的實作版:playbook Q1「就地聚合」留白的三個邊界(slot 重用 / 遲到樣本 / 未來 ts 清格)在這題落地。第一個 clarify:**window 多大?timestamp 會亂序嗎?**
+
 A whole rack produces billions of signals — storing them all is off the
 table. Aggregate into a **fixed number** of time windows.
 
@@ -134,6 +154,9 @@ Requirements:
 
 ## g · bounded_channel(Q6)
 
+> **用途**:Q6 預測題(認題:"producers block when full")。recognition 級(7/26)。
+> bounded_queue 的 MPSC 變體(`Sender: Clone`+兩邊 drop 語意)。第一個 clarify:**capacity?close 語意?**
+
 Build a bounded channel from scratch: producers block when it's full, the
 consumer blocks when it's empty. std only.
 
@@ -148,6 +171,9 @@ Requirements:
   **or the other side disappears**.
 
 ## h · timer_queue(Q7)
+
+> **用途**:Q7 預測題(認題:"periodic" / "interval" / "what runs next")。recognition 級(7/18 接尾、7/26)。
+> 接 clarify Q5 偵測那條線(heartbeat deadline 進 min-heap;**park, don't poll**)。第一個 clarify:**幾個 timer?精度?**
 
 N nodes, each health-checked on its own periodic interval. Who runs next,
 and how long should we sleep?
