@@ -1,0 +1,200 @@
+<title>sync JobHandle vs async JoinFuture:同一個 oneshot,換一個等待機制</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --s2: #1baf7a; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+      --accent: #3987e5; --s2: #199e70; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+    --accent: #3987e5; --s2: #199e70; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --s2: #1baf7a; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+    line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em;
+    font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .k { color: var(--accent); font-weight: 600; }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .hl td { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  figure.chart { margin: 20px 0 0; }
+  .chart-card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+    padding: 18px 18px 10px; }
+  .chart-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+  .chart-scroll { overflow-x: auto; }
+  .chart-scroll svg { display: block; min-width: 680px; width: 100%; height: auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; max-width: 46em; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; }
+  .nlab { font-size: 12.5px; font-weight: 700; fill: var(--ink); }
+  .nsub { font-size: 11px; fill: var(--muted); }
+  .anno { font-size: 12px; fill: var(--ink-2); }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid);
+    margin-top: 44px; padding-top: 14px; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · sync / async 對照 · deep-dive:讀懂即可,不練</div>
+  <h1>sync <code>JobHandle</code> vs async <code>JoinFuture</code>:同一個 oneshot,換一個等待機制</h1>
+  <p class="lede"><code>thread_pool</code> 的 <code>JobHandle</code> 和 <code>file_io_offload</code> 的 <code>JoinFuture</code> 是<strong>同一個 oneshot 骨架</strong>——同一塊 <code>Arc&lt;Mutex&lt;Option&lt;Result&lt;T&gt;&gt;&gt;&gt;</code>、同一個 <code>take()</code>(單消費者)、panic 同樣用 <code>resume_unwind</code> 在等待端重拋。整條差別只有<strong>一個零件</strong>:怎麼「等」。搞懂這一頁,sync/async 到底差在哪就清了——<strong>它差的是「怎麼等」,不是「能不能做」。</strong></p>
+
+  <section>
+    <h2>0 · 逐格對照:只有一列真的變了</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>sync <code>JobHandle</code></th><th>async <code>JoinFuture</code></th></tr>
+      <tr><td>共享槽</td><td><code>Option&lt;Result&lt;T&gt;&gt;</code></td><td><code>Option&lt;Result&lt;T&gt;&gt;</code></td></tr>
+      <tr class="hl"><td><strong>消費者怎麼等</strong></td><td><code>Condvar::wait_while</code><br><strong>→ park 住 OS thread</strong></td><td>存 <code>cx.waker()</code> + <code>Poll::Pending</code><br><strong>→ 讓出 task</strong></td></tr>
+      <tr class="hl"><td><strong>生產者怎麼通知</strong></td><td><code>notify_one</code></td><td><code>waker.wake()</code></td></tr>
+      <tr><td>等待機制欄位</td><td><code>Condvar</code></td><td><code>Option&lt;Waker&gt;</code></td></tr>
+      <tr><td>取 <code>Ok</code></td><td><code>take()</code> → 回傳</td><td><code>take()</code> → <code>Poll::Ready(v)</code></td></tr>
+      <tr><td>取 <code>Err</code>(panic)</td><td><code>resume_unwind(p)</code></td><td><code>resume_unwind(p)</code> ← 一模一樣</td></tr>
+      <tr><td>fast path(已完成)</td><td>wait_while 看到 <code>Some</code>、不睡</td><td>poll 看到 <code>Some</code>、直接 Ready,waker 沒用上</td></tr>
+    </table></div>
+    <p>反白的兩列就是全部差異:<strong><code>Condvar</code> → <code>Waker</code></strong>。其餘每一格都相同——包含 panic 那條 <code>resume_unwind</code>,因為兩邊都是 <strong>單消費者</strong>(take 把值 move 給唯一的等待者)。</p>
+  </section>
+
+  <section>
+    <h2>1 · 唯一被換掉的零件:等 = 佔住 thread,還是讓出 thread</h2>
+    <p>為什麼要換?因為「等」的成本完全不同。<strong>sync 的等是把整條 OS thread park 在那裡空轉;async 的等是把 task 讓出去,讓 executor 拿同一條 thread 去跑別的 task。</strong></p>
+    <figure class="chart">
+      <div class="chart-card">
+        <p class="chart-title">同一段「等結果」的時間軸:一條 thread 在做什麼</p>
+        <div class="chart-scroll">
+        <svg viewBox="0 0 760 250" role="img" aria-label="sync 阻塞 vs async 讓出的 thread 佔用對照">
+          <!-- 左:sync -->
+          <text class="nlab" x="20" y="30">sync <tspan fill="var(--accent)">JobHandle</tspan> — 等 = 佔住 thread</text>
+          <text class="nsub" x="20" y="50">OS thread</text>
+          <rect x="20"  y="60" width="70"  height="44" rx="7" fill="var(--code-bg)" stroke="var(--accent)"/>
+          <text class="nsub" x="55" y="87" text-anchor="middle" fill="var(--ink)">consumer</text>
+          <rect x="92"  y="60" width="196" height="44" rx="7" fill="var(--code-bg)" stroke="var(--muted)" stroke-dasharray="5 4"/>
+          <text class="nlab" x="190" y="83" text-anchor="middle" fill="var(--muted)">░ PARK ░</text>
+          <text class="nsub" x="190" y="98" text-anchor="middle">wait_while:thread 空轉、什麼都不做</text>
+          <rect x="290" y="60" width="70"  height="44" rx="7" fill="var(--code-bg)" stroke="var(--accent)"/>
+          <text class="nsub" x="325" y="87" text-anchor="middle" fill="var(--ink)">Ready</text>
+          <text class="anno" x="20" y="132">這段時間這條 thread <tspan fill="var(--danger)">完全浪費</tspan>——notify_one 才把它喚醒。</text>
+
+          <!-- 右:async -->
+          <text class="nlab" x="400" y="30">async <tspan fill="var(--accent)">JoinFuture</tspan> — 等 = 讓出 thread</text>
+          <text class="nsub" x="400" y="50">executor thread(同一條)</text>
+          <rect x="400" y="60" width="66" height="44" rx="7" fill="var(--code-bg)" stroke="var(--accent)"/>
+          <text class="nsub" x="433" y="81" text-anchor="middle" fill="var(--ink)">poll A</text>
+          <text class="nsub" x="433" y="96" text-anchor="middle">Pending</text>
+          <rect x="468" y="60" width="60" height="44" rx="7" fill="var(--code-bg)" stroke="var(--s2)"/>
+          <text class="nsub" x="498" y="87" text-anchor="middle" fill="var(--s2)">poll B</text>
+          <rect x="530" y="60" width="60" height="44" rx="7" fill="var(--code-bg)" stroke="var(--s2)"/>
+          <text class="nsub" x="560" y="87" text-anchor="middle" fill="var(--s2)">poll C</text>
+          <rect x="592" y="60" width="148" height="44" rx="7" fill="var(--code-bg)" stroke="var(--accent)"/>
+          <text class="nsub" x="666" y="81" text-anchor="middle" fill="var(--ink)">re-poll A → Ready</text>
+          <text class="nsub" x="666" y="96" text-anchor="middle">wake() 後</text>
+          <text class="anno" x="400" y="132">A 一 Pending 就讓出,<tspan fill="var(--s2)">同一條 thread 繼續跑 B、C</tspan>——thread 不浪費。</text>
+
+          <!-- 底部一句 -->
+          <line x1="20" y1="160" x2="740" y2="160" stroke="var(--grid)"/>
+          <text class="anno" x="20" y="184">兩邊「共享槽 + take + resume_unwind」完全一樣;差的只是上面這段「等」——</text>
+          <text class="anno" x="20" y="204"><tspan fill="var(--accent)" font-weight="700">Condvar</tspan> 把 thread 停住(sync),<tspan fill="var(--accent)" font-weight="700">Waker</tspan> 把 task 讓出(async)。這就是 sync/async 的全部本質差異。</text>
+        </svg>
+        </div>
+        <figcaption>關鍵不是「誰比較快」,是<strong>「等的時候那條 thread 有沒有被浪費」</strong>。這也是為什麼 async 一條 thread 能扛數萬個「同時在等」的連線:它們都 Pending 讓出,thread 輪流服務——sync 要同樣多的等待就要同樣多的 parked thread。</figcaption>
+      </div>
+    </figure>
+  </section>
+
+  <section>
+    <h2>2 · <code>poll()</code> 三條 arm = <code>join()</code> 三條 arm,換個殼</h2>
+    <p>把兩邊的核心並排,你會發現邏輯一比一對應——只有「還沒好」那條 arm 的動作不同(park vs 掛 waker):</p>
+<pre><code><span class="cmt">// async:JoinFuture::poll(reference/src/file_io_offload.rs)</span>
+match st.result.take() {                 <span class="cmt">// take → 單消費者(oneshot)</span>
+    Some(Ok(v))  =&gt; Poll::Ready(v),       <span class="cmt">// 好了 → 交值</span>
+    Some(Err(p)) =&gt; <span class="k">resume_unwind</span>(p),  <span class="cmt">// worker panic → 等待端重拋(= join 那行)</span>
+    None =&gt; {                             <span class="cmt">// 還沒好</span>
+        st.waker = Some(cx.waker().clone());  <span class="cmt">// ← 掛 waker,不 park</span>
+        Poll::Pending                          <span class="cmt">// ← 讓出去</span>
+    }
+}</code></pre>
+    <p>對照 sync 的 <code>JobHandle::join</code>:<code>Ok</code> → 回值、<code>Err</code> → <code>resume_unwind</code>(同一行)、<code>None</code> → <code>Condvar::wait_while</code> 睡。同構到只差「還沒好時做什麼」。</p>
+  </section>
+
+  <section>
+    <h2>3 · async 專屬的一個正確性契約:每次 poll 存「最新」的 waker</h2>
+    <p><code>None</code> arm 那行 <code>st.waker = Some(cx.waker().clone())</code> 是<strong>覆蓋</strong>,不是「只存第一次」。因為同一個 future 可能被<strong>不同 task</strong> poll、waker 會變——存了舊 waker,喚醒時會敲錯人(甚至敲一個已經移走的 task),結果就是<strong>永遠醒不過來</strong>。</p>
+    <blockquote class="say">
+      這是「醒來重查 predicate」在 async 世界的對應物:sync 靠 <code>wait_while</code> 每次醒來重查狀態;async 靠<strong>「存最新 waker + poll 時重查槽」</strong>。兩邊都不信任「喚醒事件本身」,只信任「持久狀態 + 重查」。
+    </blockquote>
+  </section>
+
+  <section>
+    <h2>4 · 兩條正交軸 + 一條階梯</h2>
+    <p>把整串收成一張圖:<strong>「怎麼等」和「幾個人拿」是兩條互相垂直的軸</strong>,四格都做得出來。</p>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>oneshot(1 消費者)</th><th>broadcast(N 消費者)</th></tr>
+      <tr><td><strong>sync</strong>(Condvar,park thread)</td><td><code>JobHandle</code></td><td>手搓 Mutex+Condvar+clone+notify_all</td></tr>
+      <tr><td><strong>async</strong>(Waker,讓出 task)</td><td><code>JoinFuture</code> / <code>tokio::sync::oneshot</code></td><td><code>futures::Shared</code> / <code>tokio::sync::broadcast</code></td></tr>
+    </table></div>
+    <ul>
+      <li><strong>縱軸 sync↔async = 怎麼等</strong>:park OS thread,還是掛 waker 讓出。換的是 <code>Condvar</code> ↔ <code>Waker</code>。</li>
+      <li><strong>橫軸 oneshot↔broadcast = 幾個人拿</strong>:<code>take()</code>(move,1 人)還是 <code>clone()</code>(peek,N 人);broadcast 還要 <code>notify_all</code> / 存多個 waker,且 panic 只能降級成可 Clone 的失敗值。</li>
+    </ul>
+    <p>一條線收乾淨:<strong><code>JobHandle</code>(sync oneshot)→ 換 Waker → <code>JoinFuture</code>(async oneshot)→ 多消費者 → <code>futures::Shared</code>(async broadcast)。</strong>同一個骨架,沿兩條軸各走一步。</p>
+  </section>
+
+  <section>
+    <h2>5 · 面試句庫</h2>
+    <blockquote class="say">
+      “<code>JoinFuture</code> is the async twin of <code>JobHandle</code>: same <code>Arc&lt;Mutex&lt;Option&lt;Result&lt;T&gt;&gt;&gt;&gt;</code> oneshot, same <code>take</code>, same <code>resume_unwind</code> on the panic arm. The only difference is how you wait — sync parks the OS thread on a <code>Condvar</code>; async stores a <code>Waker</code> and returns <code>Poll::Pending</code>, handing the thread back to the executor to run other tasks.”
+      <em>一句話把 sync/async 的本質差異釘死在「怎麼等」。</em>
+    </blockquote>
+    <blockquote class="say">
+      “That's why one async thread can hold tens of thousands of connections that are all ‘waiting’ — they're all Pending, yielded; sync would need one parked thread each.”
+      <em>接著把「為什麼 async 省 thread」講出來。</em>
+    </blockquote>
+    <blockquote class="say">
+      “sync/async is orthogonal to oneshot/broadcast. Waiting is one axis (Condvar vs Waker); how many consumers get the result is the other (take vs clone). All four cells exist.”
+      <em>秀你知道這是兩條軸、不是一條。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:deep-dive,讀懂即可、不進練習主線。原始碼:<code>reference/src/thread_pool.rs</code>(<code>JobHandle</code>)· <code>reference/src/file_io_offload.rs</code>(<code>JoinFuture</code> / <code>spawn_blocking</code>)。相鄰:<code>docs/artifacts/executor.html</code>(poll/park/Waker 全景)· <code>docs/async-runtime-anatomy.md</code>(executor × reactor)。broadcast 那條軸:見「oneshot → broadcast」卡片(能廣播的是資料、不是控制流)。
+  </div>
+</div>

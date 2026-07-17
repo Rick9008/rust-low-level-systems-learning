@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、12 份深讀教材(html_p:追問鏈 + self-quiz)、5 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、12 份深讀教材(html_p:追問鏈 + self-quiz)、6 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -781,6 +781,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">qa · lock-free 的 P/C 階梯</span>
       <span class="hook">寫者數 = 難度:SPSC 零 CAS → MPSC 的第一個 CAS(認領≠完工)→ Vyukov MPMC 的旋轉門序號 → SPMC 其實是兩題(竊取 vs 廣播)。</span>
       <span class="hits">bounded 是 lock-free 的解藥 · 序號第三用途 · std mpmc 仍 unstable</span>
+    </a>
+    <a class="card" href="qa_sync_async_oneshot.html">
+      <span class="name">qa · sync vs async oneshot</span>
+      <span class="hook">JobHandle ↔ JoinFuture 是同一個 oneshot 骨架,只換一個零件:Condvar(park thread)↔ Waker(讓出 task)。thread 佔用時間軸對照 + poll=join 三 arm + 正交兩軸階梯。</span>
+      <span class="hits">sync/async = 怎麼等,不是能不能做 · panic 兩邊都 resume_unwind</span>
     </a>
   </div>
 </section>
