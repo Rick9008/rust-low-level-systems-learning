@@ -191,7 +191,7 @@ Clarify question:
     4. 0 <= ts(data time) <= 2^31 - 1, so use u32
     5. 0 <= nodeid <= 3000, so use u16
     1 + 2 + 1 + 4 + 2 =  10 bytes
-    10 * 3000 nodes * 1000 Hz = 30000 bytes ~= 30000 KB = 30 MB
+    10 * 3000 nodes * 1000 Hz = 30000000 bytes ~= 30000 KB = 30 MB
     30000 * 60 * 60 * 24 = 1.8 GB * 60 * 24 ~= 2.6 TB 1 day
     so it's very hard to store all the data in on day even 1 sec we received.
 
@@ -226,14 +226,14 @@ Clarify question:
     Tcp -> on shutdown, drain and exit
 
 Let me look into our assumption:
-3000 nodes  at about 1 hz
-statistics are enough 
+3000 nodes at about 1k Hz
+statistics are enough
 dashboard-level SLA
-the data flow is 30KB/secs 
-So single-thread event loop, per-window aggregation, single consumer.
-Memory is fixed, 'full' can't happens. Back-pressure isn't needed.
+the data flow is 30 MB/s
+So single-thread event loop with batched reads, per-window aggregation, single consumer.
+Memory is fixed, 'full' can't happen. Back-pressure isn't needed.
 On shutdown, drain and exit.
-We can start to code.
+I'll start coding.
 
 
 > **重寫清單(7/17 批改;寫完就刪掉這塊)** — 方法論已進
