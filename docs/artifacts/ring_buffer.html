@@ -866,6 +866,17 @@ footer a:hover { border-bottom-color: var(--accent); }
     同一個環,拿掉 <code>len</code>,加上兩條執行緒。那裡會證明:為什麼壓力測試跑兩百萬次都抓不到的 bug,
     loom 在 379 微秒內就抓到了。
   </p>
+
+  <p class="note">
+    <strong>追問:那 <code>push_overwrite</code>(滿時擠掉最舊)能 lock-free 嗎?</strong><br>
+    能,但要換招。producer 用 pop_front 擠舊的會動到 <code>head</code>——雙寫者,單寫者不變量破功;
+    而且滿時的寫入格正是 consumer 要讀的格,payload 直接 data race。
+    正解是反轉責任:<strong>producer 無條件覆寫、永不看 consumer;每格掛一個 sequence number,
+    consumer 讀前讀後驗序號</strong>——序號變了 = 撕裂丟棄,跳了一整圈 = 被套圈,跳段追上並計數。
+    這就是 perf ring buffer / seqlock 一族;Disruptor 是同骨架的無損表親(producer 等最慢 consumer,不套圈)。
+    完整圖解 → <a href="qa_overwrite_ring.html"><code>qa_overwrite_ring.html</code></a>。
+    45 分鐘的正解仍是 <code>Arc&lt;Mutex&lt;SensorRing&gt;&gt;</code> + <code>AtomicU64</code> dropped 計數。
+  </p>
 </section>
 
 </main>

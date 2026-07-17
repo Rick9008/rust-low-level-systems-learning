@@ -1,0 +1,243 @@
+<title>覆寫 ring 的 lock-free 之路:seqlock 與 Disruptor</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --s2: #1baf7a; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+      --accent: #3987e5; --s2: #199e70; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+    --accent: #3987e5; --s2: #199e70; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --s2: #1baf7a; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+    line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em;
+    font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  figure.chart { margin: 20px 0 0; }
+  .chart-card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+    padding: 18px 18px 10px; }
+  .chart-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+  .chart-scroll { overflow-x: auto; }
+  .chart-scroll svg { display: block; min-width: 640px; width: 100%; height: auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; max-width: 46em; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; }
+  .nlab { font-size: 12.5px; font-weight: 700; fill: var(--ink); }
+  .nsub { font-size: 11px; fill: var(--muted); }
+  .anno { font-size: 12px; fill: var(--ink-2); }
+  .ok-txt { font-size: 12.5px; font-weight: 700; fill: var(--s2); }
+  .bad-txt { font-size: 12.5px; font-weight: 700; fill: var(--danger); }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid);
+    margin-top: 44px; padding-top: 14px; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · 覆寫 ring 家族 · deep-dive:讀懂即可,45 分鐘正解仍是 Mutex</div>
+  <h1>覆寫也能 lock-free:seqlock ring 與 Disruptor</h1>
+  <p class="lede">「滿時擠掉最舊」讓 producer 碰到 consumer 的 index,單寫者不變量破功——所以 <code>push_overwrite</code> 走不了 spsc_ring 的老路。但 drop-oldest <strong>本來就放棄了無損</strong>,這打開另一扇門:<strong>producer 根本不看 consumer、無條件覆寫;由 consumer 用序號自己偵測「我讀到的東西被改過/被套圈了」</strong>。這一族就是 seqlock ring(perf ring buffer、行情 conflation),Disruptor 是同骨架的無損表親。</p>
+
+  <section>
+    <h2>0 · 為什麼原做法 lock-free 不了(30 秒複習)</h2>
+    <ul>
+      <li><code>pop_front + push_back</code> 的覆寫 = <strong>producer 去動 <code>head</code></strong> → head 變雙寫者,spsc 的地基(每個 index 恰好一個寫者)塌了。</li>
+      <li>更狠的:滿的時候寫入格 <code>wrap(head+len) == head</code>——<strong>producer 要覆寫的正是 consumer 下一個要讀的格</strong>,一寫一讀同一塊 payload = data race。</li>
+    </ul>
+    <p>結論:別讓 producer 替 consumer 收拾。<strong>覆寫責任留在 producer(它只寫自己的東西),偵測責任交給 consumer。</strong>四個願望(lock-free / producer 不阻塞 / 覆寫最舊 / 無損 FIFO)本來就不能全拿——drop-oldest 早已交出「無損」,剛好用它換。</p>
+  </section>
+
+  <section>
+    <h2>1 · 零件:每格掛一個 sequence number</h2>
+    <p>結構長這樣——注意 <strong>producer 需要的東西全是自己寫的</strong>:</p>
+<pre><code>struct Slot&lt;T&gt; {
+    seq:  AtomicU64,          <span class="cmt">// 這格的「版本號」,只有 producer 寫</span>
+    data: UnsafeCell&lt;T&gt;,      <span class="cmt">// payload;T 必須是 POD(Copy、無指標無 Drop,原因見 §2)</span>
+}
+struct Ring&lt;T&gt; {
+    slots: Box&lt;[Slot&lt;T&gt;]&gt;,    <span class="cmt">// cap = 2 的冪</span>
+    tail:  AtomicU64,         <span class="cmt">// producer 的自由跑計數器(單寫者,同 spsc)</span>
+}                             <span class="cmt">// 沒有 head!consumer 的進度是 consumer 自己的私事</span></code></pre>
+    <p><strong>Producer 寫入(永不阻塞、永不讀對方)</strong>,經典 seqlock 的奇偶協議:</p>
+<pre><code>let t = tail.load(Relaxed);              <span class="cmt">// 讀自己的計數器</span>
+let slot = &amp;slots[(t &amp; mask) as usize];
+slot.seq.store(2*t + 1, Release);        <span class="cmt">// ① 奇數 = 「施工中」</span>
+unsafe { *slot.data.get() = item; }      <span class="cmt">// ② 寫 payload</span>
+slot.seq.store(2*t + 2, Release);        <span class="cmt">// ③ 偶數 = 完工,版本 = 輪次</span>
+tail.store(t + 1, Release);</code></pre>
+    <p>序號一石二鳥:<strong>奇偶位</strong>說「現在有沒有人在寫」,<strong>數值本身</strong>說「這格被寫到第幾輪了」——後者就是 §3 套圈偵測的鑰匙。</p>
+  </section>
+
+  <section>
+    <h2>2 · Consumer 的讀協議:先拿,再驗票</h2>
+    <figure class="chart">
+      <div class="chart-card">
+        <p class="chart-title">seqlock 讀:s1 → copy → s2,兩次序號不一致就丟棄重來</p>
+        <div class="chart-scroll">
+        <svg viewBox="0 0 760 240" role="img" aria-label="seqlock 讀協議時序">
+          <defs>
+            <marker id="qar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+            </marker>
+          </defs>
+          <line x1="40" y1="70" x2="730" y2="70" stroke="var(--grid)" stroke-width="2"/>
+          <line x1="40" y1="170" x2="730" y2="170" stroke="var(--grid)" stroke-width="2"/>
+          <text class="nlab" x="40" y="46">Consumer(好路徑)</text>
+          <text class="nlab" x="40" y="150">Consumer(撞到寫入)</text>
+
+          <!-- good path -->
+          <rect x="80" y="54" width="120" height="32" rx="6" fill="var(--code-bg)" stroke="var(--ring)"/>
+          <text class="anno" x="140" y="74" text-anchor="middle">s1 = seq ➜ 6(偶)</text>
+          <rect x="240" y="54" width="120" height="32" rx="6" fill="var(--code-bg)" stroke="var(--ring)"/>
+          <text class="anno" x="300" y="74" text-anchor="middle">copy data 出來</text>
+          <rect x="400" y="54" width="120" height="32" rx="6" fill="var(--code-bg)" stroke="var(--ring)"/>
+          <text class="anno" x="460" y="74" text-anchor="middle">s2 = seq ➜ 6</text>
+          <text class="ok-txt" x="560" y="74">s1 == s2 且為偶 → 資料可信 ✓</text>
+
+          <!-- bad path -->
+          <rect x="80" y="154" width="120" height="32" rx="6" fill="var(--code-bg)" stroke="var(--ring)"/>
+          <text class="anno" x="140" y="174" text-anchor="middle">s1 = seq ➜ 6</text>
+          <rect x="240" y="154" width="120" height="32" rx="6" fill="none" stroke="var(--danger)" stroke-dasharray="4 3"/>
+          <text class="anno" x="300" y="174" text-anchor="middle">copy 到一半…</text>
+          <text class="bad-txt" x="300" y="210" text-anchor="middle">producer 又繞回來寫這格(seq → 7 → 8)</text>
+          <rect x="400" y="154" width="120" height="32" rx="6" fill="var(--code-bg)" stroke="var(--ring)"/>
+          <text class="anno" x="460" y="174" text-anchor="middle">s2 = seq ➜ 8</text>
+          <text class="bad-txt" x="560" y="174">s1 != s2 → 撕裂,整份丟棄</text>
+        </svg>
+        </div>
+        <figcaption>讀者<strong>不擋寫者</strong>——它先把 data 整份 copy 出來,再驗兩次序號一致(且為偶數)才敢用。驗票失敗 = 這份 copy 可能是半新半舊的撕裂值 → <strong>丟棄</strong>(重試或跳走)。寫者從頭到尾不知道讀者存在。</figcaption>
+      </div>
+    </figure>
+    <p>兩個由此而來的硬限制,面試必講:</p>
+    <ul>
+      <li><strong>T 必須是 POD</strong>(<code>Copy</code>、無指標、無 <code>Drop</code>):驗票失敗的那份 copy 是撕裂值,你「拿了但不能用」——若 T 裡有指標,連 copy 這個動作本身都可能爆。telemetry 的小記錄(10 B 那種)剛好完美符合。</li>
+      <li><strong>讀是投機的(optimistic)</strong>:寫得太頻繁時讀者可能連續驗票失敗——seqlock 買「寫者永不等」,賣「讀者可能重試」。方向跟 Mutex 剛好相反,跟 RwLock 更是相反(那是讀者擋寫者)。</li>
+    </ul>
+    <p class="lede" style="font-size:14px">深水區標註(誠實聲明):在 C++/Rust 記憶體模型下,「copy 一塊正被寫的 non-atomic 記憶體」嚴格說是 data race——生產級實作用 per-word atomic/volatile read 迴避,學界叫 <em>atomic memcpy</em> 問題。面試講到協議層(上圖)即可,這個泥潭點名字就好。</p>
+  </section>
+
+  <section>
+    <h2>3 · 套圈(lapping):consumer 落後一整圈怎麼辦</h2>
+    <figure class="chart">
+      <div class="chart-card">
+        <p class="chart-title">序號的數值 = 這格被寫到第幾輪 → 落後多少,算得出來</p>
+        <div class="chart-scroll">
+        <svg viewBox="0 0 760 210" role="img" aria-label="lapping 偵測">
+          <!-- 8 slots -->
+          <g>
+            <rect x="60"  y="60" width="76" height="52" rx="7" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <rect x="144" y="60" width="76" height="52" rx="7" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <rect x="228" y="60" width="76" height="52" rx="7" fill="none" stroke="var(--danger)" stroke-width="2"/>
+            <rect x="312" y="60" width="76" height="52" rx="7" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <rect x="396" y="60" width="76" height="52" rx="7" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <rect x="480" y="60" width="76" height="52" rx="7" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <rect x="564" y="60" width="76" height="52" rx="7" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <rect x="648" y="60" width="76" height="52" rx="7" fill="var(--code-bg)" stroke="var(--ring)"/>
+          </g>
+          <g text-anchor="middle">
+            <text class="nsub" x="98"  y="78">slot 0</text><text class="nlab" x="98"  y="98">seq 32</text>
+            <text class="nsub" x="182" y="78">slot 1</text><text class="nlab" x="182" y="98">seq 34</text>
+            <text class="nsub" x="266" y="78">slot 2</text><text class="nlab" x="266" y="98" fill="var(--danger)">seq 36</text>
+            <text class="nsub" x="350" y="78">slot 3</text><text class="nlab" x="350" y="98">seq 22</text>
+            <text class="nsub" x="434" y="78">slot 4</text><text class="nlab" x="434" y="98">seq 24</text>
+            <text class="nsub" x="518" y="78">slot 5</text><text class="nlab" x="518" y="98">seq 26</text>
+            <text class="nsub" x="602" y="78">slot 6</text><text class="nlab" x="602" y="98">seq 28</text>
+            <text class="nsub" x="686" y="78">slot 7</text><text class="nlab" x="686" y="98">seq 30</text>
+          </g>
+          <text class="anno" x="266" y="40" text-anchor="middle">consumer 期望讀到 seq 20(第 1 圈)</text>
+          <path d="M266,46 L266,56" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#qar)" fill="none"/>
+          <text class="bad-txt" x="266" y="140" text-anchor="middle">實際 36 &gt; 期望 20 → 被套圈了</text>
+          <text class="anno" x="266" y="166" text-anchor="middle">(36 − 20) / 2 = 8 筆從眼前消失 → dropped += 8,跳到目前最舊的 slot 3 繼續</text>
+        </svg>
+        </div>
+        <figcaption>consumer 自己記「下一個期望序號」。讀到的序號比期望大 → producer 已經繞過你這圈,中間那段資料<strong>永遠消失</strong>——但你<strong>知道消失了幾筆</strong>(序號差算出來),補進 dropped 計數,然後跳到目前最舊的位置追上去。drop-oldest 的「掉多少要看得見」在 lock-free 版依然成立,只是計帳的人從 producer 換成 consumer。</figcaption>
+      </div>
+    </figure>
+  </section>
+
+  <section>
+    <h2>4 · 認臉:這一族住著誰</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>名字</th><th>一句話</th><th>跟本頁骨架的關係</th></tr>
+      <tr><td><strong>Linux perf / ftrace ring buffer</strong>(overwrite mode)</td><td>kernel 的觀測資料環:producer(kernel)永不阻塞,tracer 落後就被套圈</td><td>本頁的教科書本尊</td></tr>
+      <tr><td><strong>Conflation slot</strong>(行情「只要最新價」)</td><td>每個 key 一格,新價無條件蓋舊價,讀者拿到的永遠是最新</td><td><strong>單格版</strong>的 seqlock ring——卡 3 market data 的 canonical,`signal_pipeline` 的 drop-newest vs conflation 節</td></tr>
+      <tr><td><strong>LMAX Disruptor</strong></td><td>金融業招牌:ring + per-slot published sequence + 等待策略可插拔</td><td>同骨架的<strong>無損表親</strong>:producer <strong>不套圈</strong>,改為 gate 在最慢 consumer 的進度上(等它)——把「覆寫」換回「backpressure」,其餘零件幾乎同款</td></tr>
+      <tr><td>經典 seqlock(kernel 的 <code>jiffies</code>/時間戳)</td><td>單一共享值的無鎖讀:讀者驗版本號重試</td><td>把 ring 縮成一格、去掉輪次,就是它——本頁協議的祖形</td></tr>
+    </table></div>
+    <p>一個漂亮的對比要點:這一族<strong>沒有回收問題</strong>——slot 原地重用、記憶體固定,`qa_unbounded_lockfree` 那頁的沼澤(何時能 free)根本不存在;代價換成了撕裂與套圈,而兩者都由序號一個零件解決。<strong>固定記憶體 + 序號 vs 動態節點 + 回收</strong>,是 lock-free 兩大家族的分水嶺。</p>
+  </section>
+
+  <section>
+    <h2>5 · 選型表:Mutex 版 vs seqlock ring 版</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>Arc&lt;Mutex&lt;SensorRing&gt;&gt;(45 分鐘正解)</th><th>seqlock overwrite ring</th></tr>
+      <tr><td>producer 阻塞?</td><td>搶鎖時會(µs 級,uncontended ~20ns)</td><td><strong>永不</strong>(wait-free 寫入)</td></tr>
+      <tr><td>consumer 保證</td><td>無損 FIFO(在容量內)</td><td>最新資料;落後 → 整段丟失但<strong>可計數</strong></td></tr>
+      <tr><td>T 的限制</td><td>無</td><td>POD(Copy、無 Drop)</td></tr>
+      <tr><td>誰在等誰</td><td>兩邊都可能等鎖</td><td>讀者可能重試;寫者誰都不等</td></tr>
+      <tr><td>買的是什麼</td><td>10 行寫完、契約乾淨</td><td>producer 的 <strong>p99.9</strong>(硬體中斷、audio、行情這種「上游推不回去」的來源)</td></tr>
+      <tr><td>面試檔次</td><td>✍️ 寫它</td><td>🗣️ 講升級路徑,點名 perf ring / Disruptor</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>6 · 面試句庫</h2>
+    <blockquote class="say">
+      “Drop-oldest already gives up losslessness, so lock-free overwrite is legal — just not the way you'd first try. The producer never looks at the consumer: each slot carries a sequence number; the reader copies, then validates the sequence before and after — if it changed, the read is torn and discarded; if it jumped a whole lap, I've been overtaken, so I skip forward and count what I lost.”
+      <em>核心協議一段講完:序號 = 撕裂偵測 + 套圈計數,一個零件兩份工。</em>
+    </blockquote>
+    <blockquote class="say">
+      “That's the perf-ring-buffer / seqlock family. LMAX Disruptor is the lossless cousin — same per-slot sequences, but the producer gates on the slowest consumer instead of lapping it.”
+      <em>認臉句:一句話把兩個名字放進正確的位置。</em>
+    </blockquote>
+    <blockquote class="say">
+      “In 45 minutes I ship the mutex version — the seqlock ring is the upgrade path, and it only pays when someone is buying producer-side p99.9.”
+      <em>收尾:光譜心法不變,停在需求要的那站。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:deep-dive,讀懂即可、不進練習主線;45 分鐘的 <code>channel()</code> 正解仍是 Mutex 包單執行緒 ring + <code>AtomicU64</code> dropped(彩排 a Part 2)。相鄰教材:<code>docs/artifacts/ring_buffer.html</code> §5(len 之死)· <code>spsc_ring</code>(單寫者不變量)· <code>docs/signal_pipeline.md</code>(conflation 節,卡 3)· <code>qa_unbounded_lockfree.html</code>(另一族:動態節點 + 回收沼澤)。
+  </div>
+</div>
