@@ -173,38 +173,68 @@ Design the ingestion side.
 
 Clarify question:
 
-1. how many actual nodes we will have
-   maybe 1 <= nodes <= 3000? then we should use event loop for this problem
-2. how big the report telemetry data we will have?
-   we just take (temperatures, voltages, error counts) and all as u8
-   and we need nodeid i8 and time u32
-   so total use: 8 bytes
-3. how long does a report comes back?
-   maybe 1s?
-4. if the total data we cannot store, how do you expect that we handle this case?
-   just discard old data?
-   or we can use a strategy aggregate the huge data?
-5. what do we aggregates in ingestion side and express in dashboards?
-   maximum, minimum, average?
-   list datas by node?
-6. how's the data range?
-   50 <= temperatures <= 200?
-   50 <= voltage <= 1000?
-   0 <= error counts <= 100?
-7. Are we optimizing average throughput, or tail latency?
-   average throughput
+(Scale and Data rate)
+1. How many nodes are we covering? And what's the data input frequencies? How the data comes? How big the data is?
+    I assume that the data arrives over tcp, because it might monitoring a rack 
+    If nodes less than 20, maybe we can use thread-per-connections and simple mutex on data structure are enough.
+    But when  0 <= nodes <= 3000, we need to use event loop to handle the connections
+    
+    And if the data frequencies is 1 Hz then we can handle the connections very simple.
+    But if the freq >= 1k Hz, then it's hard to handle all the data input, we might need to use a data structure to store the inputs and batch process or other tech skill
+    And the description says the volume is far more than you can store, we need to know it's the per second volume very large or we are saying one day's data size is very large.
+    I will take freq as 1k Hz now.
 
-if all take my assumption we have several observations:
+    I assume: 
+    1. 0 <= the temperatures <= 200, so use u8
+    2. 0 <= voltages <= 1200, so use u16
+    3. 0 <= error counts <= 255, so use u8
+    4. 0 <= ts(data time) <= 2^31 - 1, so use u32
+    5. 0 <= nodeid <= 3000, so use u16
+    1 + 2 + 1 + 4 + 2 =  10 bytes
+    10 * 3000 nodes * 1000 Hz = 30000 bytes ~= 30000 KB = 30 MB
+    30000 * 60 * 60 * 24 = 1.8 GB * 60 * 24 ~= 2.6 TB 1 day
+    so it's very hard to store all the data in on day even 1 sec we received.
 
-1. 1 _ 24 bytes _ 3000 nodes = 72000 bytes, 72000 bytes \* 3600 almost 100000000 bytes = 10^8 bytes = 100MB
-   1 hour data will have 100MB, and for 3000 nodes, 300 GB data
-   this is impossible to store whole data
-2. the data comes 72000 byes 1 seconds, and 3000 nodes comes in the same time
+(Usage / Spec)
+2.  What do the dashboard need to show in telemetry? How do we aggregate them?
+    If we need to show every node in separate, we need to store the data from every node in shard
+    If all data need to aggregates together, we need a lock on a single data structure, or we just use a single thread to aggregate every new data into the only info we store. 
 
-I think we can use a ring buffer to collect i minutes' data because we are monitoring the device telemetry, so no need to check every data
-and for this problem we can use the average throughput
-time O(60), space O(60) to get minimum / maximum / average
-and need to handle O(3000\*60), this is acceptable
+    Maybe we can aggregate the data into minimum and maximum and count and error counts and sum by statistics? However when sum going overflow, we need to know how long the data we need to keep
+    With statistics we can store the data within a window we care.
+    -> per-window aggregation
+    single consumer read from the windows 
+
+(Data Loss)
+3. Under pressure, can we drop or aggregate, or is every sample required?
+    1. we must need to track every data, we need to use back pressure to keep the data
+    2. we can kick off the old data, then we can just pop oldest and push. memorize how many data we kickoff
+    3. we can just discard the data we cannot serve.
+    4. but if we can use statistics to aggregate the data, the data can just aggregates in-place(but the real data in that time might lose) 
+    Back-pressure -> memory is fixed so no need to care this 
+
+(SLA)
+4. What's the scenario of this solution? Are we optimizing average throughput, or tail latency?
+    1. It's for human read, then it's average throughput
+    2. It's for machine / automata read, then we need to care about tail latency
+    Because we are targeting dashboard, it's human read 
+    
+(Failure Detection)
+5. How do we learn a node died?
+    If it's TCP, we can check the pipe healthy, if node breaks itself, however we still need to own heartbeats for those disconnect not healthy
+    We need to own heartbeats? -> it's might need to use ping and deadline timer 
+    Tcp -> on shutdown, drain and exit
+
+Let me look into our assumption:
+3000 nodes  at about 1 hz
+statistics are enough 
+dashboard-level SLA
+the data flow is 30KB/secs 
+So single-thread event loop, per-window aggregation, single consumer.
+Memory is fixed, 'full' can't happens. Back-pressure isn't needed.
+On shutdown, drain and exit.
+We can start to code.
+
 
 > **重寫清單(7/17 批改;寫完就刪掉這塊)** — 方法論已進
 > [`clarify-playbook.md`](../docs/clarify-playbook.md):Q1 的「就地聚合到底在做什麼」
