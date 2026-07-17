@@ -64,3 +64,14 @@ JD 寫「lockless 更快」時,你補上「更快的是 p99.9,不是平均」。
 | acceptor + 固定 pool | 短請求、需要並發上限 | 長連線多 → 第 N+1 條餓死在 queue → event loop / tokio |
 | epoll event loop / tokio | 萬級連線、IO-bound | CPU-bound 任務會凍住 loop → offload(`file_io_offload`)|
 | readiness(epoll) | socket | regular file 永遠 ready → completion(io_uring) |
+
+## 六、被追問「再快呢?」的三句(彈藥,不主動開火)
+
+主動講會顯得往 HFT 對齊而不是往題目對齊(與「開口就 lock-free」同款失分);
+只在面試官自己把預算壓到 µs 以下時開火,一題一句:
+
+| 追問 | 台詞 | 一句原理 |
+|---|---|---|
+| dashboard 讀路徑去鎖化? | *"Single writer, many readers, occasional re-read is fine — that's a seqlock: readers validate a version counter and retry, the writer never blocks."* | 比 RCU 便宜的第一站;寫者無等待,讀者撞到寫入中就重讀 |
+| syscall 太貴怎麼辦? | *"Below a microsecond you evict the kernel: the NIC DMAs into a userspace ring and you busy-poll it — same SPSC shape, minus the kernel."* | kernel bypass 跟 SPSC ring 是同一張圖,只是把 kernel 請下車 |
+| 為什麼交易系統要 cache warming、telemetry 不用? | *"Trading hot paths rarely fire, so they go cold — they dry-run to stay warm. A telemetry stream is continuous; the path keeps itself warm."* | 冷 i-cache/d-cache 吃 tail;連續流天然保溫——反手接回 data plane 用 sync + pinned thread 的理由(見 signal_pipeline) |
