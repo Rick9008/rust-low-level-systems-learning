@@ -286,6 +286,89 @@ them to a backend; every request must get a response. The backend gets slow
 sometimes, and requests keep arriving while it's slow. Design the gateway's
 queuing and flow control.
 
+
+(Scale and Data rate and Scenario SLA)
+1. how many client requests and backends we need to handle? And what's the backend structure? Backend is a cluster or one service one node.
+    1. client requests = cr
+        if 0 <= cr <= 10^7 per seconds then we need to use a cluster to handle this, distribute by a machine and multiple machine with shard request
+        if 0 <= cr <= 10^5, we can use event loop to handle in a single machine, we take it in this time.
+    2. backends are one service one node, and we need to authorize, and redirect to the node
+        if backend is cluster then it's more complicated because we need to prepare the strategy for those nodes with same service.
+
+    we take cr <= 10^5, backend is a service a node
+    then for the client requests we need to use event loop to handle the connections and requests.
+    If the client requests are <= 10^5 , the cpu-bound task isn't on the rpc gateway, so we can just use single-thread event loop without thread pool.
+    and we need a map for backend name and the node address
+    Furthermore, we can use some threads as thread per service, and create a queue for them.
+    However, there's lots of strategy we can use for different scenario so it's complex, we use the most simple way here.
+    If you think there is some constraint or condition we need to care about, we can discuss more.
+
+(Data loss)
+2. Under pressure, the requests are too much, how do we handle this?
+    If we can just discard, then we can return with a error code ask user to request later
+    If we can't, we need to back-pressure and timeout for exhaust case.
+    We need to protect the DDOS scenario too?
+
+(Fail Detection)
+3. If there's some service nodes going down, should we do anything to backup? Or there's some request died?
+    1. If the service going down and no replica nodes, we can just return Error code and ask admin to repair
+    2. If request died, when we try to return the result, we will know that
+
+Let we look into the assumptions:
+10^5 requests, one event loop for every request
+map for backend target and node address
+we need back-pressure for huge request in a same time
+return error when service is down
+I will start to code for the map backend and request wire format first, focus on main logic
+
+Furthermore:
+redis cache for some cheap and simple request like CDN?
+
+> **批改(7/17;修完這輪可刪或保留當對照)** — canonical 見
+> [`clarify-answers.md`](clarify-answers.md) 卡 2;台詞:
+> *"RPC can't drop, but it can **reject** — bounded + timeout makes failure
+> predictable; unbounded makes it an OOM."*
+>
+> **失分點:**
+> 1. **題幹 contract 沒讀進去**:"every request must get a response" 已經回答了
+>    「可不可以丟」——不可 drop,只能「拒絕(拒絕也是回應)」或 backpressure。
+>    該問的是**壓回去的邊界**(排隊上限、超時多久),不是能不能丟。
+> 2. **SLA 掛名沒問(4/5 類)**:這題最值錢的數字是 client timeout budget
+>    (*"How long will a client wait before giving up?"*);gateway 看 **p99**。
+> 3. **零算術**——卡#1 的單位鏈沒帶過來(該算什麼見下表)。
+> 4. **timeout 的第二層**:不只回錯——**過期請求要踢出隊**,不替死人排隊
+>    (每請求 deadline 進 timer queue = 彩排 h;超時回 504、不佔位)。
+> 5. **backpressure 機制沒具體化**:對 client **停止讀**(關 EPOLLIN),
+>    TCP 收窗自動把壓力傳回 client。
+> 6. **宣言缺 shutdown、full policy 沒數字**,沒 *"I'll start coding."* 收尾;
+>    "Let **me** look"。
+> 7. **Scope creep**:authorize / DDoS / redis cache 都不是 queuing and flow
+>    control;Furthermore 段面試時整段不要講。
+> 8. **偵測機制反了**:是靠 backend call 掛 deadline **超時**得知慢/死,
+>    不是等回程才發現;補一句 health check / circuit breaker。
+>
+> **缺的姿勢:**
+> - **EPOLLIN 是什麼**:epoll 訂閱遮罩裡「這個 fd 可讀」的 bit。「關掉」=
+>   `EPOLL_CTL_MOD` 改成不含 EPOLLIN 的遮罩(訂閱還在,只是 kernel 不再叫你讀)
+>   → 你不讀 → rcv buffer 積滿 → **TCP 收窗縮到 0 → client 的 `send()` 塞住**
+>   ——backpressure 沿 TCP flow control 免費傳回去;消化完再 MOD 回來。
+> - **per-backend queue,為什麼敢關「整條連線」的 EPOLLIN?** 因為 TCP flow
+>   control 的單位是**連線**,不是請求——EPOLLIN 只能整條關。一條 client 連線
+>   只打一個 backend(常見拓撲)→ 粒度剛好。一條連線**混打多個 backend** →
+>   關整條會把去健康 backend 的請求也擋住(head-of-line blocking)——這時改用:
+>   照讀照解析、對滿隊的 backend **立即回 503/504**(在解析層 shed),或
+>   application-level credits。把這個粒度 trade-off 講出來就是加分題。
+>
+> **該算什麼 → 導向什麼答案:**
+>
+> | 算式 | 導向 |
+> |---|---|
+> | in-flight ≈ rate × client timeout(10⁵/s × 1s = 100k)| queue 深度上限(Little's law)|
+> | in-flight × per-request size(100k × ~1KB ≈ 100MB)| 記憶體存不存得下 → bounded 的具體數字 |
+> | 到達率 λ vs backend 服務率 µ,λ > µ 的期間 | 隊伍以 (λ−µ)/s 成長 → bounded 只需撐過 timeout 窗,再多是替死人排隊 |
+> | 隊中等待 > client timeout? | 過期踢出隊——每省一筆就是還 backend 一份容量 |
+
+
 **Card 3 · market data feed** — A market data feed pushes high-frequency
 price ticks per symbol. The strategy side only cares about the **latest**
 price for each symbol, and it reads at an uneven pace. Design the layer
