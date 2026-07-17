@@ -52,6 +52,16 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 ---
 
+## 進度校正(2026-07-18 實況)
+
+**實際完成**:ring_buffer(讀+drill)、iter_mutate(drill)、bounded_queue(drill,`#[ignore]` 已移)、**thread_pool(drill 8 綠——親手抓 3 個 bug:Drop 漏 join / 鎖圈住 job 執行 / submit lost wakeup)**、卡#1、ring_buffer artifact 補記憶體排版圖。
+
+**落後**:spsc drill+challenge、executor、卡#2–#3 尚未動 → 約落後 1 天;主因時間偏向「讀 + 補教材」(規則 #5 提醒:動手到哪開到哪)。
+
+**吸收決策**:動用砍序 ① —— **砍 d(tokio 彩排)**,7/19 起騰出來補 spsc(脊椎:JD ②封包流 + ③lockless,第一優先);executor 順延;fd_registry(e2)兩遍不動。
+
+---
+
 ## 砍掉 / 降級(已裁,不用再想)
 
 - **砍掉不練**:dsu、graph、trie、tree(doc 零訊號)
@@ -70,8 +80,8 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 - **P 編號已廢**(排程上),但 `html_p/` 的內容照用——它們有 repo 教材沒有的
   「面試追問鏈(≥3 層)+ Self-quiz」形式,當天讀完 artifact 後翻對應篇的
   追問鏈自測。日子對映:7/16→p7(ring 節)|7/17→p1(atomic/SPSC)|
-  7/18→p2(executor)|7/20→p3(epoll)|7/22→p8(hw_bridge)|
-  7/24→p6(telemetry,已排)|**7/25 口述底稿→`docs/thread-safe-spectrum.md` +
+  7/18→p2(executor)|7/20→p3(epoll)+epoll-eventloop(封包→callback)|7/22→p8(hw_bridge)|
+  7/24→p6(telemetry,已排)+lockfree 佇列家族+mpsc 交錯 stepper|**7/25 口述底稿→`docs/thread-safe-spectrum.md` +
   `docs/rust-five-axis.md`(已從 p5/five-axis 濃縮成 repo docs,含 repo 模組對映;
   互動深挖版仍在 html_p)**。
 - **7/16 產出欄**:drills/ring_buffer 綠 ✓|卡#1|drills/iter_mutate 綠 ✓(7/17 補完)|
@@ -96,6 +106,23 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
    每日 clarify 決策室。
 6. **彩排與卡片一律英文 I/O**:題幹讀 `rehearsals/PROMPTS_EN.md`,clarify 五問、
    定界宣言、trade-off 收尾用英文寫/講(中文版只當對照)。
+
+## JD 對齊複核(2026-07-18,對照根目錄 `interview_prep.md`)
+
+排程結構**經複核仍全中 JD 三技術支柱,不改逐日表**。只補「講法」四條:
+
+1. **fd_registry = JD 白紙黑字的「event registry」**:e2 兩遍(永不砍)正確;彩排必脫口答
+   「O(1) 世代 slot map 為何勝 O(n) 掃描、又擋 stale token」——③支柱的招牌題。
+2. **Big-O 出聲**:JD 明言「講出 Big-O implication = massive green flag」。升為每場彩排
+   trade-off 收尾的硬動作,不是心裡想。
+3. **定界用 JD 場景詞**:a=網路封包流|b=HW health check|e2=event registry|
+   c=wire protocol framing|signal_pipeline=telemetry 聚合。
+4. **HW-adjacent system design(唯一薄弱點)**:JD 列為核心 topic,目前只有 signal_pipeline
+   (JD 本尊圖)+ clarify 卡覆蓋。7/25 前把一張卡(sensor bridge / health prober)跑成
+   **完整口述設計**(分執行緒/任務 + 定通訊協定),不只答五問。
+
+不理會(JD 有提但非 coding round):Zero-Touch OS 佈署 / provisioning / stress-testing
+framework = 角色風味;588 以外 Google block 全停(JD 本身反 LeetCode)。
 
 ## Clarify 配方(最弱項的處方:高頻小塊,不開大 block)
 

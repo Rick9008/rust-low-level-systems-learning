@@ -1,0 +1,1232 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lock-free 佇列家族 — SPSC / MPSC / SPMC / MPMC 手冊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#1d2021; --bg:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d;
+  --fg:#d4be98; --dim:#a89984; --grey:#928374;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+  --mono:"JetBrains Mono","Cascadia Code",ui-monospace,Menlo,monospace;
+  --sans:"Noto Sans TC","JetBrains Mono",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg0);color:var(--fg);font-family:var(--sans);
+  font-size:15.5px;line-height:1.75}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 20px 90px}
+header h1{font-family:var(--mono);font-size:clamp(20px,3.4vw,30px);margin:0 0 6px;
+  letter-spacing:.5px}
+header h1 .fam{color:var(--yellow)}
+.sub{color:var(--dim);margin:0 0 14px;font-size:14px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.badge{font-family:var(--mono);font-size:12px;padding:4px 10px;border-radius:99px;
+  border:1px solid var(--bg3);background:var(--bg);color:var(--dim)}
+.badge.warn{border-color:var(--orange);color:var(--orange)}
+.badge.ok{border-color:var(--green);color:var(--green)}
+/* tabs */
+.tabs{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:9;
+  background:linear-gradient(var(--bg0) 88%,transparent);padding:10px 0 12px}
+.tab{font-family:var(--mono);font-size:13px;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--bg3);background:var(--bg);color:var(--dim);cursor:pointer}
+.tab:hover{color:var(--fg);border-color:var(--grey)}
+.tab.on{background:var(--bg2);color:var(--yellow);border-color:var(--yellow)}
+.panel{display:none;animation:fade .18s ease}
+.panel.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+h2{font-size:21px;margin:30px 0 12px;padding-left:12px;
+  border-left:4px solid var(--yellow)}
+h3{font-size:16.5px;margin:24px 0 10px;color:var(--aqua)}
+p{margin:9px 0}
+.card{background:var(--bg);border:1px solid var(--bg2);border-radius:12px;
+  padding:16px 18px;margin:14px 0}
+.card.edge{border-color:var(--blue)}
+.card.warn{border-color:var(--orange)}
+.card.hot{border-color:var(--red)}
+.intuit{background:var(--bg);border:1px solid var(--yellow);border-radius:12px;
+  padding:14px 18px;margin:16px 0;font-size:16px}
+.intuit b{color:var(--yellow)}
+.intuit .lb{display:block;font-family:var(--mono);font-size:11.5px;
+  color:var(--grey);margin-bottom:4px;letter-spacing:1px}
+.k{font-family:var(--mono);background:var(--bg1);border:1px solid var(--bg3);
+  border-radius:5px;padding:1px 6px;font-size:.9em;white-space:nowrap}
+.y{color:var(--yellow)}.g{color:var(--green)}.r{color:var(--red)}
+.b{color:var(--blue)}.o{color:var(--orange)}.a{color:var(--aqua)}.p{color:var(--purple)}
+.dim{color:var(--dim)}
+.jmp{color:var(--blue);cursor:pointer;text-decoration:underline dotted;
+  text-underline-offset:3px}
+.jmp:hover{color:var(--aqua)}
+/* derivation ladder */
+.derive{counter-reset:st;margin:14px 0;padding:0;list-style:none}
+.derive>li{position:relative;padding:12px 16px 12px 52px;margin:10px 0;
+  background:var(--bg);border:1px solid var(--bg2);border-radius:10px}
+.derive>li::before{counter-increment:st;content:counter(st);position:absolute;
+  left:14px;top:12px;width:26px;height:26px;border-radius:50%;
+  background:var(--bg2);color:var(--yellow);font-family:var(--mono);
+  display:flex;align-items:center;justify-content:center;font-size:13px}
+.derive>li.obs{border-color:var(--aqua)}
+.derive>li.obs::before{content:"觀察";width:auto;border-radius:6px;
+  padding:0 7px;font-size:11px;background:var(--aqua);color:var(--bg0)}
+.derive>li.dead{border-color:var(--red)}
+.derive>li.dead::before{content:"反例";width:auto;border-radius:6px;
+  padding:0 7px;font-size:11px;background:var(--red);color:var(--bg0)}
+.derive>li.born{border-color:var(--green)}
+.derive>li.born::before{content:"誕生";width:auto;border-radius:6px;
+  padding:0 7px;font-size:11px;background:var(--green);color:var(--bg0)}
+/* tables */
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+th,td{border:1px solid var(--bg3);padding:8px 10px;text-align:left;
+  vertical-align:top}
+th{background:var(--bg1);color:var(--yellow);font-family:var(--mono);
+  font-size:12.5px;white-space:nowrap}
+td b{color:var(--fg)}
+.tblwrap{overflow-x:auto;-webkit-text-size-adjust:100%}
+tr:hover td{background:var(--bg)}
+/* code */
+pre{background:var(--bg0);border:1px solid var(--bg2);border-radius:10px;
+  padding:14px 16px;overflow-x:auto;-webkit-text-size-adjust:100%;
+  font-family:var(--mono);font-size:12.8px;line-height:1.62;color:#ddc7a1;
+  tab-size:4}
+pre.mini{font-size:12.3px;margin:10px 0}
+/* signature: quadrant board */
+.quad{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+.qcell{background:var(--bg);border:1px solid var(--bg2);border-radius:12px;
+  padding:14px 16px;cursor:pointer;transition:border-color .15s}
+.qcell:hover{border-color:var(--yellow)}
+.qcell h4{margin:0 0 8px;font-family:var(--mono);font-size:15px}
+.curline{display:flex;align-items:center;gap:8px;margin:7px 0;
+  font-family:var(--mono);font-size:12.5px}
+.curname{width:44px;color:var(--dim)}
+.wr{padding:2px 8px;border-radius:6px;font-size:11.5px;
+  background:var(--bg2);border:1px solid var(--bg3)}
+.wr.one{color:var(--green);border-color:var(--green)}
+.wr.many{color:var(--red);border-color:var(--red)}
+.cas{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:6px;
+  background:var(--red);color:var(--bg0);font-weight:700}
+.nocas{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:6px;
+  border:1px dashed var(--green);color:var(--green)}
+.qfoot{font-size:12.5px;color:var(--dim);margin-top:8px}
+/* stepper */
+.stepper{background:var(--bg);border:1px solid var(--bg3);border-radius:14px;
+  padding:16px 18px;margin:18px 0}
+.stephead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:13px;margin-bottom:12px}
+.stephead .ttl{color:var(--yellow);font-weight:700}
+.sbtn{font-family:var(--mono);font-size:13px;padding:6px 14px;border-radius:8px;
+  border:1px solid var(--bg3);background:var(--bg1);color:var(--fg);cursor:pointer}
+.sbtn:hover{border-color:var(--yellow);color:var(--yellow)}
+.sbtn:disabled{opacity:.35;cursor:default}
+.fcount{margin-left:auto;color:var(--dim)}
+.slots{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+.slot{min-width:96px;flex:1;background:var(--bg1);border:2px solid var(--bg3);
+  border-radius:10px;padding:8px 10px;text-align:center;font-family:var(--mono);
+  transition:border-color .2s, background .2s}
+.slot .si{font-size:11px;color:var(--grey)}
+.slot .sv{font-size:20px;min-height:28px;font-weight:700}
+.slot .sq{font-size:11.5px;color:var(--dim);border-top:1px dashed var(--bg3);
+  margin-top:6px;padding-top:4px}
+.slot.st-full{border-color:var(--green)}.slot.st-full .sv{color:var(--green)}
+.slot.st-tik{border-color:var(--bg3)}.slot.st-tik .sv{color:var(--grey)}
+.slot.st-stale{border-color:var(--orange)}.slot.st-stale .sv{color:var(--orange)}
+.slot.st-wr{border-color:var(--purple);background:#3a3335}
+.slot.hl{border-color:var(--yellow);box-shadow:0 0 0 2px rgba(216,166,87,.25)}
+.slot.bad{border-color:var(--red);box-shadow:0 0 0 2px rgba(234,105,98,.28)}
+.curs{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);
+  font-size:13px;margin:8px 0}
+.curs span{background:var(--bg1);border:1px solid var(--bg3);
+  border-radius:8px;padding:4px 10px}
+.thline{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.th{font-family:var(--mono);font-size:12.5px;padding:6px 11px;border-radius:9px;
+  background:var(--bg1);border:1px solid var(--bg3);color:var(--dim)}
+.th.act{border-color:var(--blue);color:var(--blue)}
+.th.own{border-color:var(--green);color:var(--green)}
+.th.stall{border-color:var(--red);color:var(--red)}
+.snote{background:var(--bg0);border:1px solid var(--bg2);border-radius:10px;
+  padding:12px 14px;font-size:14px;min-height:78px}
+.snote.star{border-color:var(--yellow)}
+.snote .stag{display:inline-block;font-family:var(--mono);font-size:11px;
+  color:var(--bg0);background:var(--yellow);border-radius:5px;padding:1px 7px;
+  margin-right:8px;font-weight:700}
+.dots{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bg3);cursor:pointer}
+.dot.on{background:var(--yellow)}
+/* static strips / flows */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));
+  gap:12px;margin:14px 0}
+.frame{background:var(--bg);border:1px solid var(--bg2);border-radius:10px;
+  padding:12px 14px;font-size:13px}
+.frame h5{margin:0 0 8px;font-family:var(--mono);color:var(--yellow);
+  font-size:12.5px}
+.frame pre{margin:8px 0;padding:8px 10px;font-size:11.6px;border:none;
+  background:var(--bg0)}
+.flow{display:flex;flex-direction:column;gap:0;margin:14px 0;max-width:640px}
+.fnode{background:var(--bg);border:1px solid var(--bg2);border-radius:10px;
+  padding:10px 14px;font-size:14px}
+.fnode b{color:var(--aqua)}
+.farrow{color:var(--grey);font-family:var(--mono);padding:2px 0 2px 22px;
+  font-size:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:860px){.grid2,.grid3,.quad{grid-template-columns:1fr}}
+ul.tight{margin:8px 0;padding-left:22px}
+ul.tight li{margin:5px 0}
+.footer{margin-top:44px;color:var(--grey);font-size:12.5px;
+  font-family:var(--mono);border-top:1px solid var(--bg2);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Lock-free 佇列家族 <span class="fam">SPSC · MPSC · SPMC · MPMC</span></h1>
+  <p class="sub">比較地圖 · 使用場景 · 效能分析 · 觀念與機制推導 · 可跑的碼 — Rust std-only</p>
+  <div class="badges">
+    <span class="badge warn">📌 定位:論述級參考 — 建議 7/28 TPS 之後精讀</span>
+    <span class="badge">手寫範圍:SPSC = drill 必會 · Vyukov = 選練一次 · 其餘 = 講得出</span>
+    <span class="badge ok">碼已驗證:rustc 編譯 + 單執行緒精確測試 + 多執行緒 smoke</span>
+  </div>
+</header>
+<nav class="tabs" id="tabs">
+  <button class="tab on" data-tab="t-ov">總覽・比較圖</button>
+  <button class="tab" data-tab="t-core">觀念底盤</button>
+  <button class="tab" data-tab="t-spsc">SPSC</button>
+  <button class="tab" data-tab="t-mpsc">MPSC</button>
+  <button class="tab" data-tab="t-spmc">SPMC</button>
+  <button class="tab" data-tab="t-mpmc">MPMC</button>
+  <button class="tab" data-tab="t-perf">效能・場景・選型</button>
+  <button class="tab" data-tab="t-code">Code・驗證・延伸</button>
+</nav>
+
+<!-- ══════════ TAB 0 總覽 ══════════ -->
+<section class="panel on" id="t-ov">
+<div class="intuit"><span class="lb">整份手冊一句話</span>
+佇列的難度只由一件事決定:<b>每個 cursor 有幾個寫者</b>。單寫者的 cursor,一對
+release/acquire 就活;多寫者的 cursor,就得上 <b>CAS</b> 排隊搶號。SPSC 兩個 cursor
+都是單寫者,所以零 CAS、天然 wait-free;MPMC 兩端都在搶,所以兩顆 CAS,還得替
+「搶到號 ≠ 交完貨」補一張 per-slot 回條(sequence)。</div>
+
+<h2>2×2 地圖:CAS 出現在哪裡</h2>
+<p class="dim">點任一象限直接跳到該章。<span class="k">tail</span> = 進貨端 cursor,
+<span class="k">head</span> = 收貨端 cursor。徽章標的是「這個 cursor 有幾個寫者」。</p>
+<div class="quad">
+  <div class="qcell" data-jump="t-spsc">
+    <h4 class="g">SPSC</h4>
+    <div class="curline"><span class="curname">tail</span><span class="wr one">1 寫者 (P)</span><span class="nocas">免 CAS</span></div>
+    <div class="curline"><span class="curname">head</span><span class="wr one">1 寫者 (C)</span><span class="nocas">免 CAS</span></div>
+    <div class="qfoot">兩對 release/acquire 打天下 → <b class="g">wait-free</b>。整個家族的地基。</div>
+  </div>
+  <div class="qcell" data-jump="t-mpsc">
+    <h4 class="b">MPSC</h4>
+    <div class="curline"><span class="curname">tail</span><span class="wr many">N 寫者</span><span class="cas">CAS / swap</span></div>
+    <div class="curline"><span class="curname">head</span><span class="wr one">1 寫者 (C)</span><span class="nocas">免 CAS</span></div>
+    <div class="qfoot">只解一端 → 難度砍半。channel / logger 匯流的形狀。</div>
+  </div>
+  <div class="qcell" data-jump="t-spmc">
+    <h4 class="p">SPMC</h4>
+    <div class="curline"><span class="curname">tail</span><span class="wr one">1 寫者 (P)</span><span class="nocas">免 CAS</span></div>
+    <div class="curline"><span class="curname">head</span><span class="wr many">N 寫者</span><span class="cas">CAS</span></div>
+    <div class="qfoot">先問語意:搶著做(work-stealing)還是都要看(broadcast)?兩種是不同結構。</div>
+  </div>
+  <div class="qcell" data-jump="t-mpmc">
+    <h4 class="r">MPMC</h4>
+    <div class="curline"><span class="curname">tail</span><span class="wr many">N 寫者</span><span class="cas">CAS</span></div>
+    <div class="curline"><span class="curname">head</span><span class="wr many">N 寫者</span><span class="cas">CAS</span></div>
+    <div class="qfoot">兩端都搶 → 光有 cursor 不夠,還需要 per-slot <b>sequence</b> 回條。</div>
+  </div>
+</div>
+
+<h2>比較總表</h2>
+<div class="tblwrap"><table>
+<tr><th>型</th><th>競爭點</th><th>最低同步配備</th><th>progress 上限</th><th>代表結構</th><th>真實使用者</th><th>典型場景</th><th>面試定位</th></tr>
+<tr><td><b class="g">SPSC</b></td><td>無(各 index 單寫者)</td><td>2 對 release/acquire</td><td><b class="g">wait-free</b></td><td>ring buffer(單調 index)</td><td>音訊 pipeline、rigtorp SPSC、folly PCQ、NIC ring 概念</td><td>audio callback、per-thread logger 前緩衝、telemetry 單線</td><td>★ 手寫必會(你的 drill)</td></tr>
+<tr><td><b class="b">MPSC</b></td><td>tail 端</td><td>tail 一顆 CAS 或 swap;head 免</td><td>lock-free(intrusive 版有斷鏈窗,見該章)</td><td>半顆 Vyukov;Vyukov intrusive MPSC</td><td>std::sync::mpsc、tokio mpsc、actor mailbox</td><td>多執行緒 log 匯到單 writer、event loop 收件匣</td><td>概念 + 口述</td></tr>
+<tr><td><b class="p">SPMC</b></td><td>head / top 端</td><td>head CAS;或 Chase-Lev bottom/top 協議</td><td>lock-free</td><td>Chase-Lev deque;broadcast 另計(Disruptor)</td><td>rayon、tokio worker local queue、Go 排程器 runq</td><td>work-stealing 任務分派;行情 fan-out(broadcast)</td><td>race 圖解講得出,免手寫</td></tr>
+<tr><td><b class="r">MPMC</b></td><td>兩端都搶</td><td>兩顆 cursor CAS + per-slot seq</td><td>Vyukov「實務 non-blocking」但不滿足正式 lock-free;MS queue 真 lock-free(reclamation 代價)</td><td>Vyukov bounded;Michael-Scott unbounded</td><td>crossbeam ArrayQueue / SegQueue、folly MPMCQueue、moodycamel</td><td>thread pool 全域 injector、通用任務佇列</td><td>Vyukov 值得手寫一次;MS = 論述</td></tr>
+</table></div>
+
+<div class="card edge"><b class="a">先讀哪裡:</b>觀念底盤 → SPSC(地基)→ 直接跳
+MPMC(推導最完整,含 stepper)→ MPSC / SPMC 當 MPMC 的「拆一半」讀 → 最後效能與選型。
+每一章的機制都建立在前一章之上;<span class="jmp" data-jump="sec-seq-born">MPMC 的
+sequence 推導</span>是全書核心段。</div>
+</section>
+
+<!-- ══════════ TAB 1 觀念底盤 ══════════ -->
+<section class="panel" id="t-core">
+<h2>Progress guarantee:先把梯子放對</h2>
+<div class="tblwrap"><table>
+<tr><th>等級</th><th>定義</th><th>本書對號</th></tr>
+<tr><td><b>blocking</b></td><td>一個 thread 停滯,可能讓其他人永遠等</td><td>Mutex 版;<b class="o">Vyukov(正式定義上)</b> — 停滯的取號者會堵住該 slot</td></tr>
+<tr><td><b>lock-free</b></td><td>系統整體必有人前進(個別 thread 可能餓死)</td><td>Treiber / Michael-Scott、Chase-Lev、CAS-loop 結構</td></tr>
+<tr><td><b>wait-free</b></td><td>每個 thread 都在有界步數內完成</td><td><b class="g">SPSC ring</b>(push/pop 都是固定幾步)</td></tr>
+</table></div>
+<div class="card warn">日常說「lock-free queue」多半指「不用 mutex」。正式定義嚴格得多——
+面試被追時能分清「無鎖」≠「lock-free 保證」,並指得出 Vyukov 落在哪(下一章有現場),
+是 senior 訊號。</div>
+
+<h2 id="sec-pub">Publication:release / acquire 是唯一的資料通道</h2>
+<div class="intuit"><span class="lb">核心規則</span>
+非原子資料要跨 thread,<b>必須掛在某條 store→load 邊上被發佈</b>:寫方
+<span class="k">Release</span>-store 一個旗標,讀方 <span class="k">Acquire</span>-load
+到那個值 → 兩者 synchronizes-with → 旗標之前的所有寫入 happens-before 讀方之後的讀取。
+<b>找不到那條邊,就是 data race。</b>本書每個結構的分析都只有一個動作:把每一格 data
+的兩條邊(發佈、回收)指出來。</div>
+<p>降級紀律(你既有的原則,原文照錄):先全 <span class="k">seq_cst</span> 寫對,
+再對<b>指得出 synchronizes-with 邊</b>的位置降到 acquire/release;講不出那條邊的,不准降。
+Relaxed 只留給「單寫者讀自己」與「純仲裁/計數」。</p>
+
+<h2>CAS:取號機的物理</h2>
+<ul class="tight">
+<li><span class="k">compare_exchange(cur, new)</span>:值仍是 cur 才換成 new,原子完成;
+失敗回傳<b>實際值</b>——這是免費的重讀,retry loop 直接吃它。</li>
+<li><span class="k">weak</span> vs <span class="k">strong</span>:weak 允許
+spurious fail(LL/SC 架構上更便宜)。<b>反正在 loop 裡 → 用 weak</b>;
+一次性判定才用 strong。</li>
+<li>CAS 的 ordering 可以很弱:若它只負責「仲裁誰贏」、不發佈資料
+(資料另有 release/acquire 邊),Relaxed 就夠——Vyukov 的兩顆 cursor 正是教科書案例。</li>
+</ul>
+
+<h2 id="sec-aba">ABA:CAS 的盲點</h2>
+<div class="card">CAS 只比對<b>值</b>,不比對<b>歷史</b>。head 從 A→B→A,你的 CAS(A→…)
+誤判「沒人動過」而成功——但 A 已經是<b>重生後的 A</b>(node 被 free 又 malloc 回同位址;
+或 arena 的 slot 5 被回收又重發)。GC 語言天然遮蔽它(舊 A 有人引用就不會重生);
+C++/Rust 正面撞上。<br><br><b class="g">解法 = 給值加上歷史:generation / tag。</b>
+CAS 比對 <span class="k">[generation | index]</span> 整包,slot 每次重用 generation++。
+——這跟你 arena+index 的 generation-tagged index 是<b>同一招</b>:pointer-ABA 換皮成
+index-ABA,解法同構。而 Vyukov 的 per-slot sequence 是它的更漂亮形態:回條本身就計圈。</div>
+
+<h2>False sharing:兩個熱變數住同一條 cache line</h2>
+<p>Cache 一致性以 line(常見 64B)為單位。head 和 tail 若同住一條 line,producer 每次
+推進 tail 都會把 consumer 手上的 line 打成 invalid——兩個「毫無邏輯衝突」的變數在硬體層
+互相打架,吞吐掉一個量級是常態。解法一行:<span class="k">#[repr(align(64))]</span>
+把每個熱 cursor 包進自己的 line(crossbeam 的 CachePadded 同理;新硬體上 128B 對齊更保險,
+考量 prefetcher 成對抓 line)。</p>
+
+<h2 id="sec-reclaim">Reclamation:unbounded lock-free 的真 boss</h2>
+<p>pop 下來的 node 誰敢 free?別的 thread 可能剛 load 到它的指標、還沒 CAS——直接 free
+= use-after-free。四條路:</p>
+<ul class="tight">
+<li><b>hazard pointer</b>:讀者先公告「我正在用這顆」,回收方掃過公告欄再 free。精準、每讀有成本。</li>
+<li><b>epoch-based</b>(crossbeam-epoch):讀者進出「世代」,整代退場才批次回收。攤銷便宜、延遲回收。</li>
+<li><b>arena + generation tag</b>(你的差異化答案):node 全預配、index 互指、永不 free 單顆,
+回收 = 還 slot 進 free list;ABA 用 tag 擋。代價:容量上限 + free list 自身的併發。</li>
+<li><b class="g">slot 重用(bounded 天然免疫)</b>:格子永遠不 free、只換狀態——
+Vyukov 正是靠這條把 reclamation 整題繞掉。這是「bounded vs unbounded」在 lock-free
+世界真正的分水嶺。</li>
+</ul>
+
+<h2>驗證:並發正確性不可 fuzz</h2>
+<div class="card hot">Data race 是 timing 依賴的:隨機跑一萬次,那個壞 interleaving 可能
+永遠不出現(你 R1 的 200k uniform fuzz 抓不到 wrap off-by-one,並發只會更糟)。
+Rust 用 <b>loom</b> 窮舉所有合法 interleaving + 記憶體序;unsafe 疊加 <b>Miri</b> 抓 UB;
+C++ 用 <b>TSan</b>。面試講出「這類結構我不 fuzz,我窮舉 interleaving」本身就是加分句。
+本書附碼的多執行緒測試是 smoke(而且本機單核,交錯覆蓋有限)——正式驗證請 loom。</div>
+</section>
+
+<!-- ══════════ TAB 2 SPSC ══════════ -->
+<section class="panel" id="t-spsc">
+<div class="intuit"><span class="lb">一句話直覺</span>
+兩個人各自只推<b>自己的里程表</b>(producer 推 tail、consumer 推 head),
+互相用 release/acquire <b>偷看對方的</b>。沒有任何變數有兩個寫者 → 一顆 CAS 都不用。</div>
+
+<h2>推導:state 不是天上掉下來的</h2>
+<ol class="derive">
+<li>Naive:<span class="k">Mutex&lt;VecDeque&gt;</span>。正確地板,先寫這個永遠不丟人。</li>
+<li class="obs">觀察 ①:這個場景裡 <b>tail 只有 producer 寫、head 只有 consumer 寫</b>。
+互斥鎖在保護的「同時寫」根本不存在——需要的只剩<b>可見性順序</b>:data 要先於 index 被看見。
+→ 鎖退場,換兩對 release/acquire(<span class="jmp" data-jump="sec-pub">觀念底盤·Publication</span>)。</li>
+<li class="dead">第一版:head/tail 追著物理格子跑(到 N 歸零)。反例:
+<span class="k">head == tail</span> 到底是空還是滿?歧義。</li>
+<li>三條修法:(a) 永遠空一格(head==tail 空、差一格滿)——可行,浪費一格;
+(b) 加一顆 <span class="k">len</span> 計數——<b class="r">兩端都要寫 len → 憑空造出一個
+雙寫者變數,整個單寫者結構被一顆計數器毀掉</b>,這是核心洞見的反面教材;
+(c) <b class="g">index 單調遞增、永不歸零</b>:滿 = <span class="k">tail-head==N</span>,
+空 = <span class="k">tail==head</span>,取位 = <span class="k">idx &amp; (N-1)</span>。</li>
+<li class="born">選 (c):N 取 2 的冪,unsigned wraparound 是 defined behavior
+(Rust 顯式 <span class="k">wrapping_sub</span>),差值算術跨 usize 溢位仍正確。
+兩個「里程表」就是這個結構的全部 state——每一個都被推導逼出來,不是背出來。</li>
+</ol>
+
+<h2>兩條同步邊:每格 data 的一生</h2>
+<div class="grid2">
+<div class="card edge"><b class="b">邊 1 · 資料發佈</b><br>
+producer:寫 data → <span class="k">Release</span>-store tail<br>
+consumer:<span class="k">Acquire</span>-load tail → 讀 data<br>
+<span class="dim">保證:寫入 happens-before 讀取。少了它 = 讀到半成品。</span></div>
+<div class="card edge"><b class="p">邊 2 · 空間回收</b><br>
+consumer:讀完 data → <span class="k">Release</span>-store head<br>
+producer:<span class="k">Acquire</span>-load head → 覆寫該 slot<br>
+<span class="dim">保證:讀取 happens-before 覆寫。平時隱形,<b>wrap 時刻</b>現形——
+最常被漏掉的一條,漏了 = producer 蓋掉 consumer 正在讀的格子。</span></div>
+</div>
+<p>自己的 index 讀自己 → <span class="k">Relaxed</span>(單寫者,無序可言);
+寫自己的 index → <span class="k">Release</span>;讀對方的 index →
+<span class="k">Acquire</span>。三行講完整份 ordering 表。</p>
+
+<h2>Stepper:含 wrap 與非原點邊界</h2>
+<div class="stepper" id="stp-spsc"></div>
+
+<h2>效能角:把 acquire 的 cache miss 也省掉</h2>
+<div class="card"><b>Cached 對方 index</b>(rigtorp / folly 都做):producer 把上次看到的
+head 存成本地普通變數;只有<b>看似滿了</b>才真的 Acquire 重讀一次。常態 push 於是
+<b>零共享讀取</b>——只碰自己的 cache line。這招把 SPSC 推到「吞吐幾乎不隨負載變化」的境界,
+也是它在效能表上一枝獨秀的原因(<span class="jmp" data-jump="t-perf">效能章</span>有定位)。
+再上去是 batch push/pop:一次搬一批、攤掉 index 更新。</div>
+
+<h2>場景</h2>
+<ul class="tight">
+<li><b>audio callback → 混音 thread</b>:callback 內不可 block、不可 alloc、不可等鎖——
+wait-free 是硬需求,SPSC 是這裡的唯一正解等級。</li>
+<li><b>per-thread logger 前緩衝</b>:每條業務 thread 一條 SPSC 進 logger(N 條 SPSC
+勝過一條 MPSC 的常見理由:寫端零競爭;代價是收端要輪詢 N 條)。</li>
+<li><b>網卡收發 ring 的概念原型</b>、pipeline 相鄰 stage 間的手遞手。</li>
+<li><b>你的 telemetry 單線 ingestion</b>:滿了丟最舊 + 計數 —— 就是 7/19 彩排題的形狀。</li>
+</ul>
+</section>
+
+<!-- ══════════ TAB 3 MPSC ══════════ -->
+<section class="panel" id="t-mpsc">
+<div class="intuit"><span class="lb">一句話直覺</span>
+多人往<b>同一個信箱</b>丟信,只有一個郵差收。收件端保住單寫者 → 維持 SPSC 級簡單;
+只有投遞端要排隊。<b>難度 = 半顆 MPMC。</b></div>
+
+<h2>為什麼比 MPMC 簡單一半</h2>
+<p>對照 2×2 地圖:head 仍是單寫者 → dequeue 端整套免 CAS。要解的只剩「多個 producer
+搶 tail」一件事。兩種典型建法,對應 bounded / unbounded:</p>
+
+<h3>建法 A · bounded:半顆 Vyukov</h3>
+<div class="card">直接拿 <span class="jmp" data-jump="t-mpmc">Vyukov MPMC</span> 把
+dequeue 端退化:dpos 單寫者 → CAS 換成普通 <span class="k">Relaxed</span> store。
+enqueue 端與 per-slot seq 原封不動。讀懂 Vyukov 之後這個版本是免費的——也是延伸題 ②。</div>
+
+<h3>建法 B · unbounded:Vyukov intrusive MPSC(swap 鏈)</h3>
+<div class="card">
+push 三步:<span class="k">node.next = null</span> →
+<span class="k">prev = tail.swap(node)</span> → <span class="k">prev.next = node</span>。
+妙處:<b>swap(xchg)必定成功</b>,沒有 CAS retry storm,高競爭下吞吐極穩。<br><br>
+<b class="o">代價:第 2、3 步之間被 deschedule → 鏈是斷的。</b>tail 已指向新節點,
+但 prev.next 還沒接上——consumer 從 head 走鏈會撞到 null,明明 tail 在遠方卻走不到:
+「看得到尾巴、追不上」。consumer 此時只能回頭說「暫時沒貨」等它復工——
+與 Vyukov 的停滯取號者同款味道:<b>實務 non-blocking,正式定義非 lock-free</b>。</div>
+<div class="strip">
+<div class="frame"><h5>① swap 完成</h5><pre>tail ──────────► [N]
+head ► [A]─►[B]─► ∅   [N]</pre>新節點 N 已被 tail 認領,但還沒人指向它。</div>
+<div class="frame"><h5>② 斷鏈窗</h5><pre>consumer 走到 B.next = ∅
+但 tail ≠ B → 「有貨但追不到」</pre>producer 若在此停滯,鏈斷到它醒來為止。</div>
+<div class="frame"><h5>③ prev.next 接上</h5><pre>head ► [A]─►[B]─►[N]
+tail ──────────► [N]</pre>consumer 下次輪詢即恢復。xchg 的代價收在這扇窗裡。</div>
+</div>
+
+<h2>生態對號</h2>
+<ul class="tight">
+<li><span class="k">std::sync::mpsc</span> —— 名字就把語意講死了:MP<b>S</b>C,不是 MPMC。
+底層近年已改為 crossbeam 的移植版(憑記憶,版本號不背)。Receiver 不可 clone 正是
+「head 單寫者」這條不變式的型別化。</li>
+<li><span class="k">tokio::sync::mpsc</span> —— bounded + <b>async backpressure</b>:
+滿了不是 spin 也不是 Err,是 <span class="k">.await</span> 讓出——把「等空位」交給排程器。
+backpressure 從 API 形狀就內建,這是它跟裸佇列最大的差異。</li>
+<li>flume、各家 actor mailbox —— 同一形狀的變奏。</li>
+</ul>
+
+<h2>場景</h2>
+<ul class="tight">
+<li><b>logging 匯流</b>:N 條業務 thread → 1 條 writer。你的 Asio log daemon 論述掛在這:
+bounded + 滿載策略(丟棄計數 / 阻塞 / 降級)就是 backpressure 故事本體。</li>
+<li><b>actor mailbox / event loop 收件匣</b>:誰都能投遞、只有 owner 消化——
+單消費者同時是<b>免鎖處理內部狀態</b>的授權書(所有狀態只被 consumer thread 碰)。</li>
+<li>面試判別句:「只有一個消費者」出現的瞬間,不要拿 MPMC 硬上——你多付的那顆
+head CAS 一點東西都沒買到。</li>
+</ul>
+</section>
+
+<!-- ══════════ TAB 4 SPMC ══════════ -->
+<section class="panel" id="t-spmc">
+<div class="intuit"><span class="lb">一句話直覺 + 第一個 clarify</span>
+一個發、多人接——但「接」有兩種完全不同的意思:<b>搶著做</b>(每件事恰好一人拿走)
+還是 <b>都要看</b>(每個 consumer 看到全部)?這是兩個問題域、兩套結構。
+面試被丟「SPMC」先問這句,<b>本身就是 pillar 1 的分</b>。</div>
+
+<h2>語意 A · 競爭消費:半顆 MPMC</h2>
+<div class="card">最小改動版:tail 單寫者照舊,head 變多人搶 → head 推進改 CAS loop。
+機制上就是 MPMC 拆一半(鏡像於 MPSC)。實務上很少以這個裸形狀存在——單一 producer
+的分派場景幾乎都演化成下面兩條路之一:每個 consumer 一條 SPSC(寫端零競爭、
+收端犧牲彈性),或者 work-stealing(平時零競爭、失衡才偷)。</div>
+
+<h2>語意 A 的王者:Chase-Lev work-stealing deque</h2>
+<ol class="derive">
+<li class="obs">觀察:分派場景裡 owner(worker 自己)的 push/pop 是<b>高頻熱路徑</b>,
+小偷(其他 worker)只在失衡時才來。讓高頻方付 CAS 是本末倒置。</li>
+<li class="born">結構:owner 獨占 <span class="k">bottom</span> 端自由 push/pop
+(單寫者 → 免 CAS!),所有小偷去 <span class="k">top</span> 端 CAS 搶。
+常態下 owner 完全不感覺別人存在——把「單寫者免 CAS」原則用成<b>非對稱設計</b>。</li>
+</ol>
+<div class="strip">
+<div class="frame"><h5>① 常態</h5><pre>top ►[t]. . .[b-1]◄ bottom
+小偷 CAS top│owner 自由進出</pre>owner push/pop 都在 bottom,零競爭。</div>
+<div class="frame"><h5>② steal</h5><pre>讀 top、讀 bottom
+top &lt; bottom → CAS top→top+1</pre>贏了拿走 buf[top]。輸了 = 別的小偷先到,重試或走人。</div>
+<div class="frame"><h5>③ 最後一件的對撞</h5><pre>bottom-1 == top
+owner 的 pop 與小偷的 steal
+指著同一格</pre><b class="r">owner 也被迫 CAS</b>:唯一一次 owner 付競爭成本,
+用一顆 CAS 決定這件事歸誰。</div>
+<div class="frame"><h5>④ 為什麼要 fence</h5><pre>owner: store(bottom-1)
+       ── ‼ store→load ──
+       load(top)</pre>acquire/release 管不住 <b>store→load</b> 重排——
+兩人可能同時自認贏家、同一件事被做兩次。這裡需要 <span class="k">SeqCst</span>
+fence(或等效 SeqCst 存取)。C11 model 下的正確版本有專門論文修過
+(Lê et al.,出處憑記憶標)。</div>
+</div>
+<div class="card warn"><b>手寫定位:</b>③④ 這兩幀講得出來 = 你懂它哪裡狠;
+25 分鐘手寫可證正確的 Chase-Lev不在任何人的合理清單上。它值得你會的原因是
+<b>它就是 rayon / tokio worker / Go P-local runq 的地基</b>——你 deep-dive 講
+executor work-stealing 時,這一節是彈藥庫。附:grow 時換整塊 buffer、top/bottom
+里程表不動(又是單調 index 的好處),舊 buffer 的回收又回到
+<span class="jmp" data-jump="sec-reclaim">reclamation</span>——延伸題 ③。</div>
+
+<h2>語意 B · Broadcast:每個人都要看到</h2>
+<div class="card"><b>LMAX Disruptor 型</b>:producer 推全域 sequence,
+<b>每個 consumer 自己維護消費進度</b>(N 個 cursor,各自單寫者——又是同一條原則);
+producer 發佈前 gating 於<b>最慢的 consumer</b>,防止繞圈蓋掉沒讀完的格子
+→ backpressure 天然內建。batch claim 一次領一段號,把 cursor 更新攤薄。<br><br>
+<b>seqlock</b>:如果語意再退化成「只要最新值」(config 快照、行情最新價),
+連佇列都不用——版本號雙讀 + 重試,讀者 wait-free、零 alloc。</div>
+
+<h2>場景對號</h2>
+<div class="tblwrap"><table>
+<tr><th>需求</th><th>語意</th><th>選型</th></tr>
+<tr><td>任務分派、負載會失衡</td><td>競爭</td><td>work-stealing(Chase-Lev)</td></tr>
+<tr><td>行情 / 事件 fan-out,人人要全量</td><td>broadcast</td><td>Disruptor 型 ring + 各自 cursor</td></tr>
+<tr><td>只要最新狀態,舊的可丟</td><td>broadcast 退化</td><td>seqlock / 原子換 Arc(ArcSwap 模式)</td></tr>
+<tr><td>單源多 sink、彼此速率獨立</td><td>競爭退化</td><td>每 consumer 一條 SPSC</td></tr>
+</table></div>
+</section>
+
+<!-- ══════════ TAB 5 MPMC ══════════ -->
+<section class="panel" id="t-mpmc">
+<div class="intuit"><span class="lb">一句話直覺</span>
+兩端都有人搶。搶號用 CAS——但<b>「搶到號」不等於「交完貨」</b>。
+所以每個格子還需要一張「完工回條」,那張回條,就是 per-slot <b>sequence</b>。</div>
+
+<h2 id="sec-seq-born">推導:sequence 是被兩個反例逼出來的</h2>
+<ol class="derive">
+<li>Naive:<span class="k">Mutex&lt;VecDeque&gt;</span>。低競爭下經常直接夠用
+(<span class="jmp" data-jump="t-perf">效能章</span>有它的名譽保衛戰)。往下走的前提是
+「量到了 contention」。</li>
+<li class="dead">第一版 lock-free:兩顆 cursor 都上 CAS,producer 搶到
+<span class="k">epos</span> 的號就往對應 slot 寫。反例走一遍:P1 贏得號 0、
+<b>還沒把 data 寫完</b>就被 deschedule;consumer 看 <span class="k">dpos=0 &lt; epos=1</span>
+以為有貨 → 讀到未初始化記憶體。→ <b>cursor 只能證明「號碼發出去了」,
+證明不了「資料寫好了」。</b></li>
+<li class="dead">第二版:每格補一顆 <span class="k">ready: AtomicBool</span>
+(寫完 set true、讀完 set false)。反例:繞到第 2 圈,producer 看到一顆 true——
+是<b>這一圈</b>consumer還沒收的 true,還是<b>上一圈</b>殘留的 true?flag 無法區分圈數,
+滿/空判斷跨圈歧義——這就是 <span class="jmp" data-jump="sec-aba">ABA</span> 換了件衣服。
+→ <b>回條需要自帶「第幾圈」。</b></li>
+<li class="born">把 bool 升級成計圈的 <span class="k">seq: AtomicUsize</span>,
+一個變數同時當「狀態」和「圈數」:<br>
+<span class="k">seq == pos</span> → 本圈空位票,輪到號 pos 的 producer;<br>
+<span class="k">seq == pos+1</span> → 本圈貨到回條,輪到號 pos 的 consumer;<br>
+consumer 讀完寫 <span class="k">seq = pos+cap</span> → 恰好是下一圈同格 producer 期待的票號。
+<b>ready flag 與 lap counter 融合 → Vyukov bounded MPMC 誕生</b>
+(crossbeam ArrayQueue 走的正是這條)。slot 永遠重用、永不 free →
+<span class="jmp" data-jump="sec-reclaim">reclamation</span> 整題繞掉。</li>
+</ol>
+
+<h2>Ordering 逐條表:同步全掛在 seq 上</h2>
+<div class="tblwrap"><table>
+<tr><th>操作</th><th>Ordering</th><th>理由(照你今晚 drill 的格式:一行一個)</th></tr>
+<tr><td><span class="k">epos/dpos load</span></td><td>Relaxed</td><td>只是猜號;猜錯 CAS 會用實際值糾正,不承載任何資料可見性</td></tr>
+<tr><td><span class="k">slot.seq load</span></td><td><b class="b">Acquire</b></td><td>同步邊接收端:接住對面的 release,才保證 data(或「已清空」)可見</td></tr>
+<tr><td><span class="k">cursor CAS</span></td><td>Relaxed / Relaxed</td><td>純仲裁「號歸誰」;資料不走這裡 → 成敗兩個 ordering 都能弱</td></tr>
+<tr><td><span class="k">data write/read</span></td><td>非原子</td><td>由 seq 協議保護:同一格同一圈,寫權/讀權都是獨家</td></tr>
+<tr><td><span class="k">slot.seq store</span></td><td><b class="p">Release</b></td><td>發佈端:enqueue 發佈 data、dequeue 發佈「我讀完了」——SPSC 兩條邊的合體,只是搬到 per-slot</td></tr>
+</table></div>
+<div class="card edge">看懂這張表 = 回答了「哪一條 store→load 邊在發佈資料」:
+<b>是 slot.seq 的 Release→Acquire,從頭到尾與兩顆 cursor 無關。</b>
+這就是「cursor CAS 可以 Relaxed」的完整理由——也是 acquire/release
+從 seq_cst 降級的教科書示範。(完全形式化的論證交給 loom;口試講到這層已經超標。)</div>
+
+<h2>Stepper:兩個 producer 對撞 + 停滯現場 + 圈數算術</h2>
+<div class="stepper" id="stp-vyu"></div>
+
+<h2>誠實邊界:Vyukov 不滿足正式 lock-free 定義</h2>
+<div class="card hot">Stepper 第 6 幀就是證據:一個搶到號、還沒交貨就停滯的 producer,
+讓<b>所有</b> consumer 空手而回——系統整體無人前進,違反 lock-free 的定義,
+正式歸類是 blocking。實務上大家仍叫它 lock-free / non-blocking,因為停滯窗只有幾條指令寬、
+且無鎖可持有(不會死鎖、不怕 priority inversion 持鎖方餓死)。
+面試把「慣稱」與「正式定義」分開講,並指出停滯窗在哪兩行指令之間 = 真懂的訊號。</div>
+
+<h2>Unbounded 的正統:Michael-Scott queue(論述級)</h2>
+<div class="grid2">
+<div class="card"><b>結構</b><pre class="mini">head ►[dummy]─►[A]─►[B]─► ∅ ◄ tail
+enqueue: ① CAS tail.next: ∅→N
+         ② CAS tail: →N (swing)
+dequeue: CAS head 前移,回傳新 head 的值</pre>
+<b>dummy node</b> 解耦 head/tail:空佇列、單元素時兩端不撞同一顆 node,
+少掉一整類邊界分支。</div>
+<div class="card"><b>help-advance</b>:①②之間 tail 落後一步是<b>合法中間態</b>——
+任何 thread 發現 <span class="k">tail.next ≠ ∅</span> 都可以幫忙把 tail 推上去再繼續自己的事。
+正確性靠「中間態可辨識 + 修復動作冪等」;這是 lock-free 設計裡「大家一起收拾殘局」的
+代表手法,對照 Vyukov 的「停滯者無人能幫」正好一組對比。</div>
+</div>
+<div class="card warn">真 boss 在 <span class="jmp" data-jump="sec-reclaim">reclamation</span>:
+pop 下來的 node 直接 free = UAF,必配 hazard / epoch / arena+tag。
+<b>手寫定位(prep plan 原話)</b>:結構 + 兩步 CAS + reclamation 三條路的論述;
+25 分鐘默寫 production-correct 版對強工程師都是大 ask,投報率斷崖。</div>
+
+<h2>點名其餘家族成員(各一句)</h2>
+<ul class="tight">
+<li><b>moodycamel::ConcurrentQueue</b>(C++):per-producer sub-queue,寫端幾乎零競爭;
+代價是<b>不同 producer 之間沒有全序 FIFO</b>——「你的佇列語意到底承諾什麼」的最佳考題。</li>
+<li><b>folly::MPMCQueue</b>:ticket / turn 家族,取號後各自等自己的 turn,Vyukov 的近親。</li>
+<li><b>crossbeam SegQueue</b>:unbounded、分段鏈結——塊內像 bounded、塊間像 linked,兩邊優點各拿一半。</li>
+<li><b>LCRQ 一族</b>:fetch-add 取號的學術前沿,知道存在即可。</li>
+</ul>
+</section>
+
+<!-- ══════════ TAB 6 效能・場景・選型 ══════════ -->
+<section class="panel" id="t-perf">
+<div class="intuit"><span class="lb">效能一句話</span>
+吞吐上限 ≈ <b>最熱那條共享 cache line 的易手速率</b>。所有佇列效能分析,
+最後都是在數「有幾條熱 line、幾個核在搶」。</div>
+
+<h2>用 cache line 重讀 2×2 地圖</h2>
+<div class="tblwrap"><table>
+<tr><th>型</th><th>熱共享 line</th><th>競爭行為</th><th>吞吐特徵</th></tr>
+<tr><td><b class="g">SPSC</b></td><td>2 條(head、tail),cached-index 後常態趨近 0</td><td>兩核之間單向乒乓</td><td>近乎恆定,幾乎不隨負載劣化——家族天花板</td></tr>
+<tr><td><b class="b">MPSC</b></td><td>1 條(tail)</td><td>N 個寫者搶一條;swap 版無 retry、吞吐穩</td><td>寫端隨 N 緩慢劣化;收端不受影響</td></tr>
+<tr><td><b class="p">SPMC</b></td><td>1 條(top);Chase-Lev 常態 0(偷才碰)</td><td>失衡時才有競爭——把競爭移出熱路徑</td><td>常態貼近 SPSC,偷竊時付費</td></tr>
+<tr><td><b class="r">MPMC</b></td><td>2 條都被多人搶 + slot seq</td><td>CAS retry、line 乒乓、取號序列化</td><td><b>cursor 是全域序列化點</b>:核數↑吞吐先平後降</td></tr>
+</table></div>
+<div class="card hot"><b>序列化點論證(面試可整段搬):</b>MPMC 每筆 enqueue 都要對同一顆
+epos 完成一次成功 CAS——不管幾個核,這顆 cursor 的更新<b>天生全序</b>,
+每次易手要吃一趟跨核 line 轉移。所以吞吐上限 ≈ 1 / (line 易手延遲),
+與核數無關;超過飽和點再加 producer,只是把功耗換成 CAS retry,
+<b>吞吐反而下降</b>。這也是「把一條 MPMC 拆成 per-worker 佇列」的根本理由。</div>
+
+<h2>量級表</h2>
+<div class="card warn"><b>⚠ 量級直覺,非 benchmark。</b>憑常識級公開折衷數字整理,
+跨硬體世代會漂;任何要寫進文件或口頭引用的數字,自己用 criterion / 自寫 harness 量。
+面試裡給量級 + 說明「實際值我會量」,比背精確數字加分。</div>
+<div class="tblwrap"><table>
+<tr><th>事件</th><th>量級</th><th>對佇列的意義</th></tr>
+<tr><td>L1 命中</td><td>~1 ns 級</td><td>不共享就幾乎免費——SPSC cached-index 的獎品</td></tr>
+<tr><td>uncontended atomic RMW</td><td>~個位數 ns 級</td><td>無人搶時,CAS/swap 和普通寫同棟樓</td></tr>
+<tr><td>跨核 cache line 轉移</td><td>~數十 ns 級</td><td>共享 cursor 每次易手的地板價</td></tr>
+<tr><td>contended CAS(含 retry)</td><td>~數十 – 數百 ns 級</td><td>MPMC 飽和區的單筆成本</td></tr>
+<tr><td>futex uncontended lock/unlock</td><td>≈ atomic 同級</td><td><b>無競爭的 mutex 就是一顆 CAS</b>——它不慢</td></tr>
+<tr><td>context switch / 喚醒</td><td>~µs 級</td><td>mutex 真正貴的是「睡下去再醒來」;也是 spin-then-park 的分界</td></tr>
+</table></div>
+
+<h2>Mutex 的名譽保衛戰(先量再換)</h2>
+<div class="grid2">
+<div class="card"><b class="g">lock-free 真正買到的</b>
+<ul class="tight">
+<li>尾延遲可預測:沒有「持鎖者被 deschedule,全隊陪睡」</li>
+<li>無 priority inversion、無死鎖組合爆炸</li>
+<li>可用於不可阻塞情境:audio callback、signal handler</li>
+<li>contention 下退化曲線平緩</li>
+</ul></div>
+<div class="card"><b class="o">lock-free 沒承諾的</b>
+<ul class="tight">
+<li>平均吞吐未必贏:uncontended mutex ≈ 一顆 CAS</li>
+<li>程式碼複雜度、驗證成本(loom)全額自付</li>
+<li>Vyukov 一族還不給正式 progress 保證</li>
+<li>飽和區照樣 line 乒乓,物理不可豁免</li>
+</ul></div>
+</div>
+<p>結論句(拿去面試用):「我會先 <span class="k">Mutex&lt;VecDeque&gt;</span> +
+condvar 拿到正確性,<b>量到 contention 證據</b>再按競爭形狀換型——
+直接跳 lock-free 顯得沒判斷。」</p>
+
+<h2>組合:真實系統是逐邊選型,不是一顆佇列打天下</h2>
+<div class="card edge"><pre class="mini">            spawn / 外部提交
+                 │
+        ┌────────▼────────┐
+        │ 全域 injector    │  ← MPMC(誰都能丟、誰都能領)
+        └───┬────┬────┬───┘
+            │    │    │
+   ┌────────▼┐ ┌─▼──────┐ ┌─▼──────┐
+   │ worker 1 │ │ worker 2│ │ worker 3│
+   │ 本地deque│ │ 本地deque│ │ 本地deque│ ← Chase-Lev SPMC
+   └────▲────┘ └───▲────┘ └───▲────┘   (owner 免CAS,失衡才被偷)
+        └── steal ──┴── steal ──┘
+   io driver / timer ──► 各 worker 喚醒信箱 ← MPSC</pre>
+tokio / rayon / Go 排程器都是這個形狀:<b>每一條邊按自己的競爭形狀選型</b>。
+這張圖同時是你 executor deep-dive 的骨架圖——三章(MPMC/SPMC/MPSC)在同一張圖裡各就各位。</div>
+
+<h2>選型決策流</h2>
+<div class="flow">
+<div class="fnode"><b>Q1 可以阻塞嗎?</b>低競爭、允許睡 → Mutex+condvar 起步,量了再說。硬 real-time / callback / signal → 往下。</div>
+<div class="farrow">│ 不可阻塞或已量到 contention ▼</div>
+<div class="fnode"><b>Q2 有界可接受嗎?</b>可以 → bounded(slot 重用,免 reclamation,backpressure 有掛點)。必須無界 → MS 一族,reclamation 全套自付。</div>
+<div class="farrow">│ ▼</div>
+<div class="fnode"><b>Q3 每端各幾個競爭者?</b>1×1→SPSC;N×1→MPSC;1×N→先問競爭還是 broadcast;N×N→真的無法拆邊,才 Vyukov / ArrayQueue。</div>
+<div class="farrow">│ ▼</div>
+<div class="fnode"><b>Q4 還能再拆嗎?</b>MPMC 常能拆成 per-worker 結構 + steal(上圖)。拆邊 &gt; 換更強的佇列。</div>
+</div>
+
+<h2>場景 × 推薦彙總</h2>
+<div class="tblwrap"><table>
+<tr><th>場景</th><th>形狀</th><th>推薦</th><th>一句理由</th></tr>
+<tr><td>audio callback 交資料</td><td>1×1,不可阻塞</td><td>SPSC ring</td><td>wait-free 是硬需求</td></tr>
+<tr><td>多執行緒 log 匯流</td><td>N×1</td><td>MPSC(bounded)或 N 條 SPSC</td><td>寫端競爭 vs 收端輪詢的取捨</td></tr>
+<tr><td>thread pool 任務</td><td>N×N 可拆</td><td>MPMC injector + Chase-Lev 本地</td><td>把常態競爭拆到零</td></tr>
+<tr><td>行情 / 事件 fan-out</td><td>1×N broadcast</td><td>Disruptor 型 ring</td><td>各自 cursor,gating 即 backpressure</td></tr>
+<tr><td>config 熱更新</td><td>1×N 只要最新</td><td>seqlock / ArcSwap</td><td>連佇列都不用是最快的佇列</td></tr>
+<tr><td>跨 async task 傳訊</td><td>N×1</td><td>tokio mpsc</td><td>backpressure = .await,交給排程器</td></tr>
+<tr><td>你的 telemetry ingestion</td><td>1×1 + 滿載丟舊</td><td>SPSC + drop 計數</td><td>7/19 彩排題本體</td></tr>
+</table></div>
+</section>
+
+<!-- ══════════ TAB 7 Code・驗證・延伸 ══════════ -->
+<section class="panel" id="t-code">
+<h2>驗證聲明(這頁的碼是怎麼被信任的)</h2>
+<div class="card ok" style="border-color:var(--green)">
+<ul class="tight">
+<li>以 <span class="k">rustc 1.75 --edition 2021 -O</span> 編譯執行,全 assert 通過後
+<b>原檔逐 byte 注入</b>本頁;產出後再從 HTML 抽回、diff、重編譯——顯示的就是跑過的。</li>
+<li>2024-edition 相容:<span class="k">#![deny(unsafe_op_in_unsafe_fn)]</span> 全開、
+不用 <span class="k">gen</span> 識別字、無 <span class="k">static mut</span>。
+貼進 CoderPad(Rust 1.92 / 2024)不需改動。</li>
+<li>測試 = 單執行緒精確測試(滿/空/wrap/<b>非原點邊界</b>/多圈)+ 多執行緒 smoke。
+<b>誠實侷限:</b>本機單核,交錯覆蓋有限;smoke 過了不等於併發正確——
+正式驗證是 loom 窮舉(下方附長相)。</li>
+</ul></div>
+
+<h2>SPSC ring(drill 對答案用)</h2>
+<pre><code><!--CODE_SPSC_BEGIN-->// spsc.rs — SPSC ring buffer, std-only, 2024-edition-compatible
+// 驗證:rustc --edition 2021 -O spsc.rs &amp;&amp; ./spsc   (asserts-in-main,全綠無輸出即通過)
+#![deny(unsafe_op_in_unsafe_fn)]
+use std::cell::UnsafeCell;
+use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicUsize, Ordering::{Acquire, Relaxed, Release}};
+use std::sync::Arc;
+use std::thread;
+
+#[repr(align(64))]
+struct Pad&lt;T&gt;(T); // head / tail 各自獨占一條 cache line,避免 false sharing
+
+struct Inner&lt;T, const N: usize&gt; {
+    buf: [UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;; N],
+    head: Pad&lt;AtomicUsize&gt;, // 只有 consumer 寫(單調遞增,永不歸零)
+    tail: Pad&lt;AtomicUsize&gt;, // 只有 producer 寫(單調遞增,永不歸零)
+}
+
+// 安全論證:data 的存取由 head/tail 協議獨占(producer 只碰 [head,tail) 之外、
+// consumer 只碰 [head,tail) 之內),兩條 release/acquire 邊保證可見性。
+unsafe impl&lt;T: Send, const N: usize&gt; Send for Inner&lt;T, N&gt; {}
+unsafe impl&lt;T: Send, const N: usize&gt; Sync for Inner&lt;T, N&gt; {}
+
+pub struct Producer&lt;T, const N: usize&gt;(Arc&lt;Inner&lt;T, N&gt;&gt;);
+pub struct Consumer&lt;T, const N: usize&gt;(Arc&lt;Inner&lt;T, N&gt;&gt;);
+
+pub fn spsc&lt;T, const N: usize&gt;() -&gt; (Producer&lt;T, N&gt;, Consumer&lt;T, N&gt;) {
+    assert!(N.is_power_of_two(), "N 必須是 2 的冪:&amp; (N-1) 取位、wrap 判滿都依賴它");
+    let inner = Arc::new(Inner {
+        buf: std::array::from_fn(|_| UnsafeCell::new(MaybeUninit::uninit())),
+        head: Pad(AtomicUsize::new(0)),
+        tail: Pad(AtomicUsize::new(0)),
+    });
+    (Producer(inner.clone()), Consumer(inner))
+}
+
+impl&lt;T, const N: usize&gt; Producer&lt;T, N&gt; {
+    pub fn push(&amp;mut self, v: T) -&gt; Result&lt;(), T&gt; {
+        let q = &amp;*self.0;
+        let t = q.tail.0.load(Relaxed);   // 自己的 index:單寫者,讀自己 → Relaxed
+        let h = q.head.0.load(Acquire);   // 邊2 接收端:看到 consumer 的 release(head)
+                                          //   才保證 slot 舊值已被讀完,可以覆寫
+        if t.wrapping_sub(h) == N {       // 滿:單調 index 差值判滿,不浪費格
+            return Err(v);
+        }
+        unsafe { (*q.buf[t &amp; (N - 1)].get()).write(v); }
+        q.tail.0.store(t.wrapping_add(1), Release); // 邊1 發佈端:data 寫入
+                                                    //   happens-before 這個 store
+        Ok(())
+    }
+}
+
+impl&lt;T, const N: usize&gt; Consumer&lt;T, N&gt; {
+    pub fn pop(&amp;mut self) -&gt; Option&lt;T&gt; {
+        let q = &amp;*self.0;
+        let h = q.head.0.load(Relaxed);   // 自己的 index → Relaxed
+        let t = q.tail.0.load(Acquire);   // 邊1 接收端:同步到 producer 的
+                                          //   release(tail),data 可見
+        if t == h {                       // 空
+            return None;
+        }
+        let v = unsafe { (*q.buf[h &amp; (N - 1)].get()).assume_init_read() };
+        q.head.0.store(h.wrapping_add(1), Release); // 邊2 發佈端:「這格我讀完了」
+        Some(v)
+    }
+}
+
+impl&lt;T, const N: usize&gt; Drop for Inner&lt;T, N&gt; {
+    fn drop(&amp;mut self) { // 兩個 handle 都掛了才會走到這:獨占,安全清場
+        let mut h = *self.head.0.get_mut();
+        let t = *self.tail.0.get_mut();
+        while h != t {
+            unsafe { (*self.buf[h &amp; (N - 1)].get()).assume_init_drop(); }
+            h = h.wrapping_add(1);
+        }
+    }
+}
+
+fn main() {
+    // ── 單執行緒精確測試(含滿 / 空 / wrap / 非原點邊界)──
+    let (mut p, mut c) = spsc::&lt;u64, 4&gt;();
+    assert_eq!(c.pop(), None);                       // 初始為空
+    for i in 0..4 { assert!(p.push(i).is_ok()); }
+    assert_eq!(p.push(99), Err(99));                 // 滿(t-h==4)
+    assert_eq!(c.pop(), Some(0));
+    assert_eq!(c.pop(), Some(1));
+    assert!(p.push(4).is_ok());                      // t=4 → slot 0:跨 wrap 寫入
+    assert!(p.push(5).is_ok());                      // t=5 → slot 1
+    assert_eq!(p.push(99), Err(99));                 // 非原點的滿:h=2, t=6
+    for want in 2..6 { assert_eq!(c.pop(), Some(want)); } // FIFO 保持
+    assert_eq!(c.pop(), None);                       // 非原點的空:h==t==6
+    // 再繞幾圈,確認 lap 算術與 slot 重用
+    for lap in 0..3u64 {
+        for i in 0..4 { assert!(p.push(lap * 10 + i).is_ok()); }
+        for i in 0..4 { assert_eq!(c.pop(), Some(lap * 10 + i)); }
+    }
+
+    // ── 雙執行緒 smoke:100k 筆,驗證嚴格遞增(FIFO + 不丟不重)──
+    const M: u64 = 100_000;
+    let (mut p, mut c) = spsc::&lt;u64, 8&gt;();
+    let prod = thread::spawn(move || {
+        for i in 0..M {
+            let mut v = i;
+            loop {
+                match p.push(v) {
+                    Ok(()) =&gt; break,
+                    Err(back) =&gt; { v = back; thread::yield_now(); } // 滿了讓路
+                }
+            }
+        }
+    });
+    let cons = thread::spawn(move || {
+        let mut expect = 0u64;
+        while expect &lt; M {
+            match c.pop() {
+                Some(v) =&gt; { assert_eq!(v, expect); expect += 1; }
+                None =&gt; thread::yield_now(),
+            }
+        }
+    });
+    prod.join().unwrap();
+    cons.join().unwrap();
+    println!("spsc: all tests passed");
+}
+<!--CODE_SPSC_END--></code></pre>
+
+<h2>Vyukov bounded MPMC(選練對答案用)</h2>
+<pre><code><!--CODE_VYUKOV_BEGIN-->// vyukov.rs — Vyukov bounded MPMC queue, std-only, 2024-edition-compatible
+// 驗證:rustc --edition 2021 -O vyukov.rs &amp;&amp; ./vyukov
+// 註:欄位命名避開 `gen`(2024 保留字),用 seq / lap 語彙。
+#![deny(unsafe_op_in_unsafe_fn)]
+use std::cell::UnsafeCell;
+use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicUsize, Ordering::{Acquire, Relaxed, Release}};
+use std::sync::Arc;
+use std::thread;
+
+#[repr(align(64))]
+struct Pad&lt;T&gt;(T); // epos / dpos 兩顆熱門 cursor 分開躺,別共享 cache line
+
+struct Slot&lt;T&gt; {
+    seq: AtomicUsize,                 // 這格的「狀態 + 圈數」合體票
+    data: UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;, // 非原子;由 seq 協議保護
+}
+
+pub struct MpmcQueue&lt;T&gt; {
+    slots: Box&lt;[Slot&lt;T&gt;]&gt;,
+    mask: usize,
+    epos: Pad&lt;AtomicUsize&gt;, // enqueue 取號機(多寫者 → CAS)
+    dpos: Pad&lt;AtomicUsize&gt;, // dequeue 取號機(多寫者 → CAS)
+}
+
+unsafe impl&lt;T: Send&gt; Send for MpmcQueue&lt;T&gt; {}
+unsafe impl&lt;T: Send&gt; Sync for MpmcQueue&lt;T&gt; {}
+
+impl&lt;T&gt; MpmcQueue&lt;T&gt; {
+    pub fn new(cap: usize) -&gt; Self {
+        assert!(cap.is_power_of_two() &amp;&amp; cap &gt;= 2);
+        let slots = (0..cap)
+            .map(|i| Slot { seq: AtomicUsize::new(i), data: UnsafeCell::new(MaybeUninit::uninit()) })
+            .collect::&lt;Vec&lt;_&gt;&gt;()
+            .into_boxed_slice(); // 初始 seq=i:第 0 圈,slot i 的空位票號就是 i
+        Self { slots, mask: cap - 1, epos: Pad(AtomicUsize::new(0)), dpos: Pad(AtomicUsize::new(0)) }
+    }
+
+    pub fn push(&amp;self, v: T) -&gt; Result&lt;(), T&gt; {
+        let mut pos = self.epos.0.load(Relaxed); // 只是猜號;猜錯 CAS 會糾正 → Relaxed
+        loop {
+            let slot = &amp;self.slots[pos &amp; self.mask];
+            let seq = slot.seq.load(Acquire);    // 同步邊接收端(接對面 dequeue 的 release)
+            let diff = seq.wrapping_sub(pos) as isize;
+            if diff == 0 {
+                // seq == pos:這格是「本圈空位票」→ 去取號機搶這個號
+                match self.epos.0.compare_exchange_weak(pos, pos.wrapping_add(1), Relaxed, Relaxed) {
+                    Ok(_) =&gt; {
+                        // 搶到號 = 這格本圈的寫入權獨家歸我
+                        unsafe { (*slot.data.get()).write(v); }
+                        slot.seq.store(pos.wrapping_add(1), Release); // 貨到回條:發佈 data
+                        return Ok(());
+                    }
+                    Err(actual) =&gt; pos = actual, // 沒搶到,CAS 順手告訴我最新號
+                }
+            } else if diff &lt; 0 {
+                // seq 還停在上一圈:上一圈這格的貨還沒被 consumer 收走 → 滿
+                return Err(v);
+            } else {
+                pos = self.epos.0.load(Relaxed); // 號被別人搶走推進了,重新看號
+            }
+        }
+    }
+
+    pub fn pop(&amp;self) -&gt; Option&lt;T&gt; {
+        let mut pos = self.dpos.0.load(Relaxed);
+        loop {
+            let slot = &amp;self.slots[pos &amp; self.mask];
+            let seq = slot.seq.load(Acquire);    // 接 push 的 release:看到回條 = data 可見
+            let diff = seq.wrapping_sub(pos.wrapping_add(1)) as isize;
+            if diff == 0 {
+                // seq == pos+1:本圈貨到回條在 → 搶收貨號
+                match self.dpos.0.compare_exchange_weak(pos, pos.wrapping_add(1), Relaxed, Relaxed) {
+                    Ok(_) =&gt; {
+                        let v = unsafe { (*slot.data.get()).assume_init_read() };
+                        // 讀完發下一圈空位票:pos + cap。release 保證「我讀完了」
+                        // happens-before 下一圈 producer 的覆寫(靠對面 Acquire 接住)
+                        slot.seq.store(pos.wrapping_add(self.mask).wrapping_add(1), Release);
+                        return Some(v);
+                    }
+                    Err(actual) =&gt; pos = actual,
+                }
+            } else if diff &lt; 0 {
+                // 回條還沒出現:可能真的空,也可能 producer 搶了號還沒寫完
+                //(← Vyukov 不滿足正式 lock-free 定義的現場)
+                return None;
+            } else {
+                pos = self.dpos.0.load(Relaxed);
+            }
+        }
+    }
+}
+
+impl&lt;T&gt; Drop for MpmcQueue&lt;T&gt; {
+    fn drop(&amp;mut self) {
+        while self.pop().is_some() {} // &amp;mut self 獨占,安全排空
+    }
+}
+
+fn main() {
+    // ── 單執行緒精確測試:滿 / 空 / wrap / 非原點圈數 ──
+    let q = MpmcQueue::&lt;u64&gt;::new(4);
+    assert_eq!(q.pop(), None);
+    for i in 0..4 { assert!(q.push(i).is_ok()); }
+    assert_eq!(q.push(99), Err(99));                  // 滿:slot0.seq 停在上一圈
+    assert_eq!(q.pop(), Some(0));
+    assert!(q.push(4).is_ok());                       // 進第二圈:slot0 重用
+    for want in 1..5 { assert_eq!(q.pop(), Some(want)); }
+    assert_eq!(q.pop(), None);                        // 非原點空:dpos==epos==5
+    for lap in 0..5u64 {                              // 多繞幾圈驗 lap 算術
+        for i in 0..4 { assert!(q.push(lap * 100 + i).is_ok()); }
+        assert!(q.push(777).is_err());
+        for i in 0..4 { assert_eq!(q.pop(), Some(lap * 100 + i)); }
+    }
+
+    // ── 多執行緒 smoke:2 producers × 2 consumers,50k×2 筆 ──
+    // 驗證:(a) 不丟不重(全域 seen 表);(b) 單一 consumer 視角內,
+    //       每個 producer 的元素序號嚴格遞增(ticket 序 ⇒ per-producer FIFO)
+    const PER: u64 = 50_000;
+    let q = Arc::new(MpmcQueue::&lt;u64&gt;::new(8));
+    let done = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+    for pid in 0..2u64 {
+        let q = q.clone();
+        handles.push(thread::spawn(move || {
+            for i in 0..PER {
+                let mut v = (pid &lt;&lt; 32) | i; // 高位 producer id,低位序號
+                loop {
+                    match q.push(v) {
+                        Ok(()) =&gt; break,
+                        Err(back) =&gt; { v = back; thread::yield_now(); }
+                    }
+                }
+            }
+        }));
+    }
+    let popped = Arc::new(AtomicUsize::new(0));
+    let mut consumers = Vec::new();
+    for _ in 0..2 {
+        let (q, popped, done) = (q.clone(), popped.clone(), done.clone());
+        consumers.push(thread::spawn(move || {
+            let mut got: Vec&lt;u64&gt; = Vec::new();
+            let mut last = [-1i64; 2];
+            loop {
+                match q.pop() {
+                    Some(v) =&gt; {
+                        let (pid, i) = ((v &gt;&gt; 32) as usize, (v &amp; 0xffff_ffff) as i64);
+                        assert!(i &gt; last[pid], "per-producer 順序被打破");
+                        last[pid] = i;
+                        got.push(v);
+                        popped.fetch_add(1, Relaxed);
+                    }
+                    None =&gt; {
+                        if done.load(Acquire) == 2
+                            &amp;&amp; popped.load(Relaxed) as u64 == 2 * PER { break; }
+                        thread::yield_now();
+                    }
+                }
+            }
+            got
+        }));
+    }
+    for h in handles { h.join().unwrap(); done.fetch_add(1, Release); }
+    let mut seen = vec![false; (2 * PER) as usize];
+    for c in consumers {
+        for v in c.join().unwrap() {
+            let (pid, i) = (v &gt;&gt; 32, v &amp; 0xffff_ffff);
+            let idx = (pid * PER + i) as usize;
+            assert!(!seen[idx], "重複取出");
+            seen[idx] = true;
+        }
+    }
+    assert!(seen.iter().all(|&amp;b| b), "有元素遺失");
+    println!("vyukov: all tests passed");
+}
+<!--CODE_VYUKOV_END--></code></pre>
+
+<h2>loom 版測試長什麼樣(示意,本頁環境跑不了)</h2>
+<pre class="mini">// Cargo.toml: [dev-dependencies] loom = "0.7"   (版本憑記憶,以 crates.io 為準)
+#[test]
+fn loom_spsc() {
+    loom::model(|| {                    // 窮舉所有合法交錯與記憶體序
+        let (mut p, mut c) = spsc::&lt;u32, 2&gt;();   // 容量開小,壓縮狀態空間
+        let t = loom::thread::spawn(move || { let _ = p.push(1); let _ = p.push(2); });
+        let mut got = vec![];
+        while got.len() &lt; 2 { if let Some(v) = c.pop() { got.push(v); } loom::thread::yield_now(); }
+        assert_eq!(got, [1, 2]);
+        t.join().unwrap();
+    });
+}
+// 把 pop 的 Acquire 改成 Relaxed 再跑:loom 直接給你反例執行序 —— 這才叫驗證。</pre>
+
+<h2>延伸問題(follow-up,不在本頁解)</h2>
+<ul class="tight">
+<li><b>①</b> 給 SPSC 加「可阻塞等待」(park / futex):失去哪個 progress guarantee?
+喚醒遺失怎麼防——跟你 executor 的 wake-before-park token 是同一題嗎?</li>
+<li><b>②</b> 把 Vyukov 退化成 MPSC:哪一顆 CAS 可以變 Relaxed store?
+Ordering 表哪幾行要改寫?(答案應該只動 dequeue 側。)</li>
+<li><b>③</b> Chase-Lev grow:為什麼換 buffer 可以不停世界?舊 buffer 誰、何時回收
+——這題怎麼又變回 reclamation?</li>
+<li><b>④</b> 拿你的 arena + generation tag 當 MS queue 的 reclamation:
+tag 幾 bit 夠?u32 世代繞回時的風險怎麼「敘述」(不必解)?</li>
+<li><b>⑤</b> NUMA:per-node 佇列 + 跨節點匯流,上面那張組合圖怎麼長?</li>
+<li><b>⑥</b> Vyukov 的 full/empty 是「該號 slot 視角」的判定——它和 linearizable 的
+size() 差在哪?為什麼 lock-free 結構的 size() 幾乎都只是估計值?</li>
+</ul>
+
+<div class="footer">lockfree-queue-family-handbook · Gruvbox Material ·
+碼:rustc 驗證後逐 byte 注入 · 量級表非 benchmark · Lê et al. 出處憑記憶標註 ·
+建議精讀時機:7/28 TPS 之後</div>
+</section>
+</div>
+<script>
+/* ── tabs + data-jump(硬約束:錨點跳轉一律走 data-jump 委派 handler)── */
+(function(){
+  var tabs=document.getElementById('tabs');
+  function activate(id){
+    document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('on',p.id===id);});
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('on',t.dataset.tab===id);});
+  }
+  tabs.addEventListener('click',function(e){
+    var b=e.target.closest('.tab'); if(!b)return;
+    activate(b.dataset.tab); window.scrollTo({top:0});
+  });
+  document.addEventListener('click',function(e){
+    var j=e.target.closest('[data-jump]'); if(!j)return;
+    var id=j.dataset.jump, el=document.getElementById(id); if(!el)return;
+    var panel=el.classList.contains('panel')?el:el.closest('.panel');
+    if(panel) activate(panel.id);
+    if(el!==panel) setTimeout(function(){el.scrollIntoView({behavior:'smooth',block:'start'});},60);
+    else window.scrollTo({top:0});
+  });
+})();
+
+/* ── 通用 stepper 引擎 ── */
+function Stepper(mountId,title,frames){
+  var root=document.getElementById(mountId); if(!root)return;
+  var i=0;
+  root.innerHTML=
+    '<div class="stephead"><span class="ttl">'+title+'</span>'+
+    '<button class="sbtn" data-a="p">◀ 上一步</button>'+
+    '<button class="sbtn" data-a="n">下一步 ▶</button>'+
+    '<span class="fcount"></span></div>'+
+    '<div class="slots"></div><div class="curs"></div>'+
+    '<div class="thline"></div><div class="snote"></div><div class="dots"></div>';
+  var $=function(s){return root.querySelector(s);};
+  var dots=$('.dots');
+  frames.forEach(function(_,k){
+    var d=document.createElement('div'); d.className='dot'; d.dataset.k=k; dots.appendChild(d);
+  });
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  function render(){
+    var f=frames[i];
+    $('.slots').innerHTML=f.slots.map(function(s,k){
+      var cls='slot '+(s.cls||'st-tik')+(s.hl?' hl':'')+(s.bad?' bad':'');
+      return '<div class="'+cls+'"><div class="si">slot '+k+'</div>'+
+        '<div class="sv">'+esc(s.v||'·')+'</div>'+
+        (s.sq!=null?'<div class="sq">'+esc(s.sq)+'</div>':'')+'</div>';
+    }).join('');
+    $('.curs').innerHTML=f.curs.map(function(c){return '<span>'+esc(c)+'</span>';}).join('');
+    $('.thline').innerHTML=f.th.map(function(t){
+      return '<div class="th '+(t.cls||'')+'">'+esc(t.n)+' · '+esc(t.s)+'</div>';}).join('');
+    var note=$('.snote');
+    note.className='snote'+(f.star?' star':'');
+    note.innerHTML='<span class="stag">'+(f.star?'★':(i+1)+'/'+frames.length)+'</span>'+f.note;
+    $('.fcount').textContent=(i+1)+' / '+frames.length;
+    root.querySelector('[data-a=p]').disabled=(i===0);
+    root.querySelector('[data-a=n]').disabled=(i===frames.length-1);
+    dots.querySelectorAll('.dot').forEach(function(d,k){d.classList.toggle('on',k===i);});
+  }
+  root.addEventListener('click',function(e){
+    var b=e.target.closest('[data-a]');
+    if(b){ i+=(b.dataset.a==='n'?1:-1); i=Math.max(0,Math.min(frames.length-1,i)); render(); return;}
+    var d=e.target.closest('.dot');
+    if(d){ i=+d.dataset.k; render(); }
+  });
+  render();
+  return {step:function(dir){ i=Math.max(0,Math.min(frames.length-1,i+dir)); render(); }, root:root};
+}
+
+/* ── SPSC 幀資料(N=4;值與 index 全部手算精確)── */
+var T=function(v,cls,sq,hl,bad){return {v:v,cls:cls,sq:sq,hl:hl,bad:bad};};
+var E0=T('','st-tik');
+var SPSC_FRAMES=[
+ {slots:[E0,E0,E0,E0],curs:['h = 0','t = 0','t−h = 0(空)'],
+  th:[{n:'P',s:'idle'},{n:'C',s:'idle'}],
+  note:'初始:兩個里程表都是 0。判準只有兩條:<b>空 = t==h</b>、<b>滿 = t−h==N</b>。index 單調遞增、永不歸零,物理格 = idx & 3。'},
+ {slots:[T('A','st-wr',null,true),E0,E0,E0],curs:['h = 0','t = 0'],
+  th:[{n:'P',s:'寫 A → slot 0(tail 未動)',cls:'act'},{n:'C',s:'idle'}],
+  note:'producer 先把 data 落地。<b>此刻 consumer 看不見 A</b>——tail 還是 0,對它而言佇列仍是空的。data 永遠先於發佈動作。'},
+ {slots:[T('A','st-full'),E0,E0,E0],curs:['h = 0','t = 1'],
+  th:[{n:'P',s:'Release-store tail=1',cls:'own'},{n:'C',s:'idle'}],
+  note:'<b class="b">邊 1 發佈端</b>:release-store tail=1。剛才的 data 寫入 happens-before 這個 store——這是 A 存在於世界上的官方宣告。'},
+ {slots:[T('A','st-full',null,true),E0,E0,E0],curs:['h = 0','t = 1'],
+  th:[{n:'P',s:'idle'},{n:'C',s:'Acquire-load tail=1 → 讀 A',cls:'act'}],
+  note:'<b class="b">邊 1 接收端</b>:acquire-load(tail) 同步到那個 release → A 保證完整可見。t≠h,讀出 slot 0 的 A。'},
+ {slots:[E0,E0,E0,E0],curs:['h = 1','t = 1'],
+  th:[{n:'P',s:'idle'},{n:'C',s:'Release-store head=1',cls:'own'}],
+  note:'<b class="p">邊 2 發佈端</b>:head=1 的 release =「slot 0 我讀完了」。現在看不出用處——記住它,wrap 的時候回來收帳。'},
+ {slots:[E0,T('B','st-full'),T('C','st-full'),T('D','st-full')],curs:['h = 1','t = 4'],
+  th:[{n:'P',s:'連推 B, C, D',cls:'act'},{n:'C',s:'idle'}],
+  note:'t 一路推到 4。<b>里程表不歸零</b>——「第 4 筆」這個事實被保留,物理位置交給 & 3 去算。'},
+ {slots:[T('E','st-wr',null,true),T('B','st-full'),T('C','st-full'),T('D','st-full')],curs:['h = 1','t = 4','t−h = 3 < 4 ✓'],
+  th:[{n:'P',s:'push E:4 & 3 = slot 0!',cls:'own'},{n:'C',s:'idle'}],star:true,
+  note:'★ <b>wrap 時刻</b>:t=4 → 物理格繞回 slot 0。覆寫它安全嗎?安全——<b class="p">邊 2</b> 在此兌現:acquire 到 h=1,證明 consumer 已讀完 slot 0。沒有邊 2,這一步就是「蓋掉別人正在讀的格子」。'},
+ {slots:[T('E','st-full'),T('B','st-full',null,false,true),T('C','st-full'),T('D','st-full')],curs:['h = 1','t = 5','t−h = 4 = N ⇒ 滿'],
+  th:[{n:'P',s:'push F → Err(F)',cls:'stall'},{n:'C',s:'idle'}],star:true,
+  note:'★ <b>非原點的滿</b>:h=1、t=5,差值恰為 N。滿不是只在 h=0 發生——這就是「宣告完成前,先 dry-run 一個非原點邊界」要抓的那類案例。'},
+ {slots:[T('E','st-full'),E0,T('C','st-full'),T('D','st-full')],curs:['h = 2','t = 5'],
+  th:[{n:'P',s:'等待空間'},{n:'C',s:'讀 B → Release head=2',cls:'own'}],
+  note:'consumer 收走 B,release head=2——又一次邊 2 的發佈。'},
+ {slots:[T('E','st-full'),T('F','st-wr',null,true),T('C','st-full'),T('D','st-full')],curs:['h = 2','t = 6'],
+  th:[{n:'P',s:'重試 F:acquire h=2 → 3<4 ✓',cls:'act'},{n:'C',s:'idle'}],
+  note:'空間是靠<b class="p">邊 2</b> 遞回來的:consumer 的 release(head) → producer 的 acquire(head)。F 落在 5 & 3 = slot 1。'},
+ {slots:[T('E','st-full'),T('F','st-full'),T('C','st-full'),T('D','st-full')],curs:['h = 2','t = 6'],
+  th:[{n:'P',s:'—'},{n:'C',s:'—'}],star:true,
+  note:'★ 全景:<b class="b">邊 1(release tail → acquire tail)發佈資料</b>;<b class="p">邊 2(release head → acquire head)歸還空間</b>。每一格 data 的一生都被這兩條邊夾住——分析任何無鎖結構,問的都是同一句:資料掛在哪條邊上?'}
+];
+
+/* ── Vyukov 幀資料(cap=4;seq/epos/dpos 全部手算精確)── */
+function V(v,sq,cls,hl,bad){return {v:v,sq:'seq='+sq,cls:cls,hl:hl,bad:bad};}
+var VYU_FRAMES=[
+ {slots:[V('',0,'st-tik'),V('',1,'st-tik'),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 0','dpos = 0'],
+  th:[{n:'P1',s:'idle'},{n:'P2',s:'idle'},{n:'C1',s:'idle'}],
+  note:'初始:slot i 的 seq = i,是「第 0 圈的空位票」。判讀規則:<span class="k">seq==pos</span> 空位票 → 輪到 producer;<span class="k">seq==pos+1</span> 貨到回條 → 輪到 consumer;consumer 讀完發 <span class="k">pos+cap</span> = 下一圈的票。'},
+ {slots:[V('',0,'st-tik',true),V('',1,'st-tik'),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 0','dpos = 0'],
+  th:[{n:'P1',s:'load epos=0 → slot0 seq=0 ✓',cls:'act'},{n:'P2',s:'load epos=0 → 同一張票',cls:'act'},{n:'C1',s:'idle'}],
+  note:'兩個 producer 同時看上號 0。seq 的 <b>Acquire</b> load 是同步邊的接收端(此刻接的是初始值)。cursor 的 load 只是猜號 → Relaxed。'},
+ {slots:[V('',0,'st-tik',true),V('',1,'st-tik'),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 1','dpos = 0'],
+  th:[{n:'P1',s:'CAS epos 0→1 成功',cls:'own'},{n:'P2',s:'CAS 失敗 → Err(actual=1)',cls:'act'},{n:'C1',s:'idle'}],
+  note:'取號機仲裁。CAS 只決定「號歸誰」,不發佈任何資料 → <b>Relaxed/Relaxed 就夠</b>。輸家從 Err 直接拿到最新號 1——失敗自帶重讀,不用回頭再 load。'},
+ {slots:[V('',0,'st-tik'),V('B',1,'st-wr',true),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 2','dpos = 0'],
+  th:[{n:'P1',s:'(尚未寫入 slot0)'},{n:'P2',s:'搶到號 1 → 寫 B',cls:'own'},{n:'C1',s:'idle'}],
+  note:'P2 在號 1 上 CAS 成功(epos→2),先把 B 寫進 slot 1。搶到號 = 這一格<b>這一圈</b>的寫入權獨家歸它,data 本身不必是原子。'},
+ {slots:[V('',0,'st-tik'),V('B',2,'st-full'),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 2','dpos = 0'],
+  th:[{n:'P1',s:'💤 被 deschedule:號拿了、貨沒交',cls:'stall'},{n:'P2',s:'Release-store slot1.seq=2(回條)',cls:'own'},{n:'C1',s:'idle'}],
+  note:'P2 交貨完成:release seq=2 = 號 1 的貨到回條。同時 P1 停滯在「CAS 贏了、data 還沒寫」的窗裡。記住這個狀態,下一幀收帳。'},
+ {slots:[V('',0,'st-tik',false,true),V('B',2,'st-full',true),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 2','dpos = 0'],
+  th:[{n:'P1',s:'💤',cls:'stall'},{n:'P2',s:'idle'},{n:'C1',s:'pop:slot0 seq=0,diff=−1 → None',cls:'act'}],star:true,
+  note:'★ <b>整條隊看似空的</b>:B 明明已就緒,但 C1 必須按 dpos=0 收號 0,而號 0 的回條沒出現(seq 還是 0)。一個停滯的 thread 堵住<b>所有</b> consumer、無人能代它交貨 → 這就是 Vyukov 不滿足正式 lock-free 定義的現場(對照 MS queue 的 help-advance:那邊的中間態任何人都能修)。'},
+ {slots:[V('A',1,'st-full',true),V('B',2,'st-full'),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 2','dpos = 0'],
+  th:[{n:'P1',s:'醒來:寫 A → Release seq=1',cls:'own'},{n:'P2',s:'idle'},{n:'C1',s:'idle'}],
+  note:'P1 復工交貨:寫 A、release slot0.seq=1。這個 release 即將與 consumer 的 acquire 配對成同步邊——A 的可見性只靠它,與 epos 無關。'},
+ {slots:[V('',4,'st-tik',true),V('B',2,'st-full'),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 2','dpos = 1'],
+  th:[{n:'P1',s:'idle'},{n:'P2',s:'idle'},{n:'C1',s:'seq=1 ✓ → CAS dpos 0→1 → 讀 A → 發票 seq=4',cls:'own'}],
+  note:'收貨三步:<b>Acquire</b> 看到回條 → CAS 搶收貨號(Relaxed,又是純仲裁)→ 讀完 <b>Release</b> seq = 0+4 =「第 1 圈 slot0 的空位票」。這個 release 保證「我讀完了」happens-before 下一圈 producer 的覆寫。'},
+ {slots:[V('',4,'st-tik'),V('',5,'st-tik'),V('',2,'st-tik'),V('',3,'st-tik')],
+  curs:['epos = 2','dpos = 2'],
+  th:[{n:'P1',s:'idle'},{n:'P2',s:'idle'},{n:'C1',s:'同法收 B → slot1.seq=5',cls:'act'}],
+  note:'全域 FIFO = 取號順序。佇列現在「空」——但注意:空的證據不在 cursor,而是分散在每個 slot 的 seq 裡(dpos 指到哪、哪格的回條沒出現,就是空)。'},
+ {slots:[V('E',5,'st-full',true),V('',5,'st-tik'),V('C',3,'st-full'),V('D',4,'st-full')],
+  curs:['epos = 5','dpos = 2'],
+  th:[{n:'P1',s:'快轉:推 C(號2)、D(號3)、E(號4)',cls:'act'},{n:'P2',s:'idle'},{n:'C1',s:'idle'}],star:true,
+  note:'★ <b>圈數算術</b>:號 4 的 producer 落在 slot 4&3=0,期待 <span class="k">seq==4</span>——恰好是上一圈 consumer 發的票。slot 重用、票號永遠對齊,一格記憶體用一輩子 → <b>bounded 免 reclamation 的機制本體</b>。(此刻 seq=[5,5,3,4]:同一個值 5 在 slot0 是回條、在 slot1 是票——判讀永遠相對於「誰的 pos」。)'},
+ {slots:[V('E',5,'st-full'),V('F',6,'st-full'),V('C',3,'st-stale',false,true),V('D',4,'st-full')],
+  curs:['epos = 6','dpos = 2'],
+  th:[{n:'P1',s:'推 F(號5)✓;推 G(號6)→ slot2 seq=3,diff=−3 → Err',cls:'stall'},{n:'P2',s:'idle'},{n:'C1',s:'idle'}],star:true,
+  note:'★ <b>滿的判讀</b>:號 6 落在 slot 2,seq 卻停在上一圈的回條 3 —— 意思是 lap 0 的 C 還沒被收走(dpos=2,下一個該收的正是它)。滿/空全部從<b>單一 slot 的 seq</b> 讀出;cursor 從頭到尾只是取號機。'},
+ {slots:[V('E',5,'st-full'),V('F',6,'st-full'),V('C',3,'st-full'),V('D',4,'st-full')],
+  curs:['epos = 6','dpos = 2'],
+  th:[{n:'P1',s:'—'},{n:'P2',s:'—'},{n:'C1',s:'—'}],star:true,
+  note:'★ Ordering 總結(今晚 drill 的作業格式):<b>epos/dpos load = Relaxed(猜號)</b>;<b>seq load = Acquire(接發佈)</b>;<b>cursor CAS = Relaxed/Relaxed(純仲裁)</b>;<b>data = 非原子(seq 協議獨家授權)</b>;<b>seq store = Release(發佈 data / 發佈「已清空」)</b>。同步全掛在 per-slot seq 的一對邊上——這就是「可以從 seq_cst 降級」的完整說法。'}
+];
+
+Stepper('stp-spsc','SPSC ring · N=4 · 兩條同步邊 + wrap',SPSC_FRAMES);
+Stepper('stp-vyu','Vyukov MPMC · cap=4 · P1/P2 對撞 + 停滯 + 圈數',VYU_FRAMES);
+
+/* ── 鍵盤 ←→ 控制目前分頁裡的 stepper ── */
+document.addEventListener('keydown',function(e){
+  if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;
+  var p=document.querySelector('.panel.on'); if(!p)return;
+  var st=p.querySelector('.stepper'); if(!st)return;
+  var btn=st.querySelector(e.key==='ArrowRight'?'[data-a=n]':'[data-a=p]');
+  if(btn&&!btn.disabled){btn.click(); e.preventDefault();}
+});
+
+/* ── 顯示層 code 上色(只動 DOM,不動原始碼字串;抽碼驗證走原始檔)── */
+(function(){
+  var KW=/\b(pub|fn|struct|impl|unsafe|let|mut|const|use|loop|match|if|else|return|while|for|in|move|self|Self|assert|assert_eq|true|false)\b/g;
+  var TY=/\b(AtomicUsize|UnsafeCell|MaybeUninit|Arc|Box|Vec|Option|Result|Some|None|Ok|Err|usize|u64|isize|bool|Ordering|Acquire|Release|Relaxed|Producer|Consumer|Inner|Slot|MpmcQueue|Pad|T|N)\b/g;
+  document.querySelectorAll('#t-code pre code').forEach(function(el){
+    var out=[];
+    el.textContent.split('\n').forEach(function(line){
+      var ci=line.indexOf('//'), code=ci>=0?line.slice(0,ci):line, cm=ci>=0?line.slice(ci):'';
+      var h=code.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(KW,'<span style="color:#ea6962">$1</span>')
+        .replace(TY,'<span style="color:#7daea3">$1</span>')
+        .replace(/\b(\d+)\b/g,'<span style="color:#d3869b">$1</span>');
+      if(cm) h+='<span style="color:#928374">'+cm.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span>';
+      out.push(h);
+    });
+    el.innerHTML=out.join('\n');
+  });
+})();
+</script>
+</body>
+</html>

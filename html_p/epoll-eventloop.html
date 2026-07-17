@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>epoll 與 JS 事件迴圈:從封包到 callback</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+:root{
+  --bg:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg-code:#1d2021;
+  --fg:#d4be98; --fg1:#ddc7a1; --dim:#a89984; --grey:#928374;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665;
+  --aqua:#89b482; --blue:#7daea3; --purple:#d3869b; --border:#45403d;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,'Noto Sans Mono CJK TC','PingFang TC','Microsoft JhengHei',monospace;
+  font-size:14px; line-height:1.75; padding:16px 12px 80px;
+}
+.wrap{max-width:960px;margin:0 auto}
+h1{font-size:19px;color:var(--fg1);letter-spacing:.5px;margin-bottom:4px}
+.sub{color:var(--grey);font-size:12px;margin-bottom:14px}
+h2{font-size:16px;color:var(--yellow);margin:26px 0 10px;border-bottom:1px solid var(--border);padding-bottom:6px}
+h3{font-size:14px;color:var(--aqua);margin:18px 0 8px}
+p{margin:8px 0}
+b,strong{color:var(--fg1)}
+em{font-style:normal;color:var(--orange)}
+code{background:var(--bg2);padding:1px 5px;border-radius:3px;font-size:.92em;color:var(--fg1)}
+pre{
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+  background:var(--bg-code);border:1px solid var(--border);border-radius:6px;
+  padding:12px 14px;overflow-x:auto;font-size:12.5px;line-height:1.62;margin:10px 0;
+}
+pre code{background:none;padding:0;color:var(--fg)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 20px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:10;border-bottom:1px solid var(--border)}
+.tabbtn{
+  font-family:inherit;font-size:12px;padding:7px 11px;border-radius:5px;cursor:pointer;
+  background:var(--bg1);color:var(--dim);border:1px solid var(--border);min-height:34px;
+}
+.tabbtn.on{background:var(--bg3);color:var(--yellow);border-color:var(--yellow)}
+.panel{display:none}
+.panel.on{display:block}
+.card{background:var(--bg1);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:6px;padding:12px 14px;margin:12px 0}
+.card.warn{border-left-color:var(--red)}
+.card.key{border-left-color:var(--yellow)}
+.card.hand{border-left-color:var(--green)}
+.card .ttl{font-size:12px;color:var(--grey);letter-spacing:1px;margin-bottom:6px}
+.fm{color:var(--grey);font-size:11px}
+ul,ol{margin:6px 0 6px 22px}
+li{margin:5px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:12.5px}
+th,td{border:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--bg2);color:var(--fg1)}
+.tblwrap{overflow-x:auto}
+/* ── 旅程圖(總覽) ── */
+.lane{border-left:3px solid var(--border);margin:6px 0 6px 6px;padding:2px 0 2px 14px;position:relative}
+.lane .tag{font-size:10.5px;letter-spacing:1.5px;color:var(--grey);margin:10px 0 2px}
+.stage{background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin:7px 0;font-size:12.8px;position:relative}
+.stage::before{content:'▼';position:absolute;left:-2px;top:-15px;color:var(--bg3);font-size:10px}
+.stage:first-of-type::before{content:''}
+.stage .who{color:var(--grey);font-size:11px;display:block}
+.lane.hw{border-color:var(--purple)} .lane.hw .stage{border-left:3px solid var(--purple)}
+.lane.kn{border-color:var(--blue)}  .lane.kn .stage{border-left:3px solid var(--blue)}
+.lane.rt{border-color:var(--green)} .lane.rt .stage{border-left:3px solid var(--green)}
+.lane.js{border-color:var(--yellow)}.lane.js .stage{border-left:3px solid var(--yellow)}
+/* ── stepper 通用 ── */
+.stepbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+.btn{
+  font-family:inherit;font-size:13px;padding:8px 16px;border-radius:5px;cursor:pointer;
+  background:var(--bg2);color:var(--fg1);border:1px solid var(--border);min-height:40px;
+}
+.btn:disabled{opacity:.35;cursor:default}
+.btn.mode{font-size:12px;padding:6px 12px;min-height:34px;color:var(--dim)}
+.btn.mode.on{background:var(--bg3);color:var(--green);border-color:var(--green)}
+.stepnum{color:var(--yellow);font-size:13px;min-width:56px;text-align:center}
+.narr{
+  background:var(--bg1);border:1px solid var(--border);border-left:3px solid var(--yellow);
+  border-radius:6px;padding:11px 14px;margin:10px 0;min-height:64px;font-size:13.2px;
+}
+.narr .nt{color:var(--yellow);display:block;margin-bottom:3px;font-size:12.5px}
+/* ── epoll stepper 場景 ── */
+.scene{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.zone{background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;transition:box-shadow .25s,border-color .25s}
+.zone.hl{border-color:var(--yellow);box-shadow:0 0 0 1px var(--yellow)}
+.zone .zt{font-size:11px;letter-spacing:1.5px;color:var(--grey);margin-bottom:7px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:5px 0}
+.lbl{color:var(--dim);font-size:12px;min-width:88px}
+.chip{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:3px 9px;font-size:12px;color:var(--fg1);transition:all .25s}
+.chip.hot{background:#4a3a2a;border-color:var(--orange);color:var(--orange)}
+.chip.ok{border-color:var(--green);color:var(--green)}
+.chip.ghost{opacity:.38}
+.bell{transition:all .25s}
+.bell.ring{border-color:var(--red);color:var(--red);background:#4a2f2d;animation:ring .5s ease}
+@keyframes ring{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+.empty{color:var(--grey);font-size:12px;font-style:normal}
+.tree{font-size:12px;line-height:1.5;color:var(--dim);white-space:pre}
+.tree .tn{color:var(--fg1)}
+.tree .tn.hot{color:var(--orange)}
+.evout{border:1px dashed var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--grey);min-height:34px}
+.evout.has{border-color:var(--green);color:var(--green)}
+/* ── JS stepper ── */
+.jsgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+@media(max-width:700px){.jsgrid{grid-template-columns:1fr}}
+.codebox{background:var(--bg-code);border:1px solid var(--border);border-radius:6px;padding:10px 6px;overflow-x:auto;-webkit-text-size-adjust:100%}
+.cl{padding:1px 10px;white-space:pre;font-size:12.5px;color:var(--fg);border-left:3px solid transparent}
+.cl.on{background:#3a3428;border-left-color:var(--yellow);color:var(--fg1)}
+.qcol{display:flex;flex-direction:column;gap:8px}
+.qbox{background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:8px 10px;min-height:52px}
+.qbox .qt{font-size:11px;letter-spacing:1px;color:var(--grey);margin-bottom:5px}
+.qbox.stack .qt{color:var(--blue)} .qbox.micro .qt{color:var(--purple)}
+.qbox.task .qt{color:var(--orange)} .qbox.cons .qt{color:var(--green)}
+.qbox .chips{display:flex;flex-wrap:wrap;gap:6px}
+.consout{font-size:13px;color:var(--green);white-space:pre-line;line-height:1.5}
+/* ── libuv 相位 ── */
+.phases{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0}
+.ph{background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:7px 11px;font-size:12px;color:var(--fg1)}
+.ph.poll{border-color:var(--aqua);color:var(--aqua)}
+.arr{color:var(--grey)}
+.jump{color:var(--aqua);text-decoration:underline;cursor:pointer}
+/* ── 面試英文 ── */
+.en{color:var(--fg1);border-left:3px solid var(--aqua);padding:2px 0 2px 12px;margin:8px 0;font-size:13.5px;line-height:1.9}
+.zh{color:var(--dim);font-size:12.3px;margin:6px 0 2px}
+.alt{color:var(--grey);font-size:12px;margin:4px 0 0}
+svg text{font-family:'JetBrains Mono',monospace}
+footer{margin-top:40px;color:var(--grey);font-size:11px;border-top:1px solid var(--border);padding-top:12px}
+
+/* syntax tokens (Gruvbox Material) */
+.tk-c{color:var(--grey);font-style:italic}
+.tk-s{color:var(--green)}
+.tk-k{color:var(--red)}
+.tk-t{color:var(--yellow)}
+.tk-n{color:var(--purple)}
+.tk-f{color:var(--blue)}
+.tk-m{color:var(--orange)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>epoll 與 JS 事件迴圈</h1>
+<div class="sub">從封包到 callback 的完整通知鏈 · 建樹 → 掛鈴 → 按鈴 → 收割 · 2026-07-17</div>
+
+<div class="tabs">
+  <button class="tabbtn on" data-tab="t1">總覽</button>
+  <button class="tabbtn" data-tab="t2">建樹</button>
+  <button class="tabbtn" data-tab="t3">通知鏈 Stepper</button>
+  <button class="tabbtn" data-tab="t4">收割與陷阱</button>
+  <button class="tabbtn" data-tab="t5">瀏覽器迴圈</button>
+  <button class="tabbtn" data-tab="t6">JS Stepper</button>
+  <button class="tabbtn" data-tab="t7">Node · libuv</button>
+  <button class="tabbtn" data-tab="t8">對照 tokio</button>
+  <button class="tabbtn" data-tab="t9">可跑的碼</button>
+  <button class="tabbtn" data-tab="t10">面試英文</button>
+</div>
+
+<!-- ══════════════ Tab 1 總覽 ══════════════ -->
+<section class="panel on" id="t1">
+
+<div class="card key">
+<div class="ttl">一句話</div>
+epoll 解決的是一個排隊問題:與其你每次醒來挨家挨戶問「資料到了沒」(select/poll,代價 O(全部)),不如在每一家門口<b>裝電鈴</b>——誰有資料誰按鈴,你只看<b>鈴響名單</b>(ready list,代價 O(就緒))。紅黑樹只是<em>門牌登記簿</em>:查重、找人用的,和鈴響本身無關。
+</div>
+
+<h2>先對齊你的三個問題</h2>
+<p><b>① 樹怎麼建?</b>——沒有「批次建樹」這回事。每呼叫一次 <code>epoll_ctl(ADD)</code>,核心就往紅黑樹插一個節點(<code>epitem</code>),鍵是 <code>(struct file*, fd)</code>。細節在 <span class="jump" data-jump="t2">建樹</span>。</p>
+<p><b>② 註冊好了之後怎麼通知?</b>——ADD 的當下,epoll 順手在目標 fd 的 <b>wait queue</b> 裡塞了一個「函式指標型」節點,函式指向 <code>ep_poll_callback</code>。之後核心任何喚醒這條 wait queue 的路徑,都會順路呼叫它。這就是「裝電鈴」。</p>
+<p><b>③ epoll 回來時事件怎麼跳起來?</b>——分兩跳。<b>核心內</b>:<code>ep_poll_callback</code> 把 epitem 掛上 rdllist、喚醒睡在 <code>epoll_wait</code> 裡的行程。<b>使用者空間</b>:runtime(libuv / tokio)拿 <code>events[i].data</code> 反查是哪條連線,呼叫對應 callback 或 wake 對應 task。data 欄位核心原封不動吐回——所以 libuv 塞指標、mio 塞 Token。全程動畫在 <span class="jump" data-jump="t3">通知鏈 Stepper</span>。</p>
+
+<h2>一個事件的一生</h2>
+<p>下面是「一個封包抵達 Node 伺服器」走完的整條路。四種顏色是四個世界;每一層只認識自己的上下鄰居。</p>
+
+<div class="lane hw">
+  <div class="tag">硬體 / 中斷</div>
+  <div class="stage"><span class="who">網卡 → CPU</span>封包進 RX ring,網卡發 IRQ;核心排入 NET_RX <b>softirq</b> 延後處理</div>
+</div>
+<div class="lane kn">
+  <div class="tag">核心(fs/eventpoll.c 那一側)</div>
+  <div class="stage"><span class="who">softirq 上下文</span>TCP 協定棧收包 → payload 掛進 socket 的 <b>receive buffer</b></div>
+  <div class="stage"><span class="who">sk_data_ready</span>呼叫 <code>sock_def_readable</code> → <code>wake_up()</code> 這個 socket 的 wait queue</div>
+  <div class="stage"><span class="who">電鈴響</span>wait queue 上掛的節點,其函式是 <code>ep_poll_callback</code> → 把 epitem 掛上 <b>rdllist</b>,再喚醒 <code>ep-&gt;wq</code></div>
+  <div class="stage"><span class="who">收割</span>睡在 <code>epoll_wait</code> 的行程醒來,把 rdllist 內容 copy 到使用者的 <code>events[]</code>,系統呼叫返回</div>
+</div>
+<div class="lane rt">
+  <div class="tag">Runtime(libuv / tokio reactor)</div>
+  <div class="stage"><span class="who">poll 階段</span>libuv 的 <code>uv__io_poll</code> 從 <code>epoll_wait</code> 醒來,用 <code>events[i].data</code> 反查 handle,派發 I/O callback</div>
+</div>
+<div class="lane js">
+  <div class="tag">語言層(V8 / JS)</div>
+  <div class="stage"><span class="who">你的碼</span><code>'data'</code> 事件的 callback 執行;裡面 resolve 了一個 Promise → 排進 microtask,callback 收尾時清空</div>
+</div>
+
+<div class="card">
+<div class="ttl">三層各自的本體</div>
+<b>核心層</b>是「一棵樹 + 一條名單 + 兩種鈴」:紅黑樹管註冊,rdllist 管就緒,socket 的 wait queue 上是 <code>ep_poll_callback</code>,epoll 自己的 <code>ep-&gt;wq</code> 上是睡著的行程。<br>
+<b>Runtime 層</b>是「一個繞著 epoll_wait 打轉的迴圈」:算好 timeout(下一顆 timer 的到期時間)、睡進 epoll_wait、醒來派發。<br>
+<b>語言層</b>是「一組佇列規則」:JS 是 task / microtask 的插隊法;Rust 是 run queue 加 Waker。樹只存在於核心層——JS 那邊沒有樹,只有佇列。
+</div>
+</section>
+
+<!-- ══════════════ Tab 2 建樹 ══════════════ -->
+<section class="panel" id="t2">
+
+<div class="card key">
+<div class="ttl">一句話</div>
+<code>epoll_ctl(ADD)</code> 做兩件事:把 <code>(file*, fd)</code> <b>登記進紅黑樹</b>(建索引),並在目標檔案的 wait queue 裡<b>掛一顆帶函式指標的電鈴</b>(<code>ep_poll_callback</code>)。樹是給 ctl 用的;鈴才是通知的來源。
+</div>
+
+<h2>三個核心物件</h2>
+<div class="tblwrap"><table>
+<tr><th>結構</th><th>誰持有</th><th>裝什麼</th></tr>
+<tr><td><code>struct eventpoll</code></td><td>epoll fd 本體(<code>epoll_create1</code> 生成)</td><td><code>rbr</code> 紅黑樹根、<code>rdllist</code> 就緒串列、<code>wq</code>(睡在 epoll_wait 的行程)、<code>ovflist</code> 收割期間的溢位串列、鎖</td></tr>
+<tr><td><code>struct epitem</code></td><td>每個註冊的 (file*, fd) 一顆</td><td><code>rbn</code> 樹掛勾、<code>rdllink</code> 名單掛勾、關注遮罩 + <code>data</code>、<code>pwqlist</code>(裝了哪些鈴的收據)</td></tr>
+<tr><td><code>struct eppoll_entry</code></td><td>掛在目標檔案的 wait queue 上</td><td>一個 wait queue 節點,其喚醒函式被設成 <code>ep_poll_callback</code>——這就是電鈴本體</td></tr>
+</table></div>
+
+<div class="card">
+<div class="ttl">epitem 的雙重身分(intrusive node)</div>
+同一顆 <code>epitem</code> 身上有兩個掛勾:<code>rbn</code> <b>常駐</b>紅黑樹(只要註冊著就在),<code>rdllink</code> <b>偶爾</b>掛上 rdllist(就緒時才在)。核心不會為「就緒」另外配一顆節點——這是核心 intrusive linked list 的典型玩法,也是為什麼掛名單只是幾個指標操作,快到可以在 softirq 裡做。
+</div>
+
+<h2>樹是怎麼一顆顆長出來的</h2>
+<p>呼叫 <code>epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &amp;ev)</code> 之後,核心依序:</p>
+<ol>
+<li>取 <code>ep-&gt;mtx</code>,用 <code>ep_find</code> 以鍵 <code>(file*, fd)</code> 搜樹——已存在就回 <code>EEXIST</code>(<b>查重是樹的第一個工作</b>)。</li>
+<li>配置 <code>epitem</code>,填入關注遮罩與你的 <code>data</code>。</li>
+<li><b>裝鈴</b>:呼叫目標檔案的 <code>-&gt;poll()</code>(<code>vfs_poll</code>),傳入的 poll_table 回呼是 <code>ep_ptable_queue_proc</code>。檔案的 poll 實作照慣例呼叫 <code>poll_wait()</code>,於是 <code>ep_ptable_queue_proc</code> 被叫到:它配置一顆 <code>eppoll_entry</code>,把喚醒函式設成 <code>ep_poll_callback</code>,掛進該檔案的 wait queue(socket 就是 <code>sk_sleep(sk)</code> 那條)。</li>
+<li><code>ep_rbtree_insert</code> 把 epitem 插進紅黑樹。</li>
+<li>剛才那次 poll 順便回報了<b>當下</b>遮罩——如果 fd 此刻就已可讀,epitem 直接上 rdllist、順手喚醒 <code>ep-&gt;wq</code>。所以「先有資料、後 ADD」不會漏事件。</li>
+</ol>
+
+<svg viewBox="0 0 720 330" style="width:100%;height:auto;margin:14px 0" role="img" aria-label="epoll 註冊佈線圖">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#928374"/></marker></defs>
+  <rect x="8" y="8" width="704" height="150" rx="8" fill="#32302f" stroke="#45403d"/>
+  <text x="24" y="32" fill="#928374" font-size="12">struct eventpoll(epoll fd 本體)</text>
+  <text x="360" y="60" fill="#7daea3" font-size="13" text-anchor="middle">rbr:紅黑樹,鍵 = (file*, fd)</text>
+  <circle cx="360" cy="92" r="15" fill="#3c3836" stroke="#ea6962"/><text x="360" y="97" fill="#ddc7a1" font-size="11" text-anchor="middle">fd5</text>
+  <circle cx="290" cy="130" r="15" fill="#3c3836" stroke="#928374"/><text x="290" y="135" fill="#ddc7a1" font-size="11" text-anchor="middle">fd4</text>
+  <circle cx="430" cy="130" r="15" fill="#3c3836" stroke="#928374"/><text x="430" y="135" fill="#ddc7a1" font-size="11" text-anchor="middle">fd9</text>
+  <line x1="350" y1="105" x2="300" y2="119" stroke="#928374"/><line x1="370" y1="105" x2="420" y2="119" stroke="#928374"/>
+  <text x="120" y="90" fill="#928374" font-size="11">rdllist:(空)</text>
+  <text x="120" y="112" fill="#928374" font-size="11">wq:睡著的行程</text>
+  <text x="560" y="90" fill="#928374" font-size="11">每個圓 = epitem</text>
+  <text x="560" y="108" fill="#928374" font-size="11">rbn 常駐樹上</text>
+  <text x="560" y="126" fill="#928374" font-size="11">rdllink 就緒才掛</text>
+  <rect x="8" y="212" width="330" height="106" rx="8" fill="#32302f" stroke="#45403d"/>
+  <text x="24" y="236" fill="#928374" font-size="12">socket A(fd4)</text>
+  <text x="24" y="262" fill="#a89984" font-size="11">receive buffer:[ 空 ]</text>
+  <rect x="24" y="276" width="230" height="28" rx="5" fill="#3c3836" stroke="#e78a4e"/>
+  <text x="36" y="295" fill="#e78a4e" font-size="11">wait queue:🔔 ep_poll_callback</text>
+  <rect x="382" y="212" width="330" height="106" rx="8" fill="#32302f" stroke="#45403d"/>
+  <text x="398" y="236" fill="#928374" font-size="12">socket B(fd5)</text>
+  <text x="398" y="262" fill="#a89984" font-size="11">receive buffer:[ 空 ]</text>
+  <rect x="398" y="276" width="230" height="28" rx="5" fill="#3c3836" stroke="#e78a4e"/>
+  <text x="410" y="295" fill="#e78a4e" font-size="11">wait queue:🔔 ep_poll_callback</text>
+  <path d="M 285 145 C 240 180 180 195 150 212" stroke="#928374" stroke-dasharray="4 4" fill="none" marker-end="url(#ah)"/>
+  <path d="M 372 103 C 470 140 520 180 540 212" stroke="#928374" stroke-dasharray="4 4" fill="none" marker-end="url(#ah)"/>
+  <text x="180" y="192" fill="#928374" font-size="10.5">ADD 時裝的鈴(pwqlist 記著收據)</text>
+</svg>
+
+<h2>為什麼是紅黑樹</h2>
+<p>樹要回答的問題只有兩個:「這個 (file*, fd) <b>註冊過沒</b>」(ADD 查重)與「<b>找出它</b>」(MOD / DEL)。需求是:數量無上限、最壞情況也要穩、鍵可比較——紅黑樹的 O(log n) 保底剛好,而且是核心裡現成、久經沙場的基礎設施。雜湊表要處理擴容與最壞退化,對核心路徑反而麻煩。</p>
+
+<div class="card warn">
+<div class="ttl">面試常見誤解</div>
+「epoll_wait 去樹裡找就緒的 fd」——<b>錯</b>。epoll_wait 從頭到尾不搜樹;它只看 rdllist。樹的三個客戶是 ADD / MOD / DEL,全在 <code>epoll_ctl</code> 這條慢路徑上。就緒的答案是電鈴主動送上門的,這正是 epoll 對 select/poll 的本質改進:<em>註冊一次、常駐監聽</em>,而非每次呼叫都重新登記 + 全量掃描。
+</div>
+
+<p class="fm">※ 本頁函式與欄位名依 fs/eventpoll.c 慣用命名(ep_insert / ep_poll_callback / rdllist / ovflist);不同核心版本細節有搬動(例如收割路徑幾經重構),機制不變;上列 (3)(4) 兩步的先後也在版本間互換過——較新核心先插樹、再裝鈴——同樣不影響機制。</p>
+</section>
+<!-- ══════════════ Tab 3 通知鏈 Stepper ══════════════ -->
+<section class="panel" id="t3">
+
+<div class="card key">
+<div class="ttl">場景</div>
+epoll 已註冊兩個 socket:<b>fd4(A)</b>、<b>fd5(B)</b>。行程呼叫 <code>epoll_wait(epfd, events, 8, -1)</code>。接下來一個封包抵達 A——按「下一步」看事件怎麼一路跳上來。右上可切 <b>LT / ET</b>,差別出現在第 9、10 步。
+</div>
+
+<div class="stepbar">
+  <button class="btn" id="ep-prev">← 上一步</button>
+  <span class="stepnum" id="ep-stepnum">1 / 10</span>
+  <button class="btn" id="ep-next">下一步 →</button>
+  <span style="flex:1"></span>
+  <button class="btn mode on" id="ep-mode-lt">LT 水平觸發</button>
+  <button class="btn mode" id="ep-mode-et">ET 邊緣觸發</button>
+</div>
+
+<div class="narr" id="ep-narrbox"><span class="nt" id="ep-title"></span><span id="ep-narr"></span></div>
+
+<div class="scene">
+  <div class="zone" id="z-user">
+    <div class="zt">使用者空間 · 你的行程</div>
+    <div class="row"><span class="lbl">狀態</span><span class="chip" id="proc-state">呼叫 epoll_wait(-1)</span></div>
+    <div class="row"><span class="lbl">events[]</span><div class="evout" id="evout">(尚未返回)</div></div>
+  </div>
+  <div class="zone" id="z-ep">
+    <div class="zt">核心 · struct eventpoll</div>
+    <div class="row"><span class="lbl">紅黑樹</span><span class="tree">(root)─┬─ <span class="tn" id="tn-a">fd4·A</span>&#10;        └─ <span class="tn" id="tn-b">fd5·B</span></span></div>
+    <div class="row"><span class="lbl">rdllist</span><span id="rdl-chips"><span class="empty">(空)</span></span></div>
+    <div class="row"><span class="lbl">ep-&gt;wq</span><span class="chip" id="wq-state">💤 行程睡在這</span></div>
+  </div>
+  <div class="zone" id="z-sockA">
+    <div class="zt">核心 · socket A(fd4)</div>
+    <div class="row"><span class="lbl">recv buffer</span><span class="chip ghost" id="bufA">空</span></div>
+    <div class="row"><span class="lbl">wait queue</span><span class="chip bell" id="bellA">🔔 ep_poll_callback</span></div>
+  </div>
+  <div class="zone" id="z-sockB">
+    <div class="zt">核心 · socket B(fd5)——對照組</div>
+    <div class="row"><span class="lbl">recv buffer</span><span class="chip ghost" id="bufB">空</span></div>
+    <div class="row"><span class="lbl">wait queue</span><span class="chip bell" id="bellB">🔔 ep_poll_callback</span></div>
+  </div>
+</div>
+
+<div class="card">
+<div class="ttl">走完之後值得留下的三件事</div>
+① 電鈴(<code>ep_poll_callback</code>)常在 <b>softirq 上下文</b>被呼叫,所以它只做極輕的事:掛名單、喚醒,幾個指標操作而已。② 整段過程 socket B <b>無人聞問</b>——沒有任何掃描,這就是 O(就緒) 的具體樣貌。③ LT 與 ET 的全部差別,只是收割完「放不放回 rdllist」那一行。
+</div>
+</section>
+
+<!-- ══════════════ Tab 4 收割與陷阱 ══════════════ -->
+<section class="panel" id="t4">
+
+<div class="card key">
+<div class="ttl">一句話</div>
+rdllist 是<b>線索</b>而非答案:收割(<code>ep_send_events</code>)時,核心對每顆 epitem <b>重新 poll 一次</b>(<code>ep_item_poll</code>)取「當下」遮罩,才寫進你的 <code>events[]</code>。事件可能在你醒來前就被別的執行緒消化掉——所以即使 LT,讀取也要容忍 <code>EAGAIN</code>。
+</div>
+
+<h2>LT 與 ET:差在收割後的一行</h2>
+<div class="tblwrap"><table>
+<tr><th></th><th>LT 水平觸發(預設)</th><th>ET 邊緣觸發(EPOLLET)</th></tr>
+<tr><td>收割後</td><td>epitem <b>放回</b> rdllist</td><td><b>不放回</b></td></tr>
+<tr><td>語意</td><td>回報<b>狀態</b>:「現在可讀」——沒讀完,下次收割重 poll 仍可讀,就再報</td><td>回報<b>變化</b>:「剛變可讀」——只有新的 wake_up(新資料抵達)才會再上名單</td></tr>
+<tr><td>代價</td><td>沒消化完會反覆喚醒;監聽 EPOLLOUT 尤其危險——「可寫」幾乎永遠成立,會報不停,用完即拆</td><td>必須 non-blocking + 一路讀到 <code>EAGAIN</code>,否則漏讀 = 永遠沉默(餓死)</td></tr>
+<tr><td>誰在用</td><td>一般應用、libuv(搭配自己的 watcher 管理)</td><td>mio / tokio(在上層自己維護 readiness 快取)</td></tr>
+</table></div>
+
+<h2>四個經典陷阱</h2>
+<div class="card warn">
+<div class="ttl">① 收割窗口不丟事件 —— ovflist</div>
+<code>copy_to_user</code> 期間鎖是放掉的。此時若有新事件,<code>ep_poll_callback</code> 把 epitem 改掛 <b>ovflist</b>;收割結束後整條 splice 回 rdllist。事件不會因為「你正在拿名單」而遺失——這是無鎖窗口 + 側收集的教科書手法,跟你 SPSC ring 處理「消費中生產」是同一類問題。
+</div>
+<div class="card warn">
+<div class="ttl">② 驚群(thundering herd)</div>
+多個行程/執行緒各自 epoll 同一個 listen fd:一條連線進來,鈴響一次卻喚醒全部,只有一個搶到 accept,其餘白醒。解法:<code>EPOLLEXCLUSIVE</code> 讓核心只挑一個喚醒<span class="fm">(from memory:Linux 4.5 引入)</span>;或 <code>SO_REUSEPORT</code> 從根源把連線分流到各自的 listen fd。
+</div>
+<div class="card warn">
+<div class="ttl">③ EPOLLONESHOT —— 多執行緒共用一個 epoll 的標配</div>
+報一次後,關注遮罩自動清零;要再收事件得 <code>epoll_ctl(MOD)</code> 重新武裝。用途:避免同一個 fd 的事件被兩個 worker 同時撿走、同時處理同一條連線。
+</div>
+<div class="card warn">
+<div class="ttl">④ close ≠ 反註冊 —— 殭屍註冊</div>
+epitem 綁的是 <code>(file*, fd)</code>。若 fd 曾被 <code>dup</code> / <code>fork</code>,你這邊 <code>close</code> 之後 file 仍活著,<b>註冊也仍活著,事件照發</b>——man epoll 的著名警告。正解:close 之前先 <code>EPOLL_CTL_DEL</code>。
+</div>
+
+<div class="card hand">
+<div class="ttl">跟你的 R1 復盤同一條神經</div>
+「rdllist 是線索、收割時重驗當下狀態」= 核心版的 <b>dry-run before you trust</b>:名單說可讀,不代表現在可讀,動手前重新驗一次。這個心智模型直接搬去答 Etched pillar 5。
+</div>
+</section>
+
+<!-- ══════════════ Tab 5 瀏覽器迴圈 ══════════════ -->
+<section class="panel" id="t5">
+
+<div class="card key">
+<div class="ttl">一句話</div>
+JS 單執行緒還能不卡的秘密:把「等」全部外包給宿主(瀏覽器 / libuv),自己只維護一條 call stack 加幾條佇列。規則一句話講完——<b>跑完一個 task,把 microtask 佇列整條清空,才輪得到下一個 task</b>。
+</div>
+
+<h2>迴圈本體(HTML 規範的骨架)</h2>
+<pre><code data-lang="pseudo">loop {
+  task = 從某條 task queue 取「一個」   // setTimeout、I/O、click⋯ 各有自己的隊
+  執行 task                              // 一路跑到 call stack 清空
+  while (microtask 佇列非空) 執行下一個   // Promise.then、queueMicrotask
+                                          // 執行中新排進來的,也在本輪清完
+  if (該渲染了) rAF → style → layout → paint   // 機會點,約與螢幕更新率對齊
+}</code></pre>
+
+<h2>三條規則、三個推論</h2>
+<ol>
+<li><b>一輪只取一個 task。</b>瀏覽器可以在多條 task queue 之間調度優先權(使用者輸入通常優先),但一輪就是一個。</li>
+<li><b>microtask 一次清空,含執行中補位的。</b>推論一:<code>Promise.then</code> 永遠插隊 <code>setTimeout</code>。推論二:microtask 無限自我補位會凍結畫面——渲染永遠等不到。</li>
+<li><b>渲染是機會點,不是每輪保證。</b><code>requestAnimationFrame</code> 的 callback 屬於渲染步驟,是「畫面更新前的最後一刻」,不是普通 task。</li>
+</ol>
+
+<div class="tblwrap"><table>
+<tr><th>你寫的</th><th>進哪條隊</th><th>什麼時候跑</th></tr>
+<tr><td><code>setTimeout(fn, 0)</code></td><td>task queue</td><td>之後某一輪的開頭;0 ≠ 立即,是「最快班次」。巢狀超過 5 層後最小間隔被夾到 4ms(HTML 規範)</td></tr>
+<tr><td><code>Promise.then</code> / <code>await</code> 之後</td><td>microtask</td><td>當前 task 收尾、stack 清空後立刻,插隊所有 task</td></tr>
+<tr><td><code>queueMicrotask(fn)</code></td><td>microtask</td><td>同上——就是裸的 microtask 入口</td></tr>
+<tr><td><code>requestAnimationFrame(fn)</code></td><td>渲染步驟</td><td>下一次畫面更新前</td></tr>
+</table></div>
+
+<p>順序直覺建立起來之後,到 <span class="jump" data-jump="t6">JS Stepper</span> 逐步走兩個實例;Node 的差異(相位、setImmediate、nextTick)在 <span class="jump" data-jump="t7">Node · libuv</span>。</p>
+</section>
+
+<!-- ══════════════ Tab 6 JS Stepper ══════════════ -->
+<section class="panel" id="t6">
+
+<div class="stepbar">
+  <button class="btn" id="js-prev">← 上一步</button>
+  <span class="stepnum" id="js-stepnum">1 / 10</span>
+  <button class="btn" id="js-next">下一步 →</button>
+  <span style="flex:1"></span>
+  <button class="btn mode on" id="js-sc1">場景 1:插隊</button>
+  <button class="btn mode" id="js-sc2">場景 2:await</button>
+</div>
+
+<div class="narr" id="js-narrbox"><span class="nt" id="js-title"></span><span id="js-narr"></span></div>
+
+<div class="jsgrid">
+  <div class="codebox" id="js-code"></div>
+  <div class="qcol">
+    <div class="qbox stack"><div class="qt">CALL STACK</div><div class="chips" id="st-chips"><span class="empty">(空)</span></div></div>
+    <div class="qbox micro"><div class="qt">MICROTASK QUEUE</div><div class="chips" id="mi-chips"><span class="empty">(空)</span></div></div>
+    <div class="qbox task"><div class="qt">TASK QUEUE</div><div class="chips" id="ta-chips"><span class="empty">(空)</span></div></div>
+    <div class="qbox cons"><div class="qt">CONSOLE</div><div class="consout" id="co-out"></div></div>
+  </div>
+</div>
+
+<div class="card">
+<div class="ttl">兩個場景的落點</div>
+場景 1 的輸出 <code>A E C D B</code>(本頁範例已在 node v22 實測):B 墊底不是因為 setTimeout「慢」,是因為<b>同輪 microtask 全體優先於下一個 task</b>——D 是 C 執行中才補位的,照樣排在 B 前面。場景 2 的 <code>1 3 2</code> 給出 await 的準確語意:<b>await = 在這裡切一刀,刀之後的每一行,就是 .then 的回呼</b>。f() 同步跑到 await 就返回,後半段排進 microtask。
+</div>
+</section>
+<!-- ══════════════ Tab 7 Node · libuv ══════════════ -->
+<section class="panel" id="t7">
+
+<div class="card key">
+<div class="ttl">一句話</div>
+Node 的事件迴圈就是「一個繞著 <code>epoll_wait</code> 打轉的 while」。libuv 把每一圈切成固定相位;poll 相位裡那一次 <code>epoll_wait</code> 的 <b>timeout 參數 = 距離下一顆 timer 到期的毫秒數</b>——「閒著不吃 CPU、時間一到秒醒」的全部機關,就這一個參數。
+</div>
+
+<h2>一圈的相位</h2>
+<div class="phases">
+  <span class="ph">timers</span><span class="arr">→</span>
+  <span class="ph">pending callbacks</span><span class="arr">→</span>
+  <span class="ph">idle / prepare</span><span class="arr">→</span>
+  <span class="ph poll">poll ⏱ epoll_wait 在這</span><span class="arr">→</span>
+  <span class="ph">check(setImmediate)</span><span class="arr">→</span>
+  <span class="ph">close callbacks</span><span class="arr">↺</span>
+</div>
+<ul>
+<li><b>timers</b>:min-heap 裡到期的 <code>setTimeout</code> / <code>setInterval</code> 回呼。</li>
+<li><b>poll</b>:先算 timeout——有待辦就 0;否則取最近 timer 的差值;連 timer 都沒有就 -1(無限睡)。然後 <code>epoll_wait(timeout)</code>,醒來派發 I/O 回呼。timer 是資料結構,epoll 是鬧鐘,兩者在這個參數上會合。</li>
+<li><b>check</b>:<code>setImmediate</code> 專屬相位,緊跟在 poll 之後。</li>
+</ul>
+
+<h2>兩個順序判例(本容器 node v22 實測)</h2>
+<pre><code data-lang="js">const fs = require('fs');
+fs.readFile(__filename, () => {          // 這個回呼在 poll 相位執行
+  setTimeout(() => console.log('timeout'), 0);
+  setImmediate(() => console.log('immediate'));
+});
+// 實測輸出:immediate → timeout(固定)
+// 理由:poll 的下一站就是 check;timers 要等下一圈</code></pre>
+<pre><code data-lang="js">setTimeout(() => console.log('t'), 0);
+setImmediate(() => console.log('i'));
+// 主模組裸寫:三次實測 → i t / t i / i t(不定序!)
+// 理由:進迴圈時,那顆 1ms timer 是否已到期,取決於啟動耗時的抖動</code></pre>
+<p>面試級結論:<b>I/O 回呼之內,setImmediate 恆先於 setTimeout(0);主模組頂層則不定序。</b>能講出「為什麼」比背結論值錢。</p>
+
+<h2>nextTick 與 microtask</h2>
+<p><code>process.nextTick</code> 自成一條佇列,優先權高於 Promise microtask。每個回呼收尾時:先清空 nextTick 佇列,再清空 microtask 佇列,然後才輪下一個回呼。<span class="fm">(from memory:Node 11 起改為「每個回呼之間」都清,與瀏覽器語意對齊;更早的版本是相位之間才清。)</span>遞迴 nextTick 會餓死 I/O——它比 microtask 更會插隊。</p>
+</section>
+
+<!-- ══════════════ Tab 8 對照 tokio ══════════════ -->
+<section class="panel" id="t8">
+
+<div class="card key">
+<div class="ttl">為什麼這頁對你最值錢</div>
+你的 deep-dive 故事線是 async internals。「tokio 底下發生什麼」的答案,下半場就是前面幾頁的核心鏈;這頁把兩邊的名詞一一對上——被問到時,直接沿著這張表講。
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>epoll 世界(前幾頁)</th><th>tokio / mio 世界</th></tr>
+<tr><td><code>struct eventpoll</code>(樹 + rdllist + wq)</td><td>mio <code>Poll</code>,由 tokio 的 reactor(driver)持有</td></tr>
+<tr><td><code>epitem.data</code>——u64,核心原樣吐回</td><td>mio <code>Token</code> → slab 反查該 fd 的 <code>ScheduledIo</code></td></tr>
+<tr><td><code>ep_poll_callback</code> 把 epitem 掛上 rdllist</td><td>readiness 寫進 <code>ScheduledIo</code>,對登記在上面的 <code>Waker</code> 呼叫 <code>wake()</code> → task 回到 run queue</td></tr>
+<tr><td>喚醒 <code>ep-&gt;wq</code>(睡著的 epoll_wait)</td><td>跨執行緒叫醒 reactor:對一顆專用 <b>eventfd</b> 寫 8 bytes → epoll_wait 返回<span class="fm">(from memory:mio 的 Waker 在 Linux 以 eventfd 實作,更早的版本用 pipe)</span></td></tr>
+<tr><td>LT:收割後放回 rdllist</td><td>mio 走 <b>ET</b>;tokio 在上層自維 readiness 快取,讀到 <code>WouldBlock</code> 時 <code>clear_ready</code></td></tr>
+<tr><td>JS:「microtask 清空,才取下一個 task」</td><td>worker 迴圈批次跑 run queue 的 task;poll 到 <code>Pending</code> 就登記 waker、讓位</td></tr>
+</table></div>
+
+<p>整條鏈用一口氣講:<code>Future::poll</code> 讀 socket → <code>WouldBlock</code> → 把 waker 登記到該 fd 的 <code>ScheduledIo</code> → task 讓位,reactor 睡在 <code>epoll_wait</code> → 封包抵達,核心走「按鈴 → rdllist → 喚醒」 → reactor 拿 Token 反查、<code>wake()</code> → task 回 run queue → worker 再次 <code>poll</code>,這次讀到資料。<b>你在 Synology 寫的每一個 <code>.await</code> 醒來,走的都是這條路。</b></p>
+
+<div class="card hand">
+<div class="ttl">跟你的挑戰題直接相連</div>
+那顆用來「自我喚醒 epoll_wait」的 eventfd,就是你 mini <code>block_on</code> 挑戰裡 <b>wake-before-park token</b> 的 OS 版:喚醒訊號必須是「可儲存的」(eventfd 計數器 / 你的 token),否則 wake 發生在 park 之前就會永遠睡死。同一個 race,兩個尺度。
+</div>
+</section>
+
+<!-- ══════════════ Tab 9 可跑的碼 ══════════════ -->
+<section class="panel" id="t9">
+
+<h2>Rust:30 行摸到整條通知鏈(CoderPad 可貼)</h2>
+<p>手宣告 extern、不用 libc crate——與你 7/15 CoderPad 探針同一路數。用 eventfd 當被監聽的 fd,免網路、結果確定。</p>
+<pre><code data-lang="rust">// Rust 1.92 / edition 2024(CoderPad 實機環境)
+#[repr(C, packed)]      // x86-64 上 kernel 的 epoll_event 是 packed:12 bytes,data 在 offset 4
+#[derive(Clone, Copy)]
+struct EpollEvent { events: u32, data: u64 }
+
+unsafe extern "C" {     // edition 2024:extern block 要標 unsafe
+    fn epoll_create1(flags: i32) -> i32;
+    fn epoll_ctl(epfd: i32, op: i32, fd: i32, ev: *mut EpollEvent) -> i32;
+    fn epoll_wait(epfd: i32, evs: *mut EpollEvent, maxevents: i32, timeout_ms: i32) -> i32;
+    fn eventfd(initval: u32, flags: i32) -> i32;
+    fn write(fd: i32, buf: *const u8, count: usize) -> isize;
+    fn close(fd: i32) -> i32;
+}
+
+const EPOLL_CTL_ADD: i32 = 1;
+const EPOLLIN: u32 = 0x001;
+
+fn main() { unsafe {
+    let ep  = epoll_create1(0);
+    let efd = eventfd(0, 0);
+    assert!(ep >= 0 &amp;&amp; efd >= 0);
+
+    // 建樹:efd 登記進紅黑樹;data 佔滿 64-bit(當指標 / Token 用 —— mio 的原理)
+    let mut ev = EpollEvent { events: EPOLLIN, data: 0xdead_beef_cafe_f00d };
+    assert_eq!(epoll_ctl(ep, EPOLL_CTL_ADD, efd, &amp;mut ev), 0);
+
+    // 尚無事件:timeout=0 立即回 0
+    let mut out = [EpollEvent { events: 0, data: 0 }; 8];
+    assert_eq!(epoll_wait(ep, out.as_mut_ptr(), 8, 0), 0);
+
+    // 另一條執行緒 50ms 後按鈴:對 eventfd 寫 8 bytes
+    let h = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let v: u64 = 1;
+        write(efd, &amp;v as *const u64 as *const u8, 8);
+    });
+
+    // 阻塞等待。核心裡:write → wake_up → ep_poll_callback → rdllist → 喚醒本行程
+    let n = epoll_wait(ep, out.as_mut_ptr(), 8, 2000);
+    assert_eq!(n, 1);
+
+    // packed 欄位不可取參考 —— 先逐欄位「以值」取出再用(assert_eq! 會偷偷取參考)
+    let e0 = out[0];
+    let (evs, data) = (e0.events, e0.data);
+    assert_eq!(data, 0xdead_beef_cafe_f00d);   // 佈局錯了,炸的就是這行
+    assert!(evs &amp; EPOLLIN != 0);
+    println!("woken: n={n} events={evs:#x} data={data:#x}");
+
+    h.join().unwrap();
+    close(efd); close(ep);
+} }</code></pre>
+
+<div class="card">
+<div class="ttl">驗證出處(照實標)</div>
+語意面在<b>本容器實跑</b>(x86-64,Ubuntu rustc 1.75,extern 寫法退回 1.75 相容版):packed 版輸出 <code>woken: n=1 events=0x1 data=0xdeadbeefcafef00d</code>。<code>unsafe extern</code> 是 edition 2024 語法,與你 7/15 在 CoderPad(Rust 1.92)親測編譯的寫法一致——本容器沒有 1.92,這半句的依據是你自己的探針,不是我這次的執行。
+</div>
+
+<h2>packed 實驗:一個漂亮的 false negative</h2>
+<p>把 <code>packed</code> 拿掉(只剩 <code>#[repr(C)]</code>),同一支程式,本容器實測:</p>
+<ul>
+<li><b>data 佔滿 64-bit</b>(如上,存指標的真實情境)→ <b>炸</b>:<code>assertion failed: left: 3405705229, right: 16045690984503111693</code>。left = <code>0xCAFEF00D</code>——高 32 位在「註冊」那一刻就被截掉了:kernel 以它的佈局(data 在 offset 4)去讀你的 16-byte 結構,讀到的是「padding + 你 data 的低半」。</li>
+<li><b>data 只用 32-bit</b>(<code>0xdead_beef</code>)→ 竟然<b>通過</b>。兩個佈局錯誤在往返中互相抵消:註冊時 kernel 多讀 4 bytes 的 padding 當低半,喚醒時寫回 offset 4,你又從 offset 8 讀——剛好把值撿回來。成立前提:padding 恰為 0、值 ≤ 32-bit、只有一個事件。</li>
+</ul>
+<div class="card warn">
+<div class="ttl">這就是「測試綠燈 ≠ 正確」的實體標本</div>
+錯的佈局 + 恰好的測資 = 假通過。對症的 dry-run 是<b>讀 raw bytes,不信往返</b>:用 <code>[0xAAu8; 32]</code> 當接收 buffer,直接印,本容器實測:<br>
+<code>n=1 raw[0..16] = [01 00 00 00 | ef be ad de 00 00 00 00 | aa aa aa aa]</code><br>
+kernel 只寫了 <b>12 bytes</b>:events 在 0、data 在 <b>offset 4</b>、第 13 byte 起原封未動——佈局一翻兩瞪眼。這跟你 R1 的教訓同構:測試通過造成的確信,要用「讀出事實」來拆。
+</div>
+
+<div class="card hand">
+<div class="ttl">今天的「有沒有打字」檢查(15 分鐘)</div>
+把上面那支在 CoderPad <b>重打</b>一遍(不要貼上)。跑通後做三個實驗:① 拿掉 packed、data 佔滿 64-bit,看 assert 怎麼炸;② data 換回 32-bit,親眼看它「假通過」;③ 換 <code>[0xAAu8; 32]</code> 讀 raw bytes,親眼看 12-byte 佈局。做完,epoll_event 的佈局你這輩子不用再背。
+</div>
+
+<h2>JS:兩個判例的原始碼與實測輸出</h2>
+<pre><code data-lang="js">console.log('A');
+setTimeout(() => console.log('B'), 0);
+Promise.resolve()
+  .then(() => console.log('C'))
+  .then(() => console.log('D'));
+console.log('E');
+// node v22 實測:A E C D B</code></pre>
+<pre><code data-lang="js">async function f() { console.log('1'); await null; console.log('2'); }
+f();
+console.log('3');
+// node v22 實測:1 3 2</code></pre>
+
+<h2>延伸問題(不附答案,留著咀嚼)</h2>
+<div class="card">
+<ol>
+<li>io_uring 把「就緒通知」換成「提交 / 完成」:buffer 的所有權何時交給 kernel?Waker 模型要跟著怎麼變?</li>
+<li>epoll 監聽另一個 epoll fd(巢狀):<code>ep-&gt;poll_wait</code> 那條 wait queue 什麼時候響?</li>
+<li>timerfd 把「時間」變成 fd 事件,libuv 卻選 min-heap + timeout 參數——兩種設計各省了什麼、各付了什麼?</li>
+<li>你的 hw_bridge 若上 event loop:選 LT 還是 ET?寫方向的回壓(EPOLLOUT)何時掛上、何時拆掉?</li>
+</ol>
+</div>
+
+<footer>本頁所有程式輸出均於本容器實測(x86-64 · rustc 1.75 · node v22.22);標註 from memory 者未經本次驗證。函式與欄位名依 fs/eventpoll.c 慣用命名,細節隨核心版本略異,機制不變。</footer>
+</section>
+
+<!-- ══════════════ Tab 10 面試英文 ══════════════ -->
+<section class="panel" id="t10">
+
+<div class="card key">
+<div class="ttl">這頁在幹嘛</div>
+你的整個 loop 都是英文場,deep dive 尤其吃口頭輸出。這裡把前九頁壓成六段<b>可以直接開口</b>的英文,每段 30–45 秒;背的單位是<b>句骨架</b>而非逐字——逐字背在追問時會斷線。每段附中文對照與一句可替換的濃縮版。
+</div>
+
+<h3>① epoll,一口氣</h3>
+<div class="card">
+<p class="en">"epoll splits the work into two phases: a one-time registration, and a per-event O(1) notification path. On <code>epoll_ctl</code> ADD, the kernel inserts an epitem into a red-black tree — that part is just bookkeeping, keyed by the file pointer and the fd — and, more importantly, it hangs a callback on the target file's wait queue. From then on, when data arrives, the network stack wakes that wait queue, the callback links the epitem onto a ready list and wakes whoever is sleeping in <code>epoll_wait</code>. Readiness is pushed by the event source, so the cost scales with the number of ready events rather than the size of the interest set — that's the structural difference from select and poll."</p>
+<p class="zh">中文對照:epoll 把工作拆成兩段——一次性的註冊,和每事件 O(1) 的通知路。ADD 時插樹只是登記(鍵 = file 指標 + fd),更重要的是在目標檔案的 wait queue 掛回呼。之後資料一到:協定棧喚醒 wait queue → 回呼把 epitem 掛上就緒名單 → 喚醒睡在 epoll_wait 的人。就緒由事件源推上來,成本隨「就緒數」而非「註冊數」成長——這就是與 select/poll 的結構性差異。</p>
+<p class="alt">濃縮版:"If I had to compress epoll into one sentence: register once, get pushed forever."</p>
+</div>
+
+<h3>② 為什麼是紅黑樹</h3>
+<div class="card">
+<p class="en">"The tree never sits on the hot path. It answers exactly two questions: is this (file, fd) pair already registered — that's duplicate detection on ADD — and find it again, for MOD and DELETE. So the requirements are unbounded size, a predictable worst case, and a comparable key. The kernel's standard intrusive rbtree covers all of that in O(log n), with the node embedded in the epitem itself — no extra allocation, no resizing. A hash table would work too; it just buys nothing here and adds resize headaches."</p>
+<p class="zh">中文對照:樹從不在熱路徑上,只回答兩個問題——ADD 查重、MOD/DEL 找回。需求是數量無上限、最壞情況可預測、鍵可比較;核心標準的 intrusive 紅黑樹全包,節點內嵌零配置、免擴容。雜湊也行,但在這裡買不到什麼,還多了擴容麻煩。</p>
+<p class="alt">濃縮版:"Put differently: the tree serves epoll_ctl; the wait-queue hook serves epoll_wait."</p>
+</div>
+
+<h3>③ LT 與 ET</h3>
+<div class="card">
+<p class="en">"The entire difference between level-triggered and edge-triggered is one line after harvesting. In LT, the kernel puts the item back on the ready list, so the next <code>epoll_wait</code> re-polls it and reports it again if it's still readable — it's reporting a state. In ET it doesn't put it back, so the item only reappears when a fresh wake-up fires on the source — it's reporting a transition. That's why ET code must run the fd non-blocking and drain it until EAGAIN: bytes you leave behind will never generate another event."</p>
+<p class="zh">中文對照:LT/ET 的全部差別是收割後那一行。LT 放回名單——下次重 poll、仍可讀就再報,報的是狀態;ET 不放回——只有源頭新的喚醒才會再上榜,報的是變化。所以 ET 必須 non-blocking、讀到 EAGAIN:留在 buffer 的 bytes 再也不會產生事件。</p>
+<p class="alt">濃縮版:"A shorthand I use: LT reports a level, ET reports an edge — the names are literal."</p>
+</div>
+
+<h3>④ 新鮮度細節(differentiator)</h3>
+<div class="card">
+<p class="en">"One detail worth calling out: the ready list is a hint, not the answer. Before copying events out, the kernel re-polls each fd to get the current mask — so even if another thread consumed the data while you were waking up, you won't be handed a stale report. It's the same discipline as dry-running before you trust something: re-verify at the moment of use."</p>
+<p class="zh">中文對照:就緒名單只是線索。搬給你之前,核心對每個 fd 重新 poll 一次拿當下遮罩——就算資料在你醒來途中被別的執行緒吃掉,你也不會拿到過期的報告。與 dry-run 同一條紀律:用的那一刻重新驗證。(這句直接掛到 Etched pillar 5。)</p>
+</div>
+
+<h3>⑤ Node,一口氣</h3>
+<div class="card">
+<p class="en">"Node is one thread running a loop around <code>epoll_wait</code>. libuv slices each iteration into fixed phases — timers, pending callbacks, poll, check, close — and the poll phase blocks in <code>epoll_wait</code> with a timeout equal to the time until the next timer expires; that one parameter is how Node sleeps without burning CPU and still wakes on time. Returned events carry a data field the kernel never interprets; libuv uses it to look up the watcher and dispatch into the JS callback. And after every callback, Node drains <code>process.nextTick</code> and then the Promise microtask queue before it touches the next event."</p>
+<p class="zh">中文對照:Node 是一條執行緒繞著 epoll_wait 打轉。libuv 把一圈切成固定相位;poll 相位睡進 epoll_wait,timeout = 距下一顆 timer 到期的時間——不吃 CPU 又準時醒的全部機關就這一個參數。回來的事件帶著核心原封不動的 data 欄位,libuv 用它反查 watcher、派發進 JS 回呼。每個回呼收尾:先清 nextTick、再清 microtask,才碰下一個事件。</p>
+<p class="alt">濃縮版:"One-liner: timers give the timeout, epoll gives the sleep, data gives the routing."</p>
+</div>
+
+<h3>⑥ 接到 tokio(你的故事線)</h3>
+<div class="card">
+<p class="en">"tokio's reactor has the same shape one level up. mio registers the fd with epoll and stores a Token in the data field; on readiness, the driver uses the Token to find that fd's ScheduledIo and calls <code>wake()</code> on the registered Waker, which puts the task back on the executor's run queue. So the Waker plays the role <code>ep_poll_callback</code> plays inside the kernel — a pre-wired 'call me when this is ready' hook. Nothing scans at any layer; it's push all the way up. In production I've mostly consumed this machinery through tokio, so I can speak to both the kernel side and what the runtime builds on top of it."</p>
+<p class="zh">中文對照:tokio 的 reactor 是同一個形狀往上一層。mio 把 Token 放進 data 欄;就緒時 driver 用 Token 反查 ScheduledIo、對登記的 Waker 呼叫 wake(),task 回到 run queue。Waker 扮演的就是核心裡 ep_poll_callback 的角色——預先接好的「就緒時叫我」。沒有任何一層在掃描,層層都是推。收尾那句把你的 production 經驗焊上去。</p>
+<p class="alt">濃縮版:"Shortest form: mio's Token is epoll's data field; tokio's Waker is the kernel's ep_poll_callback."</p>
+</div>
+
+<h2>措辭庫(過場句,通用)</h2>
+<div class="card">
+<p class="en">"Let me walk the data path end to end — from the NIC up to your callback."</p>
+<p class="en">"There are two phases here: wiring, and firing."</p>
+<p class="en">"The load-bearing idea is that readiness gets pushed by the source; nothing scans."</p>
+<p class="en">"The honest trade-off is X for Y — and here's where it bites."</p>
+<p class="en">"Before I trust that, let me re-verify the current state."<span class="zh">(pillar 5 的口頭化,dry-run 時邊做邊講)</span></p>
+<p class="en">"To make that concrete: …"</p>
+</div>
+
+<div class="card hand">
+<div class="ttl">背法(每段 5 分鐘)</div>
+讀中文確認理解 → 遮掉全文、只留英文首句,把整段講滿 30 秒 → 錄音回放,對照檢查五個機制詞是否全部出現:<b>wait queue、ready list、re-poll、drain until EAGAIN、run queue</b>。骨架在就及格;卡住的那個詞,回對應分頁把 stepper 再走一次。
+</div>
+</section>
+
+</div><!-- /wrap -->
+
+<script>
+(function(){
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+
+/* ── tabs 與跳轉(data-jump,不用 href 錨點) ── */
+function activate(id){
+  var bs = document.querySelectorAll('.tabbtn'); var i;
+  for(i=0;i<bs.length;i++) bs[i].classList.toggle('on', bs[i].getAttribute('data-tab')===id);
+  var ps = document.querySelectorAll('.panel');
+  for(i=0;i<ps.length;i++) ps[i].classList.toggle('on', ps[i].id===id);
+}
+document.addEventListener('click', function(e){
+  var t = e.target.closest('[data-tab]');
+  if(t){ activate(t.getAttribute('data-tab')); return; }
+  var j = e.target.closest('[data-jump]');
+  if(j){ activate(j.getAttribute('data-jump')); window.scrollTo({top:0,behavior:'smooth'}); }
+});
+
+/* ════════ epoll 通知鏈 stepper ════════ */
+function epSteps(mode){
+  var LT = (mode==='lt');
+  var base = [
+    { t:'佈景:註冊完成,行程入睡',
+      n:'兩個 socket 都已 ADD:樹上兩顆 epitem,兩邊 wait queue 各掛一顆電鈴。行程呼叫 epoll_wait(-1),rdllist 是空的 → 行程掛上 ep->wq 睡著,讓出 CPU。',
+      hl:['z-user','z-ep'], proc:['💤 睡在 epoll_wait 裡',''], wq:['💤 行程睡在這',''],
+      rdl:[], bufA:['空','ghost'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'(尚未返回)', evok:false, tnA:false },
+    { t:'封包抵達(IRQ → softirq)',
+      n:'網卡收到給 A 的 TCP 段,發出 IRQ;重活延後到 NET_RX softirq,協定棧開始處理。注意:第 2–6 步全部發生在核心、多半在 softirq 上下文——你的行程還在睡。',
+      hl:['z-sockA'], proc:['💤 睡在 epoll_wait 裡',''], wq:['💤 行程睡在這',''],
+      rdl:[], bufA:['⚡ 封包處理中','hot'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'(尚未返回)', evok:false, tnA:false },
+    { t:'資料入庫',
+      n:'payload 掛進 A 的 receive buffer。此刻 fd4「事實上」已可讀——但除了這個 socket 自己,還沒有任何人知道。',
+      hl:['z-sockA'], proc:['💤 睡在 epoll_wait 裡',''], wq:['💤 行程睡在這',''],
+      rdl:[], bufA:['📦 有資料','ok'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'(尚未返回)', evok:false, tnA:false },
+    { t:'按鈴:sk_data_ready → wake_up',
+      n:'收包收尾,核心呼叫 sk->sk_data_ready(預設 sock_def_readable)→ wake_up() 這個 socket 的 wait queue。「通知」從這一刻開始。',
+      hl:['z-sockA'], proc:['💤 睡在 epoll_wait 裡',''], wq:['💤 行程睡在這',''],
+      rdl:[], bufA:['📦 有資料','ok'], bufB:['空','ghost'], bellA:true, bellB:false,
+      ev:'(尚未返回)', evok:false, tnA:false },
+    { t:'鈴的本體:走訪 wait queue 節點',
+      n:'wake_up 逐一走訪節點、呼叫節點上的喚醒函式。一般 blocking read 掛的節點,函式是「叫醒那個行程」;epoll 掛的節點,函式是 ep_poll_callback——所以這裡不是喚醒誰,是直接執行一段程式。它在 softirq 裡跑,動作必須極輕。',
+      hl:['z-sockA','z-ep'], proc:['💤 睡在 epoll_wait 裡',''], wq:['💤 行程睡在這',''],
+      rdl:[], bufA:['📦 有資料','ok'], bufB:['空','ghost'], bellA:true, bellB:false,
+      ev:'(尚未返回)', evok:false, tnA:false },
+    { t:'掛名單:epitem → rdllist',
+      n:'ep_poll_callback 比對「發生的事件 ∩ 你關注的遮罩」,相符 → 把 fd4 的 epitem 用 rdllink 掛上 rdllist。看一眼 B:全程無人聞問——沒有任何掃描,這就是 O(就緒) 的具體樣貌。',
+      hl:['z-ep'], proc:['💤 睡在 epoll_wait 裡',''], wq:['💤 行程睡在這',''],
+      rdl:['fd4·A'], bufA:['📦 有資料','ok'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'(尚未返回)', evok:false, tnA:true },
+    { t:'第二聲鈴:喚醒 ep->wq',
+      n:'ep_poll_callback 順手 wake_up(ep->wq)——這條 wait queue 上睡的是你的行程,節點的喚醒函式就是預設的「叫醒行程」。行程轉為可執行,等排程器排上 CPU。',
+      hl:['z-ep','z-user'], proc:['👀 被喚醒,準備收割','hot'], wq:['(已喚醒)',''],
+      rdl:['fd4·A'], bufA:['📦 有資料','ok'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'(尚未返回)', evok:false, tnA:true },
+    { t:'收割:ep_send_events',
+      n:'ep_poll 發現 rdllist 非空 → 把名單 splice 到私有串列,逐顆 epitem 重新 ep_item_poll 取「當下」遮罩(名單只是線索!),copy_to_user 寫進你的 events[]。期間新事件改掛 ovflist,不會遺失。',
+      hl:['z-ep','z-user'], proc:['⚙ 收割中(核心態)','hot'], wq:['(已喚醒)',''],
+      rdl:['fd4·A'], bufA:['📦 有資料','ok'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'events[0] = { EPOLLIN, data = A 的識別碼 }', evok:true, tnA:true }
+  ];
+  if(LT){
+    base.push({ t:'LT:放回名單,系統呼叫返回',
+      n:'收割完,fd4 的 epitem 被「放回 rdllist」——這一行就是 LT 的全部。epoll_wait 返回 1,你開始處理 A。',
+      hl:['z-user','z-ep'], proc:['▶ epoll_wait 返回 1,處理中','ok'], wq:['(空)',''],
+      rdl:['fd4·A'], bufA:['📦 有資料(還沒讀完)','ok'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'events[0] = { EPOLLIN, data = A 的識別碼 }', evok:true, tnA:false });
+    base.push({ t:'第二次 epoll_wait(buffer 沒讀完)',
+      n:'假設你只讀了一半就再呼叫 epoll_wait:fd4 還在 rdllist 上 → 收割時重 poll,仍然可讀 → 立刻又回報一次。LT 回報的是「狀態」,沒消化完就會一直提醒。',
+      hl:['z-user','z-ep'], proc:['▶ 立刻又拿到 fd4','ok'], wq:['(空)',''],
+      rdl:['fd4·A'], bufA:['📦 有資料(還沒讀完)','ok'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'events[0] = { EPOLLIN, data = A }(再次)', evok:true, tnA:true });
+  } else {
+    base.push({ t:'ET:不放回,系統呼叫返回',
+      n:'收割完,epitem 不放回,rdllist 清空。epoll_wait 一樣返回 1——LT 與 ET 在「第一次」毫無差別,差別在下一步。',
+      hl:['z-user','z-ep'], proc:['▶ epoll_wait 返回 1,處理中','ok'], wq:['(空)',''],
+      rdl:[], bufA:['📦 有資料(還沒讀完)','ok'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'events[0] = { EPOLLIN, data = A 的識別碼 }', evok:true, tnA:false });
+    base.push({ t:'第二次 epoll_wait(buffer 沒讀完)',
+      n:'rdllist 是空的,而 buffer 裡的「舊」資料不會再觸發新的 wake_up → epoll_wait 沉默阻塞,直到新封包抵達。ET 鐵律由此而來:non-blocking + 一路讀到 EAGAIN,否則漏讀 = 永遠等不到。',
+      hl:['z-user','z-sockA'], proc:['💤 再度入睡——舊資料叫不醒 ET','hot'], wq:['💤 行程睡在這',''],
+      rdl:[], bufA:['📦 有資料(被遺忘)','hot'], bufB:['空','ghost'], bellA:false, bellB:false,
+      ev:'(阻塞中⋯不會為舊資料返回)', evok:false, tnA:false });
+  }
+  return base;
+}
+var epMode='lt', epIdx=0, epArr=epSteps(epMode);
+function chipHtml(arr, hotAll){
+  if(!arr.length) return '<span class="empty">(空)</span>';
+  var h=''; for(var i=0;i<arr.length;i++) h+='<span class="chip'+(hotAll?' hot':'')+'">'+arr[i]+'</span> ';
+  return h;
+}
+function epRender(){
+  var s = epArr[epIdx];
+  $('ep-stepnum').textContent = (epIdx+1)+' / '+epArr.length;
+  $('ep-title').textContent = '第 '+(epIdx+1)+' 步 · '+s.t;
+  $('ep-narr').textContent = s.n;
+  var zones=['z-user','z-ep','z-sockA','z-sockB'];
+  for(var i=0;i<zones.length;i++) $(zones[i]).classList.toggle('hl', s.hl.indexOf(zones[i])>=0);
+  $('proc-state').textContent=s.proc[0]; $('proc-state').className='chip '+s.proc[1];
+  $('wq-state').textContent=s.wq[0];     $('wq-state').className='chip '+s.wq[1];
+  $('rdl-chips').innerHTML = chipHtml(s.rdl, true);
+  $('bufA').textContent=s.bufA[0]; $('bufA').className='chip '+s.bufA[1];
+  $('bufB').textContent=s.bufB[0]; $('bufB').className='chip '+s.bufB[1];
+  $('bellA').classList.toggle('ring', s.bellA);
+  $('bellB').classList.toggle('ring', s.bellB);
+  $('tn-a').className = 'tn'+(s.tnA?' hot':'');
+  $('evout').textContent = s.ev;
+  $('evout').className = 'evout'+(s.evok?' has':'');
+  $('ep-prev').disabled = (epIdx===0);
+  $('ep-next').disabled = (epIdx===epArr.length-1);
+}
+$('ep-prev').addEventListener('click', function(){ if(epIdx>0){epIdx--; epRender();} });
+$('ep-next').addEventListener('click', function(){ if(epIdx<epArr.length-1){epIdx++; epRender();} });
+function epSetMode(m){
+  epMode=m; epArr=epSteps(m); if(epIdx>=epArr.length) epIdx=epArr.length-1;
+  $('ep-mode-lt').classList.toggle('on', m==='lt');
+  $('ep-mode-et').classList.toggle('on', m==='et');
+  epRender();
+}
+$('ep-mode-lt').addEventListener('click', function(){ epSetMode('lt'); });
+$('ep-mode-et').addEventListener('click', function(){ epSetMode('et'); });
+epRender();
+
+/* ════════ JS 事件迴圈 stepper ════════ */
+var SC = {
+  sc1: {
+    code: [
+      "console.log('A');",
+      "setTimeout(() => console.log('B'), 0);",
+      "Promise.resolve()",
+      "  .then(() => console.log('C'))",
+      "  .then(() => console.log('D'));",
+      "console.log('E');"
+    ],
+    steps: [
+      { t:'script 起跑', n:'整段 script 以「一個 task」的身分開始執行,壓進 call stack。',
+        lines:[], st:['script'], mi:[], ta:[], out:[] },
+      { t:"log('A')", n:'同步執行,直接輸出。',
+        lines:[0], st:['script'], mi:[], ta:[], out:['A'] },
+      { t:'setTimeout 只是登記', n:'計時交給宿主。到期後回呼 B 排進 task queue 排隊——不插隊,0ms 也一樣。',
+        lines:[1], st:['script'], mi:[], ta:['B'], out:['A'] },
+      { t:'.then 排 microtask', n:'Promise 已是 resolved → then(C) 的回呼立刻排進 microtask。then(D) 掛在「C 的回傳」上,現在還不排。',
+        lines:[2,3,4], st:['script'], mi:['C'], ta:['B'], out:['A'] },
+      { t:"log('E')", n:'同步執行,輸出 E。',
+        lines:[5], st:['script'], mi:['C'], ta:['B'], out:['A','E'] },
+      { t:'task 結束 → checkpoint', n:'script 跑完,call stack 清空。進入 microtask checkpoint:清空整條 microtask 佇列,才准離開。',
+        lines:[], st:[], mi:['C'], ta:['B'], out:['A','E'] },
+      { t:'執行 C;D 補位', n:'C 出隊執行、輸出 C。C 回傳 undefined → 它的 promise resolve → D 這才排進 microtask。執行中補位的,本輪照清。',
+        lines:[3], st:['C'], mi:['D'], ta:['B'], out:['A','E','C'] },
+      { t:'執行 D', n:'D 出隊執行、輸出 D。microtask 佇列清空,checkpoint 結束。',
+        lines:[4], st:['D'], mi:[], ta:['B'], out:['A','E','C','D'] },
+      { t:'(渲染機會點)→ 下一個 task', n:'迴圈回到頂端,這時才輪到 task queue:取出 B。',
+        lines:[1], st:['B'], mi:[], ta:[], out:['A','E','C','D'] },
+      { t:'完:A E C D B', n:'B 墊底的原因只有一個:同輪 microtask 全體優先於下一個 task——包括執行中才補位的 D。(輸出已在 node v22 實測)',
+        lines:[], st:[], mi:[], ta:[], out:['A','E','C','D','B'] }
+    ]
+  },
+  sc2: {
+    code: [
+      "async function f() {",
+      "  console.log('1');",
+      "  await null;",
+      "  console.log('2');",
+      "}",
+      "f();",
+      "console.log('3');"
+    ],
+    steps: [
+      { t:'script 起跑', n:'定義 f;走到 f() 呼叫。',
+        lines:[5], st:['script'], mi:[], ta:[], out:[] },
+      { t:'f 同步執行到 await', n:'呼叫 async function 不會「排程」——它同步執行,直到碰上第一個 await。',
+        lines:[1], st:['script','f'], mi:[], ta:[], out:['1'] },
+      { t:'await:在這裡切一刀', n:'await 把「刀之後的所有程式」包成接續(continuation)排進 microtask;f 立即返回一個 pending Promise,從 stack 退出。',
+        lines:[2], st:['script'], mi:['f 的後半段'], ta:[], out:['1'] },
+      { t:"log('3')", n:'控制權回到呼叫端,繼續同步執行。',
+        lines:[6], st:['script'], mi:['f 的後半段'], ta:[], out:['1','3'] },
+      { t:'task 結束 → checkpoint', n:'stack 清空,開始清 microtask。',
+        lines:[], st:[], mi:['f 的後半段'], ta:[], out:['1','3'] },
+      { t:'跑後半段', n:'接續出隊執行:從 await 的下一行繼續。',
+        lines:[3], st:['f 的後半段'], mi:[], ta:[], out:['1','3','2'] },
+      { t:'完:1 3 2', n:'await 之後的每一行,語意上就是 .then 的回呼——「await = 讓出當前 task」的準確意思。(輸出已在 node v22 實測)',
+        lines:[], st:[], mi:[], ta:[], out:['1','3','2'] }
+    ]
+  }
+};
+var jsSc='sc1', jsIdx=0;
+function jsBuildCode(){
+  var lines = SC[jsSc].code, h='';
+  for(var i=0;i<lines.length;i++)
+    h += '<div class="cl" id="jsl-'+i+'">'+String(i+1).padStart(2,' ')+'  '+
+         lines[i].replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+  $('js-code').innerHTML = h;
+}
+function jsRender(){
+  var arr = SC[jsSc].steps, s = arr[jsIdx];
+  $('js-stepnum').textContent = (jsIdx+1)+' / '+arr.length;
+  $('js-title').textContent = '第 '+(jsIdx+1)+' 步 · '+s.t;
+  $('js-narr').textContent = s.n;
+  var lines = SC[jsSc].code;
+  for(var i=0;i<lines.length;i++)
+    $('jsl-'+i).classList.toggle('on', s.lines.indexOf(i)>=0);
+  $('st-chips').innerHTML = chipHtml(s.st, false);
+  $('mi-chips').innerHTML = chipHtml(s.mi, true);
+  $('ta-chips').innerHTML = chipHtml(s.ta, false);
+  $('co-out').textContent = s.out.join('\n');
+  $('js-prev').disabled = (jsIdx===0);
+  $('js-next').disabled = (jsIdx===arr.length-1);
+}
+$('js-prev').addEventListener('click', function(){ if(jsIdx>0){jsIdx--; jsRender();} });
+$('js-next').addEventListener('click', function(){ if(jsIdx<SC[jsSc].steps.length-1){jsIdx++; jsRender();} });
+function jsSetSc(sc){
+  jsSc=sc; jsIdx=0;
+  $('js-sc1').classList.toggle('on', sc==='sc1');
+  $('js-sc2').classList.toggle('on', sc==='sc2');
+  jsBuildCode(); jsRender();
+}
+$('js-sc1').addEventListener('click', function(){ jsSetSc('sc1'); });
+$('js-sc2').addEventListener('click', function(){ jsSetSc('sc2'); });
+jsBuildCode(); jsRender();
+})();
+</script>
+<script>
+/* build-free syntax highlighting — Gruvbox Material token map */
+(function(){
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var LANG = {
+    rust: {
+      re: /(\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*")|(#\[[^\]]*\]|\b[a-z_][a-z0-9_]*!)|\b(fn|let|mut|unsafe|extern|use|pub|struct|enum|impl|const|static|match|if|else|loop|while|for|in|return|as|move|dyn|where|trait|mod|break|continue)\b|\b(0x[0-9A-Fa-f_]+|\d[\d_]*)\b|\b(i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f32|f64|bool|str|char|[A-Z][A-Za-z0-9_]*)\b|([a-z_][A-Za-z0-9_]*)(?=\()/g,
+      cls: ['c','s','m','k','n','t','f']
+    },
+    js: {
+      re: /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`)|\b(const|let|var|function|async|await|return|new|class|if|else|for|while|of|in|try|catch|throw|typeof|require)\b|\b(0x[0-9A-Fa-f]+|\d+(?:\.\d+)?)\b|\b([A-Z][A-Za-z0-9_]*)\b|([A-Za-z_$][\w$]*)(?=\()/g,
+      cls: ['c','s','k','n','t','f']
+    },
+    pseudo: {
+      re: /(\/\/[^\n]*)|\b(loop|while|if|else)\b/g,
+      cls: ['c','k']
+    }
+  };
+  var blocks = document.querySelectorAll('pre>code[data-lang]');
+  for(var b=0; b<blocks.length; b++){
+    var el = blocks[b];
+    var L = LANG[el.getAttribute('data-lang')]; if(!L) continue;
+    var src = el.textContent, out='', i=0, m; L.re.lastIndex = 0;
+    while((m = L.re.exec(src))){
+      out += esc(src.slice(i, m.index));
+      var cls = '';
+      for(var g=1; g<m.length; g++){ if(m[g] !== undefined){ cls = L.cls[g-1]; break; } }
+      out += '<span class="tk-'+cls+'">'+esc(m[0])+'</span>';
+      i = m.index + m[0].length;
+      if(m[0].length === 0) L.re.lastIndex++;
+    }
+    el.innerHTML = out + esc(src.slice(i));
+  }
+})();
+</script>
+</body>
+</html>

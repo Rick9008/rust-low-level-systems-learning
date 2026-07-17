@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MPSC 兩式無鎖設計 — 交錯 Stepper 教材</title>
+<style>
+:root{
+  --bg:#1d2021; --panel:#282828; --card:#32302f; --card2:#3a3735;
+  --border:#45403d; --border2:#5a524c;
+  --fg:#d4be98; --fg-dim:#a89984; --grey:#928374;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657;
+  --green:#a9b665; --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+  --mono:"JetBrains Mono","Cascadia Code",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);
+  font-size:14.5px;line-height:1.75;}
+.wrap{max-width:1060px;margin:0 auto;padding:20px 16px 90px}
+header.hero{padding:26px 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.hero .eyebrow{color:var(--grey);font-size:.78rem;letter-spacing:.22em}
+.hero h1{margin:.35em 0 .15em;font-size:1.45rem;color:var(--yellow);font-weight:700;line-height:1.4}
+.hero .sub{color:var(--fg-dim);font-size:.9rem}
+.hero .sub b{color:var(--aqua);font-weight:600}
+
+/* ---------- tabs ---------- */
+nav.tabs{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:50;
+  background:var(--bg);padding:10px 0;border-bottom:1px solid var(--border)}
+nav.tabs button{font-family:var(--mono);font-size:.8rem;color:var(--fg-dim);
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;
+  padding:7px 11px;cursor:pointer;line-height:1.3}
+nav.tabs button:hover{color:var(--fg);border-color:var(--border2)}
+nav.tabs button.on{color:#1d2021;background:var(--yellow);border-color:var(--yellow);font-weight:700}
+.tabpane{display:none;animation:fadein .18s ease}
+.tabpane.on{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---------- generic blocks ---------- */
+h2{font-size:1.12rem;color:var(--orange);margin:1.6em 0 .5em;border-left:4px solid var(--orange);padding-left:.6em}
+h3{font-size:.98rem;color:var(--aqua);margin:1.5em 0 .4em}
+p{margin:.55em 0}
+.intuit{background:linear-gradient(135deg,#32302f,#2b2a28);border:1px solid var(--yellow);
+  border-radius:10px;padding:14px 18px;margin:16px 0;color:var(--fg);font-size:.95rem}
+.intuit .tag{color:var(--yellow);font-size:.72rem;letter-spacing:.2em;display:block;margin-bottom:6px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:13px 16px;margin:12px 0}
+.card .ct{color:var(--purple);font-weight:700;font-size:.85rem;margin-bottom:6px}
+.card.warn{border-color:var(--red)}
+.card.warn .ct{color:var(--red)}
+.card.ok{border-color:var(--green)}
+.card.ok .ct{color:var(--green)}
+.card.act{border-color:var(--aqua);background:#2b312d}
+.card.act .ct{color:var(--aqua)}
+.dim{color:var(--fg-dim)}
+.small{font-size:.82rem}
+em{color:var(--yellow);font-style:normal}
+strong{color:var(--fg);font-weight:700}
+code{background:var(--card2);border:1px solid var(--border);border-radius:4px;
+  padding:.08em .35em;font-size:.86em;color:var(--aqua)}
+pre{background:#232120;border:1px solid var(--border);border-radius:10px;
+  padding:14px;overflow-x:auto;-webkit-text-size-adjust:100%;text-size-adjust:100%;
+  font-size:.8rem;line-height:1.6;margin:12px 0}
+pre code{background:none;border:none;padding:0;color:var(--fg);font-size:1em}
+.k{color:var(--red)} .fn{color:var(--green)} .ty{color:var(--yellow)}
+.cm{color:var(--grey)} .lit{color:var(--purple)} .ord{color:var(--blue)}
+
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:.82rem}
+th,td{border:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--card);color:var(--yellow);font-size:.78rem}
+td{background:#262423}
+.tscroll{overflow-x:auto;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+
+.jump{color:var(--blue);text-decoration:underline dotted;cursor:pointer}
+.jump:hover{color:var(--aqua)}
+
+/* ordering badges */
+.ob{display:inline-block;border-radius:4px;padding:0 .4em;font-size:.74rem;font-weight:700;
+  border:1px solid transparent;vertical-align:1px}
+.ob.rel{color:#1d2021;background:var(--green)}
+.ob.acq{color:#1d2021;background:var(--blue)}
+.ob.ar{color:#1d2021;background:var(--purple)}
+.ob.rlx{color:#1d2021;background:var(--grey)}
+
+/* derivation Q chain */
+.qchain{counter-reset:q;margin:14px 0}
+.qstep{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--blue);
+  border-radius:0 10px 10px 0;padding:11px 15px;margin:10px 0}
+.qstep .qq{color:var(--blue);font-weight:700;font-size:.86rem}
+.qstep .qq::before{counter-increment:q;content:"Q" counter(q) " · "}
+.qstep .qa{margin-top:5px;font-size:.88rem}
+.qstep .born{margin-top:7px;font-size:.8rem;color:var(--orange)}
+.qstep .born::before{content:"⇒ 誕生:";font-weight:700}
+
+/* signature diagram: two-phase gap */
+.gapfig{display:flex;align-items:stretch;gap:0;margin:16px 0;flex-wrap:wrap}
+.gapfig .ph{flex:1 1 180px;background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:11px 13px;text-align:center;min-width:150px}
+.gapfig .ph .pt{font-weight:700;font-size:.92rem}
+.gapfig .ph .pd{font-size:.76rem;color:var(--fg-dim);margin-top:4px;line-height:1.55}
+.gapfig .ph.claim{border-color:var(--blue)} .gapfig .ph.claim .pt{color:var(--blue)}
+.gapfig .ph.pub{border-color:var(--green)} .gapfig .ph.pub .pt{color:var(--green)}
+.gapfig .gap{flex:1.2 1 200px;min-width:170px;border:2px dashed var(--red);border-radius:10px;
+  padding:11px 13px;text-align:center;margin:0 8px;
+  background:repeating-linear-gradient(45deg,#2c2422,#2c2422 8px,#332826 8px,#332826 16px)}
+.gapfig .gap .pt{color:var(--red);font-weight:700;font-size:.92rem}
+.gapfig .gap .pd{font-size:.76rem;color:var(--fg-dim);margin-top:4px;line-height:1.55}
+
+/* seq state machine */
+.seqfig{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:14px 0}
+.seqfig .sq{background:var(--card);border:2px solid var(--yellow);border-radius:8px;
+  padding:6px 13px;text-align:center;min-width:64px}
+.seqfig .sq .v{font-size:1.05rem;font-weight:700;color:var(--yellow)}
+.seqfig .sq .l{font-size:.68rem;color:var(--fg-dim);line-height:1.4}
+.seqfig .ar{padding:0 6px;text-align:center;color:var(--fg-dim);font-size:.7rem;line-height:1.4}
+.seqfig .ar .sym{color:var(--aqua);font-size:1rem;display:block}
+
+/* ---------- stepper ---------- */
+.scsel{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 10px}
+.scsel button{font-family:var(--mono);font-size:.79rem;background:var(--panel);
+  color:var(--fg-dim);border:1px solid var(--border);border-radius:20px;
+  padding:6px 13px;cursor:pointer;line-height:1.35}
+.scsel button.on{background:var(--aqua);color:#1d2021;border-color:var(--aqua);font-weight:700}
+.stepper{background:var(--panel);border:1px solid var(--border2);border-radius:12px;
+  padding:14px;margin:8px 0 20px}
+.sc-desc{font-size:.82rem;color:var(--fg-dim);margin:0 2px 10px;border-bottom:1px dashed var(--border);padding-bottom:9px}
+.ctrl{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.ctrl button{font-family:var(--mono);font-size:.95rem;background:var(--card2);color:var(--fg);
+  border:1px solid var(--border2);border-radius:8px;padding:6px 15px;cursor:pointer}
+.ctrl button:hover{background:var(--border)}
+.ctrl button:disabled{opacity:.32;cursor:default}
+.ctrl .fi{margin-left:auto;color:var(--fg-dim);font-size:.8rem}
+.opline{min-height:1.7em;font-size:.85rem;margin-bottom:10px;color:var(--fg)}
+.opline .who{font-weight:700}
+.stage{background:#232120;border:1px solid var(--border);border-radius:10px;padding:13px;min-height:120px}
+.narr{margin-top:12px;background:var(--card);border-left:4px solid var(--yellow);
+  border-radius:0 8px 8px 0;padding:10px 13px;font-size:.87rem;min-height:3.2em}
+
+/* thread lanes */
+.lanes{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;margin-top:12px;font-size:.8rem}
+.lanes .ln{color:var(--fg-dim);text-align:right;padding:3px 0;font-weight:700}
+.lanes .la{background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:3px 10px;color:var(--fg-dim)}
+.lanes .la.act{border-color:var(--yellow);color:var(--fg);background:#38332a}
+.lanes .ln.p1c{color:var(--blue)} .lanes .ln.p2c{color:var(--purple)} .lanes .ln.cc{color:var(--green)}
+
+/* D1 chain renderer */
+.zone{margin:9px 0}
+.zone .zt{font-size:.72rem;color:var(--grey);letter-spacing:.1em;margin-bottom:5px}
+.chainrow{display:flex;align-items:center;flex-wrap:wrap;gap:2px;min-height:56px}
+.nd{position:relative;background:var(--card);border:2px solid var(--aqua);border-radius:9px;
+  padding:5px 11px 6px;text-align:center;min-width:66px}
+.nd .nm{font-weight:700;font-size:.95rem;color:var(--fg)}
+.nd .vl{font-size:.72rem;color:var(--fg-dim)}
+.nd .nx{font-size:.66rem;color:var(--grey);margin-top:2px}
+.nd.stub{border-style:dotted;border-color:var(--grey)}
+.nd.stub .nm{color:var(--grey)}
+.nd.float{border-style:dashed;border-color:var(--orange)}
+.nd.priv{border-style:dashed;border-color:var(--grey);opacity:.85}
+.nd.done{opacity:.42;border-color:var(--border2)}
+.nd.hl{box-shadow:0 0 0 3px rgba(216,166,87,.45)}
+.nd .ptr{position:absolute;left:50%;transform:translateX(-50%);font-size:.62rem;
+  font-weight:700;white-space:nowrap;line-height:1.2}
+.nd .ptr.h{top:-17px;color:var(--red)}
+.nd .ptr.t{bottom:-17px;color:var(--green)}
+.lk{color:var(--aqua);font-size:1.05rem;padding:0 3px}
+.lk.brk{color:var(--red);font-size:.78rem;letter-spacing:.05em}
+.chainrow.pad{padding:18px 0 20px}
+
+/* D2 ring renderer */
+.ring{display:flex;flex-wrap:wrap;gap:9px;padding:20px 0 6px}
+.slot{position:relative;flex:1 1 120px;min-width:112px;max-width:170px;background:var(--card);
+  border:2px solid var(--border2);border-radius:10px;padding:8px 10px;text-align:center}
+.slot .si{font-size:.68rem;color:var(--grey)}
+.slot .sq2{font-size:1.25rem;font-weight:700;color:var(--fg-dim);line-height:1.25}
+.slot .sv{font-size:.8rem;color:var(--fg-dim);min-height:1.3em}
+.slot .st{font-size:.66rem;margin-top:3px;color:var(--grey)}
+.slot.ready{border-color:var(--green)} .slot.ready .sq2{color:var(--green)} .slot.ready .sv{color:var(--fg)}
+.slot.claimed{border-color:var(--orange);border-style:dashed} .slot.claimed .sq2{color:var(--orange)}
+.slot.hl{box-shadow:0 0 0 3px rgba(216,166,87,.45)}
+.slot .cur{position:absolute;left:50%;transform:translateX(-50%);font-size:.62rem;font-weight:700;white-space:nowrap}
+.slot .cur.e{top:-17px;color:var(--red)}
+.slot .cur.d{bottom:-17px;color:var(--green)}
+.cnt{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px;font-size:.8rem}
+.cnt .cb{background:var(--card);border:1px solid var(--border);border-radius:7px;padding:4px 11px}
+.cnt .cb b{color:var(--yellow)}
+
+.pkrow{display:flex;gap:10px;flex-wrap:wrap;padding:14px 0 4px}
+.pk{flex:1 1 130px;min-width:120px;background:var(--card);border:2px solid var(--border2);
+  border-radius:10px;padding:8px 12px;text-align:center}
+.pk .pl{font-size:.68rem;color:var(--grey)}
+.pk .pv{font-size:.98rem;font-weight:700;color:var(--fg-dim);margin-top:3px;line-height:1.45}
+.pk.ok{border-color:var(--green)} .pk.ok .pv{color:var(--green)}
+.pk.bad{border-color:var(--red)} .pk.bad .pv{color:var(--red)}
+.pk.warnb{border-color:var(--orange);border-style:dashed} .pk.warnb .pv{color:var(--orange)}
+.pk.hl{box-shadow:0 0 0 3px rgba(216,166,87,.45)}
+.foot{margin-top:46px;border-top:1px solid var(--border);padding-top:12px;
+  color:var(--grey);font-size:.74rem;line-height:1.8}
+@media (max-width:640px){
+  body{font-size:13.5px}
+  .hero h1{font-size:1.18rem}
+  .gapfig .gap{margin:0}
+  .slot{min-width:96px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">ETCHED PREP · LOCK-FREE QUEUES · INTERLEAVING STEPPER</div>
+  <h1>MPSC 兩式無鎖設計:佔位、發布、與中間那道縫</h1>
+  <div class="sub">設計一 <b>swap-based intrusive MPSC</b>(unbounded)· 設計二 <b>bounded ring + per-slot seq</b>(backpressure)<br>
+  頁面上所有 code 都經 rustc 1.91 以 <b>edition 2024</b> 編譯執行(對齊 CoderPad 的 1.92/2024);每個 stepper 情境都有對應的單執行緒重放 assert 認證。</div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="t1" class="on">1 · 總覽與導讀</button>
+  <button data-tab="t2">2 · 設計一:推導 &amp; Code</button>
+  <button data-tab="t3">3 · 設計一:交錯 Stepper</button>
+  <button data-tab="t4">4 · 設計二:推導 &amp; Code</button>
+  <button data-tab="t5">5 · 設計二:交錯 Stepper</button>
+  <button data-tab="t6">6 · 對照 · MPMC · 追問</button>
+  <button data-tab="t7">7 · Park 與 Token</button>
+</nav>
+
+<!-- ============ TAB 1 ============ -->
+<section class="tabpane on" id="t1">
+
+<div class="intuit"><span class="tag">一句話直覺 · 整份教材唯一要背的抽象</span>
+無鎖佇列只有一道核心題:多個寫者同時來,<em>順序誰說了算?寫到一半的東西,讀者怎麼不會看到?</em>
+兩個設計是同一個答案的兩種形狀 —— 先「<strong>佔位</strong>」定順序,再「<strong>發布</strong>」給可見。
+所有怪招(stub、seq、Inconsistent、head-of-line)都只是在處理這兩步之間<em>那道消不掉的縫</em>。</div>
+
+<h2>場景設定:用你自己的系統當教材</h2>
+<p><strong>設計一</strong>的場景是你的 log daemon:N 個 request-handler thread 產生 log entry、一個 flusher thread 寫盤 —— MPSC 的原型。任務性質是「<em>不許拒收</em>」:log 可以晚到,不能被 push 端丟掉,所以 unbounded。</p>
+<p><strong>設計二</strong>的場景換成 telemetry ingestion(你 7/24 rehearsal 的題):sensor threads 灌 readings、一個 aggregator 收。這裡「<em>寧丟不塞爆</em>」:滿了要當場拿到 <code>Err</code>,由上層決定丟點 + 計數。同一個 MPSC 需求,兩種失敗哲學,長出兩種結構 —— 這就是 <span class="jump" data-jump="t6">Tab 6 選型表</span>的第一列。</p>
+
+<h2>階梯:從正確地板爬上來</h2>
+<p class="dim small">複雜度貨幣在這裡不是 big-O,是「一次 push 花幾個原子操作、失敗時發生什麼」。</p>
+<div class="tscroll"><table>
+<tr><th>階</th><th>push 端每次成本</th><th>push 失敗行為</th><th>你付出的代價</th></tr>
+<tr><td><strong>0 · <code>Mutex&lt;VecDeque&gt;</code> + Condvar</strong><br><span class="dim small">面試永遠從這裡開場</span></td>
+<td>uncontended:futex fast path,lock/unlock 各一次 CAS,零 syscall</td>
+<td>contended:排隊睡覺(正確,只是慢)</td>
+<td>所有操作串行化;高競爭下 lock 本身成為瓶頸</td></tr>
+<tr><td><strong>1 · 設計一 intrusive MPSC</strong></td>
+<td>固定兩步:<code>swap</code> + 一個 store。<em>沒有迴圈、永不重試 = producer wait-free</em></td>
+<td>不存在「失敗」—— unbounded,永遠收</td>
+<td>吃記憶體無上限;consumer 有 Inconsistent 窗口</td></tr>
+<tr><td><strong>2 · 設計二 bounded ring</strong></td>
+<td>CAS 佔位,可能失敗重試(lock-free-ish)</td>
+<td>滿 → <code>Err(v)</code> 原值奉還,backpressure 出口</td>
+<td>容量固定;head-of-line 窗口</td></tr>
+</table></div>
+<p class="small dim">直接跳 lock-free 反而顯得沒判斷 —— 光譜由簡到繁走,講清楚「何時值得往上爬」,才是你的敘事。</p>
+
+<h2>SPSC 對照:你已經會的那一格,是理解 MP 的鑰匙</h2>
+<div class="card"><div class="ct">SPSC 為什麼便宜</div>
+SPSC 兩個單調遞增 index 就夠、完全不用 CAS,是因為<strong>每個 index 恰好只有一個寫者</strong>:producer 寫 tail、consumer 寫 head,彼此只「讀」對方 —— acquire/release 一對握手就閉環。<br><br>
+<strong>MP 打破的就是這一條。</strong>「隊尾在哪」這個變數突然有 N 個寫者。整份教材其實只在回答一件事:單一寫者前提破掉之後,怎麼救 ——
+<em>設計一用 <code>swap</code></em>(無條件交換,人人成功,靠回傳值分工)、<em>設計二用 <code>CAS</code></em>(佔位可失敗,失敗就重試或回報滿)。</div>
+
+<h2>核心概念:佔位 / 發布 / 縫</h2>
+<div class="gapfig">
+  <div class="ph claim"><div class="pt">① 佔位 claim</div><div class="pd">搶下「我在隊伍裡的位置」<br>設計一:<code>head.swap(me)</code><br>設計二:CAS 搶 <code>enq</code> 的票<br><b>順序在此刻定案</b></div></div>
+  <div class="gap"><div class="pt">縫(不可消除)</div><div class="pd">位置已定、內容未可見<br>讀者撞進來會看到什麼?<br>設計一:斷鏈 → <code>Inconsistent</code><br>設計二:未發布 slot → head-of-line</div></div>
+  <div class="ph pub"><div class="pt">② 發布 publish</div><div class="pd">讓內容對讀者可見<br>設計一:<code>prev.next = me</code> <span class="ob rel">Release</span><br>設計二:<code>slot.seq = pos+1</code> <span class="ob rel">Release</span><br><b>可見性在此刻成立</b></div></div>
+</div>
+<p>為什麼縫消不掉:佔位和發布動的是<strong>兩個不同的記憶體位置</strong>(設計一:<code>head</code> 與 <code>prev.next</code>;設計二:<code>enq</code> 與 <code>slot.seq</code>),而單一原子操作一次只能動一個位置。兩個原子操作之間,天底下任何 thread 都可能被排進來 —— 包括讀者。所以設計題從「怎麼避免縫」變成「<em>讀者撞到縫時,協議是什麼</em>」。兩個設計的所有分支,都是這個協議的條文。</p>
+
+<div class="card"><div class="ct">名詞先立牌:Vyukov 的 head / tail 跟你的直覺相反</div>
+兩個設計都出自 Dmitry Vyukov(1024cores)。他的命名:<strong>head = push 端</strong>(producers swap 的地方)、<strong>tail = pop 端</strong>(consumer cursor)。本教材全程沿用他的命名 —— 對話中我曾兩處混用,以這裡為準。順帶收掉稱呼問題:「Vyukov intrusive MPSC」= 設計一;設計二是他的 bounded <em>MPMC</em> array queue 退化到單 consumer 用。講 “Vyukov queue” 時兩者都可能被指,靠 bounded/unbounded 區分。</div>
+
+<h2>怎麼用這份教材</h2>
+<p>每個設計兩個 tab:<strong>推導</strong>(狀態變數一個一個被逼出來,不憑空出現)→ <strong>Stepper</strong>(手按 ▶,看多執行緒交錯一格一格走)。順序建議 2 → 3 → 4 → 5 → 6。Stepper 每一格的敘述都對應一條已執行通過的 assert —— 你按的不是動畫,是重放。最後 <span class="jump" data-jump="t6">Tab 6</span> 有自測追問集,和你看完這頁之後<em>真正該做的事</em>。</p>
+
+</section>
+
+<!-- ============ TAB 2 ============ -->
+<section class="tabpane" id="t2">
+
+<div class="intuit"><span class="tag">設計一 · 一句話</span>
+producer 只做兩件事:跟櫃檯<em>換牌子</em>(swap:「現在我是最後一棒」,並拿到上一棒是誰)、然後去<em>上一棒身上掛名牌</em>(link:prev.next = 我)。
+換牌永不失敗、掛牌各掛各的 —— 所以 <strong>push 端 wait-free</strong>。全部的複雜度都被擠到 consumer 那邊。</div>
+
+<h2>把狀態變數一個一個逼出來</h2>
+<p class="dim small">場景:log daemon。N 個 handler thread 各自產生 log entry(node),一個 flusher 收。以下每個 Q 都是「不加這個東西就做不下去」的點 —— 變數是被逼出來的,不是天上掉下來的。</p>
+
+<div class="qchain">
+<div class="qstep"><div class="qq">多個 producer 都要「掛到隊尾」,隊尾是什麼?</div>
+<div class="qa">必須有一個所有 producer 都看得到的單點。它會被 N 個 thread 同時寫 → 必須是 atomic。</div>
+<div class="born"><code>head: AtomicUsize</code> —— 全結構唯一的競爭點。</div></div>
+
+<div class="qstep"><div class="qq">「掛上去」是一件事還是兩件事?</div>
+<div class="qa">兩件:①讓 head 指向我(成為新隊尾);②讓<em>前一棒</em>的 next 指向我(讓讀者走得到)。兩件事動兩個記憶體位置,單一原子操作做不完 → 必須拆兩步。</div>
+<div class="born">縫。從這一刻起,設計題變成「讀者撞到縫的協議」。</div></div>
+
+<div class="qstep"><div class="qq">第一步(佔位)用什麼原子操作?</div>
+<div class="qa">CAS 迴圈(load head → CAS(old, me) → 失敗重來)可以,但有更強的:<code>swap</code>。無條件交換,<em>永遠成功</em>,而且回傳舊值 —— 我一步同時完成「成為隊尾」和「知道前一棒是誰」。沒有迴圈 = 不管幾個 producer 對撞,每人固定兩步 = wait-free。附贈:<strong>ABA 天生免疫</strong>,因為 swap 沒有 compare —— ABA 是 CAS 的病。</div>
+<div class="born"><code>let prev = head.swap(me)</code></div></div>
+
+<div class="qstep"><div class="qq">第二步 <code>prev.next = me</code>,多個 producer 會不會互相踩?</div>
+<div class="qa">不會。prev 是各自 swap 的回傳值,swap 的原子性保證<strong>每個 producer 拿到的 prev 互不相同</strong> —— 佇列順序在 swap 那一刻已定案,link 只是把已定的順序 materialize,各寫各的 next,零競爭。這是整個設計最漂亮的一步:把「N 人搶一個點」轉換成「N 人各寫各的點」。</div>
+<div class="born">link 不需要任何同步原語,一個 <span class="ob rel">Release</span> store 就完。</div></div>
+
+<div class="qstep"><div class="qq">consumer 怎麼讀?</div>
+<div class="qa">從某個起點沿 next 走。起點 = 它自己的 cursor。誰會寫這個 cursor?只有一個 consumer → <strong>普通 <code>usize</code>,連 atomic 都不用</strong>。注意這是「型別合約」不是結構保證:Rust 裡用 <code>pop(&amp;mut self)</code> + Receiver 不給 Clone,把合約編進 compiler。</div>
+<div class="born"><code>tail: usize</code>(Vyukov 命名:pop 端)</div></div>
+
+<div class="qstep"><div class="qq">佇列空的時候,head 和 tail 指同一個節點 —— pop 掉它會怎樣?</div>
+<div class="qa">災難:head 懸空,下一個 producer 的 swap 拿到已回收節點當 prev。兩端會在空佇列時撞進同一塊記憶體 → 需要一個<em>永遠不被真正取走</em>的常駐節點,把 producer 領地(head、prev.next)和 consumer 領地(tail)永久隔開。</div>
+<div class="born"><code>stub</code>(dummy node)。</div></div>
+
+<div class="qstep"><div class="qq">pop 的規則是「回傳 tail、cursor 前進到 next」—— 那最後一棒怎麼收?</div>
+<div class="qa">收不了:它沒有後繼。這是本設計最反直覺的一條規則 ——<strong>一個節點能被 pop 的條件是「它的後繼已經 link 上」</strong>。解法:consumer 客串一次 producer,把 stub 重新 push 進去,人工替最後一棒製造後繼。push 本來就 MP-safe,多一個呼叫者不會壞。</div>
+<div class="born"><code>pop</code> 裡的 <code>push(stub)</code> 分支。</div></div>
+</div>
+
+<h2>縫的三張臉</h2>
+<p>consumer 撞到「swap 完成、link 未完成」的縫,有三個入口。三個都在 <span class="jump" data-jump="t3">Tab 3</span> 有逐格重放:</p>
+<div class="tscroll"><table>
+<tr><th>撞縫位置</th><th>consumer 看到什麼</th><th>協議回應</th><th>Stepper</th></tr>
+<tr><td>停在 stub,<code>stub.next==NIL</code>,但 <code>head≠stub</code></td><td>隊上明明有人(head 被換走了),鏈卻還沒接到 stub</td><td><code>Inconsistent</code>(spin 重試)。<em>原版 Vyukov 這裡混回 empty</em>,見下方 delta 卡</td><td><span class="jump" data-jump="t3|d1c">情境 C</span></td></tr>
+<tr><td>走鏈途中 <code>next==NIL</code> 且 <code>tail≠head</code></td><td>我不是最後一棒,後面卻接不下去</td><td><code>Inconsistent</code></td><td><span class="jump" data-jump="t3|d1a">情境 A</span></td></tr>
+<tr><td><code>push(stub)</code> 之後 <code>next</code> 仍 <code>NIL</code></td><td>我 push stub 的空檔被 producer 插隊,stub 掛到了別人後面</td><td><code>Inconsistent</code> —— 單執行緒腦內模擬永遠走不到的分支</td><td><span class="jump" data-jump="t3|d1d">情境 D</span></td></tr>
+</table></div>
+
+<h2>Code(rustc 1.91 · edition 2024 編譯執行通過;demo payload 用 <code>AtomicUsize</code> 保 safe Rust)</h2>
+<pre><code><span class="k">const</span> <span class="lit">NIL</span>: <span class="k">usize</span> = <span class="k">usize</span>::MAX;
+
+<span class="k">struct</span> <span class="ty">Node</span> {
+    next: <span class="ty">AtomicUsize</span>, <span class="cm">// 同步骨架:鏈的下一格</span>
+    val: <span class="ty">AtomicUsize</span>,  <span class="cm">// demo 用 usize 當 payload,讓 safe Rust 成立;</span>
+                       <span class="cm">// 泛型 T 版需 UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt; + unsafe,</span>
+                       <span class="cm">// 獨佔視窗由同一組 happens-before 保證(loom 驗)</span>
+}
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="ty">MpscQueue</span> {
+    nodes: <span class="ty">Box</span>&lt;[<span class="ty">Node</span>]&gt;,
+    head: <span class="ty">AtomicUsize</span>, <span class="cm">// push 端:最新節點(Vyukov 命名,注意跟直覺相反)</span>
+    stub: <span class="k">usize</span>,       <span class="cm">// 常駐 dummy</span>
+}
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="ty">Consumer</span>&lt;'a&gt; {
+    q: &amp;'a <span class="ty">MpscQueue</span>,
+    tail: <span class="k">usize</span>, <span class="cm">// pop 端 cursor:單一 consumer 是「型別合約」,所以敢用普通 usize</span>
+}
+
+#[derive(<span class="ty">Debug</span>, <span class="ty">PartialEq</span>)]
+<span class="k">pub</span> <span class="k">enum</span> <span class="ty">Pop</span> {
+    Data { node: <span class="k">usize</span>, val: <span class="k">usize</span> },
+    Empty,        <span class="cm">// 真的空:可以去睡,等 producer 通知</span>
+    Inconsistent, <span class="cm">// 有 producer 卡在 swap 與 link 之間:spin/yield 馬上重試</span>
+}
+
+<span class="k">impl</span> <span class="ty">MpscQueue</span> {
+    <span class="cm">/// n_nodes 含 stub。node 0 = stub。</span>
+    <span class="cm">/// demo 版用 Box::leak 換 'static(永不釋放,測試夠用);</span>
+    <span class="cm">/// 正式版是 Arc&lt;MpscQueue&gt; + Sender(Clone)/Receiver(!Clone) 的拆法。</span>
+    <span class="k">pub</span> <span class="k">fn</span> new(n_nodes: <span class="k">usize</span>) -&gt; (&amp;'static <span class="k">Self</span>, <span class="ty">Consumer</span>&lt;'static&gt;) {
+        <span class="k">let</span> nodes: <span class="ty">Box</span>&lt;[<span class="ty">Node</span>]&gt; = (<span class="lit">0</span>..n_nodes)
+            .map(|_| <span class="ty">Node</span> { next: <span class="ty">AtomicUsize</span>::new(<span class="lit">NIL</span>), val: <span class="ty">AtomicUsize</span>::new(<span class="lit">0</span>) })
+            .collect();
+        <span class="k">let</span> q: &amp;'static <span class="ty">MpscQueue</span> = <span class="ty">Box</span>::leak(<span class="ty">Box</span>::new(
+            <span class="k">Self</span> { nodes, head: <span class="ty">AtomicUsize</span>::new(<span class="lit">0</span>), stub: <span class="lit">0</span> }));
+        (q, <span class="ty">Consumer</span> { q, tail: <span class="lit">0</span> })
+    }
+
+    <span class="cm">/// MP 端:兩步,無迴圈,永遠成功(wait-free)。</span>
+    <span class="cm">/// idx 必須是 caller 獨佔的空節點(freelist 是另一個結構,此處不混入)。</span>
+    <span class="k">pub</span> <span class="k">fn</span> push(&amp;<span class="k">self</span>, idx: <span class="k">usize</span>, val: <span class="k">usize</span>) {
+        <span class="k">self</span>.nodes[idx].val.store(val, <span class="ord">Relaxed</span>);   <span class="cm">// 1. 先填內容</span>
+        <span class="k">self</span>.nodes[idx].next.store(<span class="lit">NIL</span>, <span class="ord">Relaxed</span>);  <span class="cm">//    自己是新的最後一棒</span>
+        <span class="k">let</span> prev = <span class="k">self</span>.head.swap(idx, <span class="ord">AcqRel</span>);    <span class="cm">// 2. 佔位:順序在此刻定案</span>
+        <span class="k">self</span>.nodes[prev].next.store(idx, <span class="ord">Release</span>); <span class="cm">// 3. 發布:把鏈補上(帶出 val)</span>
+    }
+}
+
+<span class="k">impl</span> <span class="ty">Consumer</span>&lt;'_&gt; {
+    <span class="k">pub</span> <span class="k">fn</span> pop(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Pop</span> {
+        <span class="k">let</span> q = <span class="k">self</span>.q;
+        <span class="k">let</span> <span class="k">mut</span> tail = <span class="k">self</span>.tail;
+        <span class="k">let</span> <span class="k">mut</span> next = q.nodes[tail].next.load(<span class="ord">Acquire</span>);
+
+        <span class="k">if</span> tail == q.stub {
+            <span class="k">if</span> next == <span class="lit">NIL</span> {
+                <span class="cm">// 停在 stub 且沒有後繼:「空」和「有人 swap 了還沒 link」在這裡分岔。</span>
+                <span class="cm">// (原版 Vyukov 兩者都回 empty;分開才能讓 caller 決定睡或 spin)</span>
+                <span class="k">if</span> q.head.load(<span class="ord">Acquire</span>) == tail {
+                    <span class="k">return</span> <span class="ty">Pop</span>::Empty;        <span class="cm">// head 還是 stub → 沒人 push 過</span>
+                }
+                <span class="k">return</span> <span class="ty">Pop</span>::Inconsistent;     <span class="cm">// head 被換走了 → 鏈在路上</span>
+            }
+            <span class="k">self</span>.tail = next;                 <span class="cm">// 跳過 dummy</span>
+            tail = next;
+            next = q.nodes[tail].next.load(<span class="ord">Acquire</span>);
+        }
+
+        <span class="k">if</span> next != <span class="lit">NIL</span> {                      <span class="cm">// 一般路徑:後繼已接上</span>
+            <span class="k">self</span>.tail = next;
+            <span class="k">return</span> <span class="ty">Pop</span>::Data { node: tail, val: q.nodes[tail].val.load(<span class="ord">Relaxed</span>) };
+        }
+
+        <span class="cm">// next == NIL:tail 是最後一棒,或有 producer in-flight</span>
+        <span class="k">let</span> head = q.head.load(<span class="ord">Acquire</span>);
+        <span class="k">if</span> tail != head {
+            <span class="k">return</span> <span class="ty">Pop</span>::Inconsistent;         <span class="cm">// 有人 swap 了還沒 link</span>
+        }
+        q.push(q.stub, <span class="lit">0</span>);                    <span class="cm">// stub 歸隊:人工替 tail 製造後繼</span>
+        next = q.nodes[tail].next.load(<span class="ord">Acquire</span>);
+        <span class="k">if</span> next != <span class="lit">NIL</span> {
+            <span class="k">self</span>.tail = next;
+            <span class="k">return</span> <span class="ty">Pop</span>::Data { node: tail, val: q.nodes[tail].val.load(<span class="ord">Relaxed</span>) };
+        }
+        <span class="ty">Pop</span>::Inconsistent                     <span class="cm">// push(stub) 途中又被 producer 插隊</span>
+    }
+}</code></pre>
+
+<div class="card"><div class="ct">與原版 Vyukov 的 delta(同時是對前面對話的修正)</div>
+原版 pop 在「停在 stub 且 <code>next==NIL</code>」時<strong>一律回 empty</strong>,不分「真空」和「有人 swap 了還沒 link」。我前一輪給你的版本照抄了這個行為,但口頭把那個分支說成「真空」—— 不精確:那個分支<em>也可能是 in-flight</em>。上面這版加了一次 <code>head.load</code> 把兩者分開:<code>Empty</code> = caller 可以去 park 等通知;<code>Inconsistent</code> = spin 一下馬上會好。原版的混用在搭配 eventfd/notify 的系統裡也能活(producer push 完會叫醒你),但分開才是誠實的 API。代價:Empty 判定變保守 —— 兩次 load 之間 producer 完整跑完的話,會回 Inconsistent 而其實已 ready,caller 多 spin 一圈,無害。</div>
+
+<div class="card"><div class="ct">edition 2024 對照(CoderPad 環境)</div>
+本頁 code 在 rustc 1.91 · <code>--edition 2024</code> 下<strong>零診斷</strong>通過 —— 它不碰任何 2024 遷移面:無 <code>unsafe fn</code>、無 extern block、無 <code>static mut</code>、無 impl-Trait capture、無受影響的 match ergonomics。對你環境唯一的實戰提醒:<strong><code>gen</code> 在 2024 是保留字</strong> —— arena 世代標記(generation-tagged index)的命名慣性最容易撞上,改用 <code>generation</code>。附贈一筆:edition 2021 起 <code>assert!</code> 訊息裡的 <code>{x}</code> 是真的 inline format capture,panic 直接帶出變數值 —— 把 dry-run 的預測值寫進 assert 訊息,炸的時候自帶對照。</div>
+
+<h2>Ordering 表:每一筆原子存取的理由</h2>
+<div class="tscroll"><table>
+<tr><th>存取</th><th>Ordering</th><th>配對 / 理由</th></tr>
+<tr><td>push:<code>node.val</code>、<code>node.next=NIL</code></td><td><span class="ob rlx">Relaxed</span></td><td>此刻節點還是 producer 私有;可見性搭後面的 Release 便車</td></tr>
+<tr><td>push:<code>head.swap(me)</code></td><td><span class="ob ar">AcqRel</span></td><td><strong>保守慣例選擇</strong>。swap 的原子性(RMW)與 ordering 參數無關 —— 順序定案靠的是 head 上的 modification order,天生 total。本骨架的「嚴格最小 ordering」是 open question,見 <span class="jump" data-jump="t6">Tab 6 追問 #1</span>(含對我先前給過的錯誤理由的更正)</td></tr>
+<tr><td>push:<code>prev.next = me</code></td><td><span class="ob rel">Release</span></td><td>整個設計的<strong>發布點</strong>。配對 consumer 走鏈的 Acquire;把 val 與 next=NIL 一起帶出去 —— 每個節點內容的可見性,靠的是「指向它的那條 link」</td></tr>
+<tr><td>pop:走鏈讀 <code>next</code></td><td><span class="ob acq">Acquire</span></td><td>配對上一列。讀到 next=X ⇒ 也看得到 X 的 val</td></tr>
+<tr><td>pop:讀 <code>head</code>(判 Empty / Inconsistent)</td><td><span class="ob acq">Acquire</span></td><td>只比對指標值、不 deref —— 保守給 Acquire,同列入追問 #1 的最小化討論</td></tr>
+<tr><td><code>tail</code> cursor</td><td>普通 <code>usize</code></td><td>單一 consumer 型別合約;producer 從頭到尾不碰它</td></tr>
+</table></div>
+
+<div class="card warn"><div class="ct">誠實標記:這不是 formally lock-free</div>
+producer 在縫裡被 preempt(swap 完、link 前),consumer 就過不去 —— 一個卡死的 thread 擋住別人推進,不符合 lock-free 的定義。正確的宣稱是:<strong>producer wait-free、整體 non-blocking in practice</strong>。面試主動講出這句是加分,不是扣分 —— 它證明你知道術語的邊界。</div>
+
+<div class="card ok"><div class="ct">口頭加分句(deep dive 直接用)</div>
+「swap 沒有 compare,所以 ABA 天生免疫 —— ABA 是 CAS 的病」·「順序在 swap 定案,link 只是 materialize,所以 link 各寫各的、零競爭」·「每個節點的可見性靠<em>指向它的那條 link</em> 的 Release,不靠 swap」·「production 我用 tokio mpsc / crossbeam;std-only 手搓我走 arena+index,驗證用 loom 窮舉 interleaving」</div>
+
+</section>
+
+<!-- ============ TAB 3 ============ -->
+<section class="tabpane" id="t3">
+
+<div class="intuit"><span class="tag">怎麼讀這個 Stepper</span>
+上排是三條 thread 的「這一格誰動了什麼」;舞台上,<em>實線鏈</em>是 consumer 走得到的世界、<em>橘色虛線區</em>是「已佔位、link 欠著」的漂浮節點(順序已死、內容未見)。
+<span style="color:var(--red)">▲head</span> 標 push 端、<span style="color:var(--green)">▼tail</span> 標 consumer cursor。每一格的敘述都對應 <code>verify.rs</code> 裡一條跑過的 assert。</div>
+
+<div class="scsel" id="d1sel"></div>
+<div class="stepper">
+  <div class="sc-desc" id="d1desc"></div>
+  <div class="ctrl">
+    <button data-act="first">⏮</button><button data-act="prev">◀</button>
+    <button data-act="next">▶</button><button data-act="last">⏭</button>
+    <span class="fi" id="d1fi"></span>
+  </div>
+  <div class="opline" id="d1op"></div>
+  <div class="stage" id="d1stage"></div>
+  <div class="lanes" id="d1lanes"></div>
+  <div class="narr" id="d1narr"></div>
+</div>
+
+<div class="card"><div class="ct">為什麼要「重放」而不是「隨機跑」—— 真實數據</div>
+本頁的實作跑了多執行緒 stress:4 producers × 5000 訊息 × 6 輪(單核機器,12 萬則訊息、preemption 隨機)。
+<code>Inconsistent</code> 分支被踩到幾次?<strong>1 次。</strong>其他五輪全是 0。<br><br>
+這就是並發測試的殘酷事實:縫只有幾奈秒寬,<em>隨機跑幾乎永遠踩不到,但它必然存在</em> —— 上面每個情境的重放 assert 就是證明。
+「跑一萬次沒炸」在並發世界裡不是證據;窮舉 interleaving(loom)才是。這一段直接接你的 R1 教訓:interviewer 手動構造的那組輸入,就是你 fuzz 不到的那一格。</div>
+
+</section>
+
+<!-- ============ TAB 4 ============ -->
+<section class="tabpane" id="t4">
+
+<div class="intuit"><span class="tag">設計二 · 一句話</span>
+一排置物櫃,每格門上一個<em>輪次計數器 seq</em>。producer 先看計數器確認「這格空著、輪到這一圈」,再去取票機 CAS 搶票;搶到才寫貨、把計數器 +1(發布)。
+consumer 只認計數器 —— <strong>seq 一個變數同時編碼「第幾圈」和「空/滿」</strong>,這是整個設計的核心發明。</div>
+
+<h2>把 seq 逼出來</h2>
+<p class="dim small">場景:telemetry ingestion。滿了要當場 <code>Err</code> 讓上層丟點+計數 —— 這個需求會反過來決定佔位操作的選擇。</p>
+
+<div class="qchain">
+<div class="qstep"><div class="qq">bounded → 固定格子的 ring。producer 怎麼決定用哪一格?</div>
+<div class="qa">一台取票機:單調遞增的 <code>enq</code> counter,格子 = <code>pos &amp; mask</code>(容量取 2 的冪)。跟你 SPSC 的 index 同一族慣用法 —— index 永不歸零,靠 mask 落格、靠圈數對圈。</div>
+<div class="born"><code>enq: AtomicUsize</code></div></div>
+
+<div class="qstep"><div class="qq">取票用 <code>fetch_add</code> 不就好了?</div>
+<div class="qa"><code>fetch_add</code> 無條件成功 —— 票到手就退不掉。佇列滿的時候,你握著一張指向「還沒被收走的格子」的票,只能站在原地等,<strong>做不出 try_push → Err</strong>。而 Err 正是這個場景的存在理由。所以換 CAS:先看格子能不能用,再試著搶票;不能用就把原值還給 caller。(fetch_add 版是真實變體,適合「寧可等也不丟」—— 見 <span class="jump" data-jump="t6">Tab 6 追問 #3</span>。)</div>
+<div class="born">CAS 佔位 + 失敗語意的分岔。</div></div>
+
+<div class="qstep"><div class="qq">「這格能不能用」怎麼知道?一個 <code>occupied: bool</code> 夠嗎?</div>
+<div class="qa">第一圈夠,wrap 之後死:producer 看到 <code>free</code>,分不出是「這圈還沒人用」還是「上圈已收走、輪到我」還是「上上圈的殘影」。bool 少了<strong>圈數</strong>這個維度 → 把圈數直接編進狀態:每格一個 <code>seq</code>,約定 <code>seq==pos</code> 空且輪到你、<code>seq==pos+1</code> 已發布、<code>seq==pos+N</code> 是下一圈的空。</div>
+<div class="born"><code>seq: AtomicUsize</code> per slot —— 圈數與狀態二合一。</div></div>
+
+<div class="qstep"><div class="qq">consumer 端呢?</div>
+<div class="qa">單一 consumer → <code>deq</code> 普通 <code>usize</code>;判斷只有一條:<code>slot.seq == deq+1</code>。關鍵觀察:<strong>producer 從頭到尾不讀 <code>deq</code></strong> —— 滿的判斷靠 seq(diff&lt;0),空的判斷 consumer 自己看 seq。所有跨執行緒溝通都走 per-slot seq,這就是待會 ordering 表裡 <code>enq</code> 的 CAS 敢用 Relaxed 的原因。</div>
+<div class="born"><code>deq: usize</code>,以及「同步全在 seq 上」的架構事實。</div></div>
+</div>
+
+<h2>seq 的一生(slot 0,N=4)—— 本設計的簽名圖</h2>
+<div class="seqfig">
+  <div class="sq"><div class="v">0</div><div class="l">第0圈 · 空<br>輪到 pos=0</div></div>
+  <div class="ar"><span class="sym">→</span>claim+寫貨<br>store <span class="ob rel">Rel</span></div>
+  <div class="sq"><div class="v">1</div><div class="l">已發布<br>= pos+1</div></div>
+  <div class="ar"><span class="sym">→</span>consumer 收走<br>store <span class="ob rel">Rel</span></div>
+  <div class="sq"><div class="v">4</div><div class="l">第1圈 · 空<br>輪到 pos=4</div></div>
+  <div class="ar"><span class="sym">→</span>claim+寫貨</div>
+  <div class="sq"><div class="v">5</div><div class="l">已發布</div></div>
+  <div class="ar"><span class="sym">→</span>收走</div>
+  <div class="sq"><div class="v">8</div><div class="l">第2圈 · 空<br>⋯永遠 +N 前進</div></div>
+</div>
+<p class="small dim">seq 永不回頭 —— 跟 pos 一樣單調。「歸零」不存在,存在的是「追上下一圈的 pos」。</p>
+
+<h2>三態 diff:producer 的一眼判斷</h2>
+<div class="tscroll"><table>
+<tr><th><code>diff = seq.wrapping_sub(pos) as isize</code></th><th>意義</th><th>行動</th></tr>
+<tr><td><code>== 0</code></td><td>空著、輪到這一圈</td><td>CAS 搶票;搶輸拿 <code>cur</code> 重試(失敗=新票,不是錯誤)</td></tr>
+<tr><td><code>&lt; 0</code></td><td>格子還停在<em>上一圈</em>:貨沒被收走 → <strong>真的滿</strong></td><td><code>return Err(v)</code> —— backpressure 的出口,原值完璧歸還</td></tr>
+<tr><td><code>&gt; 0</code></td><td>格子已經在<em>更後面的圈</em>:我手上的 pos 過期了</td><td>重讀 <code>enq</code> 拿新票</td></tr>
+</table></div>
+
+<h2>Code(rustc 1.91 · edition 2024 編譯執行通過)</h2>
+<pre><code><span class="k">struct</span> <span class="ty">Slot</span> {
+    seq: <span class="ty">AtomicUsize</span>, <span class="cm">// 每格一個回合計數器:同時編碼「第幾圈」+「空/滿」</span>
+    val: <span class="ty">AtomicUsize</span>, <span class="cm">// demo payload(同前:泛型版是 UnsafeCell + unsafe)</span>
+}
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="ty">BoundedMpsc</span> {
+    buf: <span class="ty">Box</span>&lt;[<span class="ty">Slot</span>]&gt;,
+    mask: <span class="k">usize</span>,
+    enq: <span class="ty">AtomicUsize</span>, <span class="cm">// 純粹的取票機:跨執行緒同步全部走 per-slot seq</span>
+}
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="ty">RingConsumer</span>&lt;'a&gt; {
+    q: &amp;'a <span class="ty">BoundedMpsc</span>,
+    deq: <span class="k">usize</span>, <span class="cm">// 單一 consumer 合約 → 普通 usize,producer 從頭到尾不讀它</span>
+}
+
+<span class="k">impl</span> <span class="ty">BoundedMpsc</span> {
+    <span class="k">pub</span> <span class="k">fn</span> new(n: <span class="k">usize</span>) -&gt; (&amp;'static <span class="k">Self</span>, <span class="ty">RingConsumer</span>&lt;'static&gt;) {
+        assert!(n.is_power_of_two());
+        <span class="k">let</span> buf: <span class="ty">Box</span>&lt;[<span class="ty">Slot</span>]&gt; = (<span class="lit">0</span>..n)
+            .map(|i| <span class="ty">Slot</span> { seq: <span class="ty">AtomicUsize</span>::new(i), val: <span class="ty">AtomicUsize</span>::new(<span class="lit">0</span>) })
+            .collect();
+        <span class="k">let</span> q: &amp;'static <span class="ty">BoundedMpsc</span> =
+            <span class="ty">Box</span>::leak(<span class="ty">Box</span>::new(<span class="k">Self</span> { buf, mask: n - <span class="lit">1</span>, enq: <span class="ty">AtomicUsize</span>::new(<span class="lit">0</span>) }));
+        (q, <span class="ty">RingConsumer</span> { q, deq: <span class="lit">0</span> })
+    }
+
+    <span class="cm">/// MP 端:CAS 佔位 + per-slot seq 發布。滿了回 Err(v) — backpressure 的出口。</span>
+    <span class="k">pub</span> <span class="k">fn</span> try_push(&amp;<span class="k">self</span>, v: <span class="k">usize</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="k">usize</span>&gt; {
+        <span class="k">let</span> <span class="k">mut</span> pos = <span class="k">self</span>.enq.load(<span class="ord">Relaxed</span>);
+        <span class="k">loop</span> {
+            <span class="k">let</span> slot = &amp;<span class="k">self</span>.buf[pos &amp; <span class="k">self</span>.mask];
+            <span class="k">let</span> seq = slot.seq.load(<span class="ord">Acquire</span>); <span class="cm">// 配對 consumer 還格子的 Release</span>
+            <span class="k">let</span> diff = seq.wrapping_sub(pos) as <span class="k">isize</span>;
+
+            <span class="k">if</span> diff == <span class="lit">0</span> {
+                <span class="cm">// 這格空著、輪到這一圈 → 試著把 pos 佔走</span>
+                <span class="k">match</span> <span class="k">self</span>.enq.compare_exchange_weak(
+                    pos, pos.wrapping_add(<span class="lit">1</span>), <span class="ord">Relaxed</span>, <span class="ord">Relaxed</span>) {
+                    <span class="lit">Ok</span>(_) =&gt; {                                   <span class="cm">// 佔位成功:此格只有我碰</span>
+                        slot.val.store(v, <span class="ord">Relaxed</span>);
+                        slot.seq.store(pos.wrapping_add(<span class="lit">1</span>), <span class="ord">Release</span>); <span class="cm">// 發布</span>
+                        <span class="k">return</span> <span class="lit">Ok</span>(());
+                    }
+                    <span class="lit">Err</span>(cur) =&gt; pos = cur,   <span class="cm">// 票被別的 producer 搶走 → 拿新票重試</span>
+                }
+            } <span class="k">else</span> <span class="k">if</span> diff &lt; <span class="lit">0</span> {
+                <span class="k">return</span> <span class="lit">Err</span>(v);               <span class="cm">// 真的滿:上一圈的資料還沒被收走</span>
+            } <span class="k">else</span> {
+                pos = <span class="k">self</span>.enq.load(<span class="ord">Relaxed</span>); <span class="cm">// 手上的 pos 過期 → 重讀</span>
+            }
+        }
+    }
+}
+
+<span class="k">impl</span> <span class="ty">RingConsumer</span>&lt;'_&gt; {
+    <span class="cm">/// SC 端:只認「已發布」。seq == deq(已佔未發布)和沒人佔,對它一樣是 None。</span>
+    <span class="k">pub</span> <span class="k">fn</span> try_pop(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Option</span>&lt;<span class="k">usize</span>&gt; {
+        <span class="k">let</span> n = <span class="k">self</span>.q.buf.len();
+        <span class="k">let</span> slot = &amp;<span class="k">self</span>.q.buf[<span class="k">self</span>.deq &amp; <span class="k">self</span>.q.mask];
+        <span class="k">let</span> seq = slot.seq.load(<span class="ord">Acquire</span>);            <span class="cm">// 配對 producer 發布的 Release</span>
+        <span class="k">if</span> seq == <span class="k">self</span>.deq.wrapping_add(<span class="lit">1</span>) {
+            <span class="k">let</span> v = slot.val.load(<span class="ord">Relaxed</span>);
+            slot.seq.store(<span class="k">self</span>.deq.wrapping_add(n), <span class="ord">Release</span>); <span class="cm">// 還格子給下一圈</span>
+            <span class="k">self</span>.deq = <span class="k">self</span>.deq.wrapping_add(<span class="lit">1</span>);
+            <span class="lit">Some</span>(v)
+        } <span class="k">else</span> {
+            <span class="lit">None</span>
+        }
+    }
+}</code></pre>
+
+<h2>Ordering 表</h2>
+<div class="tscroll"><table>
+<tr><th>存取</th><th>Ordering</th><th>配對 / 理由</th></tr>
+<tr><td>producer:<code>slot.seq.load</code></td><td><span class="ob acq">Acquire</span></td><td>配對 consumer「還格子」的 Release。保護的是:<em>上一圈</em>的 val 讀取 happens-before 我這一圈的 val 覆寫 —— 沒有這對,producer 可能蓋掉 consumer 還沒讀完的資料</td></tr>
+<tr><td>producer:<code>enq</code> 的 CAS</td><td><span class="ob rlx">Relaxed</span> / <span class="ob rlx">Relaxed</span></td><td><strong>本設計的 punchline</strong>:enq 純粹是取票機,不承載任何資料可見性 —— 跨執行緒同步全部走 per-slot seq。兩個 producer 拿到不同 pos → 碰不同 slot,天然隔離</td></tr>
+<tr><td>producer:<code>slot.val.store</code></td><td><span class="ob rlx">Relaxed</span></td><td>被 seq 的 Acquire/Release 夾住,搭便車</td></tr>
+<tr><td>producer:<code>slot.seq.store(pos+1)</code></td><td><span class="ob rel">Release</span></td><td><strong>發布點</strong>。配對 consumer 的 Acquire:看到 seq==deq+1 ⇒ 看得到 val</td></tr>
+<tr><td>consumer:<code>slot.seq.load</code></td><td><span class="ob acq">Acquire</span></td><td>配對上一列</td></tr>
+<tr><td>consumer:<code>slot.seq.store(deq+N)</code></td><td><span class="ob rel">Release</span></td><td>「還格子」:配對 producer 第一列的 Acquire,保護下一圈覆寫</td></tr>
+<tr><td><code>deq</code> cursor</td><td>普通 <code>usize</code></td><td>單一 consumer 合約;producer 不讀它</td></tr>
+</table></div>
+
+<div class="card warn"><div class="ct">head-of-line:設計二的縫</div>
+CAS 搶到票、還沒 store seq 的 producer,擋住的不是別的 producer(他們拿別的票走別的格),是 <strong>consumer</strong>:FIFO 要求按 deq 順序收,deq 指的那格未發布,後面全部 ready 也過不去。這跟設計一的 Inconsistent 是同一道縫的兩張臉 —— 也同樣意味 <em>formally not lock-free</em>。<span class="jump" data-jump="t5|d2a">Stepper 情境 A</span> 逐格演。</div>
+
+<div class="card"><div class="ct">MPSC → MPMC:只差兩行的預告</div>
+把 <code>deq</code> 也升級成 <code>AtomicUsize</code>、consumer 端同款「看 seq(==pos+1)→ CAS 搶 deq」,就是完整的 Vyukov bounded MPMC —— crossbeam <code>ArrayQueue</code> 的骨架。細節與「為什麼設計一不能這樣升級」在 <span class="jump" data-jump="t6">Tab 6</span>。</div>
+
+</section>
+
+<!-- ============ TAB 5 ============ -->
+<section class="tabpane" id="t5">
+
+<div class="intuit"><span class="tag">怎麼讀這個 Stepper</span>
+每張卡是一個 slot:大數字是 <em>seq</em>、下面是 val 與狀態。<span style="color:var(--red)">▲enq</span> 標「下一張票會落在哪格」、<span style="color:var(--green)">▼deq</span> 標 consumer 下一個要收的格。
+綠框 = 已發布、橘虛框 = 已佔未發布(縫)。敘述同樣一格一 assert。</div>
+
+<div class="scsel" id="d2sel"></div>
+<div class="stepper">
+  <div class="sc-desc" id="d2desc"></div>
+  <div class="ctrl">
+    <button data-act="first">⏮</button><button data-act="prev">◀</button>
+    <button data-act="next">▶</button><button data-act="last">⏭</button>
+    <span class="fi" id="d2fi"></span>
+  </div>
+  <div class="opline" id="d2op"></div>
+  <div class="stage" id="d2stage"></div>
+  <div class="lanes" id="d2lanes"></div>
+  <div class="narr" id="d2narr"></div>
+</div>
+
+<div class="card"><div class="ct">stress 數據:Full 是常態,不是意外</div>
+容量 8、4 producers × 5000、consumer 單核追著收:<code>try_push</code> 回 <code>Err</code> 的次數 —— <strong>約 13 億次</strong>(producers spin 重試造成的風暴)。
+教訓:bounded queue 的 <code>Err</code> 不是罕見路徑,是<em>設計的主角</em>;上層拿到 Err 之後做什麼(丟棄+計數?backoff?park 到 Condvar?)才是系統設計題 —— 光譜繞回 Mutex+Condvar 那層不是恥辱,是完整敘事。</div>
+
+</section>
+
+<!-- ============ TAB 6 ============ -->
+<section class="tabpane" id="t6">
+
+<h2>兩設計對照</h2>
+<div class="tscroll"><table>
+<tr><th></th><th>設計一 · intrusive MPSC</th><th>設計二 · bounded ring</th></tr>
+<tr><td>佔位操作</td><td><code>swap</code>(無條件,wait-free,ABA 免疫)</td><td><code>CAS</code>(可失敗,lock-free-ish)</td></tr>
+<tr><td>push 失敗行為</td><td>不存在 —— unbounded,永遠收</td><td><code>Err(v)</code> 原值奉還 = backpressure 出口</td></tr>
+<tr><td>記憶體</td><td>無上限(節點來自 caller / freelist)</td><td>固定一塊,cache 友善,零配置</td></tr>
+<tr><td>consumer 的縫</td><td><code>Inconsistent</code>(swap–link 之間)</td><td>head-of-line(claim–publish 之間)</td></tr>
+<tr><td>formally lock-free?</td><td colspan="2" style="text-align:center">都不是 —— 卡在縫裡的 producer 擋住 consumer。正確宣稱:producer 端 wait-free(一)/ lock-free(二),整體 non-blocking in practice</td></tr>
+<tr><td>選它,當⋯</td><td>不許拒收:log、task queue、完成通知</td><td>要 backpressure:telemetry、rate-limited ingestion</td></tr>
+</table></div>
+<div class="card ok"><div class="ct">選型一句話</div>
+問自己:「<em>push 失敗的時候,我要系統做什麼?</em>」答不出來 → 你還沒想清楚需求;「不能失敗」→ 設計一;「回報我,我來決定」→ 設計二。這一句就是面試 clarify 階段的模板。</div>
+
+<h2>通往 MPMC 的路(mention-level,8 月 slack 再深)</h2>
+<div class="card"><div class="ct">設計二 +2 行 = Vyukov bounded MPMC</div>
+<code>deq</code> 升級 <code>AtomicUsize</code>;consumer 改成「<code>seq == pos+1</code> → CAS 搶 <code>deq</code>」—— 與 producer 完全鏡像的 claim/publish,還格子照舊 <code>seq = pos+N</code>。這就是 crossbeam <code>ArrayQueue</code> 的骨架。head-of-line 從單邊變雙邊,其餘不變。</div>
+<div class="card warn"><div class="ct">設計一為什麼不能照抄升級</div>
+consumer 端所有的便宜 —— 裸 <code>usize</code> tail、pop 免同步、stub 重推協議 —— 全部建立在「單一 consumer」這條型別合約上。多 consumer 意味 CAS 搶 tail,而「節點要有後繼才能 pop」的不變量在多人競爭下需要 help-advance;節點何時能安全回收變成經典的 reclamation 問題(hazard pointer / epoch)。這條路的終點是 Michael–Scott queue:unbounded MPMC、雙 CAS、dummy node —— 面試講到「結構 + 為什麼 reclamation 難」即可,手寫不在你的 45 分鐘攻擊面內。</div>
+
+<h2>Ordering 總表(兩設計合併速查)</h2>
+<div class="tscroll"><table>
+<tr><th>角色</th><th>設計一</th><th>設計二</th></tr>
+<tr><td>發布點(唯一必須講對的 Release)</td><td><code>prev.next = me</code> <span class="ob rel">Rel</span></td><td><code>slot.seq = pos+1</code> <span class="ob rel">Rel</span></td></tr>
+<tr><td>對應的讀端</td><td>走鏈 <code>next.load</code> <span class="ob acq">Acq</span></td><td><code>seq.load</code> <span class="ob acq">Acq</span>(consumer)</td></tr>
+<tr><td>防覆寫回程</td><td>—(unbounded 無覆寫)</td><td>還格 <code>seq=deq+N</code> <span class="ob rel">Rel</span> ↔ producer <code>seq.load</code> <span class="ob acq">Acq</span></td></tr>
+<tr><td>佔位</td><td><code>swap</code> <span class="ob ar">AcqRel</span>(保守慣例,見追問 #1)</td><td>CAS on <code>enq</code> <span class="ob rlx">Rlx</span>(同步全在 seq)</td></tr>
+<tr><td>payload</td><td><span class="ob rlx">Rlx</span> 搭 link 便車</td><td><span class="ob rlx">Rlx</span> 搭 seq 便車</td></tr>
+</table></div>
+<p class="small dim">你的既有準則原句照用:先保守寫對,再 relax 到「講得出 synchronizes-with 配對」的地方;講不出,就不動。</p>
+
+<h2>追問集 · 自測(open questions,不附答案)</h2>
+<div class="qchain">
+<div class="qstep"><div class="qq">設計一 <code>swap</code> 的 AcqRel,嚴格最小是什麼?</div>
+<div class="qa">先更正一筆:對話前段我說 acquire 是「為了拿到已初始化的 prev」—— 站不住,pusher 只寫 <code>prev.next</code>,從不讀 prev 內容。那麼:降成 Release 會壞嗎?Relaxed 呢?每個節點 val 的可見性明明走 link 的 Release⋯⋯把你的論證寫下來,然後用 loom 驗。這是「先保守後 relax」準則的實戰題。</div></div>
+<div class="qstep"><div class="qq">Empty 判定的保守性值得修嗎?</div>
+<div class="qa"><code>next==NIL</code> 之後、<code>head.load</code> 之前,producer 完整跑完 → 回 Inconsistent 但其實 ready,caller 白 spin 一圈。量化這個窗口;修它值得付什麼代價?</div></div>
+<div class="qstep"><div class="qq">寫出 <code>fetch_add</code> 版 bounded push(寧等不丟)。</div>
+<div class="qa">拿到票之後 spin 等 <code>seq==pos</code>。兩版各適合什麼場景?spin 裡該放什麼(<code>spin_loop</code>?backoff?park?)—— 13 億次 Full 的 stress 數據就是這題的動機。</div></div>
+<div class="qstep"><div class="qq">head-of-line 窗口有多長?</div>
+<div class="qa">claim 與 publish 之間是幾條指令?producer 在窗口內被 preempt 的機率跟 time slice、核數什麼關係?—— 這題連到你 P99 監控的直覺:平均無感,尾巴全是它。</div></div>
+<div class="qstep"><div class="qq">設計一 arena 化之後,freelist 用什麼做?</div>
+<div class="qa">「consumer 還節點、多 producer 領節點」—— 這本身是個 M?M? 結構。Treiber stack?那 ABA 和 reclamation 不就繞回來了?per-producer freelist 能躲掉多少?</div></div>
+<div class="qstep"><div class="qq">12 萬則訊息只踩到 1 次 Inconsistent —— 能不能把那個分支刪掉?</div>
+<div class="qa">為什麼「幾乎不發生」在並發正確性裡毫無重量?loom 會怎麼<em>必然</em>找到它?把答案講到能說服一個只會 fuzz 的同事。</div></div>
+</div>
+
+<h2>看完這頁之後</h2>
+<div class="card act"><div class="ct">下一步不是再讀一份 —— 是關掉這頁</div>
+這份教材的功能到「看懂交錯」為止。真正的收束動作:<br><br>
+<strong>1.</strong> 跟我要挖空 skeleton(三份:<code>spsc_ring</code> 完整殼 / 設計一 <code>pop</code> 兩分支挖空 / 設計二 <code>try_push</code> 三態挖空),<em>不開這頁</em>手填。<br>
+<strong>2.</strong> 填完丟回來,我不跑 fuzz —— 直接用構造反例打:wrap-crossing index、swap–link 縫、<code>push(stub)</code> 被插隊。抓得到,是真懂;抓不到的那一格,就是洞的座標。<br>
+<strong>3.</strong> 週期檢查那一題,今天也適用:<em>你今天打 code 了嗎?</em>讀完這頁不算。
+</div>
+
+<div class="foot">實作與重放:<code>verify.rs</code>,rustc 1.91 <code>--edition 2024</code>(對齊 CoderPad 1.92/2024),單核容器 · replay_d1 / replay_d2 全 assert 通過 · stress:設計一 4×5000×6 輪 Inconsistent=1;設計二 cap=8 Full≈1.3×10⁹ · 教材:Gruvbox Material / JetBrains Mono · 2026-07-17</div>
+
+</section>
+
+<!-- ============ TAB 7 ============ -->
+<section class="tabpane" id="t7">
+
+<div class="intuit"><span class="tag">縫的第三張臉 · 一句話</span>
+MPSC 給你 <code>Empty</code>,但「能不能<em>安心去睡</em>」是另一個原語的職責:「決定睡」與「睡著」之間也是一道縫,
+producer 的通知若在縫裡抵達而又<em>不留痕跡</em>,consumer 就抱著滿的佇列永眠 —— <strong>lost wakeup</strong>。
+解法與設計二的 seq 是同一個 move:<em>把「發生過」變成「存著」</em> —— 通知從事件變成狀態,叫 token。</div>
+
+<h2>把問題逼出來</h2>
+<div class="qchain">
+<div class="qstep"><div class="qq">consumer 拿到 Empty 之後想睡,裸的「pop → 睡」為什麼會死?</div>
+<div class="qa">「檢查到空」是一張 snapshot,「睡著」是稍後的動作 —— 中間任何事都可能發生。若 producer 恰好在縫裡 push 並通知,而通知打在<em>還沒睡的人</em>身上(condvar 的 notify、futex 的 wake 都是:沒人在等就蒸發),等 consumer 真的睡下去,那筆通知已經不存在了。隊上有貨、人在睡、再也沒人叫 —— 除非下一筆 push 來救。</div>
+<div class="born">lost wakeup:check-then-act race 的睡眠版。</div></div>
+
+<div class="qstep"><div class="qq">睡之前再檢查一次不就好了?</div>
+<div class="qa">縫變窄,沒有關上:「再檢查」與「睡著」之間<em>又是一道縫</em>,遞迴到底。這是面試裡最經典的錯誤答案 —— 任何「多檢查幾次」都只是在調整輸的機率。要的不是更快的檢查,是把「檢查」與「睡」做成<strong>一個原子動作</strong>。</div>
+<div class="born">結論:這不是協議層能修的,要換原語。</div></div>
+
+<div class="qstep"><div class="qq">原語要什麼性質?</div>
+<div class="qa">兩件事:①通知要<strong>持久化</strong> —— 沒人在睡也不落空,存起來(token);②park 要在內部原子地做「token 在?消費並立即返回:真的睡」。這正是 <code>std::thread::park / unpark</code> 的合約:unpark 存入一枚 token,park 消費它。於是「unpark 先到還是 park 先到」<em>不再重要</em> —— 順序敏感性被狀態吸收了。</div>
+<div class="born">token:一枚會被消費的、持久的通知。</div></div>
+</div>
+
+<h2>交錯 Stepper:同一組交錯,兩種結局</h2>
+<div class="scsel" id="d3sel"></div>
+<div class="stepper">
+  <div class="sc-desc" id="d3desc"></div>
+  <div class="ctrl">
+    <button data-act="first">⏮</button><button data-act="prev">◀</button>
+    <button data-act="next">▶</button><button data-act="last">⏭</button>
+    <span class="fi" id="d3fi"></span>
+  </div>
+  <div class="opline" id="d3op"></div>
+  <div class="stage" id="d3stage"></div>
+  <div class="lanes" id="d3lanes"></div>
+  <div class="narr" id="d3narr"></div>
+</div>
+
+<h2>Code(rustc 1.91 · edition 2024;卡死與不睡都有計時 assert 證明)</h2>
+<pre><code><span class="k">use</span> std::thread::{<span class="k">self</span>, <span class="ty">Thread</span>};
+<span class="k">use</span> std::time::<span class="ty">Duration</span>;
+<span class="k">use</span> std::sync::atomic::<span class="ty">AtomicBool</span>;
+
+<span class="cm">// ── 壞協議:兩邊都在 check-then-act ──</span>
+<span class="cm">// consumer:看到空 →(縫)→ 舉牌「我要睡」→ park</span>
+<span class="cm">// producer:push → 看牌「沒人睡」→ 省掉 unpark      ← 兩個過期 snapshot 互鎖</span>
+<span class="k">fn</span> buggy_consumer(<span class="k">mut</span> c: <span class="ty">Consumer</span>&lt;'static&gt;, sleeping: &amp;<span class="ty">AtomicBool</span>,
+                  consumed: &amp;<span class="ty">AtomicUsize</span>) {
+    assert_eq!(c.pop(), <span class="ty">Pop</span>::Empty);            <span class="cm">// snapshot:「隊是空的」</span>
+    thread::sleep(<span class="ty">Duration</span>::from_millis(<span class="lit">150</span>));  <span class="cm">// 模擬「決定睡」與「睡著」之間被切走</span>
+    sleeping.store(<span class="lit">true</span>, <span class="ord">SeqCst</span>);               <span class="cm">// 舉牌 —— 但通知已經在 50ms 前被省掉了</span>
+    thread::park();                             <span class="cm">// 睡著:隊上有貨,沒人會再叫 → lost wakeup</span>
+    <span class="k">loop</span> { <span class="k">if</span> <span class="k">let</span> <span class="ty">Pop</span>::Data { .. } = c.pop() { break } } <span class="cm">// (被人工救援後收尾)</span>
+    consumed.store(<span class="lit">1</span>, <span class="ord">SeqCst</span>);
+}
+<span class="k">fn</span> buggy_producer(q: &amp;<span class="ty">MpscQueue</span>, sleeping: &amp;<span class="ty">AtomicBool</span>, c_thread: &amp;<span class="ty">Thread</span>) -&gt; <span class="k">bool</span> {
+    thread::sleep(<span class="ty">Duration</span>::from_millis(<span class="lit">50</span>));
+    q.push(<span class="lit">1</span>, <span class="lit">7</span>);
+    <span class="k">if</span> sleeping.load(<span class="ord">SeqCst</span>) { c_thread.unpark(); <span class="lit">true</span> }
+    <span class="k">else</span> { <span class="lit">false</span> }          <span class="cm">// 讀到「沒人睡」→ 省掉通知 —— wakeup 就是在這行弄丟的</span>
+}
+
+<span class="cm">// ── 好協議:token 把「叫過你」從事件變成狀態 ──</span>
+<span class="cm">// producer:push 之後「無條件」unpark —— 沒人在睡也不落空,存進 token</span>
+<span class="k">fn</span> producer_fixed(q: &amp;<span class="ty">MpscQueue</span>, c_thread: &amp;<span class="ty">Thread</span>) {
+    q.push(<span class="lit">2</span>, <span class="lit">8</span>);
+    c_thread.unpark();
+}
+<span class="cm">// consumer:pop → park 的裸序列直接是對的:</span>
+<span class="cm">//   unpark 先到 → token 已在 → park 消費 token、立刻返回(根本不睡)</span>
+<span class="cm">//   unpark 後到 → OS 喚醒</span>
+<span class="cm">// park 允許 spurious return,所以永遠住在 loop 裡重新檢查 —— 這是合約,不是防禦</span>
+<span class="k">fn</span> consumer_fixed(c: &amp;<span class="k">mut</span> <span class="ty">Consumer</span>&lt;'static&gt;) -&gt; <span class="k">usize</span> {
+    <span class="k">loop</span> {
+        <span class="k">match</span> c.pop() {
+            <span class="ty">Pop</span>::Data { val, .. } =&gt; <span class="k">return</span> val,
+            <span class="ty">Pop</span>::Empty           =&gt; thread::park(),         <span class="cm">// 敢睡:token 兜底</span>
+            <span class="ty">Pop</span>::Inconsistent    =&gt; std::hint::spin_loop(), <span class="cm">// 不睡:馬上就好</span>
+        }
+    }
+}</code></pre>
+
+<div class="card ok"><div class="ct">consumer_fixed 就是整份教材的收束點</div>
+<code>Empty → park()</code>、<code>Inconsistent → spin</code> —— Tab 2 把兩者分開回報的理由,在這裡從 API 潔癖變成正確性分工:
+<strong>Empty 敢睡</strong>,因為 producer 每筆 push 後無條件 unpark,token 兜底;<strong>Inconsistent 不睡</strong>,因為卡在縫裡的 producer 馬上會補完,睡了純虧延遲。
+驗證:4000 則訊息跑完整協議,零卡死;壞協議則在強排交錯下 600ms 卡死實錘(人工救援收尾)。</div>
+
+<div class="card"><div class="ct">check-then-act 的三種救法(全教材統一視角)</div>
+世界在「檢查」與「行動」之間一定會變,防不了 —— 只能讓<em>行動自帶吸收</em>:
+<br><br><strong>① swap 回傳真相</strong>(設計一 · 情境 D):consumer 以為 prev 是 A,swap 回傳 B —— 行動的回傳值就是最新事實,錯誤前提被無痛覆寫。
+<br><strong>② CAS 失敗重試</strong>(設計二):前提過期 → 行動直接失敗,拿新前提重來。
+<br><strong>③ token 儲存</strong>(這裡):對方的行動(通知)持久化,我的行動(park)先消費再決定 —— 順序敏感性被狀態吸收。
+<br><br>三個都不「防止」race,都是「讓 race 無害」。deep dive 把這段講出來,就是把三個零件講成一套世界觀。</div>
+
+<div class="card"><div class="ct">condvar 那層本來就沒這個病 —— 你是拆鎖時把藥也拆了</div>
+<code>Mutex&lt;VecDeque&gt;</code> + Condvar 為什麼從來不談 lost wakeup?因為 <code>wait(guard)</code> <strong>原子地</strong>「放鎖 + 入睡」,而 producer 的 push+notify 在同一把鎖裡 —— 「檢查空」與「睡著」之間不可能插進任何 push。拆鎖拆掉的不只是互斥,還有 condvar 免費附送的這個原子性;park/token 就是把那一小塊<em>單獨贖回來</em>。這也是階梯敘事的最後一塊:第 0 階不是「爛版本」,是把多個保證打包的版本 —— 往上爬 = 把保證拆開、一塊一塊自己付錢。</div>
+
+<div class="card"><div class="ct">接回你的 executor challenge 與 production</div>
+mini <code>block_on</code>:<code>Waker</code> 的 <code>wake()</code> 最終就是打到 parker 的 <code>unpark()</code> —— 「wake-before-park token semantics」說的正是本 tab 情境 B 第 5 格:wake 比 park 先到,靠 token 不丟。你的實作用<strong>無條件 unpark</strong>(Fix A)就是對的。
+production 的 refinement(Fix B):每筆 push 都 unpark 太貴 → 加「我要睡了」flag,producer 只在看到 flag 時 unpark、consumer 舉旗後<em>再檢查一次</em>佇列才睡 —— 這個 store-然後-load-對方 的 Dekker 形狀需要 SeqCst / fence,是 tokio sleep dance 的核心,也是留給 loom 的自測題:用 Acquire/Release 寫 Fix B,讓 loom 告訴你為什麼不夠。
+順帶:eventfd 的計數器、level-triggered epoll,同一個「通知持久化」思想 —— 你 hw_bridge 那條線早就用過這味藥。</div>
+
+</section>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+var WHOC={P1:'blue',P2:'purple',C:'green',P:'blue'};
+var ONAME={rel:'Release',acq:'Acquire',ar:'AcqRel',rlx:'Relaxed'};
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function N(n,v,x,c,f){return {n:n,v:v,x:x,c:c||'',f:f||''};}
+
+/* ---------------- renderers ---------------- */
+function renderD1(fr, stage){
+  var h='';
+  fr.r.forEach(function(row){
+    h+='<div class="zone"><div class="zt">'+row.t+'</div><div class="chainrow pad">';
+    row.s.forEach(function(it){
+      if(it==='->'){h+='<span class="lk">→</span>';return;}
+      if(it==='x'){h+='<span class="lk brk">⋯縫⋯</span>';return;}
+      var cls=it.c+(it.f.indexOf('l')>=0?' hl':'');
+      h+='<div class="nd '+cls+'">';
+      if(it.f.indexOf('h')>=0)h+='<span class="ptr h">▲head</span>';
+      if(it.f.indexOf('t')>=0)h+='<span class="ptr t">▼tail</span>';
+      h+='<div class="nm">'+esc(it.n)+'</div><div class="vl">'+esc(it.v)+'</div><div class="nx">'+esc(it.x)+'</div></div>';
+    });
+    h+='</div></div>';
+  });
+  stage.innerHTML=h;
+}
+function renderD2(fr, stage){
+  var h='<div class="ring">';
+  fr.s.forEach(function(sl,i){
+    h+='<div class="slot '+(sl.c||'')+(sl.hl?' hl':'')+'">';
+    if(sl.e)h+='<span class="cur e">▲enq</span>';
+    if(sl.d)h+='<span class="cur d">▼deq</span>';
+    h+='<div class="si">slot '+i+'</div><div class="sq2">'+sl.q+'</div><div class="sv">'+(sl.v===''?'—':esc(sl.v))+'</div><div class="st">'+esc(sl.st)+'</div></div>';
+  });
+  h+='</div><div class="cnt"><div class="cb">enq = <b>'+fr.enq+'</b></div><div class="cb">deq = <b>'+fr.deq+'</b></div></div>';
+  stage.innerHTML=h;
+}
+
+/* ---------------- stepper engine ---------------- */
+function mkStepper(pre, scens, render){
+  var cur=0, fi=0;
+  function el(id){return document.getElementById(id);}
+  var stage=el(pre+'stage'), stepdiv=stage.closest('.stepper');
+  var btns=stepdiv.querySelectorAll('.ctrl button');
+  var sel=el(pre+'sel');
+  scens.forEach(function(sc,i){
+    var b=document.createElement('button');
+    b.textContent=sc.label; b.dataset.si=i;
+    b.addEventListener('click',function(){cur=i;fi=0;draw();});
+    sel.appendChild(b);
+  });
+  btns.forEach(function(b){
+    b.addEventListener('click',function(){
+      var sc=scens[cur], a=b.dataset.act;
+      if(a==='first')fi=0;
+      if(a==='prev')fi=Math.max(0,fi-1);
+      if(a==='next')fi=Math.min(sc.frames.length-1,fi+1);
+      if(a==='last')fi=sc.frames.length-1;
+      draw();
+    });
+  });
+  function draw(){
+    var sc=scens[cur], fr=sc.frames[fi];
+    sel.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',+b.dataset.si===cur);});
+    el(pre+'desc').textContent=sc.desc;
+    el(pre+'fi').textContent='第 '+(fi+1)+' / '+sc.frames.length+' 格';
+    var opl=el(pre+'op');
+    if(fr.op){
+      opl.innerHTML='<span class="who" style="color:var(--'+(WHOC[fr.op.w]||'fg')+')">'+fr.op.w+'</span> · <code>'+esc(fr.op.t)+'</code>'+
+        (fr.op.o?' <span class="ob '+fr.op.o+'">'+ONAME[fr.op.o]+'</span>':'');
+    } else opl.innerHTML='<span class="dim">(無原子操作 —— 觀察格)</span>';
+    render(fr, stage);
+    var lh='';
+    sc.lanes.forEach(function(L){
+      lh+='<div class="ln '+L[1]+'">'+L[0]+'</div><div class="la'+((fr.act===L[0])?' act':'')+'">'+
+          (fr.th&&fr.th[L[0]]?fr.th[L[0]]:'—')+'</div>';
+    });
+    el(pre+'lanes').innerHTML=lh;
+    el(pre+'narr').innerHTML=fr.narr;
+    btns.forEach(function(b){
+      var a=b.dataset.act;
+      b.disabled=((a==='first'||a==='prev')&&fi===0)||((a==='next'||a==='last')&&fi===scens[cur].frames.length-1);
+    });
+  }
+  draw();
+  return {select:function(sid){
+    scens.forEach(function(sc,i){if(sc.id===sid){cur=i;fi=0;}});
+    draw();
+  }, step:function(){var b=stepdiv.querySelector('[data-act=next]');b.click();},
+     state:function(){return {cur:cur,fi:fi,n:scens[cur].frames.length,id:scens[cur].id};}};
+}
+
+/* ---------------- D1 frame data(逐格對應 verify.rs replay_d1)---------------- */
+var STUB='stub';
+var D1=[
+{id:'d1a',label:'A · 完整生命週期',lanes:[['P1','p1c'],['P2','p2c'],['C','cc']],
+ desc:'兩個 producer 交錯 push(P1 慢、P2 快),consumer 全數收回,含 stub 重推 —— 對應 replay_d1 第二段 assert。',
+ frames:[
+ {op:null,act:null,th:{},r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','ht')]}],
+  narr:'初始狀態:只有常駐的 stub。head(push 端)與 tail(pop 端)指著同一個節點 —— 唯一被允許的「兩端同點」;之後 stub 的工作就是把兩端永久隔開。'},
+ {op:{w:'P1',t:'A.val = 11; A.next = NIL',o:'rlx'},act:'P1',th:{P1:'準備節點 A(私有)'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','ht')]},
+     {t:'產生中(P1 私有)',s:[N('A',11,'next NIL','priv','l')]}],
+  narr:'A 還是 P1 的私有物,誰都看不到 —— 所以這兩筆寫入 Relaxed 就好,可見性之後搭「指向 A 的那條 link」的 Release 便車。'},
+ {op:{w:'P1',t:'prev = head.swap(A)  →  prev = S',o:'ar'},act:'P1',th:{P1:'佔位完成,handshake 欠 link'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','t')]},
+     {t:'已佔位、link 欠著(swap 順序)',s:['x',N('A',11,'next NIL','float','hl')]}],
+  narr:'佔位完成:head 指向 A,<b>順序此刻定案(S→A)</b>。但 S.next 還是 NIL —— 鏈斷著,P1 手握 prev=S、欠一條 link。縫,開了。'},
+ {op:{w:'P2',t:'B.val = 22; B.next = NIL',o:'rlx'},act:'P2',th:{P1:'(還沒補 link)',P2:'準備節點 B(私有)'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','t')]},
+     {t:'已佔位、link 欠著(swap 順序)',s:['x',N('A',11,'next NIL','float','h')]},
+     {t:'產生中(P2 私有)',s:[N('B',22,'next NIL','priv','l')]}],
+  narr:'P2 不知道、也不需要知道 P1 卡在半路 —— 準備階段完全獨立。'},
+ {op:{w:'P2',t:'prev = head.swap(B)  →  prev = A',o:'ar'},act:'P2',th:{P1:'(還沒補 link)',P2:'佔位完成,欠 link'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','t')]},
+     {t:'已佔位、link 欠著(swap 順序)',s:['x',N('A',11,'next NIL','float',''),'x',N('B',22,'next NIL','float','hl h')]}],
+  narr:'第二道縫。兩人拿到的 prev 不同(P1→S、P2→A)—— swap 的原子性保證這點,所以 link 階段各寫各的、零競爭。佇列順序 S→A→B 已在此刻死透,剩下的只是 materialize。'},
+ {op:{w:'P2',t:'A.next = B',o:'rel'},act:'P2',th:{P1:'(還沒補 link)',P2:'link 完成,收工'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','t')]},
+     {t:'已佔位、link 欠著',s:['x',N('A',11,'next → B','float','l'),'->',N('B',22,'next NIL','float','h')]}],
+  narr:'P2 先完成 —— <b>完成順序 ≠ 佇列順序</b>。A→B 接上了,但整段仍從 S 斷開,consumer 依然一個都拿不到。誰先 swap 誰排前面;link 早晚無所謂。'},
+ {op:{w:'C',t:'pop(): tail==stub, next==NIL, head != stub',o:'acq'},act:'C',th:{P1:'(還沒補 link)',C:'pop() → Inconsistent'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','t l')]},
+     {t:'已佔位、link 欠著',s:['x',N('A',11,'next → B','float',''),'->',N('B',22,'next NIL','float','h')]}],
+  narr:'C 撞縫:停在 stub、沒有後繼,但 head 已被換走 —— 「有人在路上」。回 Inconsistent,caller spin 重試。(原版 Vyukov 此處混回 empty,見 Tab 2 delta 卡。)對應 assert:「A→B 接好了,但 stub→A 還斷著,照樣讀不到」。'},
+ {op:{w:'P1',t:'S.next = A',o:'rel'},act:'P1',th:{P1:'補上 link,收工'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next → A','stub','t'),'->',N('A',11,'next → B','','l'),'->',N('B',22,'next NIL','','h')]}],
+  narr:'P1 補上最後一條 link,鏈痊癒:S→A→B。注意:治好整條鏈的是<b>最慢的那個人</b> —— P1 卡多久,C 就等多久。這就是「formally not lock-free」的機制根源。'},
+ {op:{w:'C',t:'pop(): 跳過 stub → A 有後繼 → 收 A',o:'acq'},act:'C',th:{C:'Data(A, 11)'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done',''),N('A',11,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('B',22,'next NIL','','h t l')]}],
+  narr:'一次 pop 做兩件事:跳過 dummy(cursor→A)、發現 A 有後繼 → 收走 A、cursor→B。A 歸還 freelist;S 此刻也離了隊 —— 但它是 stub,等會要回來上班。'},
+ {op:{w:'C',t:'pop(): B.next==NIL 且 head==B → 最後一棒',o:'acq'},act:'C',th:{C:'決定 push(stub)'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done',''),N('A',11,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('B',22,'next NIL','','h t l')]}],
+  narr:'B 是最後一棒 —— 規則說「有後繼才能收」,它沒有。C 啟動 plan B:客串一次 producer,把 stub push 回去,人工替 B 製造後繼。'},
+ {op:{w:'C',t:'push(stub): swap → prev=B;B.next = S',o:'rel'},act:'C',th:{C:'push(stub) 完成'},
+  r:[{t:'已離隊',s:[N('A',11,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('B',22,'next → S','','t'),'->',N('S',STUB,'next NIL','stub','h l')]}],
+  narr:'stub 歸隊,接在 B 後面,head 回到 stub。push 本來就 MP-safe,多 C 一個呼叫者不會壞 —— 但「這一刻若有 producer 插隊呢?」→ 情境 D 專門演這件事。'},
+ {op:{w:'C',t:'重讀 B.next = S → 收 B',o:'acq'},act:'C',th:{C:'Data(B, 22)'},
+  r:[{t:'已離隊',s:[N('A',11,'','done',''),N('B',22,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','h t l')]}],
+  narr:'重讀 next:有了。收走 B,cursor 回到 stub。佇列回到「只剩 stub」的初始形狀 —— 一個完整生命週期閉環。'},
+ {op:{w:'C',t:'pop(): next==NIL 且 head==stub',o:'acq'},act:'C',th:{C:'Empty(真空)'},
+  r:[{t:'已離隊',s:[N('A',11,'','done',''),N('B',22,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','h t')]}],
+  narr:'這次是<b>真空</b>:head 還是 stub,沒有任何人 swap 過,caller 可以安心去 park 等通知。Empty 與 Inconsistent 的分岔,就是這一格與第 7 格的差別 —— 同一個 next==NIL,兩種世界。'}
+]},
+{id:'d1c',label:'C · 縫的特寫:Inconsistent 誕生',lanes:[['P1','p1c'],['P2','p2c'],['C','cc']],
+ desc:'單一 producer 在 swap 與 link 之間被 preempt,consumer 撞個正著 —— 對應 replay_d1 第一段 assert。',
+ frames:[
+ {op:null,act:null,th:{},r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','ht')]}],
+  narr:'鏡頭釘在縫上:只看一個 producer、一次撞縫。開場先確認:此刻 pop 回 <b>Empty</b>(真空)—— 對應第一條 assert。'},
+ {op:{w:'P1',t:'A.val = 11; A.next = NIL',o:'rlx'},act:'P1',th:{P1:'準備 A(私有)'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','ht')]},
+     {t:'產生中(P1 私有)',s:[N('A',11,'next NIL','priv','l')]}],
+  narr:'準備階段,世界還沒變。'},
+ {op:{w:'P1',t:'prev = head.swap(A) → prev = S ⋯⋯被 preempt',o:'ar'},act:'P1',th:{P1:'swap 完成 → OS 把它切走了'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','t')]},
+     {t:'已佔位、link 欠著',s:['x',N('A',11,'next NIL','float','hl h')]}],
+  narr:'swap 完成的瞬間,P1 被 preempt(time slice 到了)。縫現在是「開著的」,而且不知道要開多久 —— 奈秒級的程式碼,毫秒級的縫。'},
+ {op:{w:'C',t:'pop(): tail==stub, next==NIL, head != stub',o:'acq'},act:'C',th:{P1:'(睡著)',C:'pop() → Inconsistent'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','t l')]},
+     {t:'已佔位、link 欠著',s:['x',N('A',11,'next NIL','float','h')]}],
+  narr:'C 拿到的訊息是「有東西在路上,spin 一下」。若這裡回 Empty 而 caller park 了呢?要靠 producer push 完的 notify 叫醒 —— 所以原版的混用在有 eventfd/notify 的系統裡活得下去;分開回報是更誠實的 API,讓 caller 有選擇。'},
+ {op:{w:'P1',t:'S.next = A',o:'rel'},act:'P1',th:{P1:'醒來,補 link'},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next → A','stub','t'),'->',N('A',11,'next NIL','','h l')]}],
+  narr:'preemption 結束,P1 把欠的 link 補上,鏈痊癒。縫存在了「一個排程週期」那麼久 —— 這就是為什麼縫雖窄、卻不能假裝不存在。'},
+ {op:{w:'C',t:'pop(): 跳 stub → A.next==NIL → head==A → push(stub) → 收 A',o:'acq'},act:'C',th:{C:'Data(A, 11)'},
+  r:[{t:'已離隊',s:[N('A',11,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','h t l')]}],
+  narr:'這次 pop 三合一:跳過 stub、發現 A 是最後一棒、push(stub) 造後繼、收走 A。程式碼裡「push(stub) 之後再讀一次 next」的路徑,正常情況就這樣直直走過 —— 情境 D 演它被插隊的樣子。'},
+ {op:{w:'C',t:'pop(): next==NIL 且 head==stub',o:'acq'},act:'C',th:{C:'Empty(真空)'},
+  r:[{t:'已離隊',s:[N('A',11,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','h t')]}],
+  narr:'真空。對照第 4 格:同樣讀到 next==NIL,head 的值決定它是「等一下」還是「去睡吧」。'}
+]},
+{id:'d1d',label:'D · 最刁的分支:push(stub) 被插隊',lanes:[['P2','p2c'],['C','cc']],
+ desc:'consumer 決定 push(stub) 的空檔被 producer 插隊 —— code 最後一行 return Inconsistent 的唯一入口。對應 replay_d1 第三段 assert。',
+ frames:[
+ {op:null,act:null,th:{},
+  r:[{t:'佇列(consumer 可達)',s:[N('S',STUB,'next → A','stub','t'),'->',N('A',11,'next NIL','','h')]}],
+  narr:'起手式:A 完整在隊(S→A,head=A)。這個情境要演的分支,單執行緒腦內模擬<b>永遠走不到</b>。'},
+ {op:{w:'C',t:'pop(): 跳過 stub,cursor→A;讀 A.next = NIL',o:'acq'},act:'C',th:{C:'cursor 前進到 A'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('A',11,'next NIL','','h t l')]}],
+  narr:'cursor 推進到 A。A 沒有後繼 —— 進入「最後一棒?」判斷流程。'},
+ {op:{w:'C',t:'head.load() == A == tail → 決定 push(stub)',o:'acq'},act:'C',th:{C:'決定 push(stub)'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('A',11,'next NIL','','h t l')]}],
+  narr:'判斷成立:A 是最後一棒。注意 —— 這個決定的依據是「<b>這一刻</b>的 head」。決定與執行之間,沒有任何鎖保護。'},
+ {op:{w:'P2',t:'prev = head.swap(B) → prev = A ⋯⋯被切走',o:'ar'},act:'P2',th:{P2:'佔位完成,欠 link,被切走',C:'(還不知道世界變了)'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('A',11,'next NIL','','t')]},
+     {t:'已佔位、link 欠著',s:['x',N('B',22,'next NIL','float','hl h')]}],
+  narr:'就在 C 的「決定」與「執行」之間,P2 完成佔位:head=B、欠 A→B 一條 link,然後也被切走。C 的決策依據已經過期 —— 但 C 不知道。'},
+ {op:{w:'C',t:'push(stub) 之 swap → prev = B(不是 A!)',o:'ar'},act:'C',th:{P2:'(睡著,link 還欠著)',C:'swap 回傳 B —— 咦?'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('A',11,'next NIL','','t')]},
+     {t:'已佔位、link 欠著',s:['x',N('B',22,'next NIL','float',''),'x',N('S',STUB,'next NIL','stub float','hl h')]}],
+  narr:'<b>swap 的回傳值救了它</b>:C 拿到的 prev 是真實世界的 B,不是它腦中的 A。C 根本不用「發現」自己被插隊 —— 協議天然吸收了這件事。'},
+ {op:{w:'C',t:'B.next = S',o:'rel'},act:'C',th:{P2:'(睡著)',C:'把 stub 掛在 B 後面'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('A',11,'next NIL','','t')]},
+     {t:'已佔位、link 欠著',s:['x',N('B',22,'next → S','float','l'),'->',N('S',STUB,'next NIL','stub float','h')]}],
+  narr:'stub 排進了佇列尾巴 —— 位置沒錯,只是 C 原本的目的(給 A 造後繼)落空:A→B 還斷著(P2 欠)。'},
+ {op:{w:'C',t:'重讀 A.next = NIL → return Inconsistent',o:'acq'},act:'C',th:{P2:'(睡著)',C:'pop() → Inconsistent,cursor 停在 A'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('A',11,'next NIL','','t l')]},
+     {t:'已佔位、link 欠著',s:['x',N('B',22,'next → S','float',''),'->',N('S',STUB,'next NIL','stub float','h')]}],
+  narr:'這就是最後那行 <b>return Inconsistent</b>。C 空手而回、cursor 留在 A 原地 —— 沒有任何狀態被破壞,下次再來。只在並發下存在的程式碼路徑,重放 assert 證明它可達。'},
+ {op:{w:'P2',t:'A.next = B',o:'rel'},act:'P2',th:{P2:'醒來,補 link'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('A',11,'next → B','','t'),'->',N('B',22,'next → S','','l'),'->',N('S',STUB,'next NIL','stub','h')]}],
+  narr:'P2 醒來補 link,鏈痊癒:A→B→S。'},
+ {op:{w:'C',t:'pop(): A 有後繼 → 收 A',o:'acq'},act:'C',th:{C:'Data(A, 11)'},
+  r:[{t:'已離隊',s:[N('S',STUB,'','done','') ,N('A',11,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('B',22,'next → S','','t l'),'->',N('S',STUB,'next NIL','stub','h')]}],
+  narr:'這次 A 有後繼了 → 正常收走,cursor→B。'},
+ {op:{w:'C',t:'pop(): B 有後繼(stub)→ 收 B',o:'acq'},act:'C',th:{C:'Data(B, 22)'},
+  r:[{t:'已離隊',s:[N('A',11,'','done',''),N('B',22,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','h t')]}],
+  narr:'B 的後繼是 stub → 收走 B,cursor 回到 stub。'},
+ {op:{w:'C',t:'pop(): next==NIL 且 head==stub',o:'acq'},act:'C',th:{C:'Empty(真空)'},
+  r:[{t:'已離隊',s:[N('A',11,'','done',''),N('B',22,'','done','')]},
+     {t:'佇列(consumer 可達)',s:[N('S',STUB,'next NIL','stub','h t')]}],
+  narr:'真空收場。整個情境沒有一格需要「修復」—— 協議的每個分支,都提前寫好了被插隊的劇本。'}
+]}];
+
+/* ---------------- D2 frame data(逐格對應 verify.rs replay_d2)---------------- */
+function SL(q,v,st,c,fl){return {q:q,v:v,st:st,c:c||'',hl:fl&&fl.indexOf('l')>=0,e:fl&&fl.indexOf('e')>=0,d:fl&&fl.indexOf('d')>=0};}
+var D2=[
+{id:'d2a',label:'A · CAS 對撞 + head-of-line',lanes:[['P1','p1c'],['P2','p2c'],['C','cc']],
+ desc:'兩個 producer 搶同一張票;搶輸的疏散到下一格;先發布的反而卡在 FIFO 後面 —— 對應 replay_d2 第一段 assert。N=4。',
+ frames:[
+ {op:null,act:null,th:{},enq:0,deq:0,
+  s:[SL(0,'','空 · 第0圈','','ed'),SL(1,'','空 · 第0圈'),SL(2,'','空 · 第0圈'),SL(3,'','空 · 第0圈')],
+  narr:'初始:每格 seq==index =「第 0 圈、空」。enq、deq 都指 slot 0。此刻 try_pop 回 None —— 對應第一條 assert。'},
+ {op:{w:'P1',t:'pos = enq(0);slot0.seq = 0 → diff = 0',o:'acq'},act:'P1',th:{P1:'diff==0:空著、輪到我'},enq:0,deq:0,
+  s:[SL(0,'','空 · 第0圈','','edl'),SL(1,'','空 · 第0圈'),SL(2,'','空 · 第0圈'),SL(3,'','空 · 第0圈')],
+  narr:'producer 的流程永遠是「先看格、再搶票」。seq 的 load 用 Acquire —— 配對的是 consumer 未來「還格子」的 Release,防的是跨圈覆寫(情境 B 會看到)。'},
+ {op:{w:'P2',t:'pos = enq(0);slot0.seq = 0 → diff = 0',o:'acq'},act:'P2',th:{P1:'(手握 pos=0)',P2:'也是 diff==0'},enq:0,deq:0,
+  s:[SL(0,'','空 · 第0圈','','edl'),SL(1,'','空 · 第0圈'),SL(2,'','空 · 第0圈'),SL(3,'','空 · 第0圈')],
+  narr:'MP 的本質時刻:兩個 producer 手握同一張候選票 pos=0,瞄準同一格。誰真的拿到,下一步的 CAS 見分曉。'},
+ {op:{w:'P1',t:'enq.CAS(0→1) 成功 → slot0 歸我',o:'rlx'},act:'P1',th:{P1:'佔位成功(尚未發布)',P2:'(還不知道票沒了)'},enq:1,deq:0,
+  s:[SL(0,'','已佔位(P1)· 未發布','claimed','dl'),SL(1,'','空 · 第0圈','','e'),SL(2,'','空 · 第0圈'),SL(3,'','空 · 第0圈')],
+  narr:'P1 佔位成功。CAS 用 <b>Relaxed</b> —— enq 只是取票機,不承載資料可見性,保護 val 的是 seq 那對 Acquire/Release。注意:搶到票 ≠ 發布,slot0 的 seq 還是 0,對 consumer 什麼都沒發生。'},
+ {op:{w:'P2',t:'enq.CAS(0→1) 失敗,cur = 1 → pos = 1',o:'rlx'},act:'P2',th:{P2:'失敗 = 拿新票,不是錯誤'},enq:1,deq:0,
+  s:[SL(0,'','已佔位(P1)· 未發布','claimed','d'),SL(1,'','空 · 第0圈','','el'),SL(2,'','空 · 第0圈'),SL(3,'','空 · 第0圈')],
+  narr:'CAS 失敗回傳當前值 —— 直接當新票用,連重新 load 都省了。lock-free 的「失敗」是常態流程,不是異常。'},
+ {op:{w:'P2',t:'slot1.seq=1,diff=0 → enq.CAS(1→2) 成功',o:'rlx'},act:'P2',th:{P2:'搶到 slot1'},enq:2,deq:0,
+  s:[SL(0,'','已佔位(P1)· 未發布','claimed','d'),SL(1,'','已佔位(P2)· 未發布','claimed','l'),SL(2,'','空 · 第0圈','','e'),SL(3,'','空 · 第0圈')],
+  narr:'兩個 producer 已在<b>不同的格子</b>上各自作業 —— 取票機把競爭疏散成隔離。這就是 enq 敢用 Relaxed 的結構原因。'},
+ {op:{w:'P2',t:'slot1.val = 222;slot1.seq = 2',o:'rel'},act:'P2',th:{P1:'(還卡在縫裡)',P2:'發布完成,收工'},enq:2,deq:0,
+  s:[SL(0,'','已佔位(P1)· 未發布','claimed','d'),SL(1,222,'已發布','ready','l'),SL(2,'','空 · 第0圈','','e'),SL(3,'','空 · 第0圈')],
+  narr:'P2 全套完成 —— 比 P1 快。但 P1 還卡在縫裡(佔了 slot0、沒發布)。現在輪到 consumer 出場。'},
+ {op:{w:'C',t:'slot0.seq = 0 ≠ deq+1 → None',o:'acq'},act:'C',th:{P1:'(還卡在縫裡)',C:'None(head-of-line)'},enq:2,deq:0,
+  s:[SL(0,'','已佔位(P1)· 未發布','claimed','dl'),SL(1,222,'已發布','ready'),SL(2,'','空 · 第0圈','','e'),SL(3,'','空 · 第0圈')],
+  narr:'<b>head-of-line 現場</b>:slot1 躺著現成的 222,C 就是拿不到 —— FIFO 要求按 deq 順序收,deq 指的 slot0 未發布。P1 若在此被 preempt,整條佇列停擺:「formally not lock-free」長這樣。對應 assert:「slot1 ready 但 slot0 沒發布 → head-of-line 擋住」。'},
+ {op:{w:'P1',t:'slot0.val = 111;slot0.seq = 1',o:'rel'},act:'P1',th:{P1:'終於發布,收工'},enq:2,deq:0,
+  s:[SL(0,111,'已發布','ready','dl'),SL(1,222,'已發布','ready'),SL(2,'','空 · 第0圈','','e'),SL(3,'','空 · 第0圈')],
+  narr:'P1 補上發布。seq 0→1 就是「開燈」:Release 保證 C 看到 seq==1 時,val=111 必然同時可見。'},
+ {op:{w:'C',t:'seq==deq+1 → 收 111;還格 seq = 0+4 = 4',o:'rel'},act:'C',th:{C:'Some(111)'},enq:2,deq:1,
+  s:[SL(4,'','空 · 第1圈','','l'),SL(1,222,'已發布','ready','d'),SL(2,'','空 · 第0圈','','e'),SL(3,'','空 · 第0圈')],
+  narr:'收走後「還格子」:seq 寫 deq+N=4,<b>不是歸零</b> —— 圈數直接編進 seq。這個 store 用 Release,和 producer 下一圈的 Acquire 配對:「我讀完了」happens-before「你覆寫」。'},
+ {op:{w:'C',t:'slot1.seq==deq+1 → 收 222;還格 seq = 5',o:'rel'},act:'C',th:{C:'Some(222)'},enq:2,deq:2,
+  s:[SL(4,'','空 · 第1圈'),SL(5,'','空 · 第1圈','','l'),SL(2,'','空 · 第0圈','','ed'),SL(3,'','空 · 第0圈')],
+  narr:'發布完成的順序(P2 先、P1 後)絲毫不影響收貨順序(111 先、222 後)—— <b>順序在 CAS 佔位那一刻已定</b>,發布只是點亮。對應 assert:pop 依序 Some(111)、Some(222)。'}
+]},
+{id:'d2b',label:'B · 滿、還格、跨圈',lanes:[['P','p1c'],['C','cc']],
+ desc:'佇列全滿時 Err(v) 原值奉還;consumer 收走一格後,同一格在下一圈被重用 —— 對應 replay_d2 第二段 assert。N=4,常數與 replay 完全一致。',
+ frames:[
+ {op:null,act:null,th:{},enq:4,deq:0,
+  s:[SL(1,0,'已發布 · 第0圈','ready','ed'),SL(2,10,'已發布 · 第0圈','ready'),SL(3,20,'已發布 · 第0圈','ready'),SL(4,30,'已發布 · 第0圈','ready')],
+  narr:'開場即滿:四格全部「已發布」(vals 0/10/20/30)。enq=4 —— 下一張票落在 slot 4&3=0,而那格還停在第 0 圈。'},
+ {op:{w:'P',t:'slot0.seq=1,diff = 1−4 = −3 < 0 → Err(999)',o:'acq'},act:'P',th:{P:'Err(999):真的滿'},enq:4,deq:0,
+  s:[SL(1,0,'已發布 · 第0圈','ready','edl'),SL(2,10,'已發布 · 第0圈','ready'),SL(3,20,'已發布 · 第0圈','ready'),SL(4,30,'已發布 · 第0圈','ready')],
+  narr:'diff&lt;0 的意思:「這格還停在上一圈,貨沒被收走」= 滿的定義。<b>Err 把 999 原封不動還給 caller</b> —— backpressure 的出口。對照:fetch_add 版此刻已把票吞了,只能拿著票乾等。'},
+ {op:{w:'C',t:'slot0.seq==deq+1 → 收 0;還格 seq = 0+4 = 4',o:'rel'},act:'C',th:{C:'Some(0)'},enq:4,deq:1,
+  s:[SL(4,'','空 · 第1圈','','el'),SL(2,10,'已發布 · 第0圈','ready','d'),SL(3,20,'已發布 · 第0圈','ready'),SL(4,30,'已發布 · 第0圈','ready')],
+  narr:'還格寫 deq+N=4 —— 這一步就是 Tab 4 推導「bool 為什麼不夠」的現場:seq 同時記了圈數,producer 下次來看一眼就知道「輪到第 1 圈的 pos=4 了」。對應 assert:<code>slot0.seq == 4</code>。'},
+ {op:{w:'P',t:'重試:pos=enq(4);slot0.seq=4 → diff=0 → CAS(4→5) 成功',o:'rlx'},act:'P',th:{P:'第二圈佔位成功'},enq:5,deq:1,
+  s:[SL(4,'','已佔位(P)· 第1圈','claimed','l'),SL(2,10,'已發布 · 第0圈','ready','ed'),SL(3,20,'已發布 · 第0圈','ready'),SL(4,30,'已發布 · 第0圈','ready')],
+  narr:'caller 拿著剛才退回的 999 重試,這次 diff==0 —— 同一格、下一圈,佔位成功。'},
+ {op:{w:'P',t:'slot0.val = 999;slot0.seq = 5',o:'rel'},act:'P',th:{P:'發布,收工'},enq:5,deq:1,
+  s:[SL(5,999,'已發布 · 第1圈','ready','l'),SL(2,10,'已發布 · 第0圈','ready','ed'),SL(3,20,'已發布 · 第0圈','ready'),SL(4,30,'已發布 · 第0圈','ready')],
+  narr:'wrap 完成。全程沒有任何「index 歸零」:pos 單調遞增、mask 落格、seq 對圈 —— 跟你 SPSC 的 tail−head 慣用法同一族,只是圈數從「兩個 cursor 的差」變成「顯式存在每格的 seq」。'},
+ {op:{w:'C',t:'依序收 slot1,2,3(10/20/30);各自還格 seq += N',o:'rel'},act:'C',th:{C:'Some(10)、Some(20)、Some(30)'},enq:5,deq:4,
+  s:[SL(5,999,'已發布 · 第1圈','ready','d'),SL(6,'','空 · 第1圈','','el'),SL(7,'','空 · 第1圈','','l'),SL(8,'','空 · 第1圈','','l')],
+  narr:'三連收(此格壓縮三步)。deq=4 —— 下一個要收的繞回 slot0,那裡躺著跨圈進來的 999。'},
+ {op:{w:'C',t:'slot0.seq = 5 == deq+1 → 收 999;還格 seq = 8',o:'rel'},act:'C',th:{C:'Some(999)'},enq:5,deq:5,
+  s:[SL(8,'','空 · 第2圈','','l'),SL(6,'','空 · 第1圈','','ed'),SL(7,'','空 · 第1圈'),SL(8,'','空 · 第1圈')],
+  narr:'跨圈的貨照常按 FIFO 到手。slot0 的 seq 一路 <b>0→1→4→5→8</b>:對照 Tab 4 的簽名圖 —— 那條「永遠 +N 前進」的生命線,你剛剛親手按完了一整圈。對應 assert:pop 依序 10/20/30/999。'}
+]}];
+
+
+/* ---------------- Park/Token renderer + data(對應 verify.rs prove_* )---------------- */
+function renderPK(fr, stage){
+  var h='<div class="pkrow">';
+  fr.p.forEach(function(b){
+    h+='<div class="pk '+(b.c||'')+(b.hl?' hl':'')+'"><div class="pl">'+b.l+'</div><div class="pv">'+b.v+'</div></div>';
+  });
+  h+='</div>';
+  stage.innerHTML=h;
+}
+function PB(l,v,c,hl){return {l:l,v:v,c:c||'',hl:!!hl};}
+var D3=[
+{id:'d3a',label:'A · 壞協議:lost wakeup 卡死',lanes:[['P','p1c'],['C','cc']],
+ desc:'「只有真的有人在睡才付 unpark 成本」的合理優化怎麼死 —— 對應 prove_lost_wakeup:強排此交錯,600ms 後 consumed==0。',
+ frames:[
+ {op:null,act:null,th:{},p:[PB('佇列','(空)'),PB('SLEEPING 牌','false'),PB('通知','(蒸發式:打不到人就消失)'),PB('C 狀態','執行中','ok')],
+  narr:'壞協議長這樣:consumer 睡前舉牌,producer push 後<b>看牌決定</b>要不要通知。看起來很合理 —— 省掉沒必要的 unpark。看它怎麼死。'},
+ {op:{w:'C',t:'pop() → Empty',o:'acq'},act:'C',th:{C:'拿到 snapshot:「隊是空的」'},
+  p:[PB('佇列','(空)','',1),PB('SLEEPING 牌','false'),PB('通知','—'),PB('C 狀態','執行中','ok')],
+  narr:'C 拿到 snapshot:隊是空的,決定要睡。但「決定」與「睡著」之間,沒有任何原子性保護。'},
+ {op:null,act:'C',th:{C:'被 OS 切走(還沒舉牌、還沒睡)'},
+  p:[PB('佇列','(空)'),PB('SLEEPING 牌','false'),PB('通知','—'),PB('C 狀態','被切走','warnb',1)],
+  narr:'縫打開。跟設計一 swap–link 的縫、情境 D「決定–執行」的縫,同一個形狀:<b>check 完、act 前</b>。'},
+ {op:{w:'P',t:'push(7)',o:'rel'},act:'P',th:{P:'貨上架',C:'(切走中)'},
+  p:[PB('佇列','[ 7 ]','ok',1),PB('SLEEPING 牌','false'),PB('通知','—'),PB('C 狀態','被切走','warnb')],
+  narr:'貨上架了。C 手上那張「隊是空的」snapshot,從這一刻起是過期的。'},
+ {op:{w:'P',t:'SLEEPING == false → 省掉 unpark',o:'rlx'},act:'P',th:{P:'「沒人在睡」→ 不通知,收工',C:'(切走中)'},
+  p:[PB('佇列','[ 7 ]','ok'),PB('SLEEPING 牌','false','',1),PB('通知','省掉了','bad',1),PB('C 狀態','被切走','warnb')],
+  narr:'P 自己也在 check-then-act:「有沒有人在睡」同樣是會過期的 snapshot。它讀到 false —— 把通知省掉了。<b>wakeup 就是在這一格弄丟的。</b>'},
+ {op:{w:'C',t:'SLEEPING = true',o:'rlx'},act:'C',th:{C:'恢復執行,舉牌'},
+  p:[PB('佇列','[ 7 ]','ok'),PB('SLEEPING 牌','true','warnb',1),PB('通知','(已蒸發)','bad'),PB('C 狀態','執行中','ok')],
+  narr:'C 醒來,繼續它 150ms 前的決定 —— 對世界的變化一無所知。牌舉了,但看牌的人已經走了。'},
+ {op:{w:'C',t:'park()',o:null},act:'C',th:{C:'睡著'},
+  p:[PB('佇列','[ 7 ]','ok'),PB('SLEEPING 牌','true','warnb'),PB('通知','(已蒸發)','bad'),PB('C 狀態','PARKED · 永眠','bad',1)],
+  narr:'睡著。隊上有貨、牌也舉著,但通知已在第 5 格被省掉 —— 沒有然後了。<b>兩個過期 snapshot 互鎖</b>:C 以為隊空、P 以為沒人睡。'},
+ {op:null,act:null,th:{P:'(早已收工)',C:'(永眠中)'},
+  p:[PB('佇列','[ 7 ]','ok'),PB('SLEEPING 牌','true','warnb'),PB('通知','(已蒸發)','bad'),PB('C 狀態','PARKED · 永眠','bad')],
+  narr:'除非之後還有 push 來救,否則永眠。這是它最陰的地方:<b>高流量時下一筆 push 馬上救場、bug 藏著;低流量時偶爾整條 pipeline 停頓</b> —— 長在 P99 尾巴上,壓測抓不到。verify.rs 用 sleep 強排這組交錯:600ms 後 consumed==0(卡死實錘),再人工 unpark 救援收尾。'}
+]},
+{id:'d3b',label:'B · token 協議:同交錯、不同結局',lanes:[['P','p1c'],['C','cc']],
+ desc:'一模一樣的交錯,unpark 改無條件、通知改 token —— 對應 prove_token_fix:park 在 80ms 內消費既存 token 返回。',
+ frames:[
+ {op:null,act:null,th:{},p:[PB('佇列','(空)'),PB('token','EMPTY'),PB('C 狀態','執行中','ok')],
+  narr:'修法不是把檢查做得更快 —— <b>縫縮小永遠不等於關閉</b>。修法是換一個「通知不會蒸發」的原語:unpark 存入一枚 token,park 消費它。'},
+ {op:{w:'C',t:'pop() → Empty',o:'acq'},act:'C',th:{C:'snapshot:「隊是空的」'},
+  p:[PB('佇列','(空)','',1),PB('token','EMPTY'),PB('C 狀態','執行中','ok')],
+  narr:'同一張 snapshot、同一個決定。'},
+ {op:null,act:'C',th:{C:'被 OS 切走'},
+  p:[PB('佇列','(空)'),PB('token','EMPTY'),PB('C 狀態','被切走','warnb',1)],
+  narr:'同一道縫,故意排同一組交錯 —— 差別只會出在原語的合約上。'},
+ {op:{w:'P',t:'push(7)',o:'rel'},act:'P',th:{P:'貨上架',C:'(切走中)'},
+  p:[PB('佇列','[ 7 ]','ok',1),PB('token','EMPTY'),PB('C 狀態','被切走','warnb')],
+  narr:'貨上架,snapshot 過期 —— 到此為止劇本相同。'},
+ {op:{w:'P',t:'unpark() —— 無條件',o:null},act:'P',th:{P:'不看任何人臉色,通知就是發',C:'(切走中)'},
+  p:[PB('佇列','[ 7 ]','ok'),PB('token','NOTIFIED','ok',1),PB('C 狀態','被切走','warnb')],
+  narr:'關鍵一格:<b>沒人在睡,通知也不落空</b> —— 它存進 token,從「事件」變成「狀態」。對照設計二的 seq:bool 記不住圈數所以把圈編進 seq;通知記不住「叫過」所以把它存成 token。同一個 move:<b>把「發生過」變成「存著」</b>。'},
+ {op:{w:'C',t:'park():token==NOTIFIED → 消費、立即返回',o:null},act:'C',th:{C:'根本沒睡'},
+  p:[PB('佇列','[ 7 ]','ok'),PB('token','EMPTY(被吃掉)','',1),PB('C 狀態','立即返回','ok',1)],
+  narr:'park 的合約:token 在,就消費並直接返回 —— 「檢查與睡」在<b>原語內部</b>做成原子動作。這就是 condvar+mutex 本來幫你做、拆鎖時被拆掉、現在單獨贖回來的那一小塊。C 根本沒睡。'},
+ {op:{w:'C',t:'pop() → Data(7)',o:'acq'},act:'C',th:{C:'收貨'},
+  p:[PB('佇列','(空)','',1),PB('token','EMPTY'),PB('C 狀態','執行中','ok')],
+  narr:'收貨。整組交錯跟壞版一格不差,結局不同 —— <b>差別全在原語的合約,不在協議的小心程度</b>。'},
+ {op:{w:'C',t:'pop() → Empty;park() → 真的睡',o:null},act:'C',th:{C:'安心入睡'},
+  p:[PB('佇列','(空)'),PB('token','EMPTY'),PB('C 狀態','PARKED(可被喚醒)','',1)],
+  narr:'token 是一次性的:上一格吃掉了,這次是真睡 —— 之後任何 push+unpark 都會正常喚醒。對照第 6 格:<b>同一行 park(),token 有無決定睡不睡</b>。另外:park 允許 spurious return,所以它永遠住在 loop 裡、醒來重新 pop —— 這是合約的一部分,不是防禦性程式設計。'}
+]}];
+
+/* ---------------- boot ---------------- */
+var S1=mkStepper('d1',D1,renderD1);
+var S2=mkStepper('d2',D2,renderD2);
+var S3=mkStepper('d3',D3,renderPK);
+window.__ST={d1:S1,d2:S2,d3:S3};
+
+function setTab(id, top){
+  document.querySelectorAll('#tabs button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===id);});
+  document.querySelectorAll('.tabpane').forEach(function(p){p.classList.toggle('on',p.id===id);});
+  if(top) window.scrollTo(0,0);
+}
+window.__setTab=setTab;
+document.getElementById('tabs').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-tab]');
+  if(b) setTab(b.dataset.tab,true);
+});
+document.addEventListener('click',function(e){
+  var j=e.target.closest('[data-jump]');
+  if(!j) return;
+  var parts=j.dataset.jump.split('|');
+  setTab(parts[0],true);
+  if(parts[1]){
+    var pre=parts[1].slice(0,2);
+    var st=window.__ST[pre];
+    st.select(parts[1]);
+    setTimeout(function(){
+      var m=document.getElementById(pre+'stage');
+      if(m&&m.closest('.stepper').scrollIntoView) m.closest('.stepper').scrollIntoView({block:'start'});
+    },30);
+  }
+});
+})();
+</script>
+</body>
+</html>

@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、9 份深讀教材(html_p:追問鏈 + self-quiz)、5 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、12 份深讀教材(html_p:追問鏈 + self-quiz)、5 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -697,6 +697,16 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="hook">「全 SeqCst 寫對 → 逐點放鬆」的 Relax 之旅;每一步都要講出為什麼可以。</span>
       <span class="hits">日讀 7/17 · edition 2024 版</span>
     </a>
+    <a class="card" href="../../html_p/lockfree-queue-family-handbook.html">
+      <span class="name">lock-free 佇列家族</span>
+      <span class="hook">SPSC/MPSC/SPMC/MPMC 四象限一次講清:哪格能無鎖、哪格要退讓、代價各是什麼。</span>
+      <span class="hits">搭 7/24 p6(telemetry SPSC)延伸</span>
+    </a>
+    <a class="card" href="../../html_p/mpsc-interleaving-stepper.html">
+      <span class="name">MPSC 交錯 stepper</span>
+      <span class="hook">MPSC 兩式無鎖設計的交錯播放,逐步看 race 怎麼發生、又怎麼被 CAS 收掉。</span>
+      <span class="hits">搭家族手冊 · MPSC 專章</span>
+    </a>
     <a class="card" href="../../html_p/p2-async-executor-handbook.html">
       <span class="name">p2 · executor handbook</span>
       <span class="hook">async fn→狀態機→Pin 的完整推導 + tokio 全鏈路;mpmc 未 stable 那格會被問。</span>
@@ -706,6 +716,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">p3 · epoll readiness</span>
       <span class="hook">LT vs ET 同一串封包並排播放;file IO 的誠實區別是高分點。</span>
       <span class="hits">日讀 7/20(通勤)</span>
+    </a>
+    <a class="card" href="../../html_p/epoll-eventloop.html">
+      <span class="name">epoll × JS event loop</span>
+      <span class="hook">從封包進網卡到 callback 執行一條龍;kernel readiness 與 JS 事件迴圈縫成同一張圖。</span>
+      <span class="hits">搭 7/20 epoll(p3)加讀</span>
     </a>
     <a class="card" href="../../html_p/p4-arena-index-lockfree-and-graph.html">
       <span class="name">p4 · arena + index 兩用途</span>

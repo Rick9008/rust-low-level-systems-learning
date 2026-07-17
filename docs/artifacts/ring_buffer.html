@@ -788,6 +788,62 @@ footer a:hover { border-bottom-color: var(--accent); }
     像 <code>NonZero</code> 或參照,那個 tag 是<strong>免費</strong>的),換來<strong>零 unsafe</strong>。
     <code>pop</code> 就是 <code>self.buf[self.head].take()</code>,Drop 由編譯器處理,不用你維護任何東西。
   </p>
+
+  <style>
+    .mlyt { display:flex; flex-direction:column; gap:0.85rem; margin:1.3rem 0; --u:clamp(0.62rem,2vw,0.95rem); }
+    .mlyt-row { border:1px solid var(--line); border-radius:6px; background:var(--raised); padding:0.9rem 1rem; display:flex; flex-direction:column; gap:0.6rem; }
+    .mlyt-head { display:flex; align-items:baseline; justify-content:space-between; gap:0.8rem; flex-wrap:wrap; }
+    .mlyt-type { font-family:var(--mono); font-weight:600; font-size:0.95rem; color:var(--ink); }
+    .mlyt-size { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:0.8rem; font-weight:600; padding:0.12rem 0.5rem; border-radius:4px; border:1px solid var(--line); color:var(--ink-2); white-space:nowrap; }
+    .mlyt-size.wide { color:var(--danger); border-color:var(--danger); background:var(--danger-bg); }
+    .mlyt-size.tight { color:var(--ok); border-color:var(--ok); background:var(--ok-bg); }
+    .mlyt-strip { display:flex; gap:2px; overflow-x:auto; padding-bottom:2px; }
+    .mlyt-cell { height:2.9rem; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.1rem; border:1px solid var(--line); border-radius:4px; font-family:var(--mono); flex:0 0 auto; overflow:hidden; padding:0 0.25rem; box-sizing:border-box; }
+    .mlyt-cell .lbl { font-size:0.74rem; font-weight:600; }
+    .mlyt-cell .sub { font-size:0.6rem; color:var(--muted); letter-spacing:0.02em; white-space:nowrap; }
+    .mlyt-cell.tag { background:var(--producer-bg); border-color:var(--producer); color:var(--producer); }
+    .mlyt-cell.val { background:var(--surface); color:var(--ink); }
+    .mlyt-cell.val.uninit .lbl { color:var(--muted); }
+    .mlyt-cell.niche { background:var(--ok-bg); border-color:var(--ok); color:var(--ok); }
+    .mlyt-verdict { font-size:0.9rem; line-height:1.55; color:var(--ink-2); }
+    .mlyt-verdict b { color:var(--ink); font-weight:600; }
+  </style>
+  <div class="mlyt">
+    <div class="mlyt-row">
+      <div class="mlyt-head">
+        <span class="mlyt-type">Vec&lt;Option&lt;u64&gt;&gt;</span>
+        <span class="mlyt-size wide">每格 16 B</span>
+      </div>
+      <div class="mlyt-strip">
+        <div class="mlyt-cell tag" style="width:calc(8*var(--u))"><span class="lbl">tag</span><span class="sub">1B+7pad</span></div>
+        <div class="mlyt-cell val" style="width:calc(8*var(--u))"><span class="lbl">u64</span><span class="sub">8B</span></div>
+      </div>
+      <div class="mlyt-verdict">u64 <b>沒有 niche</b>(連 0 都是合法值),旗標只好自己佔一格、又被對齊撐到 8B。<b>整格一半</b>在記「這格有沒有東西」。</div>
+    </div>
+    <div class="mlyt-row">
+      <div class="mlyt-head">
+        <span class="mlyt-type">Vec&lt;MaybeUninit&lt;u64&gt;&gt;</span>
+        <span class="mlyt-size tight">每格 8 B</span>
+      </div>
+      <div class="mlyt-strip">
+        <div class="mlyt-cell val uninit" style="width:calc(8*var(--u))"><span class="lbl">u64?</span><span class="sub">8B</span></div>
+      </div>
+      <div class="mlyt-verdict">沒有 tag,密一倍。代價:<b>誰活著沒人記</b>——靠 ring buffer 的 <code>head</code>+<code>len</code> 外部記;而且 <code>MaybeUninit</code> 沒有 drop glue,你得手寫 <code>Drop</code> 去 drop <code>[head, head+len)</code>(環狀 mod capacity)那幾格。</div>
+    </div>
+    <div class="mlyt-row">
+      <div class="mlyt-head">
+        <span class="mlyt-type">Vec&lt;Option&lt;NonZeroU64&gt;&gt;</span>
+        <span class="mlyt-size tight">每格 8 B</span>
+      </div>
+      <div class="mlyt-strip">
+        <div class="mlyt-cell niche" style="width:calc(8*var(--u))"><span class="lbl">u64</span><span class="sub">0=None</span></div>
+      </div>
+      <div class="mlyt-verdict"><b>兩全</b>:<code>NonZeroU64</code> 用不到「0」這個 bit pattern,編譯器就把 <b>None 塞進 0</b>——tag 消失,密度追平 MaybeUninit,卻<b>零 unsafe</b>、Drop 仍由編譯器包辦。<code>&amp;T</code>、<code>Box&lt;T&gt;</code>(null=None)同理。</div>
+    </div>
+  </div>
+  <p class="note">
+    看寬度就懂:下面兩排是上排的一半。差別只在「誰記 liveness」——<code>Option&lt;u64&gt;</code> 用 tag(付 8B),<code>MaybeUninit</code> 用你手寫的 <code>head/len</code>+<code>Drop</code>(付一整類 UB 風險),<code>Option&lt;NonZeroU64&gt;</code> 用型別自帶的 niche(不用付)。所以被問「怎麼省那一半」時,先反問 <b>「T 有沒有 niche?」</b>——有就直接 <code>Option&lt;niche 型別&gt;</code>,沒有才輪到 MaybeUninit 那條 unsafe 路。
+  </p>
   <p>
     <code>MaybeUninit</code> 版密實一點,但你要自己維護「哪幾格已經初始化」這個不變量,
     還要手寫 <code>Drop</code> 去 drop 剩下的元素——一整類 UB 風險,換幾個 byte。

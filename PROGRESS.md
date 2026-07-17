@@ -11,9 +11,9 @@ SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ri
 
 | # | 模組 | 讀 | drill | challenge | 備註 |
 |---|---|---|---|---|---|
-| 1 | iter_mutate | ☐ | ☐(7 洞) | — | 7/16 排定 |
+| 1 | iter_mutate | ☐ | ☑ 2026-07-17 | — | 7 洞全綠(含 oracle) |
 | 2 | bounded_queue | ☐ | ☑ 2026-07-16 | — | 凌晨填答已驗綠;〔v8.1〕讀排 7/17 白天、移 #[ignore] 7/17 晚開機第一件事 |
-| 3 | thread_pool | ☐ | ☐(4 洞含 submit/join) | — | 7/17;challenge = 彩排 b |
+| 3 | thread_pool | ☐ | ☑ 2026-07-18 | — | 8 綠;親手抓 Drop 漏 join / 鎖圈住執行 / submit lost wakeup;challenge = 彩排 b |
 | 4 | ring_buffer | ☑ 2026-07-16 | ☑ 2026-07-16 | — | 7 tests 全開綠(含 oracle+白箱 guard);challenge = 彩排 a |
 | 5 | spsc_ring | ☐ | ☐ | ☐ ★ | 7/17 drill、7/18 challenge;空白 20 分 ×3:7/19、7/22、7/26 |
 | 6 | executor | ☐ | ☐ | ☐ ★ | 7/18 drill+challenge |

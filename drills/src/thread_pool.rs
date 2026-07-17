@@ -2,11 +2,12 @@
 //!
 //! 已給:結構、new、execute、JobHandle 的結構。
 //! 要填:`worker_loop`(醒來先查 stop!)、`Drop`(join 全部)、
-//! `submit` / `JobHandle::join`(one-shot rendezvous 的 condvar 版——
+//! `submit` / `JobHandle::join`(oneshot(promise)的 condvar 版——放完即走、非嚴格 rendezvous;
 //! async 版對照 reference 的 `file_io_offload::JoinFuture`)。
 //! 經典死法:predicate 忘了看 stop → drop 永久卡在 join。
 
 use std::collections::VecDeque;
+use std::panic::catch_unwind;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
@@ -63,11 +64,28 @@ impl ThreadPool {
         T: Send + 'static,
         F: FnOnce() -> T + Send + 'static,
     {
-        todo!("spec: 建 rendezvous state; execute(放結果+notify); 回 JobHandle")
+        // todo!("spec: 建 rendezvous state; execute(放結果+notify); 回 JobHandle")
+        let job_res_cv = Condvar::new();
+        let job_res_state = Arc::new((Mutex::new(None), job_res_cv));
+        let job_res_handle = JobHandle::<T> {
+            state: job_res_state.clone(),
+        };
+
+        let arc_job_state = job_res_state.clone();
+        let mut st = self.shared.state.lock().unwrap();
+        st.jobs.push_back(Box::new(move || {
+            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+            let (mx_res, job_res_cv) = &*arc_job_state;
+            *mx_res.lock().unwrap() = Some(res);
+            job_res_cv.notify_one();
+        }));
+        // don't forget to call shared cv wake up
+        self.shared.cv.notify_one();
+        job_res_handle
     }
 }
 
-/// `submit` 的收據:一次性 rendezvous 的同步版(condvar 睡)。
+/// `submit` 的收據:oneshot(promise)的同步版(condvar 睡;非嚴格 rendezvous——放完即走)。
 pub struct JobHandle<T> {
     /// None:還沒好;Some(Ok):結果;Some(Err):worker 的 panic payload。
     state: Arc<(Mutex<Option<thread::Result<T>>>, Condvar)>,
@@ -80,7 +98,21 @@ impl<T> JobHandle<T> {
     /// 2. take 出來:Ok(v) → v;Err(panic) → `std::panic::resume_unwind(panic)`
     ///    (錯誤跟著在乎它的人走,worker 不陪葬)。
     pub fn join(self) -> T {
-        todo!("spec: wait_while None; take; Ok 回值 / Err resume_unwind")
+        // todo!("spec: wait_while None; take; Ok 回值 / Err resume_unwind")
+
+        let (mx_res, cv) = &*self.state;
+        let mut opt_res = mx_res.lock().unwrap();
+        opt_res = cv
+            .wait_while(opt_res, |s| s.is_none())
+            .expect("mutex should not be poisoned");
+
+        match opt_res
+            .take()
+            .expect("we wait_while is_none, so it should be Some")
+        {
+            Ok(val) => val,
+            Err(err) => std::panic::resume_unwind(err),
+        }
     }
 }
 
@@ -90,14 +122,40 @@ impl<T> JobHandle<T> {
 /// - 佇列空且 stop → return(drain-then-exit 語意:stop 後先清空佇列)
 /// - 加分:job 用 catch_unwind 包住,panic 不殺 worker
 fn worker_loop(shared: &Shared) {
-    todo!("spec: loop {{ wait_while(空 && !stop); 有 job 拿出鎖外執行; 空+stop 則 return }}")
+    // todo!("spec: loop {{ wait_while(空 && !stop); 有 job 拿出鎖外執行; 空+stop 則 return }}")
+
+    loop {
+        let mut st = shared.state.lock().unwrap();
+
+        st = shared
+            .cv
+            .wait_while(st, |s| s.jobs.is_empty() && !s.stop)
+            .unwrap();
+        if st.stop && st.jobs.is_empty() {
+            return;
+        }
+        let op_job = st.jobs.pop_front();
+        drop(st);
+        if let Some(job) = op_job {
+            let res = catch_unwind(std::panic::AssertUnwindSafe(job));
+        }
+    }
 }
 
 impl Drop for ThreadPool {
     /// spec:置 stop → notify_all(所有 worker 都要看到)→ join 全部。
     /// 返回時保證:所有已提交 job 執行完畢。
     fn drop(&mut self) {
-        todo!("spec: set stop; notify_all; join workers(用 self.workers.drain(..))")
+        // todo!("spec: set stop; notify_all; join workers(用 self.workers.drain(..))")
+
+        let Shared { state: mx_st, cv } = &*self.shared;
+        let mut st = mx_st.lock().unwrap();
+        st.stop = true;
+        drop(st);
+        cv.notify_all();
+        self.workers
+            .drain(..)
+            .for_each(|join_hand| join_hand.join().unwrap());
     }
 }
 
@@ -108,7 +166,7 @@ mod tests {
 
     /// boundary:100 job 全執行,drop 返回後 counter 必為 100。
     #[test]
-    #[ignore = "填完 worker_loop/Drop 後移除"]
+    // #[ignore = "填完 worker_loop/Drop 後移除"]
     fn executes_all_jobs() {
         let counter = Arc::new(AtomicUsize::new(0));
         {
@@ -125,7 +183,7 @@ mod tests {
 
     /// boundary:零 job 直接 drop 不 hang——predicate 沒查 stop 就會卡死在這。
     #[test]
-    #[ignore = "填完 worker_loop/Drop 後移除"]
+    // #[ignore = "填完 worker_loop/Drop 後移除"]
     fn drop_with_zero_jobs_does_not_hang() {
         let pool = ThreadPool::new(4);
         drop(pool);
@@ -133,7 +191,7 @@ mod tests {
 
     /// boundary:單 worker FIFO 序列執行。
     #[test]
-    #[ignore = "填完 worker_loop/Drop 後移除"]
+    // #[ignore = "填完 worker_loop/Drop 後移除"]
     fn single_worker_fifo() {
         let order = Arc::new(Mutex::new(Vec::new()));
         {
@@ -148,7 +206,7 @@ mod tests {
 
     /// submit 取值 + 先完成後 join(condvar 沒用上的路徑)。
     #[test]
-    #[ignore = "填完 submit/join 後移除"]
+    // #[ignore = "填完 submit/join 後移除"]
     fn submit_returns_value() {
         let pool = ThreadPool::new(2);
         assert_eq!(pool.submit(|| 6 * 7).join(), 42);
@@ -160,7 +218,7 @@ mod tests {
 
     /// boundary:job panic → join 端重拋,且 worker 活著。
     #[test]
-    #[ignore = "填完 submit/join 後移除"]
+    // #[ignore = "填完 submit/join 後移除"]
     fn submit_panic_rethrown_worker_survives() {
         let pool = ThreadPool::new(1);
         let h = pool.submit(|| panic!("kaboom (expected in test output)"));
@@ -172,7 +230,7 @@ mod tests {
     /// boundary:execute 的 job panic 不殺 worker——單 worker 最嚴格:
     /// 沒 catch_unwind 的話,第二個 job 永遠不會跑。
     #[test]
-    #[ignore = "填完 worker_loop/Drop 後移除"]
+    // #[ignore = "填完 worker_loop/Drop 後移除"]
     fn panicking_job_does_not_kill_worker() {
         let ran_after = Arc::new(AtomicUsize::new(0));
         {
@@ -188,7 +246,7 @@ mod tests {
 
     /// boundary:drop 等慢 job 做完(drain 語意)——不是丟棄。
     #[test]
-    #[ignore = "填完 worker_loop/Drop 後移除"]
+    // #[ignore = "填完 worker_loop/Drop 後移除"]
     fn drop_waits_for_slow_jobs() {
         let counter = Arc::new(AtomicUsize::new(0));
         {
@@ -206,7 +264,7 @@ mod tests {
 
     /// 並發多 handle:結果各歸各的收據,不串音。
     #[test]
-    #[ignore = "填完 submit/join 後移除"]
+    // #[ignore = "填完 submit/join 後移除"]
     fn submit_many_results_isolated() {
         let pool = ThreadPool::new(4);
         let handles: Vec<_> = (0..8).map(|i| pool.submit(move || i * i)).collect();
