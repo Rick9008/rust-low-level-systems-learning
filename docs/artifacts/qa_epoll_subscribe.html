@@ -1,0 +1,363 @@
+<title>epoll:訂閱、監聽、退訂</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --axis:      #c3c2b7;
+    --ring:      rgba(11,11,11,0.10);
+    --s1:        #2a78d6;
+    --s2:        #1baf7a;
+    --code-bg:   rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface:   #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --axis:      #383835;
+      --ring:      rgba(255,255,255,0.10);
+      --s1:        #3987e5;
+      --s2:        #199e70;
+      --code-bg:   rgba(255,255,255,0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --grid:      #2c2c2a;
+    --axis:      #383835;
+    --ring:      rgba(255,255,255,0.10);
+    --s1:        #3987e5;
+    --s2:        #199e70;
+    --code-bg:   rgba(255,255,255,0.08);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --axis:      #c3c2b7;
+    --ring:      rgba(11,11,11,0.10);
+    --s1:        #2a78d6;
+    --s2:        #1baf7a;
+    --code-bg:   rgba(11,11,11,0.05);
+  }
+
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+    line-height: 1.75;
+    margin: 0;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  .eyebrow {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px;
+  }
+  h1 {
+    font-size: clamp(26px, 4.5vw, 38px); line-height: 1.25; margin: 0 0 10px;
+    letter-spacing: -0.015em; text-wrap: balance; font-weight: 750;
+  }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16.5px; }
+  .lede strong { color: var(--ink); }
+  h2 { font-size: 21px; margin: 0 0 8px; letter-spacing: -0.01em; text-wrap: balance; font-weight: 700; }
+  h3 { font-size: 16px; margin: 24px 0 6px; font-weight: 700; }
+  section { margin-top: 64px; }
+  section > p { color: var(--ink-2); max-width: 44em; margin: 0 0 12px; }
+  section > p strong, li strong, td strong { color: var(--ink); }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.86em; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  pre {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; line-height: 1.6; margin: 16px 0 0;
+  }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+
+  /* 心智模型三聯圖 */
+  .model { display: flex; gap: 0; align-items: stretch; margin-top: 20px; flex-wrap: wrap; }
+  .model .box {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 14px 16px; flex: 1 1 200px; min-width: 200px;
+  }
+  .model .box .t { font-weight: 700; font-size: 14.5px; }
+  .model .box p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
+  .model .arrow {
+    flex: 0 0 auto; align-self: center; padding: 0 10px; color: var(--muted);
+    font-size: 12.5px; text-align: center; line-height: 1.5; min-width: 86px;
+  }
+  .model .arrow b { display: block; font-size: 18px; color: var(--ink); }
+  @media (max-width: 720px) {
+    .model { flex-direction: column; }
+    .model .arrow b { transform: rotate(90deg); }
+  }
+  .inner { border-top: 1px dashed var(--grid); margin-top: 10px; padding-top: 8px; font-size: 13px; }
+  .inner code { font-size: 12px; }
+
+  .table-scroll { overflow-x: auto; border-radius: 10px; margin-top: 18px; }
+  table.tbl {
+    border-collapse: collapse; width: 100%;
+    font-size: 14px; background: var(--surface);
+    border: 1px solid var(--ring); border-radius: 10px; overflow: hidden;
+  }
+  table.tbl th, table.tbl td {
+    text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid);
+    vertical-align: top;
+  }
+  table.tbl th { font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; }
+  table.tbl tr:last-child td { border-bottom: none; }
+  table.tbl td:first-child { white-space: nowrap; font-weight: 650; }
+  table.tbl td code { white-space: nowrap; }
+
+  .defs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 0; }
+  @media (max-width: 640px) { .defs { grid-template-columns: 1fr; } }
+  .def {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .def .tag { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; }
+  .def .big { font-size: 17px; font-weight: 700; margin: 4px 0 6px; }
+  .def p { margin: 0 0 8px; color: var(--ink-2); font-size: 14.5px; line-height: 1.65; }
+  .def p:last-child { margin-bottom: 0; }
+
+  figure.chart { margin: 24px 0 0; }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+    padding: 18px 18px 10px;
+  }
+  .chart-title { font-size: 15px; font-weight: 700; margin: 0 0 2px; }
+  .chart-sub { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+  .chart-scroll { overflow-x: auto; }
+  .chart-scroll svg { display: block; min-width: 640px; width: 100%; height: auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; max-width: 46em; }
+
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; }
+  .axis-label { font-size: 11.5px; fill: var(--muted); }
+  .row-label { font-size: 12.5px; font-weight: 700; fill: var(--ink); }
+  .anno { font-size: 12.5px; fill: var(--ink-2); }
+
+  footer { margin-top: 72px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">epoll 圖解 · flags + 訂閱生命週期</div>
+    <h1>epoll:訂閱、監聽、退訂</h1>
+    <p class="lede">epoll 是 kernel 裡的一份<strong>訂閱服務</strong>:你用 <code>epoll_ctl</code> 管理「我關心哪些 fd 的哪些事」,用 <code>epoll_wait</code> 睡著等信。所有 flag 的差異都落在三個問題上:<strong>這是事件還是模式?要不要自己訂?什麼時候會再叫你?</strong></p>
+  </header>
+
+  <section>
+    <div class="eyebrow">心智模型</div>
+    <h2>一張興趣表 + 一條就緒佇列</h2>
+    <div class="model">
+      <div class="box">
+        <div class="t">你的 event loop</div>
+        <p>單執行緒,迴圈:<br><code>wait → dispatch → 處理</code></p>
+      </div>
+      <div class="arrow"><b>⇄</b>epoll_ctl 訂閱/改訂/退訂<br>epoll_wait 收信</div>
+      <div class="box">
+        <div class="t">epoll instance(本身也是個 fd)</div>
+        <p><strong>Interest list</strong>:fd → 遮罩 + token(你訂了什麼)</p>
+        <div class="inner"><strong>Ready list</strong>:已就緒的事件排隊等你收——<code>wait</code> 只是把它搬進你的 buffer</div>
+      </div>
+      <div class="arrow"><b>←</b>kernel 在 IRQ /<br>協定棧層面盯著</div>
+      <div class="box">
+        <div class="t">被監看的 fds</div>
+        <p>sockets、listener、eventfd、timerfd、pipe……任何支援 poll 的東西</p>
+      </div>
+    </div>
+    <p style="margin-top:16px">重點:<code>wait</code> 的成本是 <strong>O(就緒數)</strong>,不是 O(訂閱數)——這就是它贏過 <code>select/poll</code>(每次呼叫都要重新掃全表)的原因,也是「3000 條連線一條 thread」成立的前提。</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">生命週期</div>
+    <h2>訂閱 → 收信 → 改訂 → 退訂</h2>
+    <p>五個動作對映 repo 的 RAII wrapper(<code>reference/src/epoll_sys.rs</code>):</p>
+    <div class="table-scroll">
+    <table class="tbl">
+      <tr><th>動作</th><th>syscall</th><th>repo API</th><th>要點</th></tr>
+      <tr><td>開簿</td><td><code>epoll_create1(CLOEXEC)</code></td><td><code>Epoll::new()</code></td><td>epfd 本身是個 fd;RAII Drop 時 close——長行程漏 epfd 是資源枯竭 bug</td></tr>
+      <tr><td><strong>訂閱</strong></td><td><code>epoll_ctl(ADD, fd, ev)</code></td><td><code>ep.add(fd, mask, token)</code></td><td><code>mask</code> = 你關心的事件;<code>token</code>(u64)事件發生時<strong>原樣帶回</strong>,用來找回是哪條連線。重複 ADD 同一 fd → <code>EEXIST</code></td></tr>
+      <tr><td><strong>收信</strong></td><td><code>epoll_wait(buf, n, timeout)</code></td><td><code>ep.wait(&amp;mut buf, timeout)</code></td><td>timeout:<code>-1</code> 無限等 / <code>0</code> 純輪詢 / <code>n</code> ms(event loop 拿「下一個 timer deadline」當 timeout)。<code>EINTR</code> 要重試——repo 已包進迴圈</td></tr>
+      <tr><td><strong>改訂</strong></td><td><code>epoll_ctl(MOD, fd, ev)</code></td><td><code>ep.modify(fd, mask, token)</code></td><td>換遮罩或 token。backpressure 的開關水龍頭、<code>EPOLLONESHOT</code> 的重新武裝,都是它</td></tr>
+      <tr><td><strong>退訂</strong></td><td><code>epoll_ctl(DEL, fd)</code></td><td><code>ep.delete(fd)</code></td><td><code>close(fd)</code> 通常自動退訂,但 <strong>fd 被 dup 過就不會</strong>——顯式 DEL 讓生命週期在 code 裡可見</td></tr>
+    </table>
+    </div>
+    <h3>最小 event loop 骨架</h3>
+<pre><code>let ep = Epoll::new()?;
+ep.add(listener.as_raw_fd(), EPOLLIN, LISTENER)?;   <span class="cmt">// 訂閱:listener 可讀 = 有連線可 accept</span>
+
+<span class="cmt">// buf:EpollEvent 陣列,長度 = 一輪最多收幾件</span>
+loop {
+    let n = ep.wait(&amp;mut buf, None)?;               <span class="cmt">// 睡著等;EINTR 已在 wait 裡重試</span>
+    for ev in &amp;buf[..n] {
+        if ev.events &amp; (EPOLLERR | EPOLLHUP) != 0 {
+            <span class="cmt">// 先處理錯誤——這兩個免訂閱也會回報,漏接 = 死連線永遠掛著</span>
+        }
+        match ev.data {                              <span class="cmt">// token 原樣帶回</span>
+            LISTENER =&gt; { <span class="cmt">/* accept → ep.add(conn_fd, EPOLLIN, new_token) */</span> }
+            t =&gt; { <span class="cmt">/* 用 t 找回連線;LT 讀一輪即可,ET 必須讀到 EAGAIN */</span> }
+        }
+    }
+}</code></pre>
+  </section>
+
+  <section>
+    <div class="eyebrow">flags</div>
+    <h2>三族 flag:事件、免訂事件、模式開關</h2>
+    <p>遮罩是 <code>u32</code> 位元 OR。分族之後就不用背了——問自己「它是<strong>發生的事</strong>,還是<strong>通知的方式</strong>?」</p>
+
+    <h3>族 1 · 興趣/就緒事件(訂閱時要、回報時給)</h3>
+    <div class="table-scroll">
+    <table class="tbl">
+      <tr><th>flag</th><th>值</th><th>意思</th><th>什麼時候用</th></tr>
+      <tr><td><code>EPOLLIN</code></td><td>0x001</td><td><strong>可讀</strong>:socket 有資料、listener 有連線可 accept、pipe/eventfd 有東西</td><td>幾乎永遠訂著(除了 backpressure 關水龍頭時)</td></tr>
+      <tr><td><code>EPOLLOUT</code></td><td>0x004</td><td><strong>可寫</strong>:send buffer 有空間了</td><td><strong>只在欠帳時掛</strong>:write 吃了 <code>EAGAIN</code> 才加,還清就拿掉</td></tr>
+      <tr><td><code>EPOLLRDHUP</code></td><td>0x2000</td><td>對端關了寫端(half-close):「不再送了」但你還能回寫</td><td>想區分「對端說完了」和「還在等資料」時</td></tr>
+      <tr><td><code>EPOLLPRI</code></td><td>0x002</td><td>帶外資料(TCP urgent)</td><td>幾乎沒人用;面試提一句就好</td></tr>
+    </table>
+    </div>
+
+    <h3>族 2 · 免訂閱、只出現在回報(kernel 永遠幫你盯)</h3>
+    <div class="table-scroll">
+    <table class="tbl">
+      <tr><th>flag</th><th>值</th><th>意思</th><th>不處理的下場</th></tr>
+      <tr><td><code>EPOLLERR</code></td><td>0x008</td><td>fd 出錯(例:收到 RST、pipe 讀端全關你還在寫)</td><td rowspan="2">死連線永遠掛在表上吃資源——dispatch 第一步永遠先檢查這兩個 bit</td></tr>
+      <tr><td><code>EPOLLHUP</code></td><td>0x010</td><td>掛斷:雙向都關了</td></tr>
+    </table>
+    </div>
+
+    <h3>族 3 · 模式開關(不是事件,是「怎麼通知你」)</h3>
+    <div class="table-scroll">
+    <table class="tbl">
+      <tr><th>flag</th><th>值</th><th>意思</th><th>代價/義務</th></tr>
+      <tr><td><em>(不加 = LT)</em></td><td>—</td><td><strong>level-triggered(預設)</strong>:條件還成立,每次 <code>wait</code> 都叫你</td><td>寬容:這輪沒讀完,下輪還會叫</td></tr>
+      <tr><td><code>EPOLLET</code></td><td>1&lt;&lt;31</td><td><strong>edge-triggered</strong>:只在「變成就緒」那一刻叫一次</td><td><strong>義務:必須讀/寫到 <code>EAGAIN</code></strong>,否則剩下的資料永遠沒人叫你(見下圖)</td></tr>
+      <tr><td><code>EPOLLONESHOT</code></td><td>1&lt;&lt;30</td><td>叫一次後自動 <strong>disarm</strong>(訂閱還在,遮罩清成 0)</td><td>要再收信得 <code>MOD</code> 重新武裝;多執行緒 loop 用它防同一 fd 被兩條 thread 同時處理</td></tr>
+      <tr><td><code>EPOLLEXCLUSIVE</code></td><td>1&lt;&lt;28</td><td>多個 epoll 掛同一 listener 時只叫醒一個</td><td>防 thundering herd(accept 風暴);單 loop 用不到</td></tr>
+    </table>
+    </div>
+    <p style="margin-top:12px">完整清單還有 <code>EPOLLWAKEUP</code>(電源管理)和 <code>EPOLLRDNORM</code> 等 poll 相容別名——知道存在即可。repo 只定義面試需要的 8 個(<code>reference/src/epoll_sys.rs:52-61</code>)。</p>
+
+    <figure class="chart">
+      <div class="chart-card">
+        <p class="chart-title">LT vs ET:同一串事件,誰會叫你</p>
+        <p class="chart-sub">t2 到了 100B;t5 你只讀走 40B;t8 才讀到 EAGAIN。四次 wait() 呼叫,兩種模式的回應:</p>
+        <div class="chart-scroll">
+        <svg viewBox="0 0 800 268" role="img" aria-label="level-triggered 與 edge-triggered 通知時序對比">
+          <!-- buffer 狀態帶 -->
+          <text class="row-label" x="118" y="52" text-anchor="end">socket buffer</text>
+          <rect x="256" y="38" width="189" height="20" rx="4" fill="var(--s1)" opacity="0.75"/>
+          <rect x="445" y="38" width="189" height="20" rx="4" fill="var(--s1)" opacity="0.35"/>
+          <text class="axis-label" x="350" y="52" text-anchor="middle" fill="#fff" font-weight="700">100B</text>
+          <text class="axis-label" x="539" y="52" text-anchor="middle" font-weight="700">剩 60B</text>
+          <text class="anno" x="256" y="26" text-anchor="middle">t2 資料到達</text>
+          <text class="anno" x="445" y="26" text-anchor="middle">t5 讀走 40B</text>
+          <text class="anno" x="634" y="26" text-anchor="middle">t8 讀到 EAGAIN</text>
+
+          <!-- wait() 呼叫的虛線 -->
+          <g stroke="var(--axis)" stroke-width="1" stroke-dasharray="3 4">
+            <line x1="319" y1="72" x2="319" y2="196"/>
+            <line x1="382" y1="72" x2="382" y2="196"/>
+            <line x1="508" y1="72" x2="508" y2="196"/>
+            <line x1="697" y1="72" x2="697" y2="196"/>
+          </g>
+          <text class="axis-label" x="319" y="86" text-anchor="middle">wait ①</text>
+          <text class="axis-label" x="382" y="86" text-anchor="middle">wait ②</text>
+          <text class="axis-label" x="508" y="86" text-anchor="middle">wait ③</text>
+          <text class="axis-label" x="697" y="86" text-anchor="middle">wait ④</text>
+
+          <!-- LT row -->
+          <text class="row-label" x="118" y="122" text-anchor="end">LT(預設)</text>
+          <circle cx="319" cy="118" r="7" fill="var(--s1)"/>
+          <circle cx="382" cy="118" r="7" fill="var(--s1)"/>
+          <circle cx="508" cy="118" r="7" fill="var(--s1)"/>
+          <circle cx="697" cy="118" r="7" fill="none" stroke="var(--axis)" stroke-width="1.5"/>
+          <text class="anno" x="713" y="122">buffer 空了才安靜</text>
+
+          <!-- ET row -->
+          <text class="row-label" x="118" y="168" text-anchor="end">ET</text>
+          <circle cx="319" cy="164" r="7" fill="var(--s2)"/>
+          <circle cx="382" cy="164" r="7" fill="none" stroke="var(--axis)" stroke-width="1.5"/>
+          <circle cx="508" cy="164" r="7" fill="none" stroke="var(--axis)" stroke-width="1.5"/>
+          <circle cx="697" cy="164" r="7" fill="none" stroke="var(--axis)" stroke-width="1.5"/>
+          <text class="anno" x="508" y="192" text-anchor="middle" font-weight="650" fill="var(--ink)">↑ 剩的 60B 沒人會再叫你 = 經典 ET bug</text>
+
+          <!-- 時間軸 -->
+          <line x1="130" y1="216" x2="760" y2="216" stroke="var(--axis)" stroke-width="1"/>
+          <g class="axis-label" text-anchor="middle">
+            <text x="130" y="234">t0</text><text x="256" y="234">t2</text>
+            <text x="382" y="234">t4</text><text x="508" y="234">t6</text>
+            <text x="634" y="234">t8</text><text x="760" y="234">t10</text>
+          </g>
+          <!-- 圖例 -->
+          <circle cx="140" cy="256" r="6" fill="var(--s1)"/>
+          <text class="anno" x="152" y="260">wait 回報事件</text>
+          <circle cx="268" cy="256" r="6" fill="none" stroke="var(--axis)" stroke-width="1.5"/>
+          <text class="anno" x="280" y="260">安靜(不回報)</text>
+        </svg>
+        </div>
+        <figcaption>LT:「還有資料」這個<strong>狀態</strong>成立就每次都叫——你偷懶只讀一半也安全。ET:只有 t2 那次<strong>轉變</strong>(空→有)會叫;t5 的部分讀不產生新轉變,所以剩下的 60B 永遠安靜——除非對端又送新資料。這就是 ET 的鐵律:<strong>拿到事件就要讀到 <code>EAGAIN</code> 為止</strong>。互動版:repo <code>docs/artifacts/event_loop.html</code> 的 LT/ET 並排模擬器。</figcaption>
+      </div>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">實戰</div>
+    <h2>三個訂閱管理的招式</h2>
+    <div class="defs">
+      <div class="def">
+        <div class="tag">讀端 · 關水龍頭</div>
+        <div class="big">backpressure = MOD 掉 EPOLLIN</div>
+        <p>下游塞住時:<code>modify(fd, mask 去掉 EPOLLIN, token)</code> → 你不讀 → rcv buffer 積滿 → <strong>TCP 收窗縮到 0 → 對端 <code>send()</code> 塞住</strong>。backpressure 沿著 TCP flow control 免費傳回 producer;消化完再 MOD 回來。</p>
+        <p>這是 clarify 五問「掉不掉」的 TCP 版 full policy:不掉資料、讓上游塞住。</p>
+      </div>
+      <div class="def">
+        <div class="tag">寫端 · 欠帳才掛</div>
+        <div class="big">EPOLLOUT 是債權人,不是常駐嘉賓</div>
+        <p><code>write</code> 吃到 <code>EAGAIN</code> → 緩存沒寫完的 + MOD 加上 <code>EPOLLOUT</code> → 可寫事件來了補寫 → <strong>還清後把 EPOLLOUT 拿掉</strong>。</p>
+        <p>忘記拿掉的下場(LT):send buffer 幾乎永遠有空間 → 每輪 wait 都叫你 → busy loop 空轉。詳見 <code>docs/tcp_echo.md</code> 的欠帳狀態機。</p>
+      </div>
+      <div class="def">
+        <div class="tag">退訂 · 暗坑</div>
+        <div class="big">DEL 之後,舊事件還在你手上</div>
+        <p><code>delete(fd)</code> + <code>close</code> 之後:這輪 <code>wait</code> 已經搬進 buf 的事件裡<strong>可能還有那條連線的</strong>;而 fd 號碼會立刻被新連線重用 → 舊事件打到新連線。</p>
+        <p>解法:token 不放裸 fd,放 <strong>fd + generation</strong>,dispatch 時對表驗票。這正是彩排 e2(fd_registry)整題的梗——JD 的 event registry sleeper。</p>
+      </div>
+      <div class="def">
+        <div class="tag">地雷 · 型別</div>
+        <div class="big">libc 的 EPOLLET 是負數</div>
+        <p>libc 常數是 <code>i32</code>,而 <code>EPOLLET</code> = 0x80000000 = <strong>-2147483648</strong>;跟 <code>events: u32</code> 欄位混用必須 <code>as u32</code>(<code>docs/epoll_libc.md:61</code>)。repo 自家 const 直接定成 <code>u32</code>,沒這個坑。</p>
+        <p>面試日提醒:pad 上<strong>不手搓 FFI</strong>——3 行 <code>Poller</code> trait stub(Abstract the Noise),一句「底層是 epoll,data 的 u64 就是我的 token」。</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    出處與深讀:<code>reference/src/epoll_sys.rs</code>(RAII wrapper + 常數)· <code>docs/epoll_libc.md</code>(libc 版地雷)· <code>docs/event_loop.md</code> / <code>docs/tcp_echo.md</code> · 互動模擬器:<code>docs/artifacts/event_loop.html</code>(LT/ET)、<code>docs/artifacts/epoll_sys.html</code>(eventfd)。
+  </footer>
+</div>

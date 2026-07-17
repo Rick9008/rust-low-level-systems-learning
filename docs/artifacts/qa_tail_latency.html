@@ -1,0 +1,594 @@
+<title>p50 vs p99.9:吞吐與尾延遲</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --axis:      #c3c2b7;
+    --ring:      rgba(11,11,11,0.10);
+    --s1:        #2a78d6;   /* mutex / 主 series */
+    --s2:        #1baf7a;   /* lock-free */
+    --blocked:   #e1e0d9;   /* gantt 等待段 */
+    --code-bg:   rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface:   #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --axis:      #383835;
+      --ring:      rgba(255,255,255,0.10);
+      --s1:        #3987e5;
+      --s2:        #199e70;
+      --blocked:   #2c2c2a;
+      --code-bg:   rgba(255,255,255,0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --grid:      #2c2c2a;
+    --axis:      #383835;
+    --ring:      rgba(255,255,255,0.10);
+    --s1:        #3987e5;
+    --s2:        #199e70;
+    --blocked:   #2c2c2a;
+    --code-bg:   rgba(255,255,255,0.08);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --axis:      #c3c2b7;
+    --ring:      rgba(11,11,11,0.10);
+    --s1:        #2a78d6;
+    --s2:        #1baf7a;
+    --blocked:   #e1e0d9;
+    --code-bg:   rgba(11,11,11,0.05);
+  }
+
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+    line-height: 1.75;
+    margin: 0;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  .eyebrow {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px;
+  }
+  h1 {
+    font-size: clamp(26px, 4.5vw, 38px); line-height: 1.25; margin: 0 0 10px;
+    letter-spacing: -0.015em; text-wrap: balance; font-weight: 750;
+  }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16.5px; }
+  .lede strong { color: var(--ink); }
+
+  h2 {
+    font-size: 21px; margin: 0 0 8px; letter-spacing: -0.01em;
+    text-wrap: balance; font-weight: 700;
+  }
+  section { margin-top: 64px; }
+  section > p { color: var(--ink-2); max-width: 44em; margin: 0 0 12px; }
+  section > p strong, li strong { color: var(--ink); }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.86em; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px;
+  }
+
+  .defs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 0; }
+  @media (max-width: 640px) { .defs { grid-template-columns: 1fr; } }
+  .def {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .def .tag { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; }
+  .def .big { font-size: 18px; font-weight: 700; margin: 4px 0 6px; }
+  .def p { margin: 0; color: var(--ink-2); font-size: 14.5px; line-height: 1.65; }
+  .def p + p { margin-top: 8px; }
+  .def .en { font-style: italic; color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--grid); padding-top: 8px; margin-top: 10px; }
+
+  figure.chart { margin: 24px 0 0; }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+    padding: 18px 18px 10px; position: relative;
+  }
+  .chart-title { font-size: 15px; font-weight: 700; margin: 0 0 2px; }
+  .chart-sub { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+  .chart-scroll { overflow-x: auto; }
+  .chart-scroll svg { display: block; min-width: 640px; width: 100%; height: auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; max-width: 46em; }
+
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 3; display: none;
+    background: var(--ink); color: var(--page);
+    font-size: 12.5px; line-height: 1.5; padding: 6px 10px; border-radius: 6px;
+    white-space: nowrap; transform: translate(-50%, -100%); margin-top: -8px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .batch { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
+  @media (max-width: 640px) { .batch { grid-template-columns: 1fr; } }
+  .batch .def .nums { display: flex; gap: 24px; margin-top: 10px; }
+  .batch .num .v { font-size: 22px; font-weight: 750; letter-spacing: -0.01em; }
+  .batch .num .k { font-size: 12px; color: var(--muted); }
+
+  table.moves {
+    border-collapse: collapse; width: 100%; margin-top: 18px;
+    font-size: 14.5px; background: var(--surface);
+    border: 1px solid var(--ring); border-radius: 10px; overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; border-radius: 10px; }
+  table.moves th, table.moves td {
+    text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--grid);
+    vertical-align: top;
+  }
+  table.moves th { font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; background: transparent; }
+  table.moves tr:last-child td { border-bottom: none; }
+  table.moves td:first-child { white-space: nowrap; font-weight: 650; }
+
+  blockquote.line {
+    margin: 22px 0 0; padding: 14px 20px;
+    border-left: 3px solid var(--s1);
+    background: var(--surface); border-radius: 0 10px 10px 0;
+    color: var(--ink); font-size: 15.5px;
+  }
+  blockquote.line em { color: var(--ink-2); font-style: normal; font-size: 13.5px; display: block; margin-top: 6px; }
+
+  footer { margin-top: 72px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 16px; }
+
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; }
+  .axis-label { font-size: 11.5px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .marker-label { font-size: 12px; font-weight: 650; fill: var(--ink); }
+  .anno { font-size: 12.5px; fill: var(--ink-2); }
+  .direct-label { font-size: 12.5px; font-weight: 700; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">clarify playbook · Q4 圖解</div>
+    <h1>Average throughput 與 tail latency 是兩個世界</h1>
+    <p class="lede">同一個系統、同一批請求:<strong>吞吐</strong>問「一秒做完幾筆」,是系統視角的<strong>面積</strong>;<strong>延遲</strong>問「這一筆等了多久」,是單筆視角的<strong>分布</strong>。Q4(<em>“Are we optimizing average throughput, or tail latency?”</em>)問的是:你的 SLA 付錢買分布的<strong>中間</strong>,還是分布的<strong>最右端</strong>。</p>
+  </header>
+
+  <section>
+    <div class="eyebrow">定義</div>
+    <h2>先把兩個字拆開</h2>
+    <div class="defs">
+      <div class="def">
+        <div class="tag">Average throughput</div>
+        <div class="big">一秒鐘做完幾筆(p50 世界)</div>
+        <p>看的是<strong>總量</strong>:1M ops/s。個別請求慢一點沒關係,只要輸送帶整體夠快。優化手段:批次、減少 syscall、cache 友善——這些常常<strong>犧牲單筆延遲</strong>換總量。</p>
+      </div>
+      <div class="def">
+        <div class="tag">Tail latency</div>
+        <div class="big">最倒楣那 0.1% 等了多久(p99.9 世界)</div>
+        <p>看的是分布<strong>最右端</strong>:一千筆裡最慢那一筆。平均再漂亮,只要偶爾有一筆卡 8ms,p99.9 就是 8ms。優化手段:消滅「偶發的壞事件」——preemption、page fault、鎖 convoy。</p>
+      </div>
+    </div>
+    <p style="margin-top:16px">兩者<strong>不是蹺蹺板的兩端</strong>——批次可以同時把吞吐「和」單筆延遲都變大,所以它們是兩條獨立的軸,優化方向可以互相打架:</p>
+    <div class="batch">
+      <div class="def">
+        <div class="tag">逐筆處理</div>
+        <div class="nums">
+          <div class="num"><div class="v">~10 µs</div><div class="k">單筆延遲</div></div>
+          <div class="num"><div class="v">100k/s</div><div class="k">吞吐</div></div>
+        </div>
+        <p style="margin-top:8px">每筆立刻送,每筆都付一次 syscall 的錢。</p>
+      </div>
+      <div class="def">
+        <div class="tag">批次(湊滿 64 筆再送)</div>
+        <div class="nums">
+          <div class="num"><div class="v">最壞 ~640 µs</div><div class="k">單筆延遲 ↑</div></div>
+          <div class="num"><div class="v">500k/s</div><div class="k">吞吐 ↑</div></div>
+        </div>
+        <p style="margin-top:8px">第一筆得等最後一筆湊齊——<strong>兩個數字一起變大</strong>。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">分布</div>
+    <h2>延遲不是一個數字,是一條長尾巴</h2>
+    <p>下圖是一次 <code>Mutex&lt;VecDeque&gt;</code> push 的延遲分布(示意數據,量級對)。注意兩件事:<strong>x 軸和 y 軸都是對數</strong>——主體(p50 ≈ 180ns)和尾巴(p99.9 ≈ 3ms)差了<strong>四個數量級</strong>,不取對數根本畫不進同一張圖;右端那個孤島狀的腫塊,就是 tail latency 的肇事現場。</p>
+    <figure class="chart">
+      <div class="chart-card" id="hist-card">
+        <p class="chart-title">單筆 push 延遲分布(mutex 版)</p>
+        <p class="chart-sub">x:延遲(對數) · y:請求佔比(對數,每格 ×10)</p>
+        <div class="chart-scroll"><div id="hist"></div></div>
+        <div class="tooltip" id="hist-tip"></div>
+      </div>
+      <figcaption>99% 的請求活在左邊 nanosecond 的世界;讓 p99.9 變成 3ms 的是右邊那 0.1%——它們不是「比較慢」,是<strong>撞上了一次壞事件</strong>(持鎖者被排程器換下去)。平均值(≈400ns)完全看不見這件事。</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">機制</div>
+    <h2>尾巴從哪來:mutex convoy</h2>
+    <p>playbook Q4 那句「mutex holder 被 scheduler preempt → 全體 waiter 陪卡一整個 timeslice」畫出來長這樣:</p>
+    <figure class="chart">
+      <div class="chart-card" id="gantt-card">
+        <p class="chart-title">持鎖者被 preempt,等鎖的人集體陪葬</p>
+        <p class="chart-sub">x:時間(ms) · 實心=執行中 · 斜線=被排程器換下去 · 空心=blocked 等鎖</p>
+        <div class="chart-scroll"><div id="gantt"></div></div>
+      </div>
+      <figcaption>T1 只需要幾百 ns 就能放鎖,但排程器在它握鎖時把它換下去睡了一個 timeslice(ms 級)。T2–T4 的請求本來也只要幾百 ns,現在全部變成 <strong>4ms 級</strong>——這三筆就是上一張圖右端的腫塊。lock-free 的意義在這裡:<strong>沒有「持有」這回事</strong>,任何一條 thread 被換下去,其他人照走(這正是 lock-free 的定義:整體永遠有進展)。</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">圖鑑</div>
+    <h2>壞事件圖鑑:氣泡從哪來</h2>
+    <p>上面的 convoy 是「擴大器」;這裡是氣泡本身的型錄。共同點:每一個都<strong>藏在你看不見的層</strong>(scheduler、MMU、cache),在任何一條指令上隨機引爆,而且<strong>平均值幾乎看不到它們</strong>。</p>
+    <div class="defs">
+      <div class="def">
+        <div class="tag">Preemption · ms 級</div>
+        <div class="big">排程器把你換下 CPU,你沒有投票權</div>
+        <p>timeslice(典型 1–10ms)到期或更高優先級 thread 醒來,scheduler <strong>強制</strong>收回 CPU——可能發生在任何指令上,<strong>包括握著鎖的時候</strong>。context switch 本體 ~1–5µs;真正貴的是「你睡了一整個 timeslice」和右邊那張卡。</p>
+        <p class="en">“The scheduler can pause my thread mid-critical-section for a whole timeslice — and I don’t get a vote.”</p>
+      </div>
+      <div class="def">
+        <div class="tag">Cache 汙染 · 恢復後數十 µs 的鈍化</div>
+        <div class="big">你回來時,cache 已經是別人的了</div>
+        <p>你被換下去的期間,別的 thread 用同一顆核,把 L1/L2(和 TLB)住滿<strong>它的</strong>資料。你恢復後前幾千次存取全部 miss:每次 ~100ns DRAM,而不是 ~1ns L1。context switch 帳面 1–5µs,這條隱形尾巴常常更貴。</p>
+        <p>別跟 false sharing 混:那是兩顆核<strong>搶同一條 cache line</strong> 的互踢(單價 ~40–100ns/次);汙染是「無關資料把你擠出去」。</p>
+        <p class="en">“After a context switch the caches belong to someone else — I pay thousands of misses to warm them back up.”</p>
+      </div>
+      <div class="def">
+        <div class="tag">Page fault · minor ~µs / major 到 ms</div>
+        <div class="big">一次記憶體存取,悄悄變成 kernel 之旅(或磁碟之旅)</div>
+        <p><strong>Minor</strong>:page 在記憶體但你的 page table 還沒掛上——剛配置的 <code>Vec</code> 第一次寫、fork 後 copy-on-write;kernel 補個對應,~1µs 內。<strong>Major</strong>:page 在磁碟(被 swap 出去、mmap 還沒讀入)——一次隱形磁碟 I/O,數十 µs 到 ms。</p>
+        <p>對策:hot path 不配置、啟動時 pre-touch(<code>with_capacity</code> 只保留位址空間,<strong>每頁第一次寫還是會 fault</strong>)、latency 敏感就 <code>mlock</code>。</p>
+        <p class="en">“Any memory touch can silently become disk I/O — that’s why latency-critical code pre-touches and never allocates on the hot path.”</p>
+      </div>
+      <div class="def">
+        <div class="tag">Lock convoy · 上面任何一顆 × N 個 waiter</div>
+        <div class="big">一個人的氣泡,全隊一起吃</div>
+        <p><strong>第一層</strong>:持鎖者停擺(被 preempt / page fault),所有等鎖的人排在後面陪等——上圖 gantt。<strong>第二層</strong>:隊形一旦形成,鎖改用「叫醒睡著的人」交接,每次 handoff 付 µs 級 context switch,而 critical section 才幾十 ns——流量掉到 scheduler 檔,隊伍自我維持。公平鎖(FIFO)反而更糟:它保證把鎖交給睡著的人。</p>
+        <p>lock-free 消滅的是<strong>傳染</strong>,不是氣泡本身——你自己該倒楣還是倒楣,但別人照走。</p>
+        <p class="en">“A preempted holder makes every waiter eat its timeslice — that’s the p99.9 story, and the only reason to go lock-free.”</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">對比</div>
+    <h2>「lockless 買的是 p99.9,不是吞吐」</h2>
+    <p>把 mutex 版和 lock-free 版疊在同一張圖上最清楚。這種圖叫 <strong>CCDF</strong>(讀法:「有多少比例的請求比 x 還慢」),是延遲工程的標準圖形——越往下走代表越稀有的倒楣鬼:</p>
+    <figure class="chart">
+      <div class="chart-card" id="ccdf-card">
+        <p class="chart-title">「比 x 慢的請求」還剩多少比例(CCDF,log–log)</p>
+        <p class="chart-sub">兩條線在 p50 幾乎疊在一起——分岔只發生在最下面那 0.1%</p>
+        <div class="chart-scroll"><div id="ccdf"></div></div>
+        <div class="tooltip" id="ccdf-tip"></div>
+      </div>
+      <figcaption>讀法:在 <strong>p50 那條線</strong>上兩者沒有差別——mutex uncontended 才 ~20ns,吞吐世界裡它就贏了。往下走到 <strong>p99.9</strong>:mutex 撞上 preemption 平台(3ms),lock-free 在 20µs 就收尾——差 <strong>150×</strong>。所以升級 lock-free 的唯一合法理由是「有人付錢買 p99.9」;這正是 Q4 要問出來的東西。</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">回到卡 1</div>
+    <h2>儀表板級 SLA:答案是「便宜的都能用」</h2>
+    <p>卡 1 的讀者是<strong>人</strong>,預算是<strong>秒</strong>。上面兩張圖的整場戰爭(20ns vs 3ms)發生在你預算的<strong>百萬分之一</strong>以下——人眼根本看不到 p99.9。這一句假設鎖進定界宣言後,設計全面降檔:</p>
+    <div class="table-scroll">
+    <table class="moves">
+      <tr><th>決策點</th><th>儀表板級(秒)這樣做</th><th>如果是機器級(ms/µs)才需要</th></tr>
+      <tr><td>鎖策略</td><td><code>Arc&lt;Mutex&lt;…&gt;&gt;</code> 直接上——預算差 6 個數量級,鎖成本隱形</td><td>per-producer SPSC、lock-free ring(買 p99.9)</td></tr>
+      <tr><td>聚合</td><td>1s tumbling window,每格折 count/sum/min/max</td><td>更細的 window、增量 sketch</td></tr>
+      <tr><td>ingest 路徑</td><td>放心批次:多攢幾 ms 沒人看得到,吞吐白拿</td><td>逐筆低延遲路徑,避免攢批</td></tr>
+      <tr><td>讀路徑</td><td>dashboard 每秒拉一次:拿鎖 → snapshot/merge,O(格數)</td><td>無鎖讀(seqlock/RCU 風格)</td></tr>
+      <tr><td>不做清單</td><td colspan="2">busy-spin、lock-free、每筆 fsync——在 45 分鐘面試裡是<strong>負分的複雜度</strong>:你花掉的是寫完 core 的時間,買到的是沒人看得到的尾巴</td></tr>
+    </table>
+    </div>
+    <blockquote class="line">
+      “Since a human is reading this dashboard, I’ll assume seconds-level freshness. That lets me keep everything behind a plain mutex — lock-free only pays for itself at p99.9, and <strong>no human can see p99.9</strong>.”
+      <em>定界宣言裡的 SLA 一句 + 它殺掉的整排昂貴設計。面試官若糾正(「這要餵自動告警,ms 級」),當場改一次、再鎖。</em>
+    </blockquote>
+  </section>
+
+  <footer>
+    出處:<code>docs/clarify-playbook.md</code> Q4(p50/p99.9 決策表)· <code>rehearsals/clarify-cards.md</code> 規則 5 · 數據為示意,量級依 <code>docs/cost-model.md</code>(uncontended mutex ~20ns、timeslice ms 級)。
+  </footer>
+</div>
+
+<script>
+(function () {
+  var css = function (name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  };
+
+  var fmtT = function (ns) {
+    if (ns < 1e3) return ns + " ns";
+    if (ns < 1e6) return (ns / 1e3 % 1 === 0 ? ns / 1e3 : (ns / 1e3).toFixed(1)) + " µs";
+    return (ns / 1e6 % 1 === 0 ? ns / 1e6 : (ns / 1e6).toFixed(1)) + " ms";
+  };
+  var fmtP = function (f) {
+    var p = f * 100;
+    if (p >= 10) return p.toFixed(0) + "%";
+    if (p >= 1) return p.toFixed(1) + "%";
+    if (p >= 0.1) return p.toFixed(2) + "%";
+    return p.toFixed(3) + "%";
+  };
+
+  /* ---------- 共用刻度 ---------- */
+  var XMIN = 50, XMAX = 1e7;                 // ns,log
+  var lg = Math.log10 ? Math.log10 : function (v) { return Math.log(v) / Math.LN10; };
+  var xFrac = function (v) { return (lg(v) - lg(XMIN)) / (lg(XMAX) - lg(XMIN)); };
+  var decades = [
+    [100, "100 ns"], [1e3, "1 µs"], [1e4, "10 µs"],
+    [1e5, "100 µs"], [1e6, "1 ms"], [1e7, "10 ms"]
+  ];
+
+  /* ================= 直方圖 ================= */
+  var edges = [50,100,200,500,1e3,2e3,5e3,1e4,2e4,5e4,1e5,2e5,5e5,1e6,2e6,5e6,1e7];
+  var pct = [22,38,24,9,4,1.8,0.6,0.3,0.08,0.02,0.01,0.005,0.005,0.01,0.06,0.02];
+
+  (function drawHist() {
+    var W = 800, H = 360, L = 58, R = 786, T = 40, B = 312;
+    var PW = R - L, PH = B - T;
+    var YMAX = 100, YMIN = 0.001; // %(log)
+    var y = function (v) { return T + (lg(YMAX) - lg(v)) / (lg(YMAX) - lg(YMIN)) * PH; };
+    var x = function (v) { return L + xFrac(v) * PW; };
+
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="mutex push 延遲分布直方圖">');
+
+    // 網格 + y 標籤
+    [100,10,1,0.1,0.01,0.001].forEach(function (v) {
+      s.push('<line x1="' + L + '" y1="' + y(v) + '" x2="' + R + '" y2="' + y(v) +
+             '" stroke="var(--grid)" stroke-width="1"/>');
+      s.push('<text class="axis-label" x="' + (L - 8) + '" y="' + (y(v) + 4) +
+             '" text-anchor="end">' + (v >= 1 ? v : v) + '%</text>');
+    });
+    // x 刻度
+    decades.forEach(function (d) {
+      s.push('<line x1="' + x(d[0]) + '" y1="' + B + '" x2="' + x(d[0]) + '" y2="' + (B + 5) +
+             '" stroke="var(--axis)" stroke-width="1"/>');
+      s.push('<text class="axis-label" x="' + x(d[0]) + '" y="' + (B + 20) +
+             '" text-anchor="middle">' + d[1] + '</text>');
+    });
+    // baseline
+    s.push('<line x1="' + L + '" y1="' + B + '" x2="' + R + '" y2="' + B +
+           '" stroke="var(--axis)" stroke-width="1"/>');
+
+    // bars(頂端 4px 圓角、彼此留 2px 縫)
+    for (var i = 0; i < pct.length; i++) {
+      var x0 = x(edges[i]) + 2, x1 = x(edges[i + 1]) - 2;
+      var bw = Math.max(x1 - x0, 3);
+      var yt = y(pct[i] );
+      var r = Math.min(4, bw / 2, (B - yt) / 2);
+      var d = 'M' + x0 + ' ' + B +
+              ' V' + (yt + r) +
+              ' Q' + x0 + ' ' + yt + ' ' + (x0 + r) + ' ' + yt +
+              ' H' + (x0 + bw - r) +
+              ' Q' + (x0 + bw) + ' ' + yt + ' ' + (x0 + bw) + ' ' + (yt + r) +
+              ' V' + B + ' Z';
+      s.push('<path class="hbar" data-i="' + i + '" d="' + d + '" fill="var(--s1)"/>');
+    }
+
+    // 分位標記
+    var marks = [[180, "p50 ≈ 180 ns"], [6000, "p99 ≈ 6 µs"], [3e6, "p99.9 ≈ 3 ms"]];
+    marks.forEach(function (m, idx) {
+      var mx = x(m[0]);
+      s.push('<line x1="' + mx + '" y1="' + (T - 6) + '" x2="' + mx + '" y2="' + B +
+             '" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>');
+      var anchor = idx === 0 ? "start" : "middle";
+      s.push('<text class="marker-label" x="' + (idx === 0 ? mx + 5 : mx) + '" y="' + (T - 12) +
+             '" text-anchor="' + anchor + '">' + m[1] + '</text>');
+    });
+
+    // 腫塊註解 + 選擇性直接標籤
+    var bx = x(3e6);
+    s.push('<text class="axis-label" x="' + (x(2e6) + (x(5e6) - x(2e6)) / 2) + '" y="' + (y(0.06) - 8) +
+           '" text-anchor="middle" font-weight="700" fill="var(--ink)">0.06%</text>');
+    s.push('<text class="anno" x="' + (bx - 12) + '" y="' + (y(0.06) - 46) + '" text-anchor="end">被 preempt 的持鎖者</text>');
+    s.push('<text class="anno" x="' + (bx - 12) + '" y="' + (y(0.06) - 30) + '" text-anchor="end">留下的腫塊 ↘</text>');
+
+    s.push('</svg>');
+    var host = document.getElementById("hist");
+    host.innerHTML = s.join("");
+
+    // hover tooltip
+    var tip = document.getElementById("hist-tip");
+    var card = document.getElementById("hist-card");
+    host.querySelectorAll(".hbar").forEach(function (el) {
+      el.addEventListener("mousemove", function (ev) {
+        var i = +el.getAttribute("data-i");
+        tip.textContent = fmtT(edges[i]) + " – " + fmtT(edges[i + 1]) + " · " + fmtP(pct[i] / 100);
+        var r = card.getBoundingClientRect();
+        tip.style.left = (ev.clientX - r.left) + "px";
+        tip.style.top = (ev.clientY - r.top) + "px";
+        tip.style.display = "block";
+        el.style.opacity = "0.8";
+      });
+      el.addEventListener("mouseleave", function () {
+        tip.style.display = "none";
+        el.style.opacity = "";
+      });
+    });
+  })();
+
+  /* ================= convoy gantt ================= */
+  (function drawGantt() {
+    var W = 800, H = 300, L = 58, R = 720, T = 28, B = 246;
+    var PW = R - L;
+    var x = function (ms) { return L + ms / 10 * PW; };
+    var rowY = function (r) { return T + r * 52; };
+    var BH = 22;
+
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="mutex convoy 時間線">');
+    s.push('<defs><pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">' +
+           '<line x1="0" y1="0" x2="0" y2="6" stroke="var(--muted)" stroke-width="1.6"/></pattern></defs>');
+
+    // x 網格
+    for (var ms = 0; ms <= 10; ms += 2) {
+      s.push('<line x1="' + x(ms) + '" y1="' + T + '" x2="' + x(ms) + '" y2="' + B +
+             '" stroke="var(--grid)" stroke-width="1"/>');
+      s.push('<text class="axis-label" x="' + x(ms) + '" y="' + (B + 18) + '" text-anchor="middle">' + ms + ' ms</text>');
+    }
+
+    var bar = function (row, a, b, kind) {
+      var yy = rowY(row);
+      if (kind === "run")
+        s.push('<rect x="' + x(a) + '" y="' + yy + '" width="' + Math.max(x(b) - x(a), 2.5) + '" height="' + BH +
+               '" rx="4" fill="var(--s1)"/>');
+      else if (kind === "pre") {
+        s.push('<rect x="' + x(a) + '" y="' + yy + '" width="' + (x(b) - x(a)) + '" height="' + BH +
+               '" rx="4" fill="url(#hatch)" stroke="var(--muted)" stroke-width="1"/>');
+      } else // blocked
+        s.push('<rect x="' + x(a) + '" y="' + yy + '" width="' + (x(b) - x(a)) + '" height="' + BH +
+               '" rx="4" fill="var(--blocked)" stroke="var(--axis)" stroke-width="1" stroke-dasharray="3 3"/>');
+    };
+    var label = function (row, text) {
+      s.push('<text class="axis-label" x="' + (L - 10) + '" y="' + (rowY(row) + BH / 2 + 4) +
+             '" text-anchor="end" font-weight="700" fill="var(--ink)">' + text + '</text>');
+    };
+    var lat = function (row, text) {
+      s.push('<text class="anno" x="' + (R + 10) + '" y="' + (rowY(row) + BH / 2 + 4) +
+             '" font-weight="650" fill="var(--ink)">' + text + '</text>');
+    };
+
+    label(0, "T1"); bar(0, 0, 1.5, "run"); bar(0, 1.5, 5.5, "pre"); bar(0, 5.5, 5.9, "run");
+    label(1, "T2"); bar(1, 1.7, 5.9, "blk"); bar(1, 5.9, 6.2, "run"); lat(1, "4.5 ms");
+    label(2, "T3"); bar(2, 2.4, 6.2, "blk"); bar(2, 6.2, 6.5, "run"); lat(2, "4.1 ms");
+    label(3, "T4"); bar(3, 3.0, 6.5, "blk"); bar(3, 6.5, 6.8, "run"); lat(3, "3.8 ms");
+
+    // 事件註解
+    s.push('<line x1="' + x(1.5) + '" y1="' + (T - 12) + '" x2="' + x(1.5) + '" y2="' + (rowY(0) + BH) +
+           '" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 4" opacity="0.6"/>');
+    s.push('<text class="anno" x="' + (x(1.5) + 6) + '" y="' + (T - 16) + '" font-weight="650" fill="var(--ink)">1.5ms:排程器把 T1 換下去(鎖還在它手上)</text>');
+    s.push('<text class="anno" x="' + (R + 10) + '" y="' + (rowY(0) + BH / 2 + 4) + '">← 本來只差幾百 ns 就放鎖</text>');
+    // 右欄標題
+    s.push('<text class="axis-label" x="' + (R + 10) + '" y="' + (T - 16) + '" font-weight="600">該筆請求延遲</text>');
+
+    s.push('</svg>');
+    document.getElementById("gantt").innerHTML = s.join("");
+  })();
+
+  /* ================= CCDF ================= */
+  var mutex = [[50,1],[100,.78],[200,.40],[500,.16],[1e3,.07],[2e3,.03],[5e3,.012],
+               [1e4,.006],[2e4,.003],[5e4,.0025],[1e5,.0023],[2e5,.0022],[5e5,.0021],
+               [1e6,.002],[2e6,.0019],[3e6,.001],[5e6,.0003],[8e6,.00005],[1e7,.00001]];
+  var lfree = [[50,1],[100,.80],[200,.42],[500,.17],[1e3,.075],[2e3,.032],[5e3,.011],
+               [1e4,.004],[2e4,.001],[3e4,.0004],[5e4,.0001],[1e5,.00001]];
+
+  (function drawCCDF() {
+    var W = 800, H = 380, L = 58, R = 700, T = 30, B = 330;
+    var PW = R - L, PH = B - T;
+    var YMAX = 1, YMIN = 1e-5;
+    var x = function (v) { return L + xFrac(v) * PW; };
+    var y = function (f) { return T + (lg(YMAX) - lg(f)) / (lg(YMAX) - lg(YMIN)) * PH; };
+
+    var path = function (pts) {
+      return pts.map(function (p, i) { return (i ? "L" : "M") + x(p[0]).toFixed(1) + " " + y(p[1]).toFixed(1); }).join(" ");
+    };
+
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="mutex 與 lock-free 的延遲 CCDF 對比">');
+
+    // y 網格 + 標籤
+    [[1,"100%"],[.1,"10%"],[.01,"1%"],[.001,"0.1%"],[1e-4,"0.01%"],[1e-5,"0.001%"]].forEach(function (t) {
+      s.push('<line x1="' + L + '" y1="' + y(t[0]) + '" x2="' + R + '" y2="' + y(t[0]) +
+             '" stroke="var(--grid)" stroke-width="1"/>');
+      s.push('<text class="axis-label" x="' + (L - 8) + '" y="' + (y(t[0]) + 4) + '" text-anchor="end">' + t[1] + '</text>');
+    });
+    decades.forEach(function (d) {
+      s.push('<line x1="' + x(d[0]) + '" y1="' + B + '" x2="' + x(d[0]) + '" y2="' + (B + 5) +
+             '" stroke="var(--axis)" stroke-width="1"/>');
+      s.push('<text class="axis-label" x="' + x(d[0]) + '" y="' + (B + 20) + '" text-anchor="middle">' + d[1] + '</text>');
+    });
+
+    // 分位參考線(p50 / p99 / p99.9)
+    [[.5,"p50"],[.01,"p99"],[.001,"p99.9"]].forEach(function (m) {
+      s.push('<line x1="' + L + '" y1="' + y(m[0]) + '" x2="' + R + '" y2="' + y(m[0]) +
+             '" stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 4" opacity="0.45"/>');
+      s.push('<text class="marker-label" x="' + (R + 8) + '" y="' + (y(m[0]) + 4) + '">' + m[1] + '</text>');
+    });
+
+    // 曲線(2px)+ 端點直接標籤
+    s.push('<path d="' + path(mutex) + '" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>');
+    s.push('<path d="' + path(lfree) + '" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>');
+    s.push('<circle cx="' + x(3e6) + '" cy="' + y(.001) + '" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>');
+    s.push('<circle cx="' + x(2e4) + '" cy="' + y(.001) + '" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>');
+    s.push('<text class="direct-label" x="' + (x(5e6) + 8) + '" y="' + (y(.0003) - 8) + '" fill="var(--s1)">Mutex</text>');
+    s.push('<text class="direct-label" x="' + (x(3e4) + 8) + '" y="' + (y(.0004) + 14) + '" fill="var(--s2)">Lock-free</text>');
+
+    // p99.9 分岔註解
+    s.push('<text class="anno" x="' + x(2.5e5) + '" y="' + (y(.001) - 10) +
+           '" text-anchor="middle" font-weight="650" fill="var(--ink)">p99.9:20 µs vs 3 ms(150×)</text>');
+    s.push('<text class="anno" x="' + x(700) + '" y="' + (y(.5) - 10) + '" text-anchor="middle">p50:兩條線疊在一起 → 吞吐世界看不出差別</text>');
+
+    // hover overlay
+    s.push('<line id="ccdf-cross" x1="0" y1="' + T + '" x2="0" y2="' + B +
+           '" stroke="var(--ink)" stroke-width="1" opacity="0" pointer-events="none"/>');
+    s.push('<rect id="ccdf-ov" x="' + L + '" y="' + T + '" width="' + PW + '" height="' + PH + '" fill="transparent"/>');
+    s.push('</svg>');
+
+    var host = document.getElementById("ccdf");
+    host.innerHTML = s.join("");
+
+    var svg = host.querySelector("svg");
+    var ov = host.querySelector("#ccdf-ov");
+    var cross = host.querySelector("#ccdf-cross");
+    var tip = document.getElementById("ccdf-tip");
+    var card = document.getElementById("ccdf-card");
+
+    var interp = function (pts, v) { // log-log 線性內插;超出範圍回 null
+      if (v < pts[0][0] || v > pts[pts.length - 1][0]) return null;
+      for (var i = 1; i < pts.length; i++) {
+        if (v <= pts[i][0]) {
+          var a = pts[i - 1], b = pts[i];
+          var t = (lg(v) - lg(a[0])) / (lg(b[0]) - lg(a[0]));
+          return Math.pow(10, lg(a[1]) + t * (lg(b[1]) - lg(a[1])));
+        }
+      }
+      return null;
+    };
+
+    ov.addEventListener("mousemove", function (ev) {
+      var pt = svg.createSVGPoint();
+      pt.x = ev.clientX; pt.y = ev.clientY;
+      var p = pt.matrixTransform(svg.getScreenCTM().inverse());
+      var frac = (p.x - L) / PW;
+      var v = Math.pow(10, lg(XMIN) + frac * (lg(XMAX) - lg(XMIN)));
+      cross.setAttribute("x1", p.x); cross.setAttribute("x2", p.x);
+      cross.setAttribute("opacity", "0.35");
+      var m = interp(mutex, v), lf = interp(lfree, v);
+      tip.innerHTML = "比 <b>" + fmtT(Math.round(v)) + "</b> 慢的請求<br>Mutex:" +
+        (m === null ? "—" : fmtP(m)) + " · Lock-free:" + (lf === null ? "—" : fmtP(lf));
+      var r = card.getBoundingClientRect();
+      tip.style.left = (ev.clientX - r.left) + "px";
+      tip.style.top = (ev.clientY - r.top) + "px";
+      tip.style.display = "block";
+    });
+    ov.addEventListener("mouseleave", function () {
+      cross.setAttribute("opacity", "0");
+      tip.style.display = "none";
+    });
+  })();
+})();
+</script>
