@@ -91,6 +91,60 @@ trait Poller {
 三行 + 一句話,剩下的時間花在他們真正在評的東西上。**現場手搓 FFI 是負分動作**——
 時間燒在沒人評分的地方(2026-07-16 JD 攻略分析定案)。
 
+## 太大的題目:定檔程序(一顆用寫的,其餘用講的)
+
+上一節是 epoll 的特例;通則是:**任何 45 分鐘寫不完的題目,都在考定界,
+不在考手速**。escalation ladder(`rehearsals/README.md`)給了 runtime 題的
+階梯;這裡是可重複的三步程序,任何大題都跑它:
+
+1. **找心臟**。判準三條,同時成立才是心臟:
+   (a) 題目其他部分都是它的**變奏**(寫出它,其餘用講的都有掛靠點);
+   (b) 它是**被評分的核心**(不是 plumbing);
+   (c) 25–30 分鐘寫得完。
+2. **宣言簽約**(0–5 分鐘內):「45 分鐘我寫 X,Y 和 Z 我用 stub + 講架構,
+   時間剩我補 Y。」——面試官要嘛點頭要嘛當場改範圍,兩種都比悶頭寫贏。
+3. **其餘定檔**:每樣東西標「寫 / 用 / 講 / stub」,講的部分各配一句台詞。
+
+### 實例一:「build a runtime」(六樣定檔)
+
+| 東西 | 檔次 | 一句話 |
+|---|---|---|
+| **block_on + Waker + Delay** | ✍️ 寫(25–30 分) | Waker 協議是心臟;Delay 的計時 thread 就是微型 reactor;park **token 語意**必口述 |
+| async fn | 用 + 講 | 狀態機是編譯器生的,沒人手寫;講 async fn → 狀態機 → Pin 那條鏈 |
+| spawn / 多 task | 講(~3 分) | run queue + `Arc<Task>` + scheduled bit;「run queue 是唯一敢 unbounded 的地方:wake 不可阻塞不可丟,量被 scheduled bit 鎖在 #tasks」 |
+| reactor | 講 + `Poller` stub | interest table:token → waker;std 沒有多路等待原語,這層是 tokio(mio→epoll)接手 |
+| thread pool | 一句話 | 「骨架換 payload:worker 迴圈從 `job()` 換成 `task.poll()`」 |
+| work-stealing / io_uring | 收尾 2 分 | 轉折點各一句 |
+
+為什麼心臟是 block_on:spawn = 很多個 parked 的 block_on 排進 run queue;
+reactor = Delay 的計時 thread 泛化成 epoll——**其餘全是它的變奏**(判準 a)。
+可執行對照:`reference/src/mini_runtime.rs`(V0 O(n) scan → V1 epoll,
+runtime 一行不改)。
+
+### 實例二:「build a server」(規模決定心臟)
+
+先問規模,答案直接改變哪顆用寫:
+
+- **百級連線** → thread-per-connection 合法(百 × 2 MiB 付得起):
+  `TcpListener` accept 迴圈 + 每連線 spawn = **薄殼 20 行,直接寫**,
+  心臟是 framer / 每連線狀態機。
+- **千級以上** → event loop 出場,但出場方式是上一節的 `Poller` stub
+  ——**跟 runtime 題的 reactor 是同一個 stub,一套三行走天下**。
+
+注意彩排題的 API 都刻意切在 IO 邊界上(c 題是 `feed(&[u8])`,e2 是查表,
+f 是 `record/stats`)——真題多半也這樣切;沒切的話,用宣言自己切。
+
+### Stub 句庫(嘴巴的 snippet)
+
+- 定界:*"In 45 minutes I'll write the framer and per-connection state;
+  the IO loop I'll stub behind a `Poller` trait and describe."*
+- Runtime 定界:*"I'll build single-threaded `block_on` plus a `Delay`
+  future first — the Waker protocol is the heart of the runtime.
+  Spawn and the IO reactor I'll describe; if time remains I add spawn."*
+- Stub 收場:*"Underneath this is epoll — the u64 in `epoll_event.data`
+  is my token. Happy to expand it, but the graded part is the framer,
+  so let me build that."*
+
 ## 一句話總結
 
 CoderPad = 單檔 + 固定 crate 清單(std 基本盤 + tokio,無 libc / mio)+
