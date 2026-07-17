@@ -148,7 +148,7 @@ mod tests {
 
     /// boundary:FIFO + 空/滿往返。紙上 trace cap=2 的 push/push/pop/pop。
     #[test]
-    #[ignore = "填完 push/pop 後移除"]
+    // #[ignore = "填完 push/pop 後移除"]
     fn fifo_roundtrip() {
         let q = BoundedQueue::new(2);
         q.push(1).unwrap();
@@ -159,7 +159,7 @@ mod tests {
 
     /// boundary:滿 push 阻塞,pop 讓位後完成。
     #[test]
-    #[ignore = "填完 push/pop 後移除"]
+    // #[ignore = "填完 push/pop 後移除"]
     fn full_push_blocks_until_pop() {
         let q = Arc::new(BoundedQueue::new(1));
         q.push(1).unwrap();
@@ -173,7 +173,7 @@ mod tests {
 
     /// boundary:close 喚醒阻塞中的 pop → None;阻塞中的 push → 歸還元素。
     #[test]
-    #[ignore = "填完 push/pop/close 後移除"]
+    // #[ignore = "填完 push/pop/close 後移除"]
     fn close_wakes_everyone() {
         let q: Arc<BoundedQueue<i32>> = Arc::new(BoundedQueue::new(1));
         let q2 = Arc::clone(&q);
@@ -193,7 +193,7 @@ mod tests {
 
     /// boundary:close 後 drain——剩餘元素照拿,拿完才 None;push 立即失敗。
     #[test]
-    #[ignore = "填完 push/pop/close 後移除"]
+    // #[ignore = "填完 push/pop/close 後移除"]
     fn drain_after_close() {
         let q = BoundedQueue::new(4);
         q.push(1).unwrap();
@@ -209,7 +209,7 @@ mod tests {
     /// count 抓數量、XOR 抓「每個值恰好一次」(值互異,漏/重都對不上)。
     /// 這種規模才驗得到 lost wakeup / notify 錯邊;有 lost wakeup 會 **hang**。
     #[test]
-    #[ignore = "填完 push/pop/close 後移除"]
+    // #[ignore = "填完 push/pop/close 後移除"]
     fn stress_mpmc_no_loss_no_dup() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         const P: usize = 4;
