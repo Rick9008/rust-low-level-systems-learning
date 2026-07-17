@@ -1,0 +1,187 @@
+<title>unbounded × lock-free:刻意空白的那一格</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+      --accent: #3987e5; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+    --accent: #3987e5; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+    line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em;
+    font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  td.hole { background: var(--code-bg); font-weight: 650; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  figure.chart { margin: 20px 0 0; }
+  .chart-card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+    padding: 18px 18px 10px; }
+  .chart-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; }
+  .chart-scroll { overflow-x: auto; }
+  .chart-scroll svg { display: block; min-width: 620px; width: 100%; height: auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; max-width: 46em; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; }
+  .nlab { font-size: 12.5px; font-weight: 700; fill: var(--ink); }
+  .nsub { font-size: 11px; fill: var(--muted); }
+  .anno { font-size: 12px; fill: var(--ink-2); }
+  .danger-txt { font-size: 12.5px; font-weight: 700; fill: var(--danger); }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid);
+    margin-top: 44px; padding-top: 14px; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · 佇列選型的第四格 · deep-dive:讀懂即可,不練</div>
+  <h1>Unbounded × lock-free:刻意空白的那一格</h1>
+  <p class="lede">佇列選型是一張 2×2 的表,repo 給了三格可執行的教材,第四格<strong>刻意留白</strong>。這頁講清楚:那格裡住著什麼(Michael–Scott、SegQueue,認臉即可)、為什麼它是沼澤(回收問題)、以及它<strong>唯一堂堂正正的用途</strong>——executor 的 run queue。</p>
+
+  <section>
+    <h2>2×2 地圖:repo 三格有教材,一格留白</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>帶鎖</th><th>lock-free</th></tr>
+      <tr><td><strong>bounded</strong></td><td><code>bounded_queue</code>(Mutex + 雙 Condvar;滿阻塞、close drain)</td><td><code>spsc_ring</code>(兩個單寫者計數器 + Release/Acquire;限一產一消)</td></tr>
+      <tr><td><strong>unbounded</strong></td><td><code>thread_pool</code> 內部(<code>Mutex&lt;VecDeque&gt;</code>;敢用是因為 submit 的量先驗有界)</td><td class="hole">← 本頁。空白是刻意的:合法場景不在面試題裡,難點(回收)45 分鐘講不完</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>認臉:Michael–Scott queue(經典 unbounded lock-free MPMC)</h2>
+    <p>形狀:<strong>單向鏈表 + 一個 dummy 節點</strong>。<code>head</code> 指 dummy(出隊端)、<code>tail</code> 指最後一個節點(入隊端),兩端各自用 CAS 推進——所以多生產者多消費者都行,而且鏈表要多長有多長 = unbounded。</p>
+    <figure class="chart">
+      <div class="chart-card">
+        <p class="chart-title">出隊之後,那個節點什麼時候能 free?——回收沼澤的入口</p>
+        <div class="chart-scroll">
+        <svg viewBox="0 0 760 250" role="img" aria-label="Michael-Scott queue 的 use-after-free 窗口">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+            </marker>
+            <marker id="ard" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--danger)"/>
+            </marker>
+          </defs>
+          <!-- nodes -->
+          <g>
+            <rect x="60" y="70" width="130" height="56" rx="8" fill="none" stroke="var(--danger)" stroke-width="2" stroke-dasharray="5 4"/>
+            <text class="nlab" x="125" y="94" text-anchor="middle" fill="var(--danger)">dummy(舊)</text>
+            <text class="nsub" x="125" y="112" text-anchor="middle">T1 剛出隊完,想 free 它</text>
+          </g>
+          <g>
+            <rect x="260" y="70" width="130" height="56" rx="8" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <text class="nlab" x="325" y="94" text-anchor="middle">A(新 dummy)</text>
+            <text class="nsub" x="325" y="112" text-anchor="middle">head 現在指這裡</text>
+          </g>
+          <g>
+            <rect x="460" y="70" width="130" height="56" rx="8" fill="var(--code-bg)" stroke="var(--ring)"/>
+            <text class="nlab" x="525" y="94" text-anchor="middle">B</text>
+            <text class="nsub" x="525" y="112" text-anchor="middle">tail 指這裡</text>
+          </g>
+          <path d="M190,98 L254,98" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+          <path d="M390,98 L454,98" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+          <!-- head/tail pointers -->
+          <text class="anno" x="325" y="44" text-anchor="middle">head ↓(T1 已 CAS 推進)</text>
+          <text class="anno" x="525" y="44" text-anchor="middle">tail ↓</text>
+          <!-- T2 stale pointer -->
+          <rect x="60" y="180" width="150" height="42" rx="8" fill="none" stroke="var(--grid)"/>
+          <text class="nlab" x="135" y="198" text-anchor="middle">T2(另一個消費者)</text>
+          <text class="nsub" x="135" y="214" text-anchor="middle">CAS 前先讀了 head</text>
+          <path d="M135,178 C135,150 125,140 125,130" fill="none" stroke="var(--danger)" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#ard)"/>
+          <text class="danger-txt" x="240" y="165">還握著舊 dummy 的指標——此刻 free 它 = use-after-free</text>
+        </svg>
+        </div>
+        <figcaption>T1 成功出隊、把 <code>head</code> CAS 到 A,想把舊 dummy 還給 allocator。但 T2 在 T1 的 CAS <strong>之前</strong>已經 load 了 head,手上還握著那個指標、下一行就要解參照。<strong>沒有任何機制告訴 T1「大家都放手了」</strong>——這就是回收問題,鎖版沒有(鎖保證獨占),GC 語言沒有(GC 就是那個機制),lock-free + 手動記憶體管理獨有。</figcaption>
+      </div>
+    </figure>
+    <p>三個認臉要點(面試講這些就夠,不用會默寫):</p>
+    <ul>
+      <li><strong>Dummy 節點</strong>:讓「空佇列」和「非空」共用同一套不變量,head 永遠有東西可指。</li>
+      <li><strong>入隊是兩步 CAS</strong>:先 CAS <code>tail.next</code> 掛新節點,再 CAS 推進 <code>tail</code>——第二步可能被別人「幫忙完成」(helping,lock-free 演算法的招牌動作)。</li>
+      <li><strong>真正的難點不是佇列,是回收</strong>:出隊的節點何時能 free?上圖那個窗口。順帶:如果記憶體被 allocator 重用,head 的 CAS 還會撞 <strong>ABA</strong>——同一坨問題的另一張臉。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>回收沼澤的四條出路(一行一條)</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>策略</th><th>一句話</th><th>誰在用</th></tr>
+      <tr><td><strong>永不 free(arena + index)</strong></td><td>節點住在固定 arena 裡,回收 = 進 free list 重用,記憶體永不歸還 → 沒有 use-after-free,只剩 ABA → generation tag 解</td><td><strong>repo 的選擇</strong>:<code>arena_lockfree</code> 就是這個玩具版入口——「index-based 設計優先」的深層原因,不只是繞 borrow checker</td></tr>
+      <tr><td><strong>Hazard pointers</strong></td><td>每條 thread 公告「我正在讀這個指標」,free 前先掃公告板</td><td>學術經典;實務少見(讀路徑多一次 store + fence)</td></tr>
+      <tr><td><strong>Epoch-based(EBR)</strong></td><td>把時間切代,節點延遲到「所有 thread 都離開舊代」才 free</td><td><code>crossbeam-epoch</code>——生產級 lock-free 結構的地基</td></tr>
+      <tr><td><strong>交給 GC</strong></td><td>GC 本身就是「大家都放手了」的判定機</td><td>Java 的 <code>ConcurrentLinkedQueue</code> 看起來簡單的原因</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>SegQueue:工程化的折衷形狀</h2>
+    <p>crossbeam 的 <code>SegQueue</code> = <strong>「固定大小區塊」串成的鏈表</strong>:每個 segment 內部像一段小 ring(index 推進,快路徑無配置),segment 滿了才配置下一塊。配置成本被攤薄(一次配置 32 格),但 segment 本身仍要回收 → 底下還是 epoch。一句記憶法:<strong>SegQueue = spsc_ring 的快路徑 × Michael–Scott 的鏈式外殼</strong>。鄰居還有一個名字認一下就好:<strong>Chase–Lev deque</strong>(work-stealing 的那個,escalation ladder 第 4 階的「何時要 work-stealing」指的就是它)。</p>
+  </section>
+
+  <section>
+    <h2>唯一堂堂正正的用途:executor 的 run queue</h2>
+    <p>Unbounded 合法需要兩個前提<strong>同時</strong>成立,而 run queue 剛好都中:</p>
+    <ol>
+      <li><strong>Producer 不可阻塞、不可丟</strong>:<code>wake()</code> 從任何執行緒、任何 context 來,不能 block;丟一個 wakeup = task 永遠睡死。「滿了怎麼辦」的三個選項全部非法 → 只剩 unbounded。</li>
+      <li><strong>量被外部不變量鎖住</strong>:scheduled bit 保證一個 task 同時最多在隊裡一次 → 隊長 ≤ task 總數。名義 unbounded,<strong>界在別處</strong>。</li>
+    </ol>
+    <p>同族:<code>std::sync::mpsc::channel()</code>(unbounded,內部鏈式 lock-free)vs <code>sync_channel(n)</code>(bounded)——std 用兩個名字把這對分開,pad 上提這句白拿一分。</p>
+  </section>
+
+  <section>
+    <h2>面試三句</h2>
+    <blockquote class="say">
+      不主動開這格:<em>「unbounded」對「界在哪」交白卷、「lock-free」沒有 p99.9 撐腰、「MPMC」範圍爆炸——三重紅旗。光譜心法:停在需求要的那站。</em>
+    </blockquote>
+    <blockquote class="say">
+      被追問「做成 unbounded 呢?」(30 秒版):“Linked segments of fixed-size rings — amortize allocation, keep the fast path ring-like; that's crossbeam's SegQueue shape. The hard part isn't the queue, it's <strong>reclamation</strong> — when is a node safe to free while another thread may still hold it? That's epoch-based territory, so in production I'd take crossbeam rather than hand-roll it.”
+      <em>價值在指名真正的難點(回收),然後選擇不爬。</em>
+    </blockquote>
+    <blockquote class="say">
+      Executor 題的加分句:“The run queue is the one place I'd go unbounded: wake() can't block and can't drop, and the scheduled bit bounds the queue at #tasks — the bound lives elsewhere.”
+      <em>7/18 executor drill 用。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:deep-dive,讀懂即可、不進練習主線。相鄰教材:<code>docs/arena_lockfree.md</code>(ABA + generation,回收沼澤的玩具版)· <code>docs/thread-safe-spectrum.md</code>(停在哪站)· <code>docs/cost-model.md</code> 佇列三型(unbounded = O(rate × 落後))· 彩排 b / 卡 6(bounded submit 當限流閥的反向操作)。
+  </div>
+</div>

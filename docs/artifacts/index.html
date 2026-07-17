@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、9 份深讀教材(html_p:追問鏈 + self-quiz)、2 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、9 份深讀教材(html_p:追問鏈 + self-quiz)、3 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -751,6 +751,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">qa · epoll 訂閱手冊</span>
       <span class="hook">flag 三族(事件/免訂事件/模式開關)+ ADD/MOD/DEL/wait 生命週期;LT vs ET 時序圖、backpressure 關水龍頭、退訂暗坑(fd + generation)。</span>
       <span class="hits">ERR/HUP 免訂必回報 · MOD 是 backpressure 開關</span>
+    </a>
+    <a class="card" href="qa_unbounded_lockfree.html">
+      <span class="name">qa · unbounded × lock-free</span>
+      <span class="hook">佇列 2×2 的刻意空白格:Michael–Scott / SegQueue 認臉、回收沼澤四出路(arena / hazard / epoch / GC)、run queue 為什麼敢 unbounded。</span>
+      <span class="hits">讀懂即可,不練 · 難點是回收不是佇列 · 界在別處</span>
     </a>
   </div>
 </section>
