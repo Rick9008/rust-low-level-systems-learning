@@ -1,0 +1,261 @@
+<title>Atomic ordering 速查:RMW 的兩個 ordering、填錯會怎樣</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code.bad { color: var(--danger); }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  /* stepper */
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cell { font-family: ui-monospace, monospace; font-size: 14px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; }
+  .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
+  .edge { text-align: center; font-size: 11.5px; font-weight: 700; padding: 6px; border-radius: 7px; margin-top: 8px; }
+  .edge.on { color: var(--s2); border: 1px dashed var(--s2); }
+  .edge.off { color: var(--danger); border: 1px dashed var(--danger); }
+  .edge.hide { opacity: .3; color: var(--muted); border: 1px dashed var(--grid); }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · atomic ordering · deep-dive:讀懂即可,不練</div>
+  <h1>Atomic ordering 速查:RMW 的兩個 ordering、填錯會怎樣</h1>
+  <p class="lede">為什麼 <code>fetch_add</code> 只要填一個 ordering,<code>compare_exchange</code> / <code>fetch_update</code> 卻要填<strong>兩個</strong>?為什麼 <code>store</code> 給 <code>Acquire</code>、<code>load</code> 給 <code>Release</code> 會直接 <strong>panic</strong>?這頁把「哪個 op 填幾個、能填什麼、填錯會怎樣、該用什麼」一次講清——底層只有一條原則:<strong>ordering 描述的是「這個原子操作跟『它周圍那些非原子的讀寫』之間的可見性關係」。</strong></p>
+
+  <section>
+    <h2>0 · 誰填一個、誰填兩個</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>op</th><th>ordering 數</th><th>為什麼</th></tr>
+      <tr><td><code>load</code></td><td>1</td><td>只讀</td></tr>
+      <tr><td><code>store</code></td><td>1</td><td>只寫</td></tr>
+      <tr><td><code>swap</code> / <code>fetch_add</code> / <code>fetch_*</code></td><td>1</td><td><strong>一定會寫</strong>(RMW 不會失敗)→ 只有一種結果</td></tr>
+      <tr><td><code>compare_exchange(_weak)</code></td><td><strong>2</strong>:success, failure</td><td><strong>兩種結果</strong>:成功 = 讀+寫;失敗 = <strong>只讀</strong></td></tr>
+      <tr><td><code>fetch_update</code></td><td><strong>2</strong>:set_order, fetch_order</td><td>內部是 CAS 迴圈:寫成功 = set;讀(初次+每次重試)= fetch</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>1 · 為什麼 CAS 要兩個:成功「有寫」、失敗「只讀」</h2>
+    <p>一個 <code>compare_exchange</code> 有兩條命運:</p>
+    <ul>
+      <li><strong>成功</strong> → 真的做了 read-modify-<strong>write</strong>。這時可以是 <code>Release</code> / <code>AcqRel</code>(有 store 可以「發布」)。</li>
+      <li><strong>失敗</strong> → 現值不合預期,<strong>只發生了一次 load</strong>,沒有 store。</li>
+    </ul>
+    <p>你不能「release 一個沒發生的 write」。所以<strong>失敗那條的 ordering 只能是 load ordering</strong>(<code>Relaxed</code> / <code>Acquire</code> / <code>SeqCst</code>)——給它 <code>Release</code> / <code>AcqRel</code> 會 <strong>panic</strong>。<code>fetch_update</code> 的 <code>fetch_order</code> 同理(它涵蓋初次 load 和每次 CAS 失敗的 re-load)。</p>
+<pre><code><span class="cmt">// 成功時 Release(發布),失敗時只讀所以 Acquire/Relaxed 皆可</span>
+tail.compare_exchange(t, t + 1, Ordering::Release, Ordering::Relaxed)
+<span class="cmt">//                                 ^success(有寫)    ^failure(只讀)</span>
+<span class="cmt">// tail.compare_exchange(t, t+1, Relaxed, Release)  // ✗ panic:沒有「release 的失敗」</span></code></pre>
+  </section>
+
+  <section>
+    <h2>2 · 互動:Release/Acquire 那條 happens-before 邊</h2>
+    <p>ordering 真正在保護的,是<strong>那個原子變數「旁邊」的非原子資料</strong>。切換下面兩種 ordering、逐步走一次 producer→consumer 的交棒,看那條「synchronizes-with」邊怎麼決定 consumer 讀到 <code>42</code> 還是<strong>未初始化的垃圾</strong>。</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="mode">
+          <button data-mode="acqrel" class="on">store=Release · load=Acquire</button>
+          <button data-mode="relaxed">兩邊都 Relaxed</button>
+        </div>
+        <button id="next">下一步 ▸</button>
+        <button id="reset">重置</button>
+        <span class="stepcap" id="stepcap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>Producer thread</h4>
+          <div class="cell" id="pdata">data = ▢</div>
+        </div>
+        <div class="lane">
+          <h4>shared atomic</h4>
+          <div class="cell" id="tail">tail = 0</div>
+          <div class="ord" id="tailord">&nbsp;</div>
+          <div class="edge hide" id="edge">happens-before 邊</div>
+        </div>
+        <div class="lane">
+          <h4>Consumer thread</h4>
+          <div class="cell" id="ctail">看 tail: —</div>
+          <div class="cell" id="cdata">讀 data = ▢</div>
+        </div>
+      </div>
+      <div class="step-narr" id="narr"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · 每個 op 能填什麼 · 填錯會怎樣</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>op</th><th>允許的 ordering</th><th>填錯 →</th></tr>
+      <tr><td><code>load</code></td><td>Relaxed / Acquire / SeqCst</td><td>給 <code class="bad">Release</code> / <code class="bad">AcqRel</code> → <strong>panic</strong>(load 不能 release)</td></tr>
+      <tr><td><code>store</code></td><td>Relaxed / Release / SeqCst</td><td>給 <code class="bad">Acquire</code> / <code class="bad">AcqRel</code> → <strong>panic</strong>(store 不能 acquire)</td></tr>
+      <tr><td><code>swap</code> / <code>fetch_*</code></td><td>全 5 種</td><td>—</td></tr>
+      <tr><td><code>compare_exchange</code> failure<br><code>fetch_update</code> fetch_order</td><td>Relaxed / Acquire / SeqCst</td><td>給 <code class="bad">Release</code> / <code class="bad">AcqRel</code> → <strong>panic</strong></td></tr>
+    </table></div>
+    <p style="margin-top:14px">語意錯(不是 panic、而是<strong>靜默 bug</strong>)只有一種來源:<strong>該用 Release/Acquire 卻用了 Relaxed</strong>——原子性還在,但 happens-before 邊消失(見上面 stepper 的紅色分支)。<strong>太強</strong>(到處 SeqCst)不會錯、只會慢。</p>
+  </section>
+
+  <section>
+    <h2>4 · 該用什麼:對著「你在做什麼」查</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>你在做什麼</th><th>用什麼</th></tr>
+      <tr><td><strong>交棒</strong>:寫完 data 才發布 index/flag</td><td>寫側 <code>Release</code>(<code>store</code>,或 CAS 的 success=<code>Release</code>/<code>AcqRel</code>)</td></tr>
+      <tr><td><strong>接棒</strong>:讀 index/flag 才去讀 data</td><td>讀側 <code>Acquire</code>(<code>load</code>,或 CAS 的 failure/fetch=<code>Acquire</code>)</td></tr>
+      <tr><td>一個 CAS <strong>同時</strong>接舊、發布新(lock-free stack push/pop)</td><td><code>AcqRel</code>(success),failure=<code>Acquire</code>/<code>Relaxed</code></td></tr>
+      <tr><td><strong>純計數</strong>,只在最後讀總和、不靠它 handoff 別的 data</td><td><code>Relaxed</code>(如 <code>fetch_add(1, Relaxed)</code>)</td></tr>
+      <tr><td><strong>多變數 litmus</strong>(store-buffer / IRIW,要所有 thread 同意一個總序)</td><td><code>SeqCst</code></td></tr>
+    </table></div>
+    <p style="margin-top:14px"><strong>SPSC 對應</strong>:producer <code>tail.store(t+1, Release)</code> / consumer <code>tail.load(Acquire)</code>;各自讀「自己寫的那個」計數器用 <code>Relaxed</code>。單寫者不需要 CAS,所以連 success/failure 兩個 ordering 的問題都不會遇到——那是 MPSC 才開始的稅。</p>
+  </section>
+
+  <section>
+    <h2>5 · 面試句庫</h2>
+    <blockquote class="say">
+      “RMW ops that always write take one ordering; <code>compare_exchange</code> takes two because it has two outcomes — a full read-modify-write on success, but only a load on failure. You can't release a store that didn't happen, so the failure ordering must be a load ordering.”
+      <em>直接回答「為什麼兩個」。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Ordering isn't about the atomic itself — it's the visibility contract for the non-atomic data around it. Release publishes prior writes; a matching Acquire consumes them. Downgrade that pair to Relaxed and the atomic is still atomic, but the reader can see the flag without the data — a torn/uninitialized read that stress tests miss and loom catches.”
+      <em>把「太弱」的後果講到位。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Wrong-direction orderings panic, not miscompile: <code>store</code> can't take Acquire, <code>load</code> can't take Release, and a CAS failure ordering can't be Release/AcqRel.”
+      <em>秀你知道哪些是編譯期/執行期擋下、哪些是靜默 bug。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:deep-dive,讀懂即可、不進練習主線。深挖版:<code>html_p/p1-rust-atomic-spsc-ordering.html</code>(「全 SeqCst 寫對 → 逐點放鬆」的 Relax 之旅)· <code>docs/artifacts/spsc_ring.html</code> · <code>reference/tests/loom_spsc.rs</code>(loom 幫你證明放鬆後仍對)。相鄰 Q&A:<code>qa_lockfree_pc.html</code>(多寫者才長出 CAS)。
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "acqrel";        // "acqrel" | "relaxed"
+  var step = 0;               // 0..4
+  var MAX = 4;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var narr = {
+    acqrel: [
+      "初始:佇列空,<b>data</b> 還沒寫,<b>tail = 0</b>。",
+      "producer 寫 <b>data = 42</b>——但這是<b>非原子</b>的普通寫,還沒「發布」給別人。",
+      "producer 做 <b>tail.store(1, Release)</b>。<b>Release</b> 的意思:「我在這之前的所有寫(data=42),都封裝進這次 store」。",
+      "consumer 做 <b>tail.load(Acquire)</b> 看到 1。<b>Acquire</b> 接上那個 Release → 兩者<b>synchronizes-with</b>,建立一條 happens-before 邊。",
+      "consumer 讀 <b>data = 42 ✓</b>。那條邊保證「producer 在 Release 之前的寫,對 Acquire 之後的我可見」。正確。"
+    ],
+    relaxed: [
+      "初始:佇列空,<b>data</b> 還沒寫,<b>tail = 0</b>。",
+      "producer 寫 <b>data = 42</b>(一樣是非原子寫)。",
+      "producer 做 <b>tail.store(1, Relaxed)</b>。<b>Relaxed</b> 只保證這個 store 本身是原子的,<b>不建立任何跨 thread 的可見性承諾</b>。",
+      "consumer 做 <b>tail.load(Relaxed)</b> 看到 1——但<b>沒有 synchronizes-with 邊</b>。",
+      "consumer 讀 <b>data → ??? ✗</b>。沒有 happens-before:<b>data 的寫可以被重排到 tail.store 之後</b>,consumer 看到 tail=1 卻讀到<b>未初始化的垃圾</b>。壓測兩百萬次可能都不爆,<b>loom 秒抓</b>。"
+    ]
+  };
+
+  function render() {
+    var acq = (mode === "acqrel");
+    // producer data
+    var pd = $("pdata");
+    pd.textContent = step >= 1 ? "data = 42" : "data = ▢";
+    pd.className = "cell" + (step === 1 ? " hot" : "");
+    // tail
+    var tl = $("tail");
+    tl.textContent = "tail = " + (step >= 2 ? "1" : "0");
+    tl.className = "cell" + (step === 2 ? " hot" : "");
+    $("tailord").innerHTML = step >= 2 ? (acq ? "store(<b>Release</b>)" : "store(<b>Relaxed</b>)") : "&nbsp;";
+    // edge
+    var edge = $("edge");
+    if (step < 3) { edge.className = "edge hide"; edge.textContent = "happens-before 邊"; }
+    else if (acq) { edge.className = "edge on"; edge.textContent = "✓ synchronizes-with:之前的 data 寫可見"; }
+    else { edge.className = "edge off"; edge.textContent = "✗ 沒有邊:data 寫可被重排到 store 之後"; }
+    // consumer
+    var ct = $("ctail");
+    ct.textContent = step >= 3 ? ("看 tail: 1 (" + (acq ? "Acquire" : "Relaxed") + ")") : "看 tail: —";
+    ct.className = "cell" + (step === 3 ? " hot" : "");
+    var cd = $("cdata");
+    if (step < 4) { cd.textContent = "讀 data = ▢"; cd.className = "cell"; }
+    else if (acq) { cd.textContent = "讀 data = 42 ✓"; cd.className = "cell ok"; }
+    else { cd.textContent = "讀 data = ??? ✗"; cd.className = "cell bad"; }
+    // narration + controls
+    $("narr").innerHTML = narr[mode][step];
+    $("stepcap").textContent = "步驟 " + step + " / " + MAX;
+    $("next").disabled = (step >= MAX);
+  }
+
+  $("next").addEventListener("click", function () { if (step < MAX) { step++; render(); } });
+  $("reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("mode");
+  toggle.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>
