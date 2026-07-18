@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/base16/gruvbox-dark-medium.min.css">
+<!-- syntax highlighting 改為 inline hlRust(下方 script),不依賴外部 CDN -->
 <style>
 :root{
   --bg-dim:#1d2021; --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
@@ -58,7 +58,7 @@ hr{border:none;border-top:1px solid var(--bg3);margin:18px 0}
 
 /* code + diagrams */
 pre{-webkit-text-size-adjust:100%;overflow-x:auto;background:var(--bg-dim)!important;border:1px solid var(--bg3);border-radius:8px;padding:12px 14px;margin:12px 0;font-family:var(--mono);font-size:13px;line-height:1.55;tab-size:4}
-pre code.hljs{background:transparent!important;padding:0}
+pre code{background:transparent!important;padding:0;color:var(--fg)}
 pre.diagram{color:var(--fg-dim);white-space:pre}
 .svgfig .bar-bad{fill:var(--red);opacity:.55;stroke:var(--red);stroke-width:1}
 .svgfig .bar-ok{fill:var(--green);opacity:.55;stroke:var(--green);stroke-width:1}
@@ -86,15 +86,20 @@ pre.diagram{color:var(--fg-dim);white-space:pre}
 .svgfig .ah-ok{fill:var(--green)}
 .svgfig .ah-bad{fill:var(--red)}
 .svgfig .ah-wake{fill:var(--aqua)}
-.hljs{color:var(--fg)}
-.hljs-keyword,.hljs-selector-tag{color:var(--red)}
-.hljs-title,.hljs-title.function_,.hljs-section{color:var(--green)}
-.hljs-title.class_,.hljs-type,.hljs-built_in{color:var(--yellow)}
-.hljs-string,.hljs-attr{color:var(--green)}
-.hljs-number,.hljs-literal{color:var(--purple)}
-.hljs-comment{color:var(--gray);font-style:italic}
-.hljs-meta,.hljs-symbol{color:var(--aqua)}
-.hljs-punctuation,.hljs-operator{color:var(--fg-dim)}
+.tk-cm{color:var(--gray);font-style:italic}
+.tk-kw{color:var(--red)}
+.tk-ty{color:var(--yellow)}
+.tk-fn{color:var(--aqua)}
+.tk-mac{color:var(--orange)}
+.tk-str{color:var(--green)}
+.tk-num{color:var(--purple)}
+.tk-attr{color:var(--orange)}
+.tk-life{color:var(--orange)}
+.tk-o-rel{color:var(--blue)}
+.tk-o-acq{color:var(--aqua)}
+.tk-o-rlx{color:var(--gray)}
+.tk-o-sc{color:var(--purple)}
+.tk-o-ar{color:var(--orange)}
 
 /* verified box */
 .verified{background:var(--bg1);border:1px solid var(--green);border-radius:8px;padding:10px 13px;margin:12px 0;font-size:13px}
@@ -338,6 +343,8 @@ struct BorrowAcross {
 <section class="panel" data-panel="life">
   <h2>② 一個 future 的生命週期</h2>
   <div class="intuition"><code>poll</code> → 沒就緒就<b>存 waker</b> + 回 <code>Pending</code> → executor <b>park</b> 睡覺 → 資源就緒 → <code>wake()</code> → <b>unpark</b> → executor 醒 → <b>再 poll</b> → <code>Ready</code>。下面可以逐步走,並切換「wake 先於 park」的 race。</div>
+
+  <div class="intuition" style="border-style:solid">🍽️ <b>看不懂下面的 <code>st</code> / <code>cx.waker()</code> / <code>none·stored·taken</code>?</b> 先讀入門前傳 <a href="../docs/artifacts/qa_waker_lifecycle.html" style="color:var(--blue);font-weight:600;text-decoration:underline">qa_waker_lifecycle</a>——用「餐廳共用白板 + 電話回撥」把每個詞釘死(含 run queue / 永恆迴圈 / reactor),再回來走這個 stepper 會輕鬆很多。</div>
 
   <div class="card key"><span class="tag key">先建立要追蹤的狀態變數</span>
     <p>stepper 右側面板追蹤這 5 個變數,先各自定義(不讓它們突然冒出來):</p>
@@ -1843,7 +1850,7 @@ fn main() {
 <div class="foot">全部 Rust 代碼在 rustc 1.91.1 / edition 2024 / std-only 實際編譯執行 · 1.91→1.92 delta 已逐條稽核 · 版本號來源 rust-lang/rust RELEASES.md · Gruvbox Material dark · JetBrains Mono</div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<!-- highlight.js CDN 移除 —— 改用下方 inline hlRust(CSP-safe) -->
 <script>
 (function(){
   "use strict";
@@ -1984,12 +1991,28 @@ fn main() {
   });
   render();
 
-  // ---------- highlight.js ----------
-  if(window.hljs){
-    document.querySelectorAll('pre code.language-rust').forEach(function(el){
-      try{ hljs.highlightElement(el); }catch(e){}
-    });
+  // ---------- inline Rust highlighter(取代 highlight.js CDN,CSP-safe)----------
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW={"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,"unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,"move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,"break":1,"continue":1,"true":1,"false":1,"async":1,"await":1,"gen":1};
+  var RS_TY={"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1,"String":1,"Vec":1,"Box":1,"Option":1,"Result":1,"Arc":1,"Rc":1,"Pin":1,"Poll":1,"Future":1,"Waker":1,"Context":1,"RawWaker":1,"RawWakerVTable":1,"Wake":1,"AtomicUsize":1,"UnsafeCell":1,"MaybeUninit":1,"Ordering":1,"Cell":1,"RefCell":1,"Mutex":1,"Some":1,"None":1,"Ok":1,"Err":1,"Ready":1,"Pending":1,"Send":1,"Sync":1,"Unpin":1,"PhantomPinned":1,"Duration":1};
+  var RS_ORD={"Relaxed":"tk-o-rlx","Acquire":"tk-o-acq","Release":"tk-o-rel","SeqCst":"tk-o-sc","AcqRel":"tk-o-ar"};
+  function hlRust(src){
+    var out="",i=0,n=src.length;
+    function idA(c){return /[A-Za-z_]/.test(c);} function idB(c){return /[A-Za-z0-9_]/.test(c);}
+    while(i<n){
+      var c=src[i];
+      if(c==="/"&&src[i+1]==="/"){var j=src.indexOf("\n",i);if(j<0)j=n;out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==="/"&&src[i+1]==="*"){var j=src.indexOf("*/",i+2);j=(j<0)?n:j+2;out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==="#"&&src[i+1]==="["){var j=src.indexOf("]",i);j=(j<0)?n:j+1;out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==='"'){var j=i+1;while(j<n){if(src[j]==="\\"){j+=2;continue;}if(src[j]==='"'){j++;break;}j++;}out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==="'"){var lm=/^'[A-Za-z_][A-Za-z0-9_]*/.exec(src.slice(i));if(lm&&src[i+lm[0].length]!=="'"){out+="<span class='tk-life'>"+esc(lm[0])+"</span>";i+=lm[0].length;continue;}var chm=/^'(\\.|[^'])'/.exec(src.slice(i));if(chm){out+="<span class='tk-str'>"+esc(chm[0])+"</span>";i+=chm[0].length;continue;}out+=esc(c);i++;continue;}
+      if(c>="0"&&c<="9"){var nm=/^[0-9][0-9_]*(\.[0-9][0-9_]*)?(u8|u16|u32|u64|usize|i32|i64|isize|f32|f64)?/.exec(src.slice(i));var tk=nm?nm[0]:c;out+="<span class='tk-num'>"+esc(tk)+"</span>";i+=tk.length;continue;}
+      if(idA(c)){var j=i+1;while(j<n&&idB(src[j]))j++;var w=src.slice(i,j);var cls=null,macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));if(RS_ORD[w])cls=RS_ORD[w];else if(RS_KW[w])cls="tk-kw";else if(macro)cls="tk-mac";else if(RS_TY[w]||/^[A-Z]/.test(w))cls="tk-ty";else if(src[j]==="(")cls="tk-fn";out+=cls?"<span class='"+cls+"'>"+esc(w)+"</span>":esc(w);i=j;continue;}
+      out+=esc(c);i++;
+    }
+    return out;
   }
+  document.querySelectorAll('pre code').forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
 })();
 </script>
 </body>
