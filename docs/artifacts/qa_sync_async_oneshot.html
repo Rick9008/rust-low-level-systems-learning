@@ -195,6 +195,6 @@ match st.result.take() {                 <span class="cmt">// take → 單消費
   </section>
 
   <div class="warn">
-    檔次:deep-dive,讀懂即可、不進練習主線。原始碼:<code>reference/src/thread_pool.rs</code>(<code>JobHandle</code>)· <code>reference/src/file_io_offload.rs</code>(<code>JoinFuture</code> / <code>spawn_blocking</code>)。相鄰:<code>docs/artifacts/executor.html</code>(poll/park/Waker 全景)· <code>docs/async-runtime-anatomy.md</code>(executor × reactor)。broadcast 那條軸:見「oneshot → broadcast」卡片(能廣播的是資料、不是控制流)。
+    檔次:deep-dive,讀懂即可、不進練習主線。原始碼:<code>reference/src/thread_pool.rs</code>(<code>JobHandle</code>)· <code>reference/src/file_io_offload.rs</code>(<code>JoinFuture</code> / <code>spawn_blocking</code>)。相鄰:<code>docs/artifacts/qa_waker_lifecycle.html</code>(waker / <code>st</code> / <code>cx.waker()</code> 是什麼——白板+電話入門)· <code>docs/artifacts/executor.html</code>(poll/park/Waker 全景)· <code>docs/async-runtime-anatomy.md</code>(executor × reactor)。broadcast 那條軸:見「oneshot → broadcast」卡片(能廣播的是資料、不是控制流)。
   </div>
 </div>

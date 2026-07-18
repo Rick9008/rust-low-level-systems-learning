@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、8 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、10 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -801,6 +801,16 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">qa · 為什麼是 UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;</span>
       <span class="hook">兩層正交:UnsafeCell 解 aliasing(逼 unsafe 稽核)、MaybeUninit 解 init/drop;內部可變性階梯、Cell 為何不行(關鍵不是 !Sync,是 unsafe impl Sync 那句假承諾)、MaybeUninit vs Option。含 Cell/UnsafeCell soundness stepper。</span>
       <span class="hits">spsc 前置 · 槽位型別每一層都能一句話辯護 · Option 是高度錯</span>
+    </a>
+    <a class="card" href="qa_waker_lifecycle.html">
+      <span class="name">qa · waker 是什麼(st / cx.waker())</span>
+      <span class="hook">async 入門前傳:共用白板 + 電話回撥比喻釘死 <code>st</code>、<code>cx.waker()</code>(回傳 <code>&amp;Waker</code> 物件、非裸 fn)、三態 none/stored/taken;再放大到 run queue(FIFO)、executor 永恆迴圈、reactor(fd→waker)。含正解 vs「先 wake 再寫 result」反例 stepper——親手把順序寫反看它掛死。</span>
+      <span class="hits">搭 p2 handbook 讀 · waker = callback 物件 · 先發佈狀態再通知</span>
+    </a>
+    <a class="card" href="qa_async_followups.html">
+      <span class="name">qa · async 追問串(waker 之後)</span>
+      <span class="hook">一晚連環追問照脈絡收錄:兩層睡眠(task 睡=不在佇列 vs worker park)、task vs future(spawn 升格門)、park token、inert→Pin 時間線、指標旅行(佇列搬的是 8 bytes)、busy-wait 為何不愛 async、join!/select! 零 alloc、Redis 之問(runtime = epoll + 2 服務)、四模型;含 read_exact vs framer 的 cancel-safety 雙模式 stepper。</span>
+      <span class="hits">qa_waker_lifecycle 的續集 · 7/25 口述彈藥 · cancel = Drop</span>
     </a>
   </div>
 </section>

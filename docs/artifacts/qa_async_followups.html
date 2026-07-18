@@ -1,0 +1,527 @@
+<title>async 追問串:兩層睡眠 · task vs future · inert→Pin · cancel safety · 四模型</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  h2 .q { color: var(--accent); }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .good { color: var(--s2); } .bad { color: var(--danger); }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  /* 圖:泳道/方塊 */
+  .fig { border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 14px 16px; margin-top: 14px; }
+  .fig .cap { font-size: 12px; color: var(--muted); margin-bottom: 10px; letter-spacing: .04em; }
+  .rowflex { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+  .box { flex: 1 1 10rem; border: 1px solid var(--grid); border-radius: 9px; padding: 10px 12px; background: var(--page); font-size: 13.5px; }
+  .box h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .box.hl { border-color: var(--accent); }
+  .box.okb { border-color: var(--s2); }
+  .box.badb { border-color: var(--danger); }
+  .arrowline { text-align: center; color: var(--muted); font-size: 13px; margin: 6px 0; }
+  .timeline { display: flex; gap: 0; margin-top: 12px; overflow-x: auto; }
+  .tl { flex: 1 1 0; min-width: 8.5rem; border: 1px solid var(--grid); padding: 9px 10px; font-size: 12.5px; background: var(--page); }
+  .tl:first-child { border-radius: 9px 0 0 9px; } .tl:last-child { border-radius: 0 9px 9px 0; }
+  .tl b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); margin-bottom: 4px; }
+  .tl.danger b { color: var(--danger); }
+  /* stepper */
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  @media (max-width: 620px) { .scene { grid-template-columns: 1fr; } }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cell { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; min-height: 1.3em; }
+  .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .cell.dead { opacity: .45; text-decoration: line-through; }
+  .verdict { grid-column: 1 / -1; text-align: center; font-size: 12.5px; font-weight: 700; padding: 7px; border-radius: 7px; }
+  .verdict.hide { opacity: .3; color: var(--muted); border: 1px dashed var(--grid); }
+  .verdict.okv { color: var(--s2); border: 1px dashed var(--s2); }
+  .verdict.badv { color: var(--danger); border: 1px dashed var(--danger); }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · async 追問串 · 承接 qa_waker_lifecycle</div>
+  <h1>async 追問串:從「wake 之後」一路問到 cancel safety</h1>
+  <p class="lede">一個晚上的連環追問,照原本的脈絡收錄:<strong>park 是對誰?task 跟 future 差在哪?unpark 先到會丟嗎?pin 之前為什麼能動?釘住的 future 怎麼「放著等」?busy-wait 為何不愛 async?join!/select! 憑什麼零 alloc?Redis 單線不就夠了?read_exact 怎麼把 stream 弄錯位?</strong>Waker 基礎(電話的一生)在前置頁 <code>qa_waker_lifecycle.html</code>;這頁從它結束的地方開始。先立一句公理:<strong>wake ≠ poll,wake = enqueue</strong>——喚醒只是把 task 推回佇列,執行永遠由 executor 稍後 poll。</p>
+
+  <section>
+    <h2><span class="q">Q1</span> · park 是針對 task 還是 thread?multi-thread runtime 怎麼看?</h2>
+    <p><strong>park 永遠是 thread 的事;task 沒有 park。</strong>task 的「睡」不是任何 OS 操作——只是「<strong>不在 run queue 裡</strong>」這個資料結構狀態。</p>
+    <div class="fig">
+      <div class="cap">兩層睡眠 —— task : worker thread :: thread : CPU core(同一套排程思想搬上一層)</div>
+      <div class="rowflex">
+        <div class="box hl"><h4>Task 層(純資料結構)</h4>睡 = poll 回 Pending 後<b>不在佇列</b>,只剩 waker 被存著<br>醒 = <code>wake()</code> 推回 run queue,零 syscall</div>
+        <div class="box"><h4>Worker 層(OS thread)</h4>單一 task 回 Pending → <b>不 park,撈下一個</b><br>整個佇列空(連偷都偷不到)→ 才 park<br><code>wake()</code> = 入隊 + 順便 unpark 一條睡著的 worker</div>
+      </div>
+      <div class="arrowline">block_on = 兩層退化重合的特例:一 task 一 thread → 「task 醒」=「thread 醒」→ waker 直接填 unpark</div>
+    </div>
+    <p><strong>「park」可以廣義化</strong>:「這條 thread 用某個阻塞原語睡到有活」——<code>thread::park</code> / condvar wait(thread_pool)/ <strong><code>epoll_wait</code></strong>(mini_runtime V1;tokio 的 idle worker 之一抱著 IO driver 直接睡進 epoll_wait,醒來順手就是 reactor)。原語是實作選擇,「沒活就睡、來活就醒」是不變骨架。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q2</span> · task 跟 future 哪裡不一樣?</h2>
+    <p><strong>Future 是「可組合的值」;Task 是「可排程的單位」。</strong><code>spawn</code> 是把一棵 future 樹升格成 task 的那道門。</p>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>Future</th><th>Task</th></tr>
+      <tr><td>是什麼</td><td>實作 <code>Future</code> 的 struct(狀態機),被動等人 poll</td><td>executor 帳本的一格:root future + 排程簿記</td></tr>
+      <tr><td>排程</td><td><strong>不可排程</strong>——佇列裡放的從來不是裸 future</td><td>排程最小單位;「睡 = 不在佇列」的主詞</td></tr>
+      <tr><td>Waker</td><td>沒有自己的</td><td><strong>per-task</strong>:樹裡任何 leaf 回 Pending,存的都是同一個 task 的 waker</td></tr>
+    </table></div>
+    <p>類比釘死:<strong>future : task :: 函式呼叫 : thread</strong>。stack frame 不可排程、thread 才可;future 不可排程、task 才可。並發階梯:<code>.await</code>(循序)→ <code>join!</code>/<code>select!</code>(<strong>單 task 內</strong>並發,永不平行)→ <code>spawn</code>(多 task,可平行;所以要 <code>Send</code>——誰撈到誰 poll)。</p>
+    <p>喚醒粒度 = task:epoll 叫醒的是<strong>整個 task</strong>,executor re-poll 的是 <strong>root</strong>,每層狀態機憑存的狀態導航回暫停的 leaf——不存在「直接跳到 leaf」;所以 spurious wake 無害(重走一遍,沒好就再 Pending)。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q3</span> · unpark 搶在 park 之前到,訊號會丟嗎?</h2>
+    <p><strong>不丟。</strong><code>std::thread</code> 的 park/unpark 是 <strong>token(狀態)語意</strong>:每條 thread 天生一枚 token 停車位;<code>unpark()</code> 設 token(上限一枚、不累積),<code>park()</code> 有 token 就消耗、立即返回。事件語意才會讓喚醒蒸發 → 永睡。<code>park()</code> 還允許 spurious 返回——都沒關係,因為外面是 <strong>re-poll 迴圈</strong>兜底。</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>同一個幽靈(lost wakeup)</th><th>解法(全是「狀態閂」)</th></tr>
+      <tr><td>condvar lost wakeup(thread_pool 親手抓的 bug)</td><td>predicate + 持鎖重查</td></tr>
+      <tr><td>park/unpark race(本題)</td><td>token 狀態閂</td></tr>
+      <tr><td>wake-during-poll(task 層:wake 打在正在 running 的 task 上)</td><td>task atomic 狀態機:閂成 <code>notified</code>,Pending 收尾看到就直接重入隊</td></tr>
+    </table></div>
+    <blockquote class="say">「喚醒必須是<strong>狀態</strong>,不能是<strong>事件</strong>;狀態允許粗糙(合併/假醒),因為消費端永遠用迴圈重查真相。」<em>pillar-4 口述金句,三個場景通用。</em></blockquote>
+  </section>
+
+  <section>
+    <h2><span class="q">Q4</span> · 為什麼 pin 之前 future 可以隨便 move?</h2>
+    <p>因為它是 <strong>inert(惰性)的</strong>:async fn 回傳的 future 誕生在<strong>狀態 0</strong>——struct 裡只裝函式參數,body 一行沒跑、沒 local、沒借用,<strong>自引用還不存在</strong>。自引用是 <strong>poll 執行中</strong>誕生的:跑到 <code>.await</code> 要暫停時,活著的 locals(含互相借用的)被存回狀態機 struct。</p>
+    <div class="fig">
+      <div class="cap">時間線 —— pin! 是分界,poll 才是自引用的產房</div>
+      <div class="timeline">
+        <div class="tl"><b>建構(狀態0)</b>只裝參數<br><span class="good">可自由 move</span></div>
+        <div class="tl"><b>pin! / spawn</b>簽「永不再動」合約</div>
+        <div class="tl danger"><b>第一次 poll</b>借用跨 await 被存回 struct<br><span class="bad">自引用誕生</span></div>
+        <div class="tl"><b>之後</b>永不准動,直到 Ready / Drop</div>
+      </div>
+    </div>
+    <p><code>poll(self: Pin&lt;&amp;mut Self&gt;)</code> 這個簽名的全部用意:<strong>型別系統強迫「先 pin 才能 poll」</strong>——「move 自由期」與「自引用期」被 API 硬隔開。「future 是 lazy 的」=「poll 前可自由 move」,同一事實兩面;<code>tokio::spawn(fut)</code> 敢把 fut move 進 heap 也是這個理由。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q5</span> · Pending 時,釘住的 future 要怎麼「放進去等」?</h2>
+    <p><strong>動的是指標,bytes 從 spawn 那刻起再也沒動過。</strong><code>spawn</code> 把(還 inert 的)future move 進一塊 heap 配置(task),從此釘死;run queue 裡放的是<strong>指向 task 的指標</strong>——入隊、出隊、work-stealing 搬的都是 8 bytes,heap 上那塊 future 位址不動。</p>
+    <div class="fig">
+      <div class="cap">類比:future = 蓋死在地基上的房子;流通的是地址,不是房子</div>
+      <div class="rowflex">
+        <div class="box okb"><h4>heap task(bytes,不動)</h4>root future 釘在這,活到 Ready/Drop<br>靠引用計數活著(waker / JoinHandle 各持一份)</div>
+        <div class="box hl"><h4>run queue(指標,亂跑)</h4>裝 task pointer;worker 撈到就<b>走過去現場 poll</b>(in place),絕不搬房子</div>
+      </div>
+      <div class="arrowline">Pending 的 task「放哪等」?<b>哪都不放</b>——就是不在佇列;waker 的引用保活;wake() 把指標推回佇列</div>
+    </div>
+    <p>兩個 pin 的家:<code>block_on</code> 用 <code>pin!</code>(stack)——唯一的 future 哪都不用去;<code>spawn</code> 用 heap(<code>Box::pin</code> 本質)——指標要旅行,bytes 必須住在不隨 frame 死的地方。<strong>搬 Box 永遠不搬 pointee,這就是 <code>Pin&lt;Box&lt;T&gt;&gt;</code> 能到處傳的原因。</strong></p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q6</span> · async 逃不過 spawn 的 heap,所以 busy-wait 場景不愛它?</h2>
+    <p>方向對,<strong>歸因要修</strong>:per-spawn 一次 alloc 攤在 task 生命週期上是幾十 ns,不是主犯。而且 <strong>async ≠ heap</strong>——Embassy(embedded)在 no_std 零 heap 跑 async,task 靜態配置;「逃不過 heap」是 tokio 式<strong>動態 spawn</strong> 的性質。真正讓低延遲場景嫌棄的三件事:</p>
+    <ul>
+      <li><strong>排程間接層 = 延遲抖動</strong>:事件 → wake → 入隊 → 誰撈到 → poll 導航,每跳都是不可預測的延遲;busy-poll 的反應是 inline 的,個位數 ns 零抖動。</li>
+      <li><strong>控制權讓渡</strong>:runtime 決定何時何核跑你;work-stealing 毀 cache locality。低延遲要 pin core、cache 熱著(seqlock / kernel bypass / cache warming 那一側)。</li>
+      <li><strong>最根本:async 的全部價值 = 「等待很便宜」</strong>。busy-wait 場景根本不想等、沒東西可多工——沒有等待可省,收益零、成本全留。</li>
+    </ul>
+    <blockquote class="say">「不是 async 慢,是 async 在解『等待很多』的問題;熱路徑如果『從不想等』,它就是錯的工具。」<em>選型軸:waiting-dominated(萬連線 → async/evented)vs latency-dominated(專核少流 → pinned thread + busy-poll)。對照 hw_bridge 五 server:evented 吃高並發,spsc 版就是 busy-poll 派。</em></blockquote>
+  </section>
+
+  <section>
+    <h2><span class="q">Q7</span> · join!/select! 憑什麼零 alloc?是「重組了一個 task」嗎?</h2>
+    <p><strong>不是重組 task——是根本沒讓第二個 task 出現。</strong>組合發生在值的層次:<code>join!(a,b,c)</code> 展開成一個新 struct,三個子 future 以<strong>值</strong>內嵌成欄位(無 Box 無間接層);整棵樹 = 一個扁平 struct,大小<strong>編譯期</strong>算好;task 在 root 才誕生、只誕生一次。</p>
+    <pre><code><span class="cmt">// 概念展開:「組合 = struct 內嵌」,跟 async fn 存子狀態機同一招</span>
+struct Join { a: FutA, b: FutB, c: FutC, out_a: Option&lt;A&gt;, /* … */ }
+<span class="cmt">// poll:輪流 poll 還沒完成的子欄位;全樹共用同一個 per-task waker</span></code></pre>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>alloc</th><th>備註</th></tr>
+      <tr><td><code>join!</code> / <code>select!</code> / async fn 嵌套(編譯期已知個數)</td><td class="good"><strong>0</strong></td><td>純 struct 疊加</td></tr>
+      <tr><td><code>join_all(vec)</code> / <code>FuturesUnordered</code>(動態個數)</td><td>容器一次 + per-child 簿記</td><td>仍只有<strong>一個 task</strong>,遠便宜於 N 次 spawn</td></tr>
+    </table></div>
+    <p><code>join!</code> 的 O(N) re-poll 在 N 大時會痛 → <strong><code>FuturesUnordered</code> 存在的理由</strong>:給每個子 future 一個中介 waker,記下是誰叫的、只 re-poll 那一個。零配置 ↔ 精準喚醒,又一條 trade-off 軸。<strong><code>select!</code> 的差別在語意</strong>:first-Ready-wins,<strong>輸家當場 drop</strong>——這就是下面 Q9 的主角。跨語言一句:Go 每 goroutine 一條 heap stack、C++ coroutine 每 frame 一次 alloc;Rust 把並發結構編譯成 struct 嵌套 = "perfectly sized stack",所以下得了嵌入式。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q8</span> · epoll + 單執行緒也能萬連線(Redis),為什麼還要 async runtime?</h2>
+    <p><strong>你對:「等待便宜」是 epoll(evented)給的,不是 async 給的。</strong>async runtime = epoll loop + 兩個增值服務:</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>增值服務</th><th>解決什麼</th><th>Redis 為什麼不需要</th></tr>
+      <tr><td>① 編譯器幫你寫 per-connection 狀態機</td><td>協定深時,手寫狀態機被剁碎成轉移邏輯(「fd 就緒了,我剛做到哪?」)</td><td>RESP 邏輯淺:讀→查記憶體→寫回,狀態機三格,手寫毫無壓力</td></tr>
+      <tr><td>② multi-thread 排程</td><td>handler 成本不均 → 單線 evented 有 head-of-line blocking,p99.9 爆</td><td>handler 小而勻(μs 級);<strong>單執行緒 = 資料結構零鎖</strong>,是主動要的紅利</td></tr>
+    </table></div>
+    <p>判準一句話:<strong>協定深不深(狀態機誰來寫)、handler 勻不勻(要不要多線吸收)</strong>。兩個都「否」→ 手搓 evented;任一「是」→ runtime 開始回本。完整光譜:thread-per-conn → evented 手搓 → async runtime → sharded/spsc(專核)。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q9</span> · read_exact 掛進 select! 為什麼會讓 stream 錯位?</h2>
+    <p>先立定義:<strong>Rust 的 cancellation 不是訊號、不是異常,就是 Drop</strong>(select 輸掉 / timeout / abort 同一機制)。cancel-safe = 被中途 drop 不遺失任何已發生的消費。單發 <code>read()</code> 安全;<strong>多步驟有中間進度的 <code>read_exact</code> 不安全</strong>——進度住在 future 肚子,Drop 即滅證。盯住三個位置走一遍;切到 framer 模式看免疫版:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="mode">
+          <button data-mode="exact" class="on">read_exact 直接掛 select!</button>
+          <button data-mode="framer">framer:單發 read() + 自家 buffer</button>
+        </div>
+        <button id="next">下一步 ▸</button>
+        <button id="reset">重置</button>
+        <span class="stepcap" id="stepcap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>kernel socket buf</h4>
+          <div class="cell" id="k">—</div>
+        </div>
+        <div class="lane">
+          <h4 id="bellyTitle">future 肚子(pos)</h4>
+          <div class="cell" id="belly">—</div>
+        </div>
+        <div class="lane">
+          <h4 id="bufTitle">你的 buf(呼叫端 local)</h4>
+          <div class="cell" id="buf">—</div>
+        </div>
+        <div class="verdict hide" id="verdict">結局</div>
+      </div>
+      <div class="step-narr" id="narr"></div>
+    </div>
+    <p style="margin-top:14px"><strong>生死簿</strong>:future <strong>自有</strong>的(<code>pos</code>)drop 陪葬;<strong>借來</strong>的(<code>buf</code>、socket)drop 後歸還、活著——但活下來的 buf 失去「前 3 格有效」的詮釋,等於死了。kernel 那邊消費即逝、不重播,兩邊夾殺。<strong>framer 的解法 = 把進度本身(acc 的長度)也搬到 future 外面</strong>,全部狀態活過取消;追問「上 tokio 呢?」→「我的 framer 搬進 select! 不用改一行」。配套坑:<code>loop {{ select! }}</code> 每輪重建分支 future;要跨輪續跑 → pin 在 loop 外、分支用 <code>&amp;mut fut</code>。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q10</span> · 手寫狀態機 / callback / stackless / stackful,各自優缺?</h2>
+    <p>一條軸講完:<strong>狀態表示從顯式到隱式</strong>——你的 struct → 散裝閉包 → 編譯器 struct → 真 stack。<strong>越右越像同步碼;越左越省記憶體、控制越強。</strong></p>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>①手寫狀態機</th><th>②Callback</th><th>③Stackless(Rust/co_await)</th><th>④Stackful(asio spawn/goroutine)</th></tr>
+      <tr><td>狀態機誰寫</td><td>你(顯式 enum)</td><td>你(散裝閉包)</td><td><strong>編譯器</strong></td><td>沒有——用真 stack</td></tr>
+      <tr><td>per-task 記憶體</td><td class="good">最省可池化</td><td>每步閉包 alloc</td><td>一個貼身 frame</td><td class="bad">整條 stack(KB~MB)</td></tr>
+      <tr><td>暫停點</td><td>事件邊界</td><td>每步結尾</td><td>顯式 await,<strong>著色傳染</strong></td><td class="good">任意深度、無著色</td></tr>
+      <tr><td>除錯</td><td>好(state 可印)</td><td class="bad">慘</td><td>邏輯≠實體 stack</td><td class="good">真 stack 真 trace</td></tr>
+      <tr><td>取消</td><td>trivial</td><td>手動易漏</td><td>統一=Drop(cancel-safety)</td><td class="bad">unwind 活 stack,難</td></tr>
+    </table></div>
+    <p>判決:①協定淺時最優(Redis / framer);②是①的打散版,今天沒理由選;③甜蜜點 = ④的直線寫法 + ①級記憶體精確,<strong>帳單是著色 + Pin</strong>;④無著色是殺手優點,天花板是 stack 記憶體經濟學(Go 綁 GC 才能搬 stack;C++ 裸指標不能搬)。<strong>Go 選④所以必須養 runtime;Rust 要零 runtime 只能③——「複雜度沒有消失,只是從 runtime 搬到型別系統」。</strong>Asio 橫跨②③④三格。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q11</span> · 不是 epoll 的 future(timer / channel)要「放去哪」?</h2>
+    <p>先翻轉預設:<strong>future 從來不是「放去 epoll」——它把 waker 存進「它等的那個資源自己的等待結構」</strong>;epoll 的 fd 表只是 IO 資源的那一種。</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>leaf 在等什麼</th><th>waker 存哪</th><th>誰按 wake()</th></tr>
+      <tr><td>IO(TcpStream…)</td><td>reactor 的 fd → waker 表</td><td>driver(epoll 回報就緒後)</td></tr>
+      <tr><td>時間(sleep/timeout)</td><td>timer wheel(時間輪)</td><td>driver(檢查到期後)</td></tr>
+      <tr><td>channel / Mutex / Notify</td><td>該原語自己的 waker 槽 / waiter list</td><td><strong>另一個 task 的 thread</strong>(send/unlock 當下,純 userspace)</td></tr>
+    </table></div>
+    <div class="fig">
+      <div class="cap">三種喚醒源,收斂進 driver 的同一個 syscall</div>
+<pre style="margin:0"><code>driver 的 park 其實是:
+epoll_wait( [IO fds…, <b>自家 eventfd</b>],  timeout = <b>下一個 timer 到期</b> )
+              ↑ IO 就緒      ↑ 別 thread 的 wake       ↑ 時間到</code></pre>
+      <div class="arrowline">時間不是事件、是 deadline → 翻譯成 timeout 參數;userspace 的喚醒 → 翻譯成 eventfd 寫入(kernel 只聽 fd 的語言)</div>
+    </div>
+    <p><strong>eventfd</strong> = kernel 給的「64-bit counter 假裝成 fd」(write 加一、read 清零)——存在目的就是讓「叫醒」這件事有 fd 的形狀,epoll 才看得見。類比:值班室只聽門鈴;IO 天生自帶門鈴,同事(userspace 的 send)想叫醒值班的人,喊沒用,只能也去按那顆<strong>裝給自己人按的門鈴</strong>。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q12</span> · channel send 會「直接敲 eventfd」嗎?——三層 wake 拆解</h2>
+    <p><strong>不會。channel 從頭到尾不知道 eventfd 存在。</strong>它只按下 wake 這顆不透明按鈕;按鈕背後的線路(runtime 造 waker 時填進 vtable 的)分三層。切換兩種情境步進一遍:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="mode2">
+          <button data-mode="asleep" class="on">有 worker 睡在 epoll_wait</button>
+          <button data-mode="busy">全部 worker 醒著在忙</button>
+        </div>
+        <button id="next2">下一步 ▸</button>
+        <button id="reset2">重置</button>
+        <span class="stepcap" id="stepcap2"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>① channel(queue + waker 槽)</h4>
+          <div class="cell" id="wch">—</div>
+        </div>
+        <div class="lane">
+          <h4>② runtime(run queue / workers)</h4>
+          <div class="cell" id="wrq">—</div>
+          <div class="cell" id="wwk">—</div>
+        </div>
+        <div class="lane">
+          <h4>③ driver thread</h4>
+          <div class="cell" id="wdr">—</div>
+        </div>
+        <div class="verdict hide" id="wverdict">結局</div>
+      </div>
+      <div class="step-narr" id="narr2"></div>
+    </div>
+    <p style="margin-top:14px">自測:全部 worker 醒著在忙時,wake 會走到第③層嗎?——<strong>不會</strong>,第②層(入隊)就結束,eventfd 一根寒毛不動。答得出來,三層就真的分開了。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q13</span> · recv 到底做什麼?waker 會幫我搬資料嗎?</h2>
+    <p><strong>recv 自己不等,waker 也不搬資料。</strong>recv-future 的 poll 只做三步;「等」是 executor 的事(不再 poll 這個 task),資料靠下一次 poll 自取:</p>
+<pre><code><span class="cmt">// Recv future 的 poll,概念版:</span>
+<span class="cmt">// ① 先查真相</span>
+if let Some(msg) = queue.try_pop() { return Ready(Some(msg)); }
+<span class="cmt">// ② 空 → 把「這個 task 的」waker 存進 channel 的 waker 槽</span>
+channel.rx_waker.register(cx.waker());
+<span class="cmt">// ③ 存完「再查一次」——擋 wake-before-register race</span>
+if let Some(msg) = queue.try_pop() { return Ready(Some(msg)); }
+Pending</code></pre>
+    <p><strong>③ 是性命攸關的</strong>:①查到空、還沒走到②之間,send 可能塞了資料並按了 wake——那時槽裡還沒有你的 waker,<strong>鈴按給了空氣</strong>;不做③就帶著永遠不響的鈴回去睡 = lost wakeup。這是<strong>同一個幽靈的第四次現身</strong>(condvar predicate / park token / task notified 閂 / <strong>register-then-recheck</strong>)。wake 的契約只有「值得再 poll 一次」——跟 epoll 的 readiness 同構:告訴你可讀了,bytes 還是自己去拿。</p>
+    <p>channel 的 state:tokio mpsc(單 consumer)= 一格 <code>AtomicWaker</code>(每次 poll 覆蓋);多等待者的 Mutex/Notify 才升級成 intrusive waiter list(sync 版存 <code>Thread</code>+park,async 版存 <code>Waker</code>——同構雙生)。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q14</span> · Context 跟著誰走?Waker 到底是什麼指標?</h2>
+    <p><strong>Context 是「單次 poll 的信封」;Waker 是「task 的耐久身分證」= task ptr + runtime vtable 的胖指標。</strong></p>
+<pre><code>RawWaker { data: *const (),  vtable: &amp;'static RawWakerVTable }
+<span class="cmt">//          ↑ tokio 填:task 的 heap 指標(帶引用計數)  ↑ runtime 填 {clone, wake, wake_by_ref, drop}</span>
+<span class="cmt">// wake() = vtable.wake(data) = 把 data 當 task ptr 推進 run queue</span>
+<span class="cmt">// block_on 版:data = Thread 把手,wake = unpark —— 同一個殼,換線路</span></code></pre>
+    <div class="fig">
+      <div class="cap">箭頭方向(最容易反的一格):資源持有 waker,waker 只指向 task</div>
+<pre style="margin:0"><code>fd 表 / timer wheel / channel 槽 ──(存著 Waker 的 clone)──→ Waker ──(data)──→ Task
+        ↑ 資源知道 waker 在哪              waker 對「自己被存在哪」一無所知     wake 時入隊</code></pre>
+    </div>
+    <p>三種流向一次記:<strong>poll 期間往下</strong>(executor 現場造 cx,以 <code>&amp;mut</code> 傳下整棵樹,這次 poll 結束就死——lifetime 逼你想留門鈴就得 <code>cx.waker().clone()</code>);<strong>需要等就往旁存</strong>(leaf 存進資源);<strong>稍後往回敲</strong>(資源按 wake → 指標入隊)。</p>
+    <div class="fig">
+      <div class="cap">樹的分工:中間節點純水管,leaf 是唯一的註冊點</div>
+      <div class="rowflex">
+        <div class="box"><h4>中間節點(async fn 狀態機 / join! / select!)</h4>把 <code>&amp;mut Context</code> 往下傳,<b>從不碰 waker 存放</b></div>
+        <div class="box hl"><h4>leaf future(runtime/函式庫作者寫好的)</h4>poll = 查資源 → 不 ready 就把 waker clone 存進<b>自家資源</b>的等待結構(每次 poll 覆蓋)→ Pending</div>
+      </div>
+      <div class="arrowline">推論:tokio 的 sleep/TcpStream 離開 tokio 會 panic(leaf 要找自家 timer wheel/reactor);channel future 到哪都能跑(資源就是 channel 自己)。<b>leaf 依賴什麼基礎設施,決定它綁不綁 runtime。</b></div>
+    </div>
+    <p><strong>waker 是 per-task、不是 per-資源</strong>的鐵證:<code>select!</code> 同時等 timer + IO + channel = 同一個 task 的 waker 被 clone 三份、存進三個家;誰先好誰先按,按下去做的事完全相同。而 waker 的 <code>data</code> 帶引用計數 → 「Pending 的 task 靠 waker 的引用保活」就是這麼落地的。</p>
+  </section>
+
+  <section>
+    <h2>面試句庫</h2>
+    <blockquote class="say">
+      “Wake never executes anything — it just re-enqueues the task (or unparks the executor). Execution always happens later, when a worker polls. That separation is what keeps ‘only the executor polls’ a single-entry invariant.”
+      <em>wake = enqueue,一句話。</em>
+    </blockquote>
+    <blockquote class="say">
+      “A future is inert until first polled — state zero only holds the arguments, so it's freely movable. Self-references are created during poll, when locals borrowing each other get saved across an await point. That's why <code>poll</code> takes <code>Pin&lt;&amp;mut Self&gt;</code>.”
+      <em>inert → pin → poll 的時間線。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Cancellation in Rust is just Drop. <code>read_exact</code> keeps its progress inside the future, so <code>select!</code> dropping it loses consumed bytes and desyncs the stream. Own the accumulation buffer in your struct and only do single-shot cancel-safe reads — exactly what a hand-rolled framer does by construction.”
+      <em>cancel safety + framer 免疫。</em>
+    </blockquote>
+    <blockquote class="say">
+      “An async runtime is just an epoll loop plus two services: the compiler writes your per-connection state machines, and the scheduler absorbs uneven handler costs. Redis needs neither — that's why hand-rolled evented is the right call there.”
+      <em>Redis 問題的完整回擊。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Non-IO futures don't go into epoll — each resource keeps its own waiter structure: the timer wheel, the channel's waker slot, intrusive waiter lists. What converges on <code>epoll_wait</code> is the wakeup <em>delivery</em>: timers become the timeout argument, and cross-thread wakes write an eventfd registered in the same epoll set. Three wake sources, one syscall.”
+      <em>「timer / channel 怎麼叫醒 driver」的完整版。</em>
+    </blockquote>
+    <blockquote class="say">
+      “A Waker is just a fat pointer — task pointer plus the runtime's vtable. Resources hold clones of it; it holds the task; wake() feeds that pointer back into the run queue. The waker never knows where it's stored — storage is the resource's business, and the channel never touches the eventfd; that's the runtime's unpark, three layers down.”
+      <em>waker 胖指標 + 三層分工,一句講完。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:deep-dive 口述彈藥(7/25 底稿),不進練習主線。前置:<code>qa_waker_lifecycle.html</code>(Waker 基礎)· 相鄰:<code>qa_sync_async_oneshot.html</code>(JobHandle↔JoinFuture)· <code>html_p/p2-async-executor-handbook.html</code>(block_on 全鏈路)· <code>html_p/rmw-cas-atomics.html</code>。可跑範例:<code>reference/examples/intrusive_wait_queue.rs</code>(stack-pinned waiter)。全文字版:Heptabase「Rust Low Level Notes」板 8 張卡。
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "exact";   // "exact" | "framer"
+  var step = 0, MAX = 5;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // 每步:[kernel, belly, buf, verdict, narr] ;cls 由前綴決定:文字|cls
+  var S = {
+    exact: {
+      bellyT: "future 肚子(pos)", bufT: "你的 buf(loop 外 local)",
+      steps: [
+        ["AA BB CC|hot", "(尚未建)|", "?? ?? ?? ??|", null,
+         "協定 <b>[len:4B][payload]</b>,真長度 = AA BB CC DD。t0:網路只到了前 3 個 byte,躺在 kernel。"],
+        ["(空)|hot", "pos = 3/4|hot", "AA BB CC ??|hot", null,
+         "read_exact poll:一次 read() 把 AA BB CC <b>從 kernel 讀走</b>(kernel 空了,<b>不會重播</b>)→ 寫進 buf 前 3 格,「湊到 3 個」記在 future 肚子的 pos。第 4 byte 沒到 → Pending。"],
+        ["(空)|", "pos 蒸發 💀|dead", "AA BB CC ??|", null,
+         "tick / shutdown 分支先 Ready → select 判它贏 → <b>read_exact future 被 DROP</b>。buf 是借來的、活著;<b>pos 是自有的、陪葬</b>——「前 3 格有效」沒人知道了。"],
+        ["DD EE FF GG|hot", "新 future pos = 0/4|hot", "AA BB CC ??|", null,
+         "下一輪 select 重建一個全新的 read_exact,<b>從 0/4 開始</b>。此時 DD(真長度的最後一個 byte)和 payload EE FF… 陸續到站。"],
+        ["(空)|", "pos = 4/4 ✓|", "DD EE FF GG|bad", null,
+         "新 future 讀 4 個 → <b>蓋掉</b> AA BB CC。回 Ready:你拿到的「長度」= DD EE FF GG——DD 是真長度的末 byte,EE FF GG 是 payload 被當成長度。"],
+        ["(空)|", "—|", "DD EE FF GG|bad", "bad|✗ 垃圾長度 → 之後每個 frame 邊界全錯:無 error、無 crash,stream 靜靜錯位",
+         "<b>丟的不是 buf 裡的 bytes,是「已經從 kernel 消費了 3 個」這件事的記憶。</b>kernel 消費即逝 + future 肚子陪葬,兩邊夾殺。"]
+      ]
+    },
+    framer: {
+      bellyT: "read() future(單發)", bufT: "你 struct 的 acc buffer",
+      steps: [
+        ["AA BB CC|hot", "(尚未建)|", "[](空)|", null,
+         "同一場景,但 select 裡只放<b>單發 read()</b>,讀到的立刻餵進你 struct 自家的 acc buffer——<b>進度 = acc 的內容,住你家</b>。"],
+        ["(空)|hot", "read() 完成|ok", "[AA BB CC]|ok", null,
+         "read() 拿到 3 bytes → <b>立刻 push 進 acc</b>。next_frame 檢查:不足 4,回「還不夠」,等下輪。沒有任何進度藏在 future 裡。"],
+        ["(空)|", "被 drop(單發,無進度)|dead", "[AA BB CC]|ok", null,
+         "tick 分支贏 → read() future 被 drop。<b>它是單發、肚子裡沒進度 → 零損失</b>;AA BB CC 安然躺在 acc。"],
+        ["DD EE FF GG|hot", "新 read()|hot", "[AA BB CC]|ok", null,
+         "下一輪:新的單發 read()。acc 還在,啥都沒忘。"],
+        ["(空)|", "read() 完成|ok", "[AA BB CC DD EE FF GG]|ok", null,
+         "讀到 DD EE FF GG → <b>append</b> 進 acc。next_frame 這次夠了:切出長度 = <b>AA BB CC DD</b> ✓,剩 EE FF GG 留著當 payload 開頭。"],
+        ["(空)|", "—|", "[EE FF GG…]|ok", "ok|✓ cancel-safe by construction:狀態全住你的 struct,取消殺不到",
+         "<b>差別只有一個:進度住哪。</b>future 肚子(隨取消陪葬)vs 你的 struct(活過取消)。搬進 tokio select! 不用改一行。"]
+      ]
+    }
+  };
+
+  function setCell(id, spec) {
+    var el = $(id); if (!el) return;
+    var parts = spec.split("|");
+    el.textContent = parts[0];
+    el.className = "cell" + (parts[1] ? " " + parts[1] : "");
+  }
+  function render() {
+    var m = S[mode], s = m.steps[step];
+    $("bellyTitle").textContent = m.bellyT;
+    $("bufTitle").textContent = m.bufT;
+    setCell("k", s[0]); setCell("belly", s[1]); setCell("buf", s[2]);
+    var v = $("verdict");
+    if (!s[3]) { v.className = "verdict hide"; v.textContent = "結局"; }
+    else {
+      var vp = s[3].split("|");
+      v.className = "verdict " + (vp[0] === "ok" ? "okv" : "badv");
+      v.textContent = vp[1];
+    }
+    $("narr").innerHTML = s[4];
+    $("stepcap").textContent = "步驟 " + step + " / " + MAX;
+    $("next").disabled = (step >= MAX);
+  }
+  $("next").addEventListener("click", function () { if (step < MAX) { step++; render(); } });
+  $("reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("mode");
+  toggle.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>
+<script>
+(function () {
+  var mode = "asleep";   // "asleep" | "busy"
+  var step = 0, MAX = 4;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // 每格:「文字|cls」;S[mode][step] = [ch, rq, wk, dr, verdict, narr]
+  var S = {
+    asleep: [
+      ["queue:[] · 槽:T5 的 waker|", "run queue:[T3]|", "W1 忙著 poll|", "W2 睡在 epoll_wait(fds+eventfd)|hot",
+       null, "初始:task T5 的 recv 上輪回了 Pending,waker 躺在 channel 槽。W2 抱著 IO driver <b>睡在 epoll_wait 裡</b>——它的 epoll set 除了 IO fds,還多註冊了一個<b>自家 eventfd</b>。"],
+      ["push(msg) → 取出槽裡的 waker|hot", "run queue:[T3]|", "W1 忙著 poll|", "W2 睡著|",
+       null, "<b>第①層(channel 的事)</b>:別的 task 執行 <code>send(msg)</code> → push 進 queue → 從槽裡取出 Waker、呼叫 <code>wake()</code>。<b>channel 只知道這步</b>——Waker 對它是不透明按鈕。"],
+      ["queue:[msg] · 槽:空|", "run queue:[T3, T5]|hot", "W1 忙著 poll|", "W2 睡著|",
+       null, "<b>第②層(wake 的 vtable,runtime 填的)</b>:把 T5 的 task 指標推回 run queue。接著檢查:有沒有 worker 在睡?——<b>有,W2</b>。"],
+      ["queue:[msg]|", "run queue:[T3, T5]|", "W1 忙著 poll|", "write(eventfd)!→ epoll_wait 返回|hot",
+       null, "<b>第③層(unpark 的實作)</b>:W2 睡的原語是 epoll_wait,kernel 聽不到 userspace 的喊——唯一的叫醒方式是<b>製造一個它聽得懂的事件</b>:對自家 eventfd write 一下 → epoll_wait 返回。"],
+      ["queue:[msg]|", "run queue:[T3]|", "W1 忙著 poll|", "W2 醒了,撈到 T5 → re-poll|ok",
+       "ok|✓ W2 re-poll T5 → recv 的 poll 第①步 try_pop 拿到 msg → Ready。資料靠 re-poll 自取,wake 只是門鈴",
+       "W2 醒來先 read(eventfd) 清零,然後撈 run queue 拿到 T5 → 從 root re-poll → 導航回 recv → <b>重查真相</b> → 這次 try_pop 有貨 → Ready。整條線走完。"]
+    ],
+    busy: [
+      ["queue:[] · 槽:T5 的 waker|", "run queue:[T3]|", "W1 忙著 poll|", "W2 也忙著 poll(沒人睡)|",
+       null, "同場景,但這次<b>所有 worker 都醒著在忙</b>——沒有任何 thread 睡在 epoll_wait 或 parker 裡。"],
+      ["push(msg) → 取出槽裡的 waker|hot", "run queue:[T3]|", "W1 忙|", "W2 忙|",
+       null, "<b>第①層</b>:send → push → 取 waker → <code>wake()</code>。channel 的部分一模一樣——它永遠不知道 worker 的狀態。"],
+      ["queue:[msg] · 槽:空|", "run queue:[T3, T5]|hot", "W1 忙|", "W2 忙|",
+       null, "<b>第②層</b>:T5 入隊。檢查:有 worker 在睡嗎?——<b>沒有</b>。"],
+      ["queue:[msg]|", "run queue:[T3, T5]|ok", "W1 忙|", "W2 忙(eventfd 全程沒動)|ok",
+       null, "<b>到此為止</b>。不需要第③層——沒人要叫醒,T5 在佇列裡排隊,等哪條 worker 忙完手上的 task 自然來撈。<b>eventfd 一根寒毛都沒動。</b>"],
+      ["queue:[msg]|", "run queue:[T3]|", "W1 撈到 T5 → re-poll|ok", "W2 忙|",
+       "ok|✓ 第③層只有「目標 worker 正在睡」時才存在——wake 的本體永遠只是 enqueue",
+       "W1 忙完,從佇列撈到 T5 → re-poll → recv 重查 → 拿到 msg。對照左邊模式:<b>差別只在要不要多按那顆 eventfd 門鈴</b>。"]
+    ]
+  };
+
+  function setCell(id, spec) {
+    var el = $(id); if (!el) return;
+    var p = spec.split("|");
+    el.textContent = p[0];
+    el.className = "cell" + (p[1] ? " " + p[1] : "");
+  }
+  function render2() {
+    var s = S[mode][step];
+    setCell("wch", s[0]); setCell("wrq", s[1]); setCell("wwk", s[2]); setCell("wdr", s[3]);
+    var v = $("wverdict");
+    if (!s[4]) { v.className = "verdict hide"; v.textContent = "結局"; }
+    else { var vp = s[4].split("|"); v.className = "verdict " + (vp[0] === "ok" ? "okv" : "badv"); v.textContent = vp[1]; }
+    $("narr2").innerHTML = s[5];
+    $("stepcap2").textContent = "步驟 " + step + " / " + MAX;
+    $("next2").disabled = (step >= MAX);
+  }
+  $("next2").addEventListener("click", function () { if (step < MAX) { step++; render2(); } });
+  $("reset2").addEventListener("click", function () { step = 0; render2(); });
+  var t2 = $("mode2");
+  t2.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(t2.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render2();
+  });
+  render2();
+})();
+</script>
