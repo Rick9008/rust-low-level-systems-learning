@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、12 份深讀教材(html_p:追問鏈 + self-quiz)、8 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、8 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -746,6 +746,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">五軸 · Send/Sync × Ordering × Pin</span>
       <span class="hook">推導表逐格實編驗證;軸 4 是唯一沒有攔截網的軸。unsafe impl 三段辯護 = 7/28 必答。</span>
       <span class="hits">7/25 口述底稿 · 濃縮版 docs/rust-five-axis.md</span>
+    </a>
+    <a class="card" href="../../html_p/rmw-cas-atomics.html">
+      <span class="name">RMW &amp; CAS · fetch_add / compare_exchange</span>
+      <span class="hook">read-modify-write 深讀:為何 CAS 吃兩個 ordering(結局數,不是半邊數)、weak vs strong、ABA 三解、Arc refcount 同構;含 CAS-race 互動 stepper(A 贏 / B 重試,反例演 lost update)+ P/C 家族(寫者數=難度)。</span>
+      <span class="hits">atomic ordering 的延伸 · CAS loop 白板題 · Treiber stack</span>
     </a>
   </div>
 </section>

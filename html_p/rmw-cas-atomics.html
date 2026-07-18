@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rust RMW &amp; CAS — fetch_add / compare_exchange / CAS loop</title>
+<style>
+:root{
+  --bg0:#282828; --bg0dim:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg0:#d4be98; --fg1:#ddc7a1;
+  --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665; --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; background:var(--bg0dim); color:var(--fg0);
+  font-family:'JetBrains Mono','Fira Code',ui-monospace,Consolas,monospace;
+  font-size:15px; line-height:1.65;
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:0 16px 80px;}
+header.top{padding:26px 0 10px;}
+header.top h1{font-size:20px; margin:0 0 4px; color:var(--yellow);}
+header.top .sub{color:var(--grey2); font-size:13px;}
+.tabbar{
+  position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:6px;
+  background:var(--bg0dim); padding:10px 0 8px; border-bottom:1px solid var(--bg3); margin-bottom:20px;
+}
+.tabbtn{
+  font:inherit; cursor:pointer; border:1px solid var(--bg3); background:var(--bg1); color:var(--grey2);
+  padding:7px 12px; border-radius:8px; font-size:13px; transition:.12s;
+}
+.tabbtn:hover{border-color:var(--bg4); color:var(--fg0);}
+.tabbtn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.panel{display:none;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+h2{font-size:17px; color:var(--aqua); border-left:3px solid var(--aqua); padding-left:10px; margin:30px 0 12px;}
+h3{font-size:15px; color:var(--orange); margin:22px 0 8px;}
+p{margin:10px 0;}
+code{background:var(--bg1); padding:1px 5px; border-radius:4px; font-size:.92em; color:var(--fg1);}
+pre{
+  background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px;
+  overflow-x:auto; -webkit-text-size-adjust:100%; text-size-adjust:100%; font-size:13px; line-height:1.55;
+}
+pre code{background:none; padding:0; color:var(--fg0);}
+.anchor{
+  background:linear-gradient(135deg,var(--bg2),var(--bg1)); border:1px solid var(--yellow);
+  border-radius:12px; padding:18px 20px; margin:18px 0;
+}
+.anchor .big{font-size:18px; color:var(--yellow); font-weight:700;}
+.anchor .small{color:var(--grey2); font-size:13px; margin-top:6px;}
+.card{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px; margin:14px 0;}
+.card.warn{border-color:var(--red);}
+.card.good{border-color:var(--green);}
+.card.info{border-color:var(--blue);}
+.jump{
+  display:inline; font:inherit; cursor:pointer; background:none; border:none; padding:0;
+  color:var(--blue); text-decoration:underline dotted; text-underline-offset:3px;
+}
+.jump:hover{color:var(--aqua);}
+.o-rel{color:var(--blue);} .o-acq{color:var(--aqua);} .o-rlx{color:var(--grey);} .o-sc{color:var(--purple);} .o-ar{color:var(--orange);}
+.tag{display:inline-block; padding:0 6px; border-radius:4px; font-size:11px; border:1px solid currentColor; margin-left:4px;}
+ul{margin:8px 0; padding-left:22px;} li{margin:5px 0;}
+.kbd{background:var(--bg3); border:1px solid var(--bg4); border-radius:5px; padding:1px 7px; font-size:12px;}
+table.mini{border-collapse:collapse; width:100%; margin:12px 0; font-size:13px;}
+table.mini th,table.mini td{border:1px solid var(--bg3); padding:7px 9px; text-align:left; vertical-align:top;}
+table.mini th{background:var(--bg2); color:var(--fg1);}
+.hl-red{color:var(--red);} .hl-grn{color:var(--green);} .hl-yel{color:var(--yellow);}
+.note{color:var(--grey2); font-size:12.5px;}
+.unv{color:var(--orange); font-weight:700;}
+details{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:2px 14px; margin:12px 0;}
+details[open]{padding-bottom:12px;}
+summary{cursor:pointer; padding:12px 0; color:var(--fg1); font-weight:500;}
+summary:hover{color:var(--yellow);}
+.qnum{color:var(--purple); font-weight:700;}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--grey2); margin:8px 2px;}
+
+/* stepper */
+.svgbox{background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:8px; overflow-x:auto; -webkit-text-size-adjust:100%;}
+.svgbox svg{display:block; min-width:1000px;}
+.lane-label{fill:var(--grey2); font-size:13px; font-family:inherit;}
+.lane-line{stroke:var(--bg4); stroke-width:2;}
+.evt rect{fill:var(--bg2); stroke:var(--bg4); stroke-width:1.5;}
+.evt .op{fill:var(--fg0); font-size:12.5px; font-family:inherit;}
+.evt .sub{fill:var(--grey); font-size:11px; font-family:inherit;}
+.evt.dim{opacity:.32;}
+.evt.act rect{stroke:var(--yellow); stroke-width:2.5;}
+.evt.ok rect{stroke:var(--green); stroke-width:2.5;} .evt.ok .op{fill:var(--green);}
+.evt.bad rect{stroke:var(--red); stroke-width:2.5;} .evt.bad .op{fill:var(--red);}
+.badge{font-size:11px; font-family:inherit; font-weight:700;}
+.badge.o-ar{fill:var(--orange);} .badge.o-acq{fill:var(--aqua);} .badge.o-rlx{fill:var(--grey);}
+.ctrbox rect{fill:var(--bg1); stroke:var(--yellow); stroke-width:2;}
+.ctrbox .lab{fill:var(--grey); font-size:11px; font-family:inherit;}
+.ctrval{fill:var(--yellow); font-size:26px; font-weight:700; font-family:inherit;}
+.rarrow{stroke:var(--grey); stroke-width:1.5; stroke-dasharray:4 3; fill:none; opacity:.5;}
+.warrow{stroke:var(--green); stroke-width:2.5; fill:none;}
+.warrow.hide{opacity:0;}
+.lost{opacity:0;} .lost.show{opacity:1;}
+.lostline{stroke:var(--red); stroke-width:2.5; stroke-dasharray:6 4; fill:none;}
+.losttxt{fill:var(--red); font-size:12.5px; font-weight:700; font-family:inherit;}
+.stepctrl{display:flex; align-items:center; gap:10px; margin:14px 0; flex-wrap:wrap;}
+.stepctrl button{font:inherit; cursor:pointer; background:var(--bg2); border:1px solid var(--bg4); color:var(--fg0); padding:7px 14px; border-radius:8px;}
+.stepctrl button:hover{border-color:var(--yellow); color:var(--yellow);}
+.dots{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap;}
+.dot{width:26px; height:26px; border-radius:50%; border:1px solid var(--bg4); background:var(--bg1); color:var(--grey2); font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+.dot.active{background:var(--yellow); color:var(--bg0); border-color:var(--yellow); font-weight:700;}
+.dot.brk.active{background:var(--red); border-color:var(--red); color:#fff;}
+.stepgrid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:6px;}
+@media(max-width:760px){.stepgrid{grid-template-columns:1fr;}}
+.codepanel{background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.7; overflow-x:auto; white-space:pre; -webkit-text-size-adjust:100%;}
+.codepanel .chgline{background:rgba(216,166,87,.14); border-radius:4px; display:inline-block; width:100%;}
+.stepcard{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px;}
+.stepcard.brk{border-color:var(--red);}
+.stepcard h4{margin:0 0 8px; color:var(--orange); font-size:14px;}
+
+.tk-cm{color:var(--grey);} .tk-kw{color:var(--red);} .tk-ty{color:var(--yellow);} .tk-fn{color:var(--aqua);}
+.tk-mac{color:var(--orange);} .tk-str{color:var(--green);} .tk-num{color:var(--purple);} .tk-attr{color:var(--orange);}
+.tk-o-rel{color:var(--blue);} .tk-o-acq{color:var(--aqua);} .tk-o-rlx{color:var(--grey);} .tk-o-sc{color:var(--purple);} .tk-o-ar{color:var(--orange);}
+.codepanel .tk-cm{font-style:normal;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <h1>Rust RMW &amp; CAS</h1>
+  <div class="sub">read-modify-write:<code>fetch_add</code> / <code>swap</code> / <code>compare_exchange</code> / CAS loop &nbsp;·&nbsp; 姊妹頁:atomic ordering(RMW 是它的延伸)&nbsp;·&nbsp; std-only</div>
+</header>
+
+<nav class="tabbar">
+  <button class="tabbtn active" data-jump="p-overview">導讀</button>
+  <button class="tabbtn" data-jump="p-concept">① 概念推導</button>
+  <button class="tabbtn" data-jump="p-stepper">② 互動 Stepper</button>
+  <button class="tabbtn" data-jump="p-followup">③ 面試追問</button>
+  <button class="tabbtn" data-jump="p-quiz">④ Self-Quiz</button>
+  <button class="tabbtn" data-jump="p-code">完整代碼</button>
+</nav>
+
+<!-- ============ OVERVIEW ============ -->
+<section id="p-overview" class="panel active">
+  <div class="anchor">
+    <div class="big">「RMW = 把 <u>讀 → 改 → 寫</u> 焊成一步,別人插不進來。」</div>
+    <div class="small">plain <code>load</code> 再 <code>store</code> 有縫,兩條 thread 會擠進去互相蓋掉更新(lost update)。RMW 用硬體把這三步變成<b>不可分割</b>的一次操作——這是它存在的唯一理由。</div>
+  </div>
+
+  <p>上一頁把 <b>Release / Acquire / SeqCst</b> 講完了,但那些是 <code>load</code>/<code>store</code>。真正的 lock-free 資料結構(計數器、佇列、堆疊、refcount)靠的是 <b>read-modify-write</b>:<code>fetch_add</code>、<code>swap</code>、<code>compare_exchange</code>。這頁把 RMW 的兩件正交的事拆開講清楚——<b>要不要用 RMW</b>(原子性)和 <b>掛哪個 ordering</b>(可見性)——以及 CAS 那個「吃兩個 ordering」的招牌問題。</p>
+
+  <h2>閱讀路線</h2>
+  <ul>
+    <li><button class="jump" data-jump="p-concept">① 概念推導</button>:先看 plain load+store 的 lost update(為什麼非 RMW 不可)→ RMW 家族 → <b>兩個正交問題</b>(A 幾個寫者 / B 兩個半邊)→ <code>fetch_add</code>(一個 ordering)vs <code>compare_exchange</code>(兩個)→ weak/strong → ABA → <b>P/C 家族</b>(SPSC/MPSC/SPMC/MPMC,寫者數 = 難度)。</li>
+    <li><button class="jump" data-jump="p-stepper">② 互動 Stepper</button>:兩條 thread 各用 <b>CAS loop</b> 對同一個計數器 +1。看 A 的 CAS 成功、B 的 CAS <b>失敗後重試</b>,最後 count 不丟;最後一步示範<b>用 plain load+store 取代 RMW</b> 如何漏掉一次更新。</li>
+    <li><button class="jump" data-jump="p-followup">③ 面試追問</button>:三條鏈——CAS 為什麼吃兩個 ordering、CAS loop 與 weak/strong、ABA 三種解法。</li>
+    <li><button class="jump" data-jump="p-quiz">④ Self-Quiz</button>:5 題,含指定題(MPSC 的 <code>tail.fetch_add</code> 該掛什麼 ordering)。</li>
+    <li><button class="jump" data-jump="p-code">完整代碼</button>:CAS-loop 計數器 + <code>fetch_add</code> 對照 + Treiber lock-free stack(CAS 的招牌用法)。</li>
+  </ul>
+
+  <div class="card info">
+    <b>定位。</b>本頁是 <b>atomic ordering</b> 的延伸:那頁的「兩個半邊(load 側 / store 側)」在這裡直接複用——RMW 同時是 load 又是 store,所以一個 ordering 就能同時給兩半語意。ordering 本身的推導(synchronizes-with / happens-before / 為何 Relaxed 會 UB)請先看姊妹頁。
+    <span class="note">Rust 以 <code>use std::sync::atomic::Ordering::*;</code> 為前提;<span class="unv">unverified</span>:x86/ARM 指令層 lowering(<code>lock xadd</code> / <code>lock cmpxchg</code> / LL-SC)標為 typical,面試講到架構層規則即可,不背各家微架構條文。</span>
+  </div>
+</section>
+
+<!-- ============ CONCEPT ============ -->
+<section id="p-concept" class="panel">
+  <h2>1. 為什麼需要 RMW:plain load+store 的 lost update</h2>
+  <p>想像兩條 thread 各對共享計數器 +1,用最直覺的「讀出來、加一、寫回去」:</p>
+  <pre><code>// ⚠ 錯:load 和 store 之間有縫
+let v = c.load(Relaxed);      // 讀
+c.store(v + 1, Relaxed);      // 改 + 寫(分成兩步)</code></pre>
+  <ul>
+    <li>Thread A 讀到 <code>5</code>,Thread B <b>也</b>讀到 <code>5</code>(A 還沒寫回)。</li>
+    <li>A 寫 <code>6</code>,B 也寫 <code>6</code>。兩次 +1,結果卻是 <code>6</code> —— <b class="hl-red">少了一次(lost update)</b>。</li>
+    <li>問題出在 <code>load</code> 與 <code>store</code> 是<b>兩個獨立操作</b>,中間可以插進別人。</li>
+  </ul>
+  <div class="card warn">
+    <b>RMW 的作用:把「讀 → 改 → 寫」焊成<u>一次不可分割</u>的操作。</b><code>c.fetch_add(1, Relaxed)</code> 由硬體保證:從讀到寫之間<b>沒有任何 thread 能改到這個變數</b>。兩條 thread 各 <code>fetch_add(1)</code>,兩次都算數,結果一定是 <code>7</code>。這就是 <button class="jump" data-jump="p-stepper">Stepper</button> 要演的:CAS 版怎麼靠「失敗重試」達到同樣效果。
+  </div>
+
+  <h3>1.1 RMW 還免費送你一個性質:讀到 modification order 的最新值</h3>
+  <p>普通 <code>Relaxed</code> <code>load</code> 可能讀到 <b>stale</b>(舊)值。但 RMW 保證讀到的是該變數<b>修改順序裡最新的那個寫</b>——它 read-from 緊鄰在它前面的那次修改。所以 <code>fetch_add(1, Relaxed)</code> 當純計數器,<b>一個增量都不會掉</b>,即使 Relaxed。這是「計數器類敢用 Relaxed」的底氣。</p>
+
+  <h2>2. RMW 家族</h2>
+  <table class="mini">
+    <tr><th>操作</th><th>條件?</th><th>回傳</th><th>用途</th></tr>
+    <tr><td class="o-ar"><code>fetch_add</code> / <code>sub</code> / <code>or</code> / <code>and</code> / <code>xor</code></td><td><b>無條件</b>,一定寫</td><td>舊值</td><td>計數器、bitset、flags</td></tr>
+    <tr><td class="o-ar"><code>swap</code></td><td>無條件</td><td>舊值</td><td>取出並換掉(如 take 一個指標)</td></tr>
+    <tr><td class="o-ar"><code>compare_exchange</code></td><td><b>有條件</b>:現值 == expected 才寫</td><td><code>Ok(舊)</code> / <code>Err(實際值)</code></td><td>lock-free 結構、CAS loop</td></tr>
+    <tr><td class="o-ar"><code>compare_exchange_weak</code></td><td>有條件 + 允許 spurious 失敗</td><td>同上</td><td>CAS <b>迴圈</b>裡(LL/SC 架構更快)</td></tr>
+    <tr><td class="o-ar"><code>fetch_update</code></td><td>有條件(內部就是 CAS loop)</td><td><code>Ok</code>/<code>Err</code></td><td>把 CAS loop 包成一個閉包</td></tr>
+  </table>
+
+  <h2>3. 兩個正交問題(永遠拆開問)</h2>
+  <div class="card">
+    <p><b>問題 A(要不要 RMW?)= 原子性。</b>「同一個 atomic,是不是<b>多個</b> thread 在寫?」多寫者 → 要「讀+改+寫」焊成一步,否則 lost update。<b>單一寫者(如 SPSC 的 tail)→ 一個 plain <code>store</code> 就夠,不需要 RMW。</b></p>
+    <p><b>問題 B(掛哪個 ordering?)= 可見性。</b>就是姊妹頁的「兩個半邊」:</p>
+    <ul>
+      <li><b>load 半</b>:這一步要<b>看到</b>別 thread 的 payload 嗎?→ 需要 <span class="o-acq">Acquire</span>。</li>
+      <li><b>store 半</b>:這一步要<b>發布</b> payload 給下一個讀的人嗎?→ 需要 <span class="o-rel">Release</span>。</li>
+      <li>兩邊都要 → <span class="o-ar">AcqRel</span>。都不要(純記帳)→ <span class="o-rlx">Relaxed</span>。</li>
+    </ul>
+    <p>兩者<b>獨立</b>:<code>fetch_add(Relaxed)</code>(原子但零排序=純計數)、<code>compare_exchange(AcqRel)</code>(原子+雙向=拿鎖)都合法。<b>先答 A 決定用不用 RMW,再答 B 決定掛哪個 ordering。</b></p>
+  </div>
+
+  <h2>4. CAS 為什麼吃<u>兩個</u> ordering:結局數,不是半邊數</h2>
+  <p>這是招牌追問。<code>fetch_add</code> 只填一個 ordering,<code>compare_exchange</code> 填<b>兩個</b>——差別不在「幾個半邊」,在「<b>幾種結局</b>」。</p>
+  <table class="mini">
+    <tr><th>操作</th><th>有分支?</th><th>幾種結局</th><th>ordering 參數</th></tr>
+    <tr><td><code>fetch_add</code> / <code>swap</code></td><td>無條件</td><td><b>1</b>(一定 load+store)</td><td>1(值可為 AcqRel,涵蓋兩半)</td></tr>
+    <tr><td><code>compare_exchange</code></td><td>比對成功才寫</td><td><b>2</b>:成功=RMW / 失敗=<b>只 load</b></td><td>2:success, failure</td></tr>
+  </table>
+  <pre><code>c.compare_exchange(expected, new,
+    Ordering::AcqRel,   // success:load + store 都發生 → 可到 AcqRel
+    Ordering::Acquire)  // failure:只有 load 發生 → 最多 Acquire
+// c.compare_exchange(expected, new, Acquire, Release)  // ✗ panic:沒有「release 的失敗」</code></pre>
+  <div class="card warn">
+    <b>失敗那條為什麼不能 Release / AcqRel?</b>比對失敗 = <b>store 沒發生</b>,<b>沒有寫可以「發布」</b>。給它 Release 語意在語言層是 logic error → Rust 會 <b>panic</b>。所以 failure ordering 只能是 load ordering(<code>Relaxed</code> / <code>Acquire</code> / <code>SeqCst</code>)。<code>fetch_update</code> 的 <code>fetch_order</code> 同理(它涵蓋初次 load + 每次 CAS 失敗的 re-load)。</div>
+  <p class="note">「一個 ordering 參數」≠「只管一個半邊」:<code>fetch_add(AcqRel)</code> 這<b>單一</b>參數照樣同時給 load 半 Acquire、store 半 Release。參數的<b>數量</b>只反映<b>結局數</b>。</p>
+
+  <h2>5. CAS loop:為什麼要迴圈、weak vs strong</h2>
+  <p>多寫者搶同一個 atomic,CAS <b>本來就會失敗</b>(別人先改了)。所以 CAS 幾乎總是包在<b>重試迴圈</b>裡:失敗就拿新值重算再試。</p>
+  <pre><code>let mut cur = c.load(Relaxed);
+loop {
+    let new = f(cur);                                   // 用現值算新值
+    match c.compare_exchange_weak(cur, new, AcqRel, Acquire) {
+        Ok(_) => break,                                 // 沒人插隊 → 成功
+        Err(actual) => cur = actual,                    // 有人先改 → 用新值重試
+    }
+}</code></pre>
+  <table class="mini">
+    <tr><th></th><th><code>compare_exchange</code>(strong)</th><th><code>compare_exchange_weak</code></th></tr>
+    <tr><th>spurious 失敗</th><td>不會(值真的不符才失敗)</td><td class="hl-yel"><b>可能</b>(值符合也可能假失敗)</td></tr>
+    <tr><th>底層</th><td>LL/SC 架構要自己包一層 retry</td><td>直接對映一次 LL/SC,更快</td></tr>
+    <tr><th>用在</th><td><b>單次</b> CAS(不迴圈)</td><td><b>迴圈裡</b>(反正都要重試)</td></tr>
+  </table>
+  <p class="note">x86 有 <code>lock cmpxchg</code>,strong/weak 沒差;差別在 ARM/POWER 的 LL/SC(load-linked/store-conditional):weak 讓「假失敗」直接冒泡到你的 loop(你本來就會重試),strong 要在指令層多包一圈把假失敗吃掉。<span class="unv">unverified</span>:各架構確切 lowering 不背。</p>
+
+  <h2>6. ABA:CAS 只看值、不看歷史</h2>
+  <div class="card warn">
+    <p>CAS 判斷「現值 == expected」就以為「沒人動過」。但值可能 <b>A → B → A</b> 繞回來:你讀到 A,別人把它改成 B 又改回 A,你的 <code>compare_exchange(A, ...)</code> <b>誤以為沒變、成功了</b>——中間那段變化你完全沒察覺。</p>
+    <p>典型爆點:<b>lock-free stack 的 pop</b>。你讀 <code>head = 節點1</code>,打算 CAS 成 <code>節點1.next</code>;但在你 CAS 前,別人 pop 了節點1、又 pop 節點2、再 push 回節點1——<code>head</code> 又是節點1(A),你的 CAS 成功,卻把 <code>head</code> 設成一個<b>已經被釋放/已改變的 next</b>。</p>
+  </div>
+  <p>三種解:<b>① 版本號 / tagged pointer</b>(把值和一個單調遞增的 counter 綁在一起 CAS,值繞回但版本不會)、<b>② epoch / hazard pointer</b>(延遲回收,確保沒人還握著舊節點才 free)、<b>③ 根本不重用</b>(free-running index,如 SPSC 的計數器永不繞回同一值——這也是 SPSC <b>不需要 CAS</b> 的另一個原因)。詳見 <button class="jump" data-jump="p-followup">追問鏈 C</button>。</p>
+
+  <h2>7. 錨:<code>Arc</code> 的 refcount 就是這套的活教材</h2>
+  <table class="mini">
+    <tr><th>操作</th><th>RMW</th><th>ordering</th><th>為什麼</th></tr>
+    <tr><td><code>Arc::clone</code></td><td><code>fetch_add(1)</code></td><td class="o-rlx">Relaxed</td><td>只是多一個持有者,<b>不 publish 不 consume 資料</b> → 問題 B 答「都不用」</td></tr>
+    <tr><td><code>Arc::drop</code>(每次)</td><td><code>fetch_sub(1)</code></td><td class="o-rel">Release</td><td>「我對物件的使用發布出去」</td></tr>
+    <tr><td>減到 0,free 之前</td><td><code>fence</code></td><td class="o-acq">Acquire</td><td>先看到別 thread 在其 Release 前對物件做的所有事,才敢釋放記憶體</td></tr>
+  </table>
+  <p><code>clone</code> 敢 Relaxed 而 <code>drop</code> 要 Release 的差別:<b>clone 沒有 payload 交接;drop 之後那塊記憶體要被回收 = 最硬的 payload</b>。又是那把尺:這一步有沒有跨 thread 的資料要跟著它走?</p>
+
+  <h2>8. 從 RMW 到 P/C 家族:寫者數 = 難度</h2>
+  <p>RMW/CAS 是<b>機制</b>;lock-free 佇列家族(SPSC / MPSC / SPMC / MPMC)是<b>應用</b>。決定每一側要不要 CAS 的,就是<b>問題 A</b>:<b>那一側有幾個寫者?</b></p>
+  <table class="mini">
+    <tr><th></th><th>單 consumer(head 單寫)</th><th>多 consumer(head 多寫)</th></tr>
+    <tr><th>單 producer<br>(tail 單寫)</th><td class="hl-grn"><b>SPSC</b> — 兩側各單寫者 → <b>零 CAS</b>,plain load/store(你剛做的 challenge)</td><td><b>SPMC</b> — head 多寫 → consumer 側 CAS 搶</td></tr>
+    <tr><th>多 producer<br>(tail 多寫)</th><td><b>MPSC</b> — tail 多寫 → producer 側 CAS / <code>fetch_add</code> 搶</td><td class="hl-red"><b>MPMC</b> — 兩側都多寫 → 兩側都 CAS</td></tr>
+  </table>
+  <ul>
+    <li><b>SPSC</b>:每 index 單寫者 → <b>零 CAS</b>。free-running 計數器永不繞回同值,連 ABA 都免疫——這就是它最簡單的原因。</li>
+    <li><b>MPSC</b>:多 producer 搶 <code>tail</code> → <code>tail.fetch_add(1, Relaxed)</code> 發號碼牌(無 payload → Relaxed)。但完成順序<b>亂</b>,<b>不能</b>拿單一 tail 當「資料備妥水位線」——payload 的 Release/Acquire <b>下放到 per-slot ready 旗標</b>(<code>slot[pos].ready.store(true, Release)</code>)。</li>
+    <li><b>SPMC</b>:多 consumer 搶 <code>head</code> → head 側 CAS。其實是<b>兩題</b>:work-stealing(每人搶<b>不同</b>項,像 Tokio run queue)vs broadcast(每人都要收到<b>同一份</b>)——語意不同,別混。</li>
+    <li><b>MPMC</b>:兩側都搶 → <b>Vyukov bounded MPMC</b> 的招牌:每個 slot 帶一個 <b>sequence number</b>,CAS 推進 position + 用 seq 當「這格現在輪到 producer 還是 consumer」的旋轉門。</li>
+  </ul>
+  <div class="card info"><b>一句話串起來</b>:某一側的寫者數從 1 變 2,那一側就從「plain <code>store</code>」升級成「CAS 搶」;payload 的交接旗標也從「單一水位線」下放到「per-slot」。<b>深挖</b>(階梯圖解、MPSC 交錯 stepper、佇列家族手冊):<code>docs/artifacts/qa_lockfree_pc.html</code> · <code>html_p/lockfree-queue-family-handbook.html</code> · <code>html_p/mpsc-interleaving-stepper.html</code>。</div>
+</section>
+
+<!-- ============ STEPPER ============ -->
+<section id="p-stepper" class="panel">
+  <h2>2. 兩條 thread 用 CAS loop 對同一個計數器 +1</h2>
+  <p>共享 <code>counter</code> 起始 <b>5</b>。兩條 thread 各要 +1,正確結果是 <b>7</b>。看 CAS 怎麼靠「失敗重試」保證不丟更新;最後一步示範<b>用 plain load+store 取代 CAS</b> 如何漏掉一次。</p>
+  <div class="legend">
+    <span><b class="o-ar">AcqRel</b> CAS 成功(讀+寫)</span>
+    <span><b class="o-acq">Acquire</b> CAS 失敗(只讀)</span>
+    <span><b class="hl-grn">✓</b> CAS 成功</span>
+    <span><b class="hl-red">✗</b> CAS 失敗 → 重試</span>
+    <span>綠箭頭 = 寫進 counter</span>
+    <span>虛線 = 讀 counter</span>
+  </div>
+
+  <div class="svgbox">
+    <svg viewBox="0 0 1080 340" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="wa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a9b665"/></marker>
+      </defs>
+
+      <!-- shared counter box -->
+      <g class="ctrbox">
+        <rect x="452" y="140" width="176" height="60" rx="10"/>
+        <text class="lab" x="540" y="158" text-anchor="middle">shared AtomicUsize</text>
+        <text class="ctrval" id="ctrval" x="540" y="188" text-anchor="middle">5</text>
+      </g>
+
+      <!-- lanes -->
+      <line class="lane-line" x1="40" y1="70" x2="1040" y2="70"/>
+      <line class="lane-line" x1="40" y1="270" x2="1040" y2="270"/>
+      <text class="lane-label" x="8" y="40">Thread A</text>
+      <text class="lane-label" x="8" y="300">Thread B</text>
+
+      <!-- write arrow (A success) -->
+      <path class="warrow hide" id="wA" d="M300,92 C 380,120 430,130 470,138" marker-end="url(#wa)"/>
+      <!-- write arrow (B retry success) -->
+      <path class="warrow hide" id="wB" d="M770,248 C 700,222 640,208 616,200" marker-end="url(#wa)"/>
+
+      <!-- Thread A events -->
+      <g class="evt dim" id="eA1">
+        <rect x="60" y="48" width="150" height="44" rx="7"/>
+        <text class="op" x="135" y="66" text-anchor="middle">load → 5</text>
+        <text class="sub" x="135" y="83" text-anchor="middle">expected = 5</text>
+      </g>
+      <g class="evt dim" id="eA2">
+        <rect x="240" y="48" width="176" height="44" rx="7"/>
+        <text class="op" x="328" y="66" text-anchor="middle">CAS(5 → 6)</text>
+        <text class="badge o-ar" id="baA2" x="328" y="83" text-anchor="middle">AcqRel</text>
+      </g>
+
+      <!-- Thread B events -->
+      <g class="evt dim" id="eB1">
+        <rect x="60" y="248" width="150" height="44" rx="7"/>
+        <text class="op" x="135" y="266" text-anchor="middle">load → 5</text>
+        <text class="sub" x="135" y="283" text-anchor="middle">expected = 5</text>
+      </g>
+      <g class="evt dim" id="eB2">
+        <rect x="240" y="248" width="176" height="44" rx="7"/>
+        <text class="op" x="328" y="266" text-anchor="middle">CAS(5 → 6)</text>
+        <text class="badge o-acq" id="baB2" x="328" y="283" text-anchor="middle">Acquire</text>
+      </g>
+      <g class="evt dim" id="eB3">
+        <rect x="560" y="248" width="150" height="44" rx="7"/>
+        <text class="op" x="635" y="266" text-anchor="middle">reload → 6</text>
+        <text class="sub" x="635" y="283" text-anchor="middle">expected = 6</text>
+      </g>
+      <g class="evt dim" id="eB4">
+        <rect x="740" y="248" width="176" height="44" rx="7"/>
+        <text class="op" x="828" y="266" text-anchor="middle">CAS(6 → 7)</text>
+        <text class="badge o-ar" id="baB4" x="828" y="283" text-anchor="middle">AcqRel</text>
+      </g>
+
+      <!-- read hints (static, faint) -->
+      <path class="rarrow" d="M135,94 L500,140"/>
+      <path class="rarrow" d="M135,246 L500,200"/>
+
+      <!-- lost-update overlay (final 反例 step) -->
+      <g class="lost" id="lostmark">
+        <path class="lostline" d="M416,70 C 460,110 460,150 470,168"/>
+        <path class="lostline" d="M416,270 C 460,230 460,190 470,172"/>
+        <text class="losttxt" x="700" y="120" text-anchor="middle">plain store:兩邊都寫 6 → counter=6</text>
+        <text class="losttxt" x="700" y="140" text-anchor="middle">少了一次 +1 ⚡ lost update</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="stepctrl">
+    <button data-step="prev">‹ 上一步</button>
+    <button data-step="next">下一步 ›</button>
+    <span id="stepno" class="note"></span>
+    <div class="dots">
+      <div class="dot active" data-step="0">0</div>
+      <div class="dot" data-step="1">1</div>
+      <div class="dot" data-step="2">2</div>
+      <div class="dot" data-step="3">3</div>
+      <div class="dot" data-step="4">4</div>
+      <div class="dot" data-step="5">5</div>
+      <div class="dot brk" data-step="6">6</div>
+    </div>
+  </div>
+
+  <div class="stepgrid">
+    <div class="codepanel" id="codepanel"></div>
+    <div class="stepcard" id="stepcard"></div>
+  </div>
+</section>
+
+<!-- ============ FOLLOW-UP ============ -->
+<section id="p-followup" class="panel">
+  <h2>3. 面試追問(三條鏈,每條 ≥ 三層)</h2>
+
+  <h3>鏈 A — CAS 為什麼吃兩個 ordering</h3>
+  <div class="card">
+    <p><b>L1 — 為什麼 <code>fetch_add</code> 填一個、<code>compare_exchange</code> 填兩個?</b></p>
+    <p>ordering 參數的數量對應「幾種<b>結局</b>」,不是「幾個半邊」。<code>fetch_add</code> 無條件、一定 load+store,只有一種結局 → 一個。<code>compare_exchange</code> 會分岔:成功=完整 RMW、失敗=<b>只 load</b> → 兩種結局、兩個參數。</p>
+    <p><b>L2 — 失敗那條的 ordering 能填 <code>Release</code> 嗎?</b></p>
+    <p>不能。失敗代表 <b>store 沒發生</b>,沒有寫可以 release。填 Release / AcqRel 是 logic error → Rust <b>panic</b>。failure 只能是 load ordering(Relaxed / Acquire / SeqCst)。</p>
+    <p><b>L3 — 那 <code>fetch_add(AcqRel)</code> 的「一個參數」怎麼同時管兩個半邊?</b></p>
+    <p>ordering 這個 enum 的<b>值</b>負責把語意分配到兩半:AcqRel = load 半 Acquire + store 半 Release。參數的<b>數量</b>只反映結局數;<code>fetch_add</code> 一種結局但兩個半邊,單一 AcqRel 就涵蓋兩半。這也是為什麼 CAS 的 <b>success</b> 那格可以填到 AcqRel。</p>
+  </div>
+
+  <h3>鏈 B — CAS loop 與 weak / strong</h3>
+  <div class="card">
+    <p><b>L1 — 為什麼 CAS 幾乎總是包在迴圈裡?</b></p>
+    <p>多寫者搶同一 atomic,CAS 失敗是<b>正常</b>的(別人先改了)。失敗回傳的是<b>當下實際值</b>,你拿它重算新值再試,直到成功。單次不 loop 的 CAS 只有在「失敗就放棄」(如 try-lock)時才對。</p>
+    <p><b>L2 — <code>compare_exchange</code> 和 <code>_weak</code> 差在哪?</b></p>
+    <p>weak 允許 <b>spurious failure</b>:即使現值 == expected 也可能假失敗。因為 ARM/POWER 的 LL/SC(load-linked / store-conditional)本來就會因為 cache line 被碰、context switch 等假失敗;weak 直接把它冒泡給你,strong 要在指令層多包一圈把假失敗吃掉。</p>
+    <p><b>L3 — 那什麼時候用哪個?</b></p>
+    <p><b>迴圈裡用 weak</b>(你本來就會重試,假失敗只是多轉一圈,但每次 CAS 更便宜);<b>單次、不迴圈用 strong</b>(不能容忍假失敗把你踢掉)。x86 上兩者編出來一樣(<code>lock cmpxchg</code>),差異只在弱記憶體序架構——但寫對意圖是好習慣。</p>
+  </div>
+
+  <h3>鏈 C — ABA</h3>
+  <div class="card">
+    <p><b>L1 — 什麼是 ABA?</b></p>
+    <p>CAS 只比對「現值 == expected」,不看歷史。值 <b>A→B→A</b> 繞回來時,你的 <code>compare_exchange(A,…)</code> 誤以為沒變、成功了,但中間的變化(可能有節點被釋放/重用)你沒察覺。</p>
+    <p><b>L2 — 給一個會爆的場景。</b></p>
+    <p>Treiber stack pop:讀 <code>head=N1</code>、算好要 CAS 成 <code>N1.next=N2</code>。CAS 前別人 pop N1、pop N2、再 push N1 回來(N1 記憶體被重用)。<code>head</code> 又 == N1(A),你的 CAS <b>成功</b>,卻把 <code>head</code> 設成 <b>N2——一個已經被 pop 掉的節點</b>,堆疊結構壞掉 / use-after-free。</p>
+    <p><b>L3 — 三種解法,各自代價?</b></p>
+    <ul>
+      <li><b>版本號 / tagged pointer</b>:把指標和一個單調遞增 counter 綁成一個 double-width word 一起 CAS(x86 的 <code>cmpxchg16b</code>)。值繞回但版本不會 → CAS 失敗。代價:需要 double-width CAS。</li>
+      <li><b>epoch / hazard pointer</b>:延遲回收——確保「沒有任何 thread 還握著這個舊節點」才真的 free。代價:回收機制複雜(crossbeam-epoch 那套)。</li>
+      <li><b>不重用</b>:free-running 單調 index,永不繞回同一值(SPSC 計數器就是這樣,所以它連 CAS 都不用)。代價:只適用「不需要重用記憶體位址」的設計。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ QUIZ ============ -->
+<section id="p-quiz" class="panel">
+  <h2>4. Self-Quiz(答案摺疊)</h2>
+
+  <details>
+    <summary><span class="qnum">Q1(指定題)</span>&nbsp;MPSC 裡多個 producer 用 <code>tail.fetch_add(1, ?)</code> 搶 slot,ordering 該填什麼?為什麼?</summary>
+    <p><b>Relaxed 就夠。</b>先答問題 A:多 producer 搶同一 <code>tail</code> → 多寫者 → 要 RMW(<code>fetch_add</code> 保證每人拿到<b>唯一</b>格號、不丟、不重)。再答問題 B:搶格子的<b>當下還沒寫資料</b>,這一步沒有 payload 要交接 → 不需要 Acquire/Release → Relaxed。</p>
+    <p>關鍵陷阱:MPSC 的 producer 完成順序是亂的,<b>不能</b>拿單一 <code>tail</code> 當「資料備妥水位線」(那是 SPSC 才行)。payload 的 Release/Acquire 要<b>下放到 per-slot 的 ready 旗標</b>:<code>slot[pos].ready.store(true, Release)</code> / consumer <code>load(Acquire)</code>。<code>fetch_add</code> 只負責發號碼牌。</p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q2</span>&nbsp;<code>compare_exchange</code> 的 failure ordering 填 <code>Release</code> 會怎樣?</summary>
+    <p><b>panic</b>(logic error)。失敗代表 store 沒發生,沒有寫可以「發布」,所以 failure 只能是 load ordering(Relaxed / Acquire / SeqCst)。這也是判斷你懂不懂「CAS 兩種結局」的照妖鏡。</p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q3</span>&nbsp;<code>compare_exchange</code> vs <code>compare_exchange_weak</code>,CAS loop 裡該用哪個?</summary>
+    <p><b>loop 裡用 weak。</b>weak 允許 spurious failure(值符也可能假失敗),但你在迴圈裡本來就會重試,假失敗只是多轉一圈;好處是每次 CAS 對映一次 LL/SC、更便宜。<b>單次不迴圈用 strong</b>(不能被假失敗踢掉)。x86 上兩者一樣,差異在 ARM/POWER。</p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q4</span>&nbsp;為什麼 SPSC ring 從頭到尾<u>不用</u>任何 CAS/RMW?</summary>
+    <p>因為問題 A 的答案是「否」:<b>每個 index 只有一方寫</b>(tail←只有 producer、head←只有 consumer)。單一寫者 → 沒有 lost update 風險 → 一個 plain <code>store</code> 就夠,不需要焊成一步。RMW 是等你<b>破壞單寫者前提</b>(MPSC / MPMC / lock-free stack / refcount)才被迫登場的。順帶:free-running 計數器永不繞回同值,連 ABA 都免疫。</p>
+  </details>
+
+  <details>
+    <summary><span class="qnum">Q5</span>&nbsp;兩條 thread 各 <code>fetch_add(1, Relaxed)</code> 一百萬次,總和會不會少?為什麼一個 Relaxed 夠?</summary>
+    <p><b>不會少,剛好兩百萬。</b>RMW 保證讀到 modification order 的<b>最新值</b>(不像 Relaxed load 可能 stale),而且讀-改-寫不可分割 → 不丟增量。這個「原子性 + 讀最新」是 RMW <b>本身</b>免費給的,跟 ordering 無關;因為純計數不 publish / consume 任何 payload,問題 B 答「都不用」→ Relaxed。</p>
+  </details>
+</section>
+
+<!-- ============ CODE ============ -->
+<section id="p-code" class="panel">
+  <h2>完整代碼(std-only)</h2>
+  <div class="card info"><b>三段。</b>(1) 計數器:<code>fetch_add</code> 版 vs 手寫 CAS-loop 版(等價);(2) 一個會漏更新的 <b>錯</b>版(plain load+store)當對照;(3) Treiber lock-free stack——CAS 的招牌用法。<span class="note"><span class="unv">unverified</span>:本頁製作環境未實編這段;請在你的 pad 按一次 Run 當最終確認。Treiber stack <b>刻意不做記憶體回收</b>(節點會 leak),把焦點留在 CAS 本身——真實版要配 epoch/hazard 解 ABA + reclamation。</span></div>
+
+  <h3>① 計數器:<code>fetch_add</code> vs 手寫 CAS loop</h3>
+  <pre><code>use std::sync::atomic::{AtomicUsize, Ordering::*};
+
+// 最簡:一步到位。多寫者也不丟,因為 RMW 不可分割。
+fn inc_fetch_add(c: &amp;AtomicUsize) {
+    c.fetch_add(1, Relaxed);          // 純計數,無 payload → Relaxed
+}
+
+// 等價的手寫版:當你的「改」不是 +1 這種現成 op 時就得這樣寫。
+fn inc_cas_loop(c: &amp;AtomicUsize) {
+    let mut cur = c.load(Relaxed);
+    loop {
+        let new = cur + 1;             // 任意計算
+        // 迴圈裡用 _weak;success 這裡不 handoff payload,Relaxed 即可
+        match c.compare_exchange_weak(cur, new, Relaxed, Relaxed) {
+            Ok(_) => break,            // 沒人插隊
+            Err(actual) => cur = actual, // 有人先改 → 用最新值重試
+        }
+    }
+}</code></pre>
+
+  <h3>② 錯版:plain load+store 會漏更新(別這樣寫)</h3>
+  <pre><code>// ⚠ load 與 store 之間有縫,兩 thread 會擠進去互相蓋掉
+fn inc_broken(c: &amp;AtomicUsize) {
+    let v = c.load(Relaxed);
+    c.store(v + 1, Relaxed);          // A、B 都讀到 5、都寫 6 → 少一次
+}</code></pre>
+
+  <h3>③ Treiber lock-free stack(CAS 招牌用法)</h3>
+  <pre><code>use std::sync::atomic::{AtomicPtr, Ordering::*};
+use std::ptr;
+
+struct Node&lt;T&gt; { val: T, next: *mut Node&lt;T&gt; }
+
+pub struct Stack&lt;T&gt; { head: AtomicPtr&lt;Node&lt;T&gt;&gt; }
+
+impl&lt;T&gt; Stack&lt;T&gt; {
+    pub fn new() -&gt; Self { Stack { head: AtomicPtr::new(ptr::null_mut()) } }
+
+    pub fn push(&amp;self, val: T) {
+        let node = Box::into_raw(Box::new(Node { val, next: ptr::null_mut() }));
+        let mut cur = self.head.load(Relaxed);
+        loop {
+            // 把新節點的 next 接到當前 head
+            unsafe { (*node).next = cur; }
+            // 發布這個節點(Release);失敗只 load(Acquire 拿到最新 head)
+            match self.head.compare_exchange_weak(cur, node, Release, Acquire) {
+                Ok(_) =&gt; return,
+                Err(actual) =&gt; cur = actual,   // 有人先 push/pop → 重接重試
+            }
+        }
+    }
+
+    pub fn pop(&amp;self) -&gt; Option&lt;T&gt; {
+        let mut cur = self.head.load(Acquire);   // 要讀 *cur,先 Acquire
+        loop {
+            if cur.is_null() { return None; }
+            let next = unsafe { (*cur).next };
+            // ⚠ 此處有 ABA 風險(見追問鏈 C);示範版不做回收
+            match self.head.compare_exchange_weak(cur, next, AcqRel, Acquire) {
+                Ok(_) =&gt; {
+                    let boxed = unsafe { Box::from_raw(cur) };
+                    return Some(boxed.val);
+                }
+                Err(actual) =&gt; cur = actual,
+            }
+        }
+    }
+}
+
+// 注意:多執行緒下 pop 的 Box::from_raw 有 ABA / use-after-free 風險,
+// 真實版要 epoch(crossbeam-epoch)或 hazard pointer;此處為教學單純化。</code></pre>
+
+  <details>
+    <summary>▶ 計數器的雙執行緒驗證 harness(點開)</summary>
+    <pre><code>fn main() {
+    use std::sync::Arc;
+    use std::thread;
+    let c = Arc::new(AtomicUsize::new(0));
+    const T: usize = 8;
+    const N: usize = 100_000;
+    let mut hs = Vec::new();
+    for _ in 0..T {
+        let c = c.clone();
+        hs.push(thread::spawn(move || {
+            for _ in 0..N { inc_cas_loop(&amp;c); }
+        }));
+    }
+    for h in hs { h.join().unwrap(); }
+    assert_eq!(c.load(Relaxed), T * N, "CAS loop 丟了更新");
+    println!("{} 次遞增全數到帳 = {}", T * N, c.load(Relaxed));
+}</code></pre>
+    <p class="note">把 <code>inc_cas_loop</code> 換成 <code>inc_broken</code> 重跑,<code>assert_eq!</code> 幾乎必爆(總和 &lt; T·N)——那就是 lost update 的實證,也是 <button class="jump" data-jump="p-stepper">Stepper 第 6 步</button>演的。</p>
+  </details>
+</section>
+
+</div><!-- /.wrap -->
+
+<script>
+(function(){
+  "use strict";
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1,
+    "String":1,"Vec":1,"Box":1,"Option":1,"Result":1,"Arc":1,"AtomicUsize":1,"AtomicPtr":1,"Ordering":1,
+    "Node":1,"Stack":1,"Some":1,"None":1,"Ok":1,"Err":1,"Send":1,"Sync":1};
+  var RS_ORD = {"Relaxed":"tk-o-rlx","Acquire":"tk-o-acq","Release":"tk-o-rel","SeqCst":"tk-o-sc","AcqRel":"tk-o-ar"};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i];
+      if(c==="/"&&src[i+1]==="/"){ var j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ var j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ var j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c>="0"&&c<="9"){
+        var nm=/^[0-9][0-9_]*/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        var j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_ORD[w]) cls=RS_ORD[w];
+        else if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+
+  // events: eA1 A-load, eA2 A-CAS, eB1 B-load, eB2 B-CAS(fail), eB3 B-reload, eB4 B-CAS(ok)
+  var STEPS = [
+    { // 0
+      ctr:"5", ev:{eA1:"dim",eA2:"dim",eB1:"dim",eB2:"dim",eB3:"dim",eB4:"dim"},
+      wA:false,wB:false,lost:false,brk:false,chg:[],
+      title:"起點:counter = 5,兩條 thread 各要 +1",
+      body:"共享 <code>counter</code> = 5。A、B 都想 +1,正確結果是 <b>7</b>。RMW 的挑戰:兩條 thread 同時動同一個變數,怎麼保證兩次 +1 都算數?CAS 的答案是「賭一把:賭沒人插隊;插隊了就重試」。按 Next 開始。"
+    },
+    { // 1
+      ctr:"5", ev:{eA1:"ok",eA2:"dim",eB1:"ok",eB2:"dim",eB3:"dim",eB4:"dim"},
+      wA:false,wB:false,lost:false,brk:false,chg:["load"],
+      title:"兩條 thread 都 load 到 5",
+      body:"A 和 B <b>都</b>讀到 <code>counter = 5</code>,各自記下 <code>expected = 5</code>、算好要寫的 <code>new = 6</code>。注意:這裡兩個 load 各自獨立,<b>還沒有人寫</b>——真正的競爭在下一步的 CAS。"
+    },
+    { // 2
+      ctr:"6", ev:{eA1:"ok",eA2:"ok",eB1:"ok",eB2:"dim",eB3:"dim",eB4:"dim"},
+      wA:true,wB:false,lost:false,brk:false,chg:["cas","ok"],
+      title:"A 的 CAS(5 → 6) 成功",
+      body:"A 做 <code>compare_exchange(5, 6)</code>:現值確實是 5 == expected → <b class='hl-grn'>成功</b>,counter 變 <b>6</b>(綠箭頭)。成功那條走 <span class='o-ar'>AcqRel</span>(讀+寫都發生)。關鍵:整個「比對 5、寫 6」是<b>不可分割</b>的一步,B 插不進來。"
+    },
+    { // 3
+      ctr:"6", ev:{eA1:"ok",eA2:"ok",eB1:"ok",eB2:"bad",eB3:"dim",eB4:"dim"},
+      wA:true,wB:false,lost:false,brk:false,chg:["cas","err"],
+      title:"B 的 CAS(5 → 6) 失敗",
+      body:"B 也做 <code>compare_exchange(5, 6)</code>,但現值已經是 <b>6</b>(A 改過了)≠ expected 5 → <b class='hl-red'>失敗</b>,回傳 <code>Err(6)</code>。<b>失敗只發生了一個 load</b>(把實際值 6 讀出來給你),沒有 store——這就是為什麼失敗那條的 ordering 最多 <span class='o-acq'>Acquire</span>,不能 Release。B 沒有丟更新,它只是要重試。"
+    },
+    { // 4
+      ctr:"7", ev:{eA1:"ok",eA2:"ok",eB1:"dim",eB2:"dim",eB3:"ok",eB4:"ok"},
+      wA:false,wB:true,lost:false,brk:false,chg:["err","cas","ok"],
+      title:"B 重試:reload 6 → CAS(6 → 7) 成功",
+      body:"B 拿失敗回傳的 <b>6</b> 當新的 expected,重算 <code>new = 7</code>,再 <code>compare_exchange(6, 7)</code> → 這次現值是 6 == expected → <b class='hl-grn'>成功</b>,counter = <b>7</b>。<b>兩次 +1 都算數了</b>。這就是 CAS loop:失敗不是錯,是「有人先到,我重來」。<code>fetch_update</code> 就是把這個 loop 包成一個閉包。"
+    },
+    { // 5
+      ctr:"7", ev:{eA1:"ok",eA2:"ok",eB1:"ok",eB2:"bad",eB3:"ok",eB4:"ok"},
+      wA:true,wB:true,lost:false,brk:false,chg:[],
+      title:"整段回顧:CAS 靠「失敗重試」保證不丟",
+      body:"完整走完:A 一次成功、B 失敗一次後重試成功,counter 5 → 7,<b>兩次 +1 都在</b>。RMW 的原子性讓「比對+寫」不可分割,CAS loop 讓「被插隊」變成「重試」而非「丟失」。<code>fetch_add(1)</code> 是這整套的硬體捷徑——一條 <code>lock xadd</code> 幫你把 loop 做掉。<b>下一步看:如果不用 RMW、改用 plain load+store,會怎樣?</b>"
+    },
+    { // 6 — 反例
+      ctr:"6", ev:{eA1:"ok",eA2:"bad",eB1:"ok",eB2:"bad",eB3:"dim",eB4:"dim"},
+      wA:false,wB:false,lost:true,brk:true,chg:["broken"],
+      title:"反例:用 plain load+store 取代 RMW → lost update",
+      body:"若把 CAS 換成「<code>load</code> 再 <code>store</code>」兩步:A、B <b>都</b>讀到 5、<b>都</b>寫 6——沒有「比對」擋著,B 的 store 直接蓋上去。兩次 +1 只剩<b>一次</b>,counter 卡在 <b>6</b>(應為 7)。<b class='hl-red'>lost update</b>。這正是 RMW 存在的理由:把讀-改-寫焊成一步,讓「A 改過了」這件事能被 B 的 CAS 察覺並重試。<code>fetch_add</code> / CAS 有這個保護,plain load+store 沒有。"
+    }
+  ];
+
+  function codeHTML(step){
+    var chg = step.chg || [];
+    function ln(key, txt){ var h = hlRust(txt); return (key && chg.indexOf(key) >= 0) ? "<span class='chgline'>"+h+"</span>" : h; }
+    var rows = [
+      [null,     "// 兩條 thread 各跑 inc()。use Ordering::*;"],
+      [null,     "fn inc(c: &AtomicUsize) {"],
+      ["load",   "    let mut cur = c.load(Relaxed);        // 讀現值"],
+      [null,     "    loop {"],
+      [null,     "        let new = cur + 1;                // 改"],
+      ["cas",    "        match c.compare_exchange_weak("],
+      [null,     "                 cur, new,"],
+      [null,     "                 AcqRel,                  // success:讀+寫"],
+      [null,     "                 Acquire) {               // failure:只讀"],
+      ["ok",     "            Ok(_) => break,               // 沒人插隊 → 成功"],
+      ["err",    "            Err(actual) => cur = actual,  // 有人先改 → 重試"],
+      [null,     "        }"],
+      [null,     "    }"],
+      [null,     "}"],
+      [null,     ""],
+      ["broken", "// 反例:別這樣寫 —— load 與 store 之間有縫"],
+      ["broken", "fn inc_broken(c: &AtomicUsize) {"],
+      ["broken", "    let v = c.load(Relaxed);"],
+      ["broken", "    c.store(v + 1, Relaxed);   // A、B 都寫 6 → 少一次"],
+      ["broken", "}"]
+    ];
+    return rows.map(function(r){ return ln(r[0], r[1]); }).join("\n");
+  }
+
+  function setEvt(id, state){
+    var g = document.getElementById(id);
+    if(!g) return;
+    g.setAttribute("class", "evt " + (state || ""));
+  }
+  function setArrow(id, on){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.setAttribute("class", "warrow" + (on ? "" : " hide"));
+  }
+
+  var cur = 0;
+  function render(i){
+    if(i < 0) i = 0; if(i > STEPS.length-1) i = STEPS.length-1;
+    cur = i;
+    var s = STEPS[i];
+    var cv = document.getElementById("ctrval");
+    if(cv) cv.textContent = s.ctr;
+    for(var id in s.ev){ setEvt(id, s.ev[id]); }
+    setArrow("wA", s.wA); setArrow("wB", s.wB);
+    var lost = document.getElementById("lostmark");
+    if(lost) lost.setAttribute("class", "lost" + (s.lost ? " show" : ""));
+
+    var cp = document.getElementById("codepanel");
+    if(cp) cp.innerHTML = codeHTML(s);
+    var sc = document.getElementById("stepcard");
+    if(sc){
+      sc.setAttribute("class", "stepcard" + (s.brk ? " brk" : ""));
+      sc.innerHTML = "<h4>Step "+i+" — "+s.title+"</h4><div>"+s.body+"</div>";
+    }
+    var no = document.getElementById("stepno");
+    if(no) no.textContent = "Step " + i + " / " + (STEPS.length-1);
+    document.querySelectorAll(".dot").forEach(function(d){
+      d.classList.toggle("active", parseInt(d.getAttribute("data-step"),10) === i);
+    });
+  }
+
+  function showTab(id){
+    document.querySelectorAll(".panel").forEach(function(p){ p.classList.toggle("active", p.id === id); });
+    document.querySelectorAll(".tabbtn").forEach(function(b){ b.classList.toggle("active", b.getAttribute("data-jump") === id); });
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+
+  document.addEventListener("click", function(ev){
+    var jt = ev.target.closest("[data-jump]");
+    if(jt){ showTab(jt.getAttribute("data-jump")); return; }
+    var st = ev.target.closest("[data-step]");
+    if(st){
+      var v = st.getAttribute("data-step");
+      if(v === "next") render(cur+1);
+      else if(v === "prev") render(cur-1);
+      else render(parseInt(v,10));
+    }
+  });
+
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
+  render(0);
+})();
+</script>
+</body>
+</html>
