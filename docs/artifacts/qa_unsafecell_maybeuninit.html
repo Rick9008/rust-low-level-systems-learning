@@ -1,0 +1,249 @@
+<title>為什麼是 UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;:兩層正交 · Cell/Option 為何不行</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code.bad { color: var(--danger); }
+  code.ok { color: var(--s2); }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .card { border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 14px 16px; }
+  .card h3 { margin: 0 0 6px; font-size: 14px; font-weight: 700; color: var(--ink); }
+  .card .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  @media (max-width: 620px) { .two { grid-template-columns: 1fr; } }
+  /* stepper */
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cell { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; }
+  .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .edge { text-align: center; font-size: 11.5px; font-weight: 700; padding: 6px; border-radius: 7px; margin-top: 8px; grid-column: 1 / -1; }
+  .edge.on { color: var(--s2); border: 1px dashed var(--s2); }
+  .edge.off { color: var(--danger); border: 1px dashed var(--danger); }
+  .edge.hide { opacity: .3; color: var(--muted); border: 1px dashed var(--grid); }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · unsafe / 內部可變性 · spsc 前置</div>
+  <h1>為什麼是 <code>UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;</code></h1>
+  <p class="lede">SPSC ring 的槽位型別是 <code>Box&lt;[UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;]&gt;</code>——不是抄來的巧合,是<strong>兩個正交問題</strong>逼出來的唯一合理型別。這頁把「兩層各解什麼、為何不能換 <code>Cell</code>、為何不用 <code>Option</code>」一次講死。ordering 側見姊妹頁 <code>qa_atomic_ordering_rmw.html</code>。</p>
+
+  <section>
+    <h2>0 · 兩層正交:一層解「能不能改」、一層解「有沒有 T」</h2>
+    <div class="two">
+      <div class="card">
+        <div class="tag">外層</div>
+        <h3><code>UnsafeCell&lt;…&gt;</code></h3>
+        <p style="margin:6px 0 0">解 <strong>aliasing / 內部可變性</strong>:讓你能透過兩條 thread 共享的 <code>&amp;SpscRing</code> 合法地<strong>改</strong>槽位。</p>
+      </div>
+      <div class="card">
+        <div class="tag">內層</div>
+        <h3><code>MaybeUninit&lt;T&gt;</code></h3>
+        <p style="margin:6px 0 0">解 <strong>初始化 / drop 生命週期</strong>:槽位一開始是空的,可能有、也可能沒有一個有效 <code>T</code>。</p>
+      </div>
+    </div>
+    <p style="margin-top:14px">兩個問題你<strong>都</strong>有,所以兩層都要。合起來讀:「一格<strong>我能透過 <code>&amp;</code> 改</strong>、而且<strong>可能有也可能沒有</strong>有效 <code>T</code> 的槽位」。</p>
+  </section>
+
+  <section>
+    <h2>1 · UnsafeCell:唯一能「透過 <code>&amp;</code> 改」的原始積木</h2>
+    <p>Rust 別名模型:拿著 <code>&amp;T</code>,編譯器就<strong>假設它不變</strong>(可 cache 進暫存器、重排、省略重讀)。把 <code>&amp;T</code> 轉裸指標去寫一塊<strong>不在 <code>UnsafeCell</code> 裡</strong>的資料 → <strong>立刻 UB</strong>。</p>
+    <blockquote class="say"><code>UnsafeCell</code> 是<strong>唯一</strong>告訴編譯器「這裡面即使透過 <code>&amp;</code> 也可能被改,別做『不會變』假設」的標記。所有內部可變性型別(<code>Cell</code> / <code>RefCell</code> / <code>Mutex</code> / <code>Atomic*</code>)骨子裡都是它。</blockquote>
+    <p style="margin-top:14px">它<strong>不是 ptr</strong>——是包住 <code>T</code> 的結構,<code>.get()</code> 交給你 <code>*mut T</code>。它自己<strong>零同步</strong>:「兩條 thread 不會同時碰同一格」是你用 SP/SC 型別不變式 + head/tail 的 Release/Acquire fence 去<strong>證明</strong>的——這也是為什麼每個 <code>unsafe</code> 上面都要寫 SAFETY 不變式。</p>
+  </section>
+
+  <section>
+    <h2>2 · 內部可變性階梯:安全包裝 = 標準庫打包好的證明</h2>
+    <p>它們<strong>全部</strong>建在 <code>UnsafeCell</code> 上,差別在「誰幫你證明、代價、能不能跨 thread」。往上能用安全包裝就用;<code>UnsafeCell</code> 是階梯最底、專給「我在造新抽象、我當證明作者」。</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>型別</th><th>誰證明安全</th><th>代價</th><th>Sync?</th><th>用在</th></tr>
+      <tr><td><code>Cell&lt;T&gt;</code></td><td>標準庫(單執行緒)</td><td>零</td><td>✗</td><td>單 thread、整值換</td></tr>
+      <tr><td><code>RefCell&lt;T&gt;</code></td><td>標準庫(執行期借用檢查,違反 panic)</td><td>借用旗標</td><td>✗</td><td>單 thread、要真的 <code>&amp;</code>/<code>&amp;mut</code></td></tr>
+      <tr><td><code>Mutex</code>/<code>RwLock&lt;T&gt;</code></td><td>標準庫(上鎖)</td><td>鎖 / 阻塞</td><td>✓</td><td>跨 thread、可接受鎖</td></tr>
+      <tr><td><code>Atomic*</code></td><td>標準庫(lock-free)</td><td>一個 word</td><td>✓</td><td>跨 thread、單字大小</td></tr>
+      <tr><td><strong><code>UnsafeCell&lt;T&gt;</code></strong></td><td><strong>你</strong></td><td>零(你扛證明)</td><td>✗(自己 <code>unsafe impl</code>)</td><td><strong>上面都不合,你在造新抽象</strong></td></tr>
+    </table></div>
+    <p style="margin-top:14px"><strong>ring 是怎麼被「逼」到 UnsafeCell 的</strong>:每層安全的都被刷掉——<code>Cell</code>/<code>RefCell</code> <strong>!Sync</strong> 出局 → <code>Mutex</code>/<code>RwLock</code> 要<strong>上鎖</strong>(否定 lock-free)→ <code>Atomic*</code> 只裝<strong>一個 word</strong>(裝不下任意 <code>T</code>)→ 全刷完只剩 <code>UnsafeCell</code> + 你自己的 fence 證明。你不是<strong>選</strong>它,是被逼下來的。</p>
+  </section>
+
+  <section>
+    <h2>3 · 互動:為什麼不能換 <code>Cell</code>(關鍵不是 <code>!Sync</code>)</h2>
+    <p>常見誤解:「因為 <code>Cell</code> 是 <code>!Sync</code>」。但 <code>UnsafeCell</code> <strong>也</strong> <code>!Sync</code>(<code>Cell</code> 的 <code>!Sync</code> 正是因為它包著 <code>UnsafeCell</code>),兩邊都得 <code>unsafe impl Sync</code>。真正的區別是那句承諾<strong>守不守得住</strong>。切換兩種 <code>buf</code> 型別,走一遍兩條 thread 同時寫 <code>slot[0]</code>:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="mode">
+          <button data-mode="unsafe" class="on">buf: UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;</button>
+          <button data-mode="cell">buf: Cell&lt;MaybeUninit&lt;T&gt;&gt;</button>
+        </div>
+        <button id="next">下一步 ▸</button>
+        <button id="reset">重置</button>
+        <span class="stepcap" id="stepcap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>Thread A</h4>
+          <div class="cell" id="a">—</div>
+        </div>
+        <div class="lane">
+          <h4>Thread B</h4>
+          <div class="cell" id="b">—</div>
+        </div>
+        <div class="edge hide" id="edge">unsafe impl Sync 的承諾</div>
+      </div>
+      <div class="step-narr" id="narr"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 · MaybeUninit vs Option:Option 可用,但「高度錯」</h2>
+    <p><code>MaybeUninit&lt;T&gt;</code> 跟 <code>T</code> <strong>同大小同對齊</strong>——它不是為了「更緊密」,是為了<strong>語意</strong>:合法持有「還不是有效 <code>T</code>」的記憶體(配置未初始化的 <code>[T; N]</code> 當場 UB),而且<strong>沒有解構子</strong>(永不自動 drop,讓你手控「首次寫不 drop 舊值 / pop 後不 double-drop / Drop 只清 <code>[head,tail)</code>」)。</p>
+    <p style="margin-top:10px"><code>Option&lt;T&gt;</code> 其實<strong>能用、sound、甚至自動處理 Drop</strong>。但它是錯的高度,三個理由:</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>面向</th><th><code>MaybeUninit&lt;T&gt;</code></th><th><code>Option&lt;T&gt;</code></th></tr>
+      <tr><td>大小</td><td>= <code>T</code>(<code>MaybeUninit&lt;u64&gt;</code> = 8B)</td><td>常 &gt; <code>T</code>,多 discriminant(<code>Option&lt;u64&gt;</code> = <strong>16B</strong>)→ buffer 兩倍、cache 命中砍半</td></tr>
+      <tr><td>占用狀態</td><td>由 head/tail <strong>單一真相</strong>負責,槽位不帶 tag</td><td>tag 是<strong>第二份</strong>、非 atomic 的占用旗標,抄一遍 head/tail 已知的事</td></tr>
+      <tr><td>讀取</td><td><code class="ok">assume_init_read</code>:<strong>無分支</strong> move(初始化已由 <code>[head,tail)</code>+Acquire 證明)</td><td><code>take()</code> branch 檢查 tag(檢查已證明的事),或 <code>unwrap_unchecked</code>(同斷言卻仍付 tag 大小)</td></tr>
+    </table></div>
+    <blockquote class="say">Option 不是<strong>錯</strong>,是<strong>高度錯</strong>:拿一個非 atomic 的 per-slot tag 去重新解決「這格占用了嗎」——但那件事你的 head/tail atomic 已經是單一真相來源。<code>MaybeUninit</code> 的立場:<strong>「占用與否由 index 全權負責;槽位只是一塊生的、對齊好的儲存空間,不帶 tag、不帶解構子。」</strong></blockquote>
+  </section>
+
+  <section>
+    <h2>5 · 面試句庫</h2>
+    <blockquote class="say">
+      “<code>UnsafeCell</code> is the only primitive that lets you mutate through a shared <code>&amp;</code> — every interior-mutability type is built on it. Unlike <code>Cell</code>, it has <strong>no safe mutation API</strong>, so every access is a marked <code>unsafe</code> block. That's exactly what a lock-free structure needs: the no-data-race invariant becomes something I prove at each site, not a convention I hope holds.”
+      <em>把「為什麼不是 Cell」講到位。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Both <code>Cell</code> and <code>UnsafeCell</code> are <code>!Sync</code>, so both need <code>unsafe impl Sync</code>. The difference is whether that promise holds: <code>Cell</code> exposes safe <code>set</code>/<code>get</code> that would race with no <code>unsafe</code> marker, so the impl would be unsound; <code>UnsafeCell</code>'s only path is a raw pointer I control.”
+      <em>秀你知道差別不在 <code>!Sync</code>。</em>
+    </blockquote>
+    <blockquote class="say">
+      “<code>MaybeUninit</code> is the same size as <code>T</code> and has no destructor — it lets the ring hold uninitialized slots and control drop manually. <code>Option</code> would work but pays a discriminant, duplicates the occupancy that head/tail already track, and forces a branch on a fact I've already proven.”
+      <em>一句話說完 MaybeUninit vs Option。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:spsc 前置,讀懂即可。姊妹頁:<code>docs/artifacts/qa_atomic_ordering_rmw.html</code>(ordering / RMW 側)· <code>docs/artifacts/spsc_ring.html</code>。完整文字版:<code>docs/atomics-unsafe-foundations.md</code>(含兩條 edge 的推導表與那把「誰寫的」尺)。
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "unsafe";        // "unsafe" | "cell"
+  var step = 0;               // 0..3
+  var MAX = 3;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var narr = {
+    unsafe: [
+      "初始:<b>buf: UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;</b>。要寫槽位,唯一的路徑是 <b>.get() → *mut T</b>。",
+      "Thread A 要寫 → 被逼進 <b>unsafe { *ptr = .. }</b>,一個<b>有標記、有 SAFETY 註解</b>的區塊。",
+      "Thread B 同理,也在 <b>unsafe</b> 裡。你在那裡用 SP/SC 型別不變式 + fence <b>證明</b>了兩者不會同時碰同一格。",
+      "<b>unsafe impl Sync 的承諾守得住 ✓</b>:能造成競爭的只有你審查過的 unsafe。<b>sound</b>。"
+    ],
+    cell: [
+      "初始:<b>buf: Cell&lt;MaybeUninit&lt;T&gt;&gt;</b>。Cell 提供<b>安全</b>方法 <b>.set()</b>——透過 <b>&amp;self</b> 就能改,零同步、零 unsafe。",
+      "Thread A 呼叫 <b>ring.buf[0].set(x)</b>——注意:<b>沒有 unsafe</b>,編譯器不擋。",
+      "Thread B 同時呼叫 <b>ring.buf[0].set(y)</b>——一樣是安全碼。兩條非同步寫撞同一格。",
+      "<b>data race → UB ✗</b>,而且全程<b>沒有一個 unsafe 警告</b>。你的 <b>unsafe impl Sync 是假承諾</b>:安全碼就能觸發 UB。<b>unsound</b>。"
+    ]
+  };
+
+  function render() {
+    var safe = (mode === "unsafe");
+    var a = $("a"), b = $("b"), edge = $("edge");
+    // Thread A
+    if (step < 1) { a.textContent = "—"; a.className = "cell"; }
+    else if (safe) { a.textContent = "unsafe { *p = x }"; a.className = "cell" + (step === 1 ? " hot" : ""); }
+    else { a.textContent = "buf[0].set(x)"; a.className = "cell" + (step === 1 ? " hot" : ""); }
+    // Thread B
+    if (step < 2) { b.textContent = "—"; b.className = "cell"; }
+    else if (safe) { b.textContent = "unsafe { *p = y }"; b.className = "cell" + (step === 2 ? " hot" : ""); }
+    else { b.textContent = "buf[0].set(y)"; b.className = "cell" + (step === 2 ? " hot" : "") + (step >= 3 ? " bad" : ""); }
+    if (!safe && step >= 2) a.className = "cell" + (step >= 3 ? " bad" : (step === 1 ? " hot" : ""));
+    // edge / verdict
+    if (step < 3) { edge.className = "edge hide"; edge.textContent = "unsafe impl Sync 的承諾"; }
+    else if (safe) { edge.className = "edge on"; edge.textContent = "✓ 每個存取都是稽核過的 unsafe → 承諾守得住 → sound"; }
+    else { edge.className = "edge off"; edge.textContent = "✗ 安全碼就能 race,無 unsafe 警告 → 假承諾 → unsound"; }
+    $("narr").innerHTML = narr[mode][step];
+    $("stepcap").textContent = "步驟 " + step + " / " + MAX;
+    $("next").disabled = (step >= MAX);
+  }
+
+  $("next").addEventListener("click", function () { if (step < MAX) { step++; render(); } });
+  $("reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("mode");
+  toggle.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-mode]");
+    if (!btn) return;
+    mode = btn.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === btn);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>

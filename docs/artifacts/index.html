@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、12 份深讀教材(html_p:追問鏈 + self-quiz)、7 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、12 份深讀教材(html_p:追問鏈 + self-quiz)、8 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -791,6 +791,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">qa · atomic ordering 速查</span>
       <span class="hook">RMW 為何 fetch_add 填一個、CAS/fetch_update 填兩個(success 有寫 / failure 只讀);每 op 能填什麼、填錯 panic vs 靜默 bug;含 Release/Acquire 可見性 stepper(切 Relaxed 看 data race 現形)。</span>
       <span class="hits">gruvbox · 「該用什麼」速查表 · loom 抓的就是這個</span>
+    </a>
+    <a class="card" href="qa_unsafecell_maybeuninit.html">
+      <span class="name">qa · 為什麼是 UnsafeCell&lt;MaybeUninit&lt;T&gt;&gt;</span>
+      <span class="hook">兩層正交:UnsafeCell 解 aliasing(逼 unsafe 稽核)、MaybeUninit 解 init/drop;內部可變性階梯、Cell 為何不行(關鍵不是 !Sync,是 unsafe impl Sync 那句假承諾)、MaybeUninit vs Option。含 Cell/UnsafeCell soundness stepper。</span>
+      <span class="hits">spsc 前置 · 槽位型別每一層都能一句話辯護 · Option 是高度錯</span>
     </a>
   </div>
 </section>
