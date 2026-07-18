@@ -32,7 +32,23 @@ impl Wake for ThreadWaker {
 /// 3. loop:poll → Ready 就回傳;Pending 就 `thread::park()`
 /// 4. 醒來**一律 re-poll**(park 允許虛假喚醒;完成與否由 future 說)
 pub fn block_on<F: Future>(fut: F) -> F::Output {
-    todo!("spec: pin! + waker + loop {{ poll / park }}")
+    // todo!("spec: pin! + waker + loop {{ poll / park }}")
+    let mut pin_fut = pin!(fut);
+    let waker = Waker::from(Arc::new(ThreadWaker {
+        thread: thread::current(),
+    }));
+    let mut cx = Context::from_waker(&waker);
+    let res = loop {
+        let pin_fut_ref = &mut pin_fut;
+        // as mut will produce a new Pin<&mut F> within shorter lifetime
+        // pub fn as_mut<'a>(&'a mut self) -> Pin<&'a mut F>
+        //          ↑ 借你的 fut 多久      ↑ 新 Pin 裡的 &mut 就活多久
+        //
+        match pin_fut_ref.as_mut().poll(&mut cx) {
+            Poll::Ready(item) => return item,
+            Poll::Pending => thread::park(),
+        }
+    };
 }
 
 /// async sleep。
@@ -79,7 +95,20 @@ impl Future for Delay {
     ///    只保證最後一次 poll 的 waker 會被叫)→ Pending
     fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         let this = self.get_mut(); // Delay 無自引用 ⇒ Unpin,安全取 &mut
-        todo!("spec: 到期 Ready;首次 spawn timer;之後更新 waker")
+        // if Self is !Unpin use unsafe {get_uncheck_mut()}
+        // todo!("spec: 到期 Ready;首次 spawn timer;之後更新 waker")
+        if this.deadline <= Instant::now() {
+            return Poll::Ready(());
+        }
+        if let Some(waker) = &this.waker_slot {
+            *waker.lock().unwrap() = Some(cx.waker().clone());
+            return Poll::Pending;
+        }
+        let waker_slot = Arc::new(Mutex::new(Some(cx.waker().clone())));
+        Self::spawn_timer(this.deadline, waker_slot.clone());
+        this.waker_slot = Some(waker_slot);
+
+        Poll::Pending
     }
 }
 
