@@ -264,6 +264,30 @@ refcount>1 時 `Arc::get_mut` 回 None)、甚至 `as_ptr`(**確實**能透過 `&
 
 ---
 
+## Part E — 驗證 unsafe / 並發 code(assertion + Miri + loom 三件套)
+
+2026-07-18 spsc challenge review 學到的:**unsafe code 的 bug 常是 UB,而「有沒有崩」是爛訊號。**
+
+### E1. 為什麼不能靠 SIGSEGV 當紅綠燈
+
+- **UB 不確定**:同一個「drop 未初始化槽」,可能 SIGSEGV、可能 **exit 0 假裝沒事(假綠,最可怕)**、可能 hang。同一個 bug 一次崩一次不崩,你剛好都遇到了。
+- **崩會遮住別人**:一個 test binary 裡所有測試同 process,一個 SIGSEGV 打掉整包,其他結果全丟 → 易崩的測試**單獨跑**或先 `#[ignore]`。
+- **`#[should_panic]` 攔不到 signal**:它只攔 Rust panic(unwind),SIGSEGV 不是 panic。
+
+### E2. 三層驗證(缺一不可)
+
+1. **assertion + DropSpy 模式(std 測試)**:一般正確性用 assert;**Drop / leak 要用會數 drop 的型別**——`struct DropSpy(Arc<AtomicUsize>); impl Drop { fetch_add(1) }`。`u64` 沒解構子,Drop 漏收 / 走錯範圍**完全看不出來**。測:非 Copy(String)進出、容量邊界 + 環狀重用、帶未消費元素 drop 的**回收計數**。
+2. **Miri(`cargo +nightly miri test -p <crate> --lib <test>`)**:確定性 UB 偵測器——未初始化記憶體、use-after-free、越界、aliasing(Stacked/Tree Borrows)、**還有 leak**。把隨機 SIGSEGV 變成「reading uninitialized memory at line X」+ backtrace。單執行緒跑(100k 的 smoke test 在 Miri 下太慢,過濾掉;並發交給 loom)。裝:`rustup +nightly component add miri`。
+3. **loom(`cargo test -p reference --test loom_spsc`)**:並發窮舉 model checker。**只認 loom 自己的型別**——std 硬寫死的 challenge **不能直接跑**(要 sync_shim 機關:core 抽獨立檔走 `crate::sync_shim` 別名,lib 接 std、loom 測試接 loom、`#[path]` include 同一份原始碼)。抓 data race:降一級 ordering → `Causality violation: Concurrent read and write to UnsafeCell`。模型刻意小(cap1、2 元素)= 最大對撞 + 狀態不爆。
+
+### E3. 心智模型
+
+> **loom : 資料競爭 :: Miri : unsafe 記憶體。** 三者互補:assertion 證邏輯 + leak、Miri 證 `MaybeUninit`/`UnsafeCell` 記憶體操作、loom 證 ordering。
+
+「感受窮舉」的鐵證:把一個 `Acquire` 降成 `Relaxed`,loom **建構出**那條會爆的交錯(不是 fuzz、不是跑很多次賭),印出「並發讀寫同一個 UnsafeCell 槽」→ 反證**每個 ordering 都是承重牆**。這是 CLAUDE.md「loom 幫你證明放鬆後仍對」的反面。
+
+---
+
 ## 一頁速記(面試白板版)
 
 - **ordering 保護的是旗子旁邊的普通記憶體,不是 atomic 本身;觸發 = 跨 thread 撞同一格 + ≥1 寫。**
@@ -272,3 +296,4 @@ refcount>1 時 `Arc::get_mut` 回 None)、甚至 `as_ptr`(**確實**能透過 `&
 - **RMW:先問幾個寫者(要不要 RMW),再問兩個半邊(哪個 ordering);cmpxchg 兩 ordering = 結局數。**
 - **UnsafeCell 解 aliasing(逼 unsafe 稽核)、MaybeUninit 解 init/drop;Cell 因為有安全 mutation API 而讓 `unsafe impl Sync` 變假承諾。**
 - **MaybeUninit 讓 index 當單一真相;Option 重複占用狀態 + 多分支 + 更大。**
+- **驗 unsafe/並發別靠有沒有崩:assertion+DropSpy(邏輯+leak)/ Miri(單執行緒 UB,把 SIGSEGV 變精準診斷)/ loom(並發窮舉,抓 Causality violation)。loom:資料競爭 :: Miri:unsafe 記憶體。**
