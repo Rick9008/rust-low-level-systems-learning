@@ -30,7 +30,32 @@ pub enum DecodeError {
 ///
 /// 提示:`u32::from_be_bytes`、`buf.get(..4)`。
 pub fn try_decode(buf: &[u8]) -> Result<Option<(RawFrame, usize)>, DecodeError> {
-    todo!("spec: 讀 len → 驗 len → 等齊 → 切出 (frame, consumed)")
+    // todo!("spec: 讀 len → 驗 len → 等齊 → 切出 (frame, consumed)")
+    if buf.len() < 4 {
+        return Ok(None);
+    }
+    let (frame_len, frame) = buf.split_at(4);
+    let frame_len = u32::from_be_bytes(
+        *frame_len
+            .as_array()
+            .expect("Invariant: buf should not be empty."),
+    );
+    if frame_len == 0 {
+        return Err(DecodeError::EmptyFrame);
+    }
+    if frame_len > MAX_FRAME_LEN {
+        return Err(DecodeError::FrameTooLarge(frame_len));
+    }
+    if frame.len() < frame_len as usize || frame.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some((
+        RawFrame {
+            opcode: frame[0],
+            payload: frame[1..].to_vec(),
+        },
+        frame_len as usize + 4,
+    )))
 }
 
 /// 已給:組 frame。
@@ -49,7 +74,7 @@ mod tests {
 
     /// boundary:精確 byte 佈局(手 trace:len=3 → [0,0,0,3,op,p0,p1])。
     #[test]
-    #[ignore = "填完 try_decode 後移除"]
+    // #[ignore = "填完 try_decode 後移除"]
     fn exact_layout_roundtrip() {
         let bytes = encode_frame(OP_READ_SENSOR, &[0x01, 0x02]);
         assert_eq!(bytes, vec![0, 0, 0, 3, OP_READ_SENSOR, 0x01, 0x02]);
@@ -61,7 +86,7 @@ mod tests {
 
     /// boundary:**每一個**不完整前綴都回 Ok(None)。
     #[test]
-    #[ignore = "填完 try_decode 後移除"]
+    // #[ignore = "填完 try_decode 後移除"]
     fn every_partial_prefix_is_none() {
         let full = encode_frame(OP_PING, &[9, 9, 9]);
         for cut in 0..full.len() {
@@ -71,7 +96,7 @@ mod tests {
 
     /// boundary:兩個 frame 背靠背——consumed 恰好指到界線。
     #[test]
-    #[ignore = "填完 try_decode 後移除"]
+    // #[ignore = "填完 try_decode 後移除"]
     fn two_frames_consumed_exact() {
         let mut buf = encode_frame(OP_PING, &[]);
         buf.extend(encode_frame(OP_READ_SENSOR, &[1, 2]));
@@ -84,7 +109,7 @@ mod tests {
 
     /// boundary:malformed len(0 與超大)是 Err 不是 None。
     #[test]
-    #[ignore = "填完 try_decode 後移除"]
+    // #[ignore = "填完 try_decode 後移除"]
     fn malformed_len_is_err() {
         assert_eq!(
             try_decode(&0u32.to_be_bytes()),
