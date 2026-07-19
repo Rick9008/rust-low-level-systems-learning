@@ -54,7 +54,17 @@ impl<T> FdRegistry<T> {
     ///    panic 訊息含 "already registered")。
     /// 4. 放入 value、len += 1,回 Token((gens[fd] << 32) | fd)。
     pub fn register(&mut self, fd: usize, value: T) -> Token {
-        todo!("spec: assert 範圍與空 slot; 增長; 放入; 打包 (gen<<32)|fd")
+        // todo!("spec: assert 範圍與空 slot; 增長; 放入; 打包 (gen<<32)|fd")
+        assert!(fd <= u32::MAX as usize);
+        if fd >= self.slots.len() {
+            self.slots.resize_with(fd + 1, || None);
+            self.gens.resize(fd + 1, 0);
+        }
+
+        assert!(self.slots[fd].is_none(), "already registered.");
+        self.len += 1;
+        self.slots[fd] = Some(value);
+        Token(((self.gens[fd] as u64) << 32) | fd as u64)
     }
 
     /// spec:移除並取回。
@@ -62,18 +72,47 @@ impl<T> FdRegistry<T> {
     /// 取出 Some 時:gens[fd] wrapping_add(1)、len -= 1。
     /// (gen 只在**成功移除**時 bump——stale unregister 不能動現任住戶。)
     pub fn unregister(&mut self, token: Token) -> Option<T> {
-        todo!("spec: 驗 gen; take; 成功才 bump gen 與 len")
+        // todo!("spec: 驗 gen; take; 成功才 bump gen 與 len")
+        let fd = token.fd_index();
+        let generation = token.generation();
+        if fd >= self.slots.len() {
+            return None;
+        }
+        if generation != self.gens[fd] {
+            return None;
+        }
+        self.gens[fd] = self.gens[fd].wrapping_add(1);
+        self.len -= 1;
+        self.slots[fd].take()
     }
 
     /// spec:O(1) 查表。gen 對不上 → None;gen 相符但 slot 為 None
     /// (從未登記的 slot、偽造 token)也要安全回 None。
     pub fn get(&self, token: Token) -> Option<&T> {
-        todo!("spec: gens.get(fd) 比對後 as_ref")
+        // todo!("spec: gens.get(fd) 比對後 as_ref")
+        let fd = token.fd_index();
+        let generation = token.generation();
+        if fd > self.slots.len() {
+            return None;
+        }
+        if generation != self.gens[fd] {
+            return None;
+        }
+        self.slots[fd].as_ref()
     }
 
     /// spec:get 的可變版。
     pub fn get_mut(&mut self, token: Token) -> Option<&mut T> {
-        todo!("spec: 同 get,as_mut")
+        // todo!("spec: 同 get,as_mut")
+        let fd = token.fd_index();
+        let generation = token.generation();
+        if fd > self.slots.len() {
+            return None;
+        }
+        if generation != self.gens[fd] {
+            return None;
+        }
+        self.slots[fd].as_mut()
     }
 
     pub fn len(&self) -> usize {
@@ -98,7 +137,6 @@ mod tests {
     /// 核心 boundary:fd 重用——舊 token 必死、新 token 必活。
     /// 先在紙上 trace:register(5) 時 gens[5] 是多少?unregister 後呢?
     #[test]
-    #[ignore = "填完 register/unregister/get 後移除"]
     fn fd_reuse_stale_token_dies() {
         let mut r = FdRegistry::new();
         let t1 = r.register(5, "A");
@@ -112,7 +150,6 @@ mod tests {
 
     /// token 經 u64 往返(模擬 epoll_event.data)後仍解析。
     #[test]
-    #[ignore = "填完 register/get 後移除"]
     fn token_u64_roundtrip() {
         let mut r = FdRegistry::new();
         let t = r.register(3, 30);
@@ -121,7 +158,6 @@ mod tests {
 
     /// boundary:空表偽造 token、gen=0 但從未登記的 slot——安全回 None。
     #[test]
-    #[ignore = "填完 get/unregister 後移除"]
     fn forged_tokens_are_safe() {
         let mut r: FdRegistry<i32> = FdRegistry::new();
         assert_eq!(r.get(Token::from_raw(5)), None);
@@ -132,7 +168,6 @@ mod tests {
 
     /// double-register 活著的 fd 要 panic。
     #[test]
-    #[ignore = "填完 register 後移除"]
     #[should_panic(expected = "already registered")]
     fn register_occupied_panics() {
         let mut r = FdRegistry::new();
@@ -142,7 +177,6 @@ mod tests {
 
     /// dispatch 端用 get_mut 就地改狀態;fd 跳躍增長時 len 只數活著的。
     #[test]
-    #[ignore = "填完 register/get 後移除"]
     fn get_mut_and_sparse_growth() {
         let mut r = FdRegistry::new();
         let t0 = r.register(0, vec![1]);
@@ -156,7 +190,6 @@ mod tests {
     /// 規模 churn:200 個 fd 註冊、偶數位換代——舊 token 全滅、新的全活、
     /// 奇數位第一代不受影響(單例測試抓不到的批量交錯)。
     #[test]
-    #[ignore = "填完 register/unregister/get 後移除"]
     fn churn_generations_isolated() {
         let mut r = FdRegistry::new();
         let gen0: Vec<Token> = (0..200).map(|fd| r.register(fd, fd)).collect();
