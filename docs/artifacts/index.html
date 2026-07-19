@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、10 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、11 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -771,6 +771,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">qa · epoll 訂閱手冊</span>
       <span class="hook">flag 三族(事件/免訂事件/模式開關)+ ADD/MOD/DEL/wait 生命週期;LT vs ET 時序圖、backpressure 關水龍頭、退訂暗坑(fd + generation)。</span>
       <span class="hits">ERR/HUP 免訂必回報 · MOD 是 backpressure 開關</span>
+    </a>
+    <a class="card" href="qa_epoll_stale_registry.html">
+      <span class="name">qa · epoll 內部與 stale fd(e2 的 why)</span>
+      <span class="hook">kernel 三結構(紅黑樹/ready list/events 卷)複雜度圖解;entry 上沒有 fd 欄位、data 是證件;stale 事件的一生 stepper(裸 fd 💥 vs generation ✓)、三放大器、O(max_fd)+4B 的帳、tokio ScheduledIo 雙 waker。</span>
+      <span class="hits">close 收不回你手上的卷 · 鎖擋同時、generation 擋時間 · e2 電梯句</span>
     </a>
     <a class="card" href="qa_unbounded_lockfree.html">
       <span class="name">qa · unbounded × lock-free</span>

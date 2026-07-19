@@ -1,0 +1,327 @@
+<title>epoll 內部與 stale fd:events 卷、generation 證件、雙 waker</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code.bad { color: var(--danger); }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  /* 三結構靜態圖 */
+  .arch { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .arch .box { border: 1px solid var(--ring); border-radius: 10px; background: var(--surface); padding: 12px; }
+  .arch h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .arch .big { font-family: ui-monospace, monospace; font-weight: 700; font-size: 14px; color: var(--ink); }
+  .arch .sub { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .arch .o { color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700; margin-top: 6px; }
+  @media (max-width: 640px) { .arch, .scene { grid-template-columns: 1fr; } }
+  /* stepper(qa 家族慣用式) */
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cell { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; overflow: hidden; }
+  .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .cell.gone { opacity: .38; }
+  .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · epoll internals · e2 fd_registry 的 why</div>
+  <h1>epoll 內部與 stale fd:events 卷、generation 證件、雙 waker</h1>
+  <p class="lede">訂閱面(<code>epoll_ctl</code> 的招式)見 <code>qa_epoll_subscribe.html</code>;這頁講<strong>身份面</strong>:kernel 裡到底是哪三個資料結構在動、<code>epoll_wait</code> 交到你手上的「卷子」是什麼語意、為什麼 close 得再快也擋不住 <strong>stale fd 事件</strong>、generation 證件怎麼用 4 bytes 把它變成 O(1) 拒收——最後接到 tokio 真實的 per-fd <strong>雙 waker</strong> 設計。這條鏈就是彩排 e2(fd_registry)必脫口的完整故事。</p>
+
+  <section>
+    <h2>0 · kernel 三結構:誰有 log、誰 O(1)、誰線性</h2>
+    <div class="arch">
+      <div class="box">
+        <h4>interest set(常駐)</h4>
+        <div class="big">紅黑樹</div>
+        <div class="sub">「我在關注誰」。<code>epoll_ctl</code> ADD/MOD/DEL 走這裡,每條連線的生命週期只付幾次。</div>
+        <div class="o">O(log N_watched)</div>
+      </div>
+      <div class="box">
+        <h4>ready list(kernel 內)</h4>
+        <div class="big">雙向鏈結串列</div>
+        <div class="sub">封包到達 → socket 的 wait-queue callback 把 epitem <strong>append</strong> 上來。事件發生的當下就記好帳。</div>
+        <div class="o">O(1) / 事件</div>
+      </div>
+      <div class="box">
+        <h4>events 卷(你的)</h4>
+        <div class="big">你 malloc 的陣列</div>
+        <div class="sub"><code>epoll_wait</code> 把 ready list 抄進來,回傳「填了幾格」。每次呼叫整卷重填。</div>
+        <div class="o">O(min(ready, maxevents))</div>
+      </div>
+    </div>
+    <p style="margin-top:14px">注意 ready 路徑上<strong>連排序都不存在</strong>——epoll 對就緒事件不承諾任何順序,所以鏈結串列(O(1) append)就是下限。對照 timer queue:它的 API 問題是「<strong>誰最早</strong>」,這才逼出 min-heap 的 O(log n)。一句收束:<strong>資料結構跟著 API 要回答的問題走</strong>——要順序,付 log;不要順序,付 O(1)。</p>
+    <blockquote class="say">
+      “epoll is fast because it never searches: the cost was paid when the event <strong>arrived</strong> — the callback appended it to a ready list — so <code>epoll_wait</code> just collects.”
+      <em>「不是找得快,是根本不找」的英文版。</em>
+    </blockquote>
+  </section>
+
+  <section>
+    <h2>1 · events 卷的語意:答案卷,不是名冊</h2>
+    <p>常見誤解是把它想成「註冊時往後推的清單」。不是——註冊進的是 kernel 的 interest set;<code>events</code> 陣列是<strong>你自己準備的空白答案卷</strong>,每次呼叫遞給 kernel 當場填:</p>
+<pre><code>let mut events = vec![epoll_event::default(); 1024]; <span class="cmt">// 空白卷,1024 格</span>
+loop {
+    let n = epoll_wait(epfd, events.as_mut_ptr(), 1024, timeout);
+    <span class="cmt">//  ^ 回傳值就是 n:「這次幫你填了幾格」——kernel 說的</span>
+    for ev in &amp;events[..n] {          <span class="cmt">// 只有前 n 格有效!</span>
+        <span class="cmt">// 第 n 格之後 = 上次呼叫的垃圾,不歸零、不可讀</span>
+    }
+}</code></pre>
+    <ul>
+      <li>回傳 <code>0</code> = timeout 到了沒人 ready(timer queue 靠這條接手)。</li>
+      <li>ready 的比卷子大(2000 條 ready、卷只有 1024 格)→ 這批填滿,<strong>剩的留在 kernel ready list,下次再給</strong>,不會丟。<code>maxevents</code> 是批次大小,不是上限承諾。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2 · bitmask 三旗標:是 AND,不是掃描</h2>
+    <p>每格 entry 的 <code>events</code> 欄是<strong>一個 u32</strong>,旗標是同一個 socket 的獨立事實,可以同時亮(進來了資料 + 送出 buffer 有空位 = <code>EPOLLIN|EPOLLOUT</code> 一起亮)。檢查是每旗標一條 AND 指令——沒有任何「從頭掃 bit」存在:</p>
+<pre><code>for ev in &amp;events[..n] {                     <span class="cmt">// O(ready) 走訪</span>
+    if ev.events &amp; (EPOLLHUP | EPOLLERR) != 0 { <span class="cmt">/* 先處理死亡 */</span> }
+    if ev.events &amp; EPOLLIN  != 0 { <span class="cmt">/* 可讀:read 不會卡 → 餵 framer */</span> }
+    if ev.events &amp; EPOLLOUT != 0 { <span class="cmt">/* 可寫:write 不會卡 → flush 待送 */</span> }
+}</code></pre>
+    <p>慣例順序 <strong>HUP/ERR → IN → OUT</strong>:先確認人還活著,再收貨,再出貨。</p>
+  </section>
+
+  <section>
+    <h2>3 · data 是證件欄:entry 上根本沒有 fd</h2>
+    <p>註冊時交出去的是「fd(當 key)+ 一個小結構(當值)」,而那個結構的 <code>data</code> 欄(u64 union)kernel <strong>從頭到尾不看、不解釋</strong>,只在每次事件時原樣奉還:</p>
+<pre><code>struct epoll_event {
+    uint32_t     events;  <span class="cmt">// 註冊時 = 興趣遮罩;回來時 = ready 遮罩</span>
+    epoll_data_t data;    <span class="cmt">// union { void*; int fd; uint32_t; uint64_t }——你的 cookie</span>
+};</code></pre>
+    <p>而多數人漏掉的重點:<strong><code>epoll_wait</code> 回來的 entry 裡沒有 fd 欄位</strong>。你收到的只有 <code>events</code> + <code>data</code>——想知道「這是誰」,唯一管道就是你當初塞進 data 的東西。塞裸 fd(<code>data.fd</code>)是 union 給你的偷懶選項;塞 <strong>(index, generation)</strong> 是 e2 的正解,差別就是下面 stepper 的兩條分支:</p>
+<pre><code><span class="cmt">// 組證件:generation 高 32、slot index 低 32(先升寬再移!u32 << 32 是 UB 級錯誤)</span>
+let token: u64 = (generation as u64) &lt;&lt; 32 | (index as u64);
+<span class="cmt">// 拆證件:0xFFFF_FFFF = 32 個 1 的遮罩(跟 1 AND = 保留、跟 0 AND = 清除)</span>
+let index      = (ev.u64 &amp;  0xFFFF_FFFF) as u32;
+let generation = (ev.u64 &gt;&gt; 32) as u32;
+<span class="cmt">// 驗證件:不合 = stale,O(1) 丟棄</span>
+if slots[index].generation != generation { continue; }</code></pre>
+  </section>
+
+  <section>
+    <h2>4 · 互動:stale fd 事件的一生——裸 fd vs generation</h2>
+    <p>fd 是 OS 會回收重發的「名字」(POSIX 保證發<strong>最小可用號碼</strong>——你剛 close 的 5,正是下一個 <code>accept</code> 必然拿到的 5)。切換兩種 cookie,逐步走一次「同一批卷子裡 close + 重發」,看舊事件怎麼跳出來:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="mode">
+          <button data-mode="raw" class="on">data = 裸 fd</button>
+          <button data-mode="gen">token = (index, generation)</button>
+        </div>
+        <button id="next">下一步 ▸</button>
+        <button id="reset">重置</button>
+        <span class="stepcap" id="stepcap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>kernel</h4>
+          <div class="cell" id="kready">ready: [fd9, fd5]</div>
+          <div class="ord" id="kcap">fd5 = 舊連線 A 的資料到了</div>
+        </div>
+        <div class="lane">
+          <h4>你的 events 卷</h4>
+          <div class="cell" id="e0">卷[0] fd9 · 控制連線</div>
+          <div class="cell" id="e1">卷[1] fd5 · EPOLLIN</div>
+          <div class="ord" id="e1cap">&nbsp;</div>
+        </div>
+        <div class="lane">
+          <h4>registry slot 5</h4>
+          <div class="cell" id="slot">A 的連線狀態</div>
+          <div class="ord" id="gen">generation = 7</div>
+        </div>
+      </div>
+      <div class="step-narr" id="narr"></div>
+    </div>
+    <p style="margin-top:14px">關鍵不對稱:<strong>kernel 保證「close 之後不再產生新的舊事件」(epitem 連同 ready list 上的殘留一起蒸發),但收不回已經抄到你手上的卷子</strong>。所以防禦必須放在 dispatch 查表那一刻,不能指望 close 得夠快。</p>
+  </section>
+
+  <section>
+    <h2>5 · 三條時間線 + 一個殭屍</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>close 的時候,舊事件在哪?</th><th>會跳出來嗎</th><th>為什麼</th></tr>
+      <tr><td>已抄進你 userspace 的卷(同一批)</td><td><strong>會——唯一的跳出點</strong></td><td>快照已離開 kernel,收不回</td></tr>
+      <tr><td>還躺在 kernel ready list</td><td>不會</td><td><code>close</code> 銷毀 epitem 時連 ready list 上的一起拔掉</td></tr>
+      <tr><td>根本還沒 ready</td><td>不會</td><td>事件從未存在;新連線的事件是自己的、帶新證件</td></tr>
+      <tr><td><strong>殭屍案</strong>:fd 被 <code>dup()</code> 過 / 傳給過子行程</td><td><strong>持續跳</strong></td><td>close 你的號碼不銷毀底層 description,epitem 不死——generation 是唯一防線;best practice:先 <code>EPOLL_CTL_DEL</code> 再 close</td></tr>
+    </table></div>
+    <p style="margin-top:14px">「同一批」聽起來罕見?三個放大器把它變例行公事:① <strong>跨連線 close</strong>(timeout 收割器、gateway 關 backend 腿、聊天室踢人——某人的 handler 會關別人的 fd);② <strong>最小號碼分配</strong>在幫倒忙(重發同號是保證,不是巧合);③ <strong>多執行緒 + 高 churn</strong>(視窗擴到任意時刻;低機率 × 每秒幾千次 × 跑好幾天 = 必然)。而踩中的代價不是 crash,是 <strong>A 使用者的資料進了 B 使用者的連線</strong>——無聲資料錯亂,資安事故等級;保費是每 slot 4 bytes + 一次整數比較。沒有不買的選項。</p>
+  </section>
+
+  <section>
+    <h2>6 · registry 的帳:O(max_fd) 為什麼是划算的</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>結構</th><th>lookup</th><th>stale 防禦</th><th>記憶體</th></tr>
+      <tr><td><code>HashMap&lt;fd, T&gt;</code></td><td>hash + probe(常數大、cache 差)</td><td>沒解</td><td>O(live)</td></tr>
+      <tr><td><code>Vec&lt;Option&lt;T&gt;&gt;</code> by fd</td><td>一次 array load</td><td>沒解</td><td>O(max_fd)</td></tr>
+      <tr><td><strong>世代 slot map(e2)</strong></td><td>一次 array load + 一次比較</td><td><strong>O(1) 拒收</strong></td><td>O(max_fd) + 4B/slot</td></tr>
+    </table></div>
+    <ul>
+      <li><strong>O(max_fd) 的入場券是 fd 的密集性</strong>:POSIX 永遠發最小可用號碼 → max_fd ≈ 尖峰同時連線數,不會稀疏爆炸。key 若是隨機 u64(session id),這招就死,只能回 HashMap——面試講出這個對比是加分題。</li>
+      <li>「stale 防禦沒解」跟查找結構無關——那不是 lookup 問題,是 <strong>token 身份設計</strong>問題;mutex 也救不了(鎖擋「同時」,擋不住「時間」)。</li>
+      <li>generation 用 u32:單一 slot 要重用 2³² 次才繞回——以連線壽命計是幾十年,wrap-around 可接受。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>7 · 再上一層:reactor 的 per-fd 雙 waker</h2>
+    <p>裸 event loop(hw_bridge 的 server_evented)查到表就<strong>當場幹活</strong>,沒有 waker。放上 async runtime 後,迴圈的工作從「做事」變成「<strong>叫醒要做事的 task</strong>」,而標準設計是每個 fd 兩個槽:</p>
+<pre><code>interest table entry(per fd):
+    reader_waker: Option&lt;Waker&gt;   <span class="cmt">// poll_read 回 Pending 時存入</span>
+    writer_waker: Option&lt;Waker&gt;   <span class="cmt">// poll_write 回 Pending 時存入</span>
+<span class="cmt">// EPOLLIN → wake(reader);EPOLLOUT → wake(writer);HUP/ERR → 兩個都叫</span></code></pre>
+    <p>為什麼兩槽:等讀的和等寫的常是<strong>不同 task</strong>(<code>TcpStream::split()</code> 讀半寫半分家)。叫錯人 = 白醒(spurious,無害——poll 會再檢查);漏叫人 = <strong>lost wakeup,task 永眠</strong>。不對稱決定設計:寧可多叫、槽要分開——跟 condvar 的「先發佈狀態再 notify」是同一條定律。</p>
+    <p><strong>收尾彩蛋</strong>:tokio 真實的這張表叫 <code>ScheduledIo</code>(<code>tokio/src/runtime/io/scheduled_io.rs</code>)——readiness 原子位 + reader/writer 兩個 waker 槽 + 一條 intrusive wait list;而它的 mio token 正是「slab 位址 + generation」打包,<strong>驗證失敗就丟</strong>。你在 e2 手搓的,就是 tokio IO driver 心臟的教學版。</p>
+  </section>
+
+  <section>
+    <h2>8 · 面試句庫</h2>
+    <blockquote class="say">
+      “The events array is an answer sheet, not a roster — <code>epoll_wait</code>'s return value tells me how many entries the kernel filled, and everything past that is last call's garbage.”
+      <em>events 卷語意一句話。</em>
+    </blockquote>
+    <blockquote class="say">
+      “A lock protects against concurrent access; generations protect against <strong>temporal</strong> confusion — the fd is a name the OS recycles, so the token must carry proof of which incarnation it refers to.”
+      <em>mutex 為什麼救不了 stale。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Stale events are rare per event but guaranteed at scale, and the failure mode is silent cross-connection data corruption — so the 4-byte generation is non-negotiable: one array load plus one compare, O(1) worst-case.”
+      <em>e2 的完整電梯句:機率 × 代價 × 保費。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:e2(fd_registry)前置概念,讀懂即可。訂閱面:<code>qa_epoll_subscribe.html</code>(興趣表 + flag 三族 + 訂閱管理三招)· 深挖:<code>html_p/p3-epoll-readiness-event-loop.html</code>(LT/ET、eventfd、readiness vs completion)· 動手:<code>docs/fd_registry.md</code> + <code>drills/src/fd_registry.rs</code>(6 測試含 stale/forged token)· waker 那層:<code>qa_waker_lifecycle.html</code>。
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "raw";           // "raw" | "gen"
+  var step = 0;               // 0..4
+  var MAX = 4;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var narr = {
+    raw: [
+      "初始:舊連線 <b>A</b> 佔著 fd 5(registry slot 5)。A 送來了資料,kernel ready list 記著 <b>fd9、fd5</b> 兩筆。",
+      "<b>epoll_wait</b>:kernel 把 ready list 抄進你的卷子,回傳 n=2。卷[1] 是 A 的 EPOLLIN,cookie 是<b>裸 fd = 5</b>。快照從此離開 kernel。",
+      "處理卷[0](控制連線):handler 判定 A 超時 → <b>close(fd 5)</b>。kernel 端 epitem 蒸發;registry 釋放 slot 5。<b>但卷[1] 還躺在你手上。</b>",
+      "同一個 handler 接著 <b>accept()</b> → POSIX 發<b>最小可用號碼 = 5</b> 給新連線 <b>B</b> → 註冊,slot 5 = B。",
+      "走到卷[1]:拿裸 fd=5 查表 → 命中 <b>B</b> ✗。A 的殘料被當成 B 的資料處理——<b>跨連線資料錯亂,無聲、不 crash</b>。這就是 stale fd bug。"
+    ],
+    gen: [
+      "初始:舊連線 <b>A</b> 佔著 fd 5,registry slot 5 記著 <b>generation = 7</b>。kernel ready list:fd9、fd5。",
+      "<b>epoll_wait</b>:抄卷,n=2。卷[1] 是 A 的 EPOLLIN,cookie 是打包好的 <b>token = (index 5, gen 7)</b>。",
+      "處理卷[0]:close(fd 5) → registry 釋放 slot 5,<b>generation 7 → 8</b>(回收當下就 bump——所有在途舊證件從此作廢)。",
+      "accept() → 新連線 <b>B</b> 拿到 fd 5 → 註冊 slot 5 = B,發的是<b>新證件 (5, gen 8)</b>。",
+      "走到卷[1]:拆 token 得 (5, <b>gen 7</b>),跟 slot 的 <b>gen 8</b> 一比:<b>不合 → stale,丟棄 ✓</b>。一次 array load + 一次比較,4 bytes 的保費擋下資安級 bug。"
+    ]
+  };
+
+  function render() {
+    var gen = (mode === "gen");
+    // kernel ready list
+    var kr = $("kready");
+    kr.textContent = step >= 1 ? "ready: []（已抄走）" : "ready: [fd9, fd5]";
+    kr.className = "cell" + (step === 1 ? " hot" : "") + (step >= 2 ? " gone" : "");
+    $("kcap").textContent = step >= 2 ? "fd5 的 epitem 已隨 close 蒸發" : "fd5 = 舊連線 A 的資料到了";
+    // 卷
+    var e0 = $("e0");
+    e0.className = "cell" + (step === 2 || step === 3 ? " hot" : "") + (step >= 4 ? " gone" : "");
+    var e1 = $("e1");
+    var e1cap = $("e1cap");
+    e1cap.innerHTML = step >= 1 ? (gen ? "cookie: token = (5, gen 7)" : "cookie: data.fd = 5") : "&nbsp;";
+    if (step < 4) { e1.textContent = "卷[1] fd5 · EPOLLIN"; e1.className = "cell" + (step === 1 ? " hot" : ""); }
+    else if (gen) { e1.textContent = "卷[1] → stale,丟棄 ✓"; e1.className = "cell ok"; }
+    else { e1.textContent = "卷[1] → 送進 B 💥"; e1.className = "cell bad"; }
+    // registry slot
+    var sl = $("slot");
+    var gcap = $("gen");
+    if (step < 2) { sl.textContent = "A 的連線狀態"; sl.className = "cell"; gcap.textContent = gen ? "generation = 7" : "（沒有 generation 欄）"; }
+    else if (step === 2) { sl.textContent = "（slot 5 已釋放）"; sl.className = "cell hot"; gcap.textContent = gen ? "generation 7 → 8" : "（沒有 generation 欄）"; }
+    else { sl.textContent = "B 的連線狀態"; sl.className = "cell" + (step === 3 ? " hot" : (step === 4 && !gen ? " bad" : "")); gcap.textContent = gen ? "generation = 8" : "（沒有 generation 欄）"; }
+    // narration + controls
+    $("narr").innerHTML = narr[mode][step];
+    $("stepcap").textContent = "步驟 " + step + " / " + MAX;
+    $("next").disabled = (step >= MAX);
+  }
+
+  $("next").addEventListener("click", function () { if (step < MAX) { step++; render(); } });
+  $("reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("mode");
+  toggle.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>
