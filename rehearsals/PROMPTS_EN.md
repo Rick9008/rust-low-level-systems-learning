@@ -286,7 +286,65 @@ them to a backend; every request must get a response. The backend gets slow
 sometimes, and requests keep arriving while it's slow. Design the gateway's
 queuing and flow control.
 
+7/19
+(Scale and Data rate)
+1. What's the request rate and how big is a request data size? And how the backend architecture we need to handle? How long does backend handle the request?
+    For request rate:
+        1. Under 10^4, then thread-per-request might be enough, 1MB * 10000 = 10GB, very close
+        2. Larger than 10^5 and lower than 10^7, use epoll is good.
+        3. Larger than 10^7, we need cluster and L3 router for different RPC gateway instance, because the memory will too large
+    For request data size:
+        I guess there's a backend name and payload and session token for auth state: 128 u8 + 1024 u8 + 256u8 ~= 1400 bytes ~= 1KB
+    For backend:
+        Let try this in only simple backend name with only one instance now.
+        And we need different backend queue for the rpc request we need to route to the backend.
+    For backend handle rate:
+        1 request 50ms now.
+(Data loss)
+2. Under pressure, can we return a error code for the requests we can't handle? Or we need a back-pressure strategy. If do, how long does a client give up request.
+    Let guess that the client will wait for 1s and if exceed return Error code
+    And if the requests is too large, we need to back-pressure. We can close the epollin for client requests to the full queue backend, and gateway we need to handle the connection and check if the queue full.
+    If queue full we return Error code instantly.
 
+(Failure Detection)
+3. If a backend is dead how do we learn? And if the client request drop how do we know?
+    If backend can know from TCP, good. Otherwise we need a heartbeat detect and request timeout.
+    If client request drop, I think we can know from tcp connection dead.
+
+(SLA)
+4. Are we optimizing average throughput or tail latency?
+    If tail latency, the queue need lock-free queue, because mutex holder will be preempt by scheduler, and lock-free is targeting for p99.9 but not the throughput
+    If average throughput, we can only use the lock with simple data structure, 
+
+
+Let's look into the assumptions:
+10^5 request per sec, with 1KB
+10^5 * 1KB = 100000 KB = 100MB per seconds coming
+
+And we need to record the client connection socket and fd data and request id, maybe 16B for id and fd.
+10^5 * 16B = 1600000 B = 1600 KB = 1.6 MB per second in normal time
+1s drop the client request.
+1000 / 50ms = 20 requests for sequential requests
+10^5 * 0.05 = 5000 requests concurrency
+5000 * 16 B = 80 KB, cheap
+queue capacity = 10^5 * 1 sec = 100k entries
+And body will store in the kernel buffer, epoll will care this for us when tcp flow control
+Under pressure:
+the handle time become 500 ms
+10^5 * 0.5 = 50000 requests concurrency
+
+I will use per queue for different backend service
+And use a map for name to queue.
+Per queue has a event loops to process the connections.
+And we need event loop + epoll to handle the connections from client and backends.
+** Each queued request carries a deadline; on expiry I evict it and return 504 — it must not occupy a slot or waste backend capacity. **
+Single thread event loop is enough because it's only to route the rpc.
+I'll start with a plain bounded queue behind the event loop - single threaded, no locking needed.
+If we later shard across threads and tail latency matters, that's where lock-free in.
+Ok I'll start to code, begin with the backend queue and event loop
+
+
+Bad version:
 (Scale and Data rate and Scenario SLA)
 1. how many client requests and backends we need to handle? And what's the backend structure? Backend is a cluster or one service one node.
     1. client requests = cr

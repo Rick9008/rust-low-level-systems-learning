@@ -15,7 +15,7 @@ SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ri
 | 2 | bounded_queue | ☐ | ☑ 2026-07-16 | — | 凌晨填答已驗綠;〔v8.1〕讀排 7/17 白天、移 #[ignore] 7/17 晚開機第一件事 |
 | 3 | thread_pool | ☐ | ☑ 2026-07-18 | — | 8 綠;親手抓 Drop 漏 join / 鎖圈住執行 / submit lost wakeup;challenge = 彩排 b |
 | 4 | ring_buffer | ☑ 2026-07-16 | ☑ 2026-07-16 | — | 7 tests 全開綠(含 oracle+白箱 guard);challenge = 彩排 a |
-| 5 | spsc_ring | ☐ | ☑ 2026-07-18 | ☑ 2026-07-18 ★ | challenge 空白手搓綠(12 測試,含 DropSpy 驗 Drop);Miri 單執行緒 UB + loom 並發窮舉三重驗過;空白 20 分 ×3:7/19、7/22、7/26 |
+| 5 | spsc_ring | ☐ | ☑ 2026-07-18 | ☑ 2026-07-18 ★ | challenge 空白手搓綠(12 測試,含 DropSpy 驗 Drop);Miri 單執行緒 UB + loom 並發窮舉三重驗過;空白 20 分 ×3:7/19 ✗(35 編譯錯;Ordering 全對,傷在 use 塊/impl&lt;T&gt;/&amp;self+UnsafeCell,五類清單見 7/19 journal)、7/22(目標 ≤5 錯)、7/26 |
 | 6 | executor | ☐ | ☐ | ☐ ★ | 7/18 drill+challenge |
 | 7 | lru | ☐ | ☐ | ☐ ★ | 降級:超前才寫 |
 | 8 | fd_registry | ☐ | ☐ | — | JD sleeper;7/19 drill;彩排 e2:7/21、7/24 |
@@ -60,7 +60,7 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 
 | 日期 | 題 | clarify | skeleton | core | boundary | trade-offs | 一次編過? | 哪段爆 / 對照漏了什麼 |
 |---|---|---|---|---|---|---|---|---|
-| | a ring_drop_oldest | | | | | | | |
+| 2026-07-19 | a ring_drop_oldest | ~5 | ~5 | ~25 | **0(自行跳過)** | ~5 | 未記錄 | oracle 4/5 紅,全數 pillar-5 miss:①pop 判空用 head==tail(滿=空二義,連鎖 len>cap+FIFO 毀)②drop_cnt 整條沒 ++ ③Part 2 擅改 contract 成阻塞 pop(clarify miss)。亮點:SPSC×drop-oldest 衝突當場談判降級。修洞 7/20 紅測先行 |
 | | b pool_graceful_shutdown | | | | | | | |
 | | c frame_parser_heartbeat | | | | | | | |
 | | d tokio_frame_server | | | | | | | |
@@ -73,8 +73,8 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 卡 | 做完日期 | 漏問了哪一類(掉不掉/速率/規模/SLA/偵測) |
 |---|---|---|
 | 1 telemetry hub | | |
-| 2 RPC gateway | | |
-| 3 market data feed | | |
+| 2 RPC gateway | 2026-07-19(重寫) | SLA(p99 vs p50)沒問——「SLA」標籤誤貼在 client timeout 上;另:英文把「關 client 連線的 EPOLLIN」講成「關 backend 的」 |
+| 3 market data feed | **拿掉不寫**(2026-07-19 裁) | 模式 = per-key conflation,當日已深學;7/25 快打認題 30 秒帶過:"only latest matters → conflation slot, capacity = 1" |
 | 4 log shipper | | |
 | 5 sensor bridge | | |
 | 6 health prober | | |

@@ -21,7 +21,7 @@
 | **7/22 三** | 🔴**c#1 frame_parser_heartbeat**(45+30m)→ 修 e2#1 的洞(45m)→ **spsc 空白 #2**(20m)。〔v8.1〕日讀 p8 排 **c#1 回放之後**(晚尾或 7/23 通勤) | ~3h |
 | **7/23 四** | 〔v8.1〕`signal_pipeline` **110m**:**扇入先於 litmus**——讀 `start_fan_in` 6 tests + SB stepper 走四組合 + 3 trade-off 口述(不寫碼)→ drill 2 洞 → litmus 口述(**最後一份新材料**)→ 🔴**a#2**(45+20m,驗收斂)→ 修 c#1 的洞(30m) | ~3.5h |
 | **7/24 五** | 🔴**e2#2**(45+20m)→ 🔴**d#1 tokio_frame_server**(45+20m,**只跑一遍**——「面試官說可用 crate」那條分支的保險;預設仍 std-only + 陳述假設)。日讀:p6 →〔v8.1〕**配套動手:aggregator 延伸**(含「未來 ts 清 window」case) | ~3h |
-| **7/25 六** | 六張 clarify 卡**快打重來一輪**(40m)→ 🔴**c#2**(45+20m)→ 🔴**浮動 #3**:給兩遍都爆的那題(45+30m)→ deep-dive 口述錄音 120m:ordering / Waker 鏈 / 光譜 / 選型 + executor×reactor + 五 server p99.9,〔v8.1〕內含獨立產出格「**unsafe impl 三段式脫口(spsc_ring 實例)**」 | ~5h |
+| **7/25 六** | 六張 clarify 卡**快打重來一輪**(40m;卡3 認題 30 秒帶過即可)→ 🔴**c#2**(45+20m)→ 🔴**浮動 #3**:給兩遍都爆的那題(45+30m)→ 口述錄音 120m **拆兩塊**(7/19 內線情報:deep-dive 面 = 主管聊履歷/WLB/最難問題,非技術深挖):①技術口述 ~75m:ordering / Waker 鏈 / 光譜 / 選型 + executor×reactor + 五 server p99.9,內含「**unsafe impl 三段式脫口(spsc_ring 實例)**」(仍餵 coding round trade-off 收尾)②主管面 ~45m:3 分鐘履歷 walk-through、最難問題故事、WLB 答案、反問清單(英文錄音) | ~5h |
 | **7/26 日** | 🔴**b#2**(45+20m,累了這場先砍)→ recognition 級 e/f/g/h:讀題→30 秒定界→口述 arc(60m)→ 經驗故事 3 條寫成 bullet(40m)→ 英文句庫整份唸出聲(30m)→ **spsc 空白 #3**(20m,最後手熱檢查)→ 讀自己的 challenge code(60m) | ~4.5h,早睡 |
 | **7/27 一** | **Taper。不碰新題(命令)。** 10 分鐘暖手 drill → 背時間預算(0-3/3-5/5-10/10-35/35-40/40-45)+ 五 pillar + 開場三句 → 檢查 CoderPad link / Meet / 耳機 / 水 → **早睡** | ≤1.5h |
 | **7/28 二** | 8:00 暖手(小 drill 10m + pillar-5 清單 + 時間預算)→ **8:45–9:30 TPS** | — |
