@@ -4,27 +4,27 @@
     color-scheme: light;
     --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
     --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
-    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
       color-scheme: dark;
       --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
       --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
-      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
     --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
     --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
-    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
   }
   :root[data-theme="light"] {
     color-scheme: light;
     --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
     --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
-    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
   }
   body { background: var(--page); color: var(--ink); margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
@@ -82,6 +82,8 @@
   .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
   .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
   .step-narr b { color: var(--ink); }
+  .tk-cm{color:var(--muted);} .tk-kw{color:var(--hl-kw);} .tk-ty{color:var(--hl-ty);} .tk-fn{color:var(--hl-fn);}
+  .tk-mac{color:var(--hl-mac);} .tk-str{color:var(--hl-str);} .tk-num{color:var(--hl-num);} .tk-attr{color:var(--hl-attr);}
 </style>
 
 <div class="wrap">
@@ -323,5 +325,46 @@ if slots[index].generation != generation { continue; }</code></pre>
     step = 0; render();
   });
   render();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1,"uint32_t":1};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i], j;
+      if(c==="/"&&src[i+1]==="/"){ j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c>="0"&&c<="9"){
+        var nm=/^[0-9][0-9_xA-Fa-f]*/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
 })();
 </script>

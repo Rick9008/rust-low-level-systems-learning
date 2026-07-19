@@ -1,0 +1,272 @@
+<title>telemetry windows:換索引軸,亂序就蒸發</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1fr 1.6fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .row { display: flex; gap: 8px; }
+  .cell { font-family: ui-monospace, monospace; font-size: 12.5px; font-weight: 700; padding: 8px 8px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; flex: 1; overflow: hidden; }
+  .cell small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; letter-spacing: .04em; }
+  .cell + .cell.solo { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .cell.dim { opacity: .38; }
+  .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+  .tk-cm{color:var(--muted);} .tk-kw{color:var(--hl-kw);} .tk-ty{color:var(--hl-ty);} .tk-fn{color:var(--hl-fn);}
+  .tk-mac{color:var(--hl-mac);} .tk-str{color:var(--hl-str);} .tk-num{color:var(--hl-num);} .tk-attr{color:var(--hl-attr);}
+  @media (max-width: 640px) { .scene { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · telemetry aggregation · Q5 認題:can't store them all / aggregate / windows</div>
+  <h1>telemetry windows:換索引軸,亂序就蒸發</h1>
+  <p class="lede">整機櫃數十億筆訊號,全存不可能——聚合進<strong>固定數量</strong>的 time window,記憶體 O(#windows) 與樣本數徹底脫鉤。這題的靈魂只有一句:<strong>把資料結構的索引軸從「第幾個到的」換成「樣本自己的時間屬於哪一格」</strong>。換完之後,「亂序怎麼辦」的答案是<strong>不辦</strong>——你根本沒在看到達順序。此頁停在概念層;三個實作邊界(7/24 的動手題)只點名、不給答案。</p>
+
+  <section>
+    <h2>0 · 換索引軸:event time,不是 processing time</h2>
+<pre><code>window_index = ts / W        <span class="cmt">// W = window 長度;整數除法</span>
+<span class="cmt">// 只看樣本自己的純函數:同一筆 ts,現在到、晚三秒到、跟五百筆擠著到,
+// 算出來永遠是同一格。到達順序從頭到尾沒有出場。</span></code></pre>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>ring buffer(彩排 a)</th><th>time window(本題)</th></tr>
+      <tr><td>索引軸</td><td>「第幾個<strong>到</strong>的」(processing time)</td><td>「樣本自己<strong>屬於</strong>哪格」(event time)</td></tr>
+      <tr><td>亂序</td><td>災難(順序即語意)</td><td><strong>無害</strong>(索引不看順序)</td></tr>
+      <tr><td>記憶體</td><td>O(capacity)</td><td>O(#windows),與樣本數、速率皆脫鉤</td></tr>
+      <tr><td>保留的東西</td><td>原始值</td><td>統計摘要(原始值蒸發)</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>1 · 格子裡不存樣本,只折四個數字</h2>
+<pre><code>count += 1;  sum += v;  min = min(min, v);  max = max(max, v);  <span class="cmt">// 每筆 O(1)</span></code></pre>
+    <p>亂序無害的<strong>代數理由</strong>:這四個運算<strong>可交換</strong>——先折 A 再折 B 等於先折 B 再折 A。兩個必被追問的點:</p>
+    <ul>
+      <li><strong>average 要存 <code>sum</code> + <code>count</code>,不能存 running average</strong>——兩個平均沒辦法合併。</li>
+      <li><strong>min/max 只在 tumbling(固定)window 是 O(1)。</strong>sum 有反元素(離開時 <code>sum -= v</code> 還原),min/max 沒有——你不能「減掉」一個 min。固定 window 從不移除樣本(時間到就關格開新格),所以不需要反元素;<strong>sliding window 的 min/max</strong> 只能重掃或上 monotonic deque。這是代數結構問題,不是實作技巧問題。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2 · 互動:亂序樣本流進固定三格(W = 100ms)</h2>
+    <p>保留最近 3 格:w0 [0,100)、w1 [100,200)、w2 [200,300)。看四筆樣本(含一筆遲到、一筆太老)怎麼落格:</p>
+    <div class="step">
+      <div class="step-controls">
+        <button id="next">下一步 ▸</button>
+        <button id="reset">重置</button>
+        <span class="stepcap" id="stepcap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>進來的樣本</h4>
+          <div class="cell solo" id="incoming">—</div>
+          <div class="ord" id="icap">&nbsp;</div>
+          <div class="cell solo dim" id="verdict">&nbsp;</div>
+        </div>
+        <div class="lane">
+          <h4>windows(記憶體恆 3 格)</h4>
+          <div class="row">
+            <div class="cell" id="w0">w0 [0,100)<small id="s0">已淘汰</small></div>
+            <div class="cell" id="w1">w1 [100,200)<small id="s1">空</small></div>
+            <div class="cell" id="w2">w2 [200,300)<small id="s2">空</small></div>
+          </div>
+          <div class="ord">window_index = ts / 100</div>
+        </div>
+      </div>
+      <div class="step-narr" id="narr"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · 什麼時候聚合才划算:每格樣本 ≫ 1</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>每 node 速率</th><th>存原始值(覆蓋 60s)</th><th>聚合(1s 格 × 60)</th></tr>
+      <tr><td>1 Hz</td><td><strong>4.3 MB ← 原始值贏</strong></td><td>8.6 MB</td></tr>
+      <tr><td>1 kHz</td><td>4.3 GB</td><td><strong>8.6 MB</strong></td></tr>
+      <tr><td>1 MHz</td><td>4.3 TB</td><td><strong>8.6 MB</strong></td></tr>
+    </table></div>
+    <p style="margin-top:14px">1 Hz 下每格只有 1 筆——你花 4 個數字記 1 筆,聚合是把資料<strong>變大</strong>的有損壓縮;crossover 在每格 ~2 筆。所以正確的說法不是「聚合比較省」,是<strong>「聚合的成本與速率無關」</strong>:</p>
+<pre><code>存原始值:memory = rate × T × size      <span class="cmt">// rate 在式子裡</span>
+聚合:    memory = (T / W) × 固定        <span class="cmt">// rate 不在式子裡</span></code></pre>
+    <p><strong>代價講清楚才叫 trade-off</strong>:聚合之後你永遠答不了「14:03:22 那筆讀數是多少」。切點是<strong>產品需求</strong>不是效能——儀表板只要統計 → 聚合;要看得到原始波形 → 退回 drop-oldest ring,把 <code>rate × 保留秒數 × size</code> 算給面試官,讓他決定付不付。</p>
+  </section>
+
+  <section>
+    <h2>4 · 三個實作邊界——點名,不解答(7/24 的動手題)</h2>
+    <p>只保留 N 格時,這三題就是彩排 f(aggregator 延伸)的全部難度,<strong>動手前先自己想</strong>:</p>
+    <ol>
+      <li>新來的 window_index,<strong>住哪個 slot?</strong>(N 格循環重用——這格上一任住戶的資料呢?)</li>
+      <li>ts 落在<strong>已淘汰的過去</strong>——用什麼判準認出「太老」?拒收要 O(1)。</li>
+      <li>ts <strong>跳到很遠的未來</strong>——中間被跳過的那些格,裡面的舊資料<strong>誰負責清?什麼時候清?</strong></li>
+    </ol>
+    <p>加一題 R1 同款陷阱當開胃菜:<strong>空 window 的 <code>stats</code> 為什麼必須回 <code>None</code>、不能回 zero 填充?</strong>提示:zero 對 count/sum 無害,對 <strong>min</strong> 是什麼?</p>
+  </section>
+
+  <section>
+    <h2>5 · 面試句庫</h2>
+    <blockquote class="say">
+      “I index by <strong>event time</strong>, not arrival: <code>window = ts / W</code> is a pure function of the sample itself, so out-of-order arrival is a non-event — the four fold operations are commutative.”
+      <em>換索引軸 + 可交換性,一句收掉亂序追問。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Aggregation's real property isn't ‘smaller' — it's that memory is <strong>rate-independent</strong>: raw is rate × T × size, windows are T/W × constant. Below ~2 samples per bucket, raw actually wins — so Q2's rate number decides, not taste.”
+      <em>划算判準講到位 = 展示你不是背口訣。</em>
+    </blockquote>
+    <blockquote class="say">
+      “The cost is irreversibility: after folding I can never answer ‘what was the reading at 14:03:22'. That's a product decision, so I'd ask whether the dashboard needs raw waveforms before choosing.”
+      <em>代價 + 把球丟回需求——clarify 精神收尾。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:Q5(彩排 f)recognition 級,概念在此、實作邊界 7/24 動手才解。題幹:<code>rehearsals/PROMPTS_EN.md</code>(f 題)· 決策脈絡:<code>docs/clarify-playbook.md</code>(Q1「就地聚合」節,含 crossover 完整推導)· 對照組:<code>qa_overwrite_ring.html</code>(要原始值時的 drop-oldest ring)· 動手檔:<code>drills/src/ring_buffer.rs</code>(aggregator 延伸寫在同檔)。
+  </div>
+</div>
+
+<script>
+(function () {
+  var step = 0, MAX = 5;
+  var $ = function (id) { return document.getElementById(id); };
+  var W = [
+    // [w1 text, w2 text] per step(w0 永遠已淘汰)
+    ["空", "空"],
+    ["c=1 s=7 [7,7]", "空"],
+    ["c=1 s=7 [7,7]", "c=1 s=4 [4,4]"],
+    ["c=2 s=16 [7,9]", "c=1 s=4 [4,4]"],
+    ["c=2 s=16 [7,9]", "c=1 s=4 [4,4]"],
+    ["c=2 s=16 [7,9]", "c=1 s=4 [4,4]"]
+  ];
+  var IN = ["—", "ts=105, v=7", "ts=203, v=4", "ts=112, v=9", "ts=95, v=2", "—"];
+  var CAP = ["", "105/100 = 1 → w1", "203/100 = 2 → w2", "112/100 = 1 → w1(遲到)", "95/100 = 0 → 已淘汰", ""];
+  var HOT = [null, 1, 2, 1, null, null];
+  var NARR = [
+    "初始:三格全空。索引規則:<b>window_index = ts / 100</b>——只看樣本自己。",
+    "ts=105 → 105/100 = <b>1</b> → 折進 w1:count=1, sum=7, min=max=7。",
+    "ts=203 → 索引 <b>2</b> → 折進 w2。",
+    "ts=112 <b>遲到了</b>(203 都到過了)——但 112/100 還是 <b>1</b>,照樣折進 w1:count=2, sum=16, min=7, max=9。<b>純函數不在乎它排隊排第幾。</b>",
+    "ts=95 → 索引 <b>0</b> → w0 <b>已淘汰</b> → 拒收(回 false)。「太老」是唯一要擋的亂序——怎麼判 O(1)?那是 §4 的第 2 題。",
+    "四筆處理完:<b>記憶體從頭到尾恆 3 格</b>。速率翻一千倍,這張圖一個 byte 都不變——這就是「與樣本數脫鉤」。"
+  ];
+  function render() {
+    var last = (step >= MAX);
+    var inc = $("incoming");
+    inc.textContent = IN[step];
+    inc.className = "cell solo" + (step === 4 ? " bad" : (step > 0 && !last ? " hot" : ""));
+    $("icap").textContent = CAP[step] || " ";
+    $("s1").textContent = W[step][0];
+    $("s2").textContent = W[step][1];
+    $("w0").className = "cell dim" + (step === 4 ? " bad" : "");
+    $("w1").className = "cell" + (HOT[step] === 1 ? " hot" : "");
+    $("w2").className = "cell" + (HOT[step] === 2 ? " hot" : "");
+    var v = $("verdict");
+    if (last) { v.className = "cell solo ok"; v.textContent = "記憶體恆 O(3) ✓"; }
+    else if (step === 4) { v.className = "cell solo bad"; v.textContent = "太老 → 拒收 (false)"; }
+    else { v.className = "cell solo dim"; v.innerHTML = "&nbsp;"; }
+    $("narr").innerHTML = NARR[step];
+    $("stepcap").textContent = "步驟 " + step + " / " + MAX;
+    $("next").disabled = last;
+  }
+  $("next").addEventListener("click", function () { if (step < MAX) { step++; render(); } });
+  $("reset").addEventListener("click", function () { step = 0; render(); });
+  render();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1,"uint32_t":1};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i], j;
+      if(c==="/"&&src[i+1]==="/"){ j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c>="0"&&c<="9"){
+        var nm=/^[0-9][0-9_xA-Fa-f]*/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
+})();
+</script>

@@ -1,0 +1,299 @@
+<title>timer queue:park 不輪詢、舊 deadline 不飄移、eventfd 戳醒</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  /* stepper(qa 家族慣用式) */
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cell { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; overflow: hidden; }
+  .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .cell.dim { opacity: .4; }
+  .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+  @media (max-width: 640px) { .scene { grid-template-columns: 1fr; } }
+  .tk-cm{color:var(--muted);} .tk-kw{color:var(--hl-kw);} .tk-ty{color:var(--hl-ty);} .tk-fn{color:var(--hl-fn);}
+  .tk-mac{color:var(--hl-mac);} .tk-str{color:var(--hl-str);} .tk-num{color:var(--hl-num);} .tk-attr{color:var(--hl-attr);}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · timer queue · Q7 認題:periodic / interval / what runs next</div>
+  <h1>timer queue:park 不輪詢、舊 deadline 不飄移、eventfd 戳醒</h1>
+  <p class="lede">N 個 node 各有自己的健檢週期——<strong>誰下一個跑?該睡多久?</strong>每個 event loop / async runtime 裡都有一顆這種東西(Delay 的計時 thread、heartbeat 偵測、<code>epoll_wait</code> 的 timeout 參數,背後全是它)。這頁釘死四件事:deadline vs interval、<strong>從舊 deadline 重排為什麼不飄移</strong>(互動 stepper 對照錯誤版)、為什麼不 thread-per-timer、以及 park 中的 loop 怎麼被跨 thread 的 <code>schedule</code> 戳醒。</p>
+
+  <section>
+    <h2>0 · 它是誰:兩個 API,一個被動資料結構</h2>
+<pre><code>schedule(id, first_at, interval)  <span class="cmt">// 「id 第一次在 first_at 響,之後每 interval 響一次」</span>
+next_deadline() -&gt; Option&lt;u64&gt;    <span class="cmt">// 「下一個最早要響的時間點」= park 的目標</span>
+pop_due(now) -&gt; Vec&lt;id&gt;           <span class="cmt">// 「到 now 為止全部到期的,吐出來 + 自動重排」</span></code></pre>
+    <p>關鍵定位:它<strong>刻意只當被動的資料結構</strong>——「等待」是呼叫它的 event loop 的工作。迴圈形狀:</p>
+<pre><code>loop {
+    let timeout = q.next_deadline().map(|d| d.saturating_sub(now()));
+    poller.wait(timeout);              <span class="cmt">// epoll_wait(timeout) 或 Condvar::wait_timeout</span>
+    for id in q.pop_due(now()) { fire(id); }
+}                                      <span class="cmt">// park 到 deadline,不是每 10ms 醒來輪詢</span></code></pre>
+    <p><strong>deadline vs interval</strong>:deadline 是<strong>絕對時間點</strong>(幾點響),interval 是<strong>相對時距</strong>(響完隔多久再響)。<code>schedule(1, 100, 100)</code> → 響鈴序列 100, 200, 300…;<code>schedule(2, 150, 300)</code> → 150, 450, 750…。內部一顆 <code>BinaryHeap&lt;Reverse&lt;(deadline, id, interval)&gt;&gt;</code>:tuple 排序天然給出 (deadline, id) 的 tie-break,<code>Reverse</code> 把 max-heap 翻成 min-heap——免手寫 <code>Ord</code>。</p>
+  </section>
+
+  <section>
+    <h2>1 · 互動:pop_due(300)——從「舊 deadline」還是「now」重排?</h2>
+    <p>情境:loop 忙別的事,忙到 <strong>t=300</strong> 才回來看 timer(遲到了)。t1 = (100, 每100),t2 = (150, 每300)。切換兩種重排策略,走同一次 <code>pop_due(300)</code>:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="mode">
+          <button data-mode="old" class="on">舊 deadline + interval(正解)</button>
+          <button data-mode="now">now + interval(飄移版)</button>
+        </div>
+        <button id="next">下一步 ▸</button>
+        <button id="reset">重置</button>
+        <span class="stepcap" id="stepcap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>heap(最小在上)</h4>
+          <div class="cell" id="h0">(100, t1)</div>
+          <div class="cell" id="h1">(150, t2)</div>
+          <div class="ord" id="hcap">now = 300,開始收帳</div>
+        </div>
+        <div class="lane">
+          <h4>pop_due 吐出</h4>
+          <div class="cell" id="out">[]</div>
+          <div class="ord" id="ocap">&nbsp;</div>
+          <div class="cell dim" id="verdict">&nbsp;</div>
+        </div>
+      </div>
+      <div class="step-narr" id="narr"></div>
+    </div>
+    <p style="margin-top:14px">正解版收 <code>[1, 2, 1, 1]</code>(100/150/200/300 四響全補發)、下一響 400——<strong>網格固定在 100 的倍數,遲到不改變節奏</strong>。飄移版只收 <code>[1, 2]</code>,漏掉 200/300 兩響,而且之後每次晚 5ms 醒來,整個節奏就永久往後滑 5ms——監控系統的「每分鐘一筆」會慢慢變成「每 61 秒一筆」。<code>assert!(interval &gt;= 1)</code> 的理由也在這:interval 0 會讓「重排後仍 ≤ now」永遠成立,<code>pop_due</code> 停不下來。</p>
+  </section>
+
+  <section>
+    <h2>2 · 為什麼不 thread-per-timer?</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>理由</th><th>帳</th></tr>
+      <tr><td><strong>規模</strong></td><td>伺服器 timer 動輒上萬(每條連線一個 idle timeout)。一萬條 sleep thread = 20 GB stack + scheduler 負擔;<strong>一顆 heap + 一個等待者</strong>管百萬個 timer——tokio 內部就是這樣。</td></tr>
+      <tr><td><strong>跟 IO 等待合併</strong></td><td>event loop 本來就 park 在 <code>epoll_wait</code> 等 socket;把 <code>next_deadline()</code> 塞進它的 timeout 參數,<strong>一次等待同時服務 IO 和 timer</strong>。thread 睡覺沒辦法合併。</td></tr>
+      <tr><td><strong>可測試性</strong></td><td><code>pop_due(now)</code> 把「現在幾點」當<strong>參數注入</strong>,不碰真實時鐘——測試決定性、瞬間跑完、不用 sleep。面試加分句。</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>3 · park 中,別的 thread 呼叫 schedule(9, 350, …) 會怎樣?</h2>
+    <p>loop 正 park 到 400,heap 裡多了 (350, 9)——<strong>但沒有人看</strong>。timer 9 會遲到到 400(或碰巧被 IO 事件吵醒)才補發。資料結構是對的,錯過的是「<strong>醒來的理由</strong>」。解法 = 跨 thread 戳醒睡著的人,按 park 形式分兩條,形狀同構:</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>park 在哪</th><th>叫醒的工具</th></tr>
+      <tr><td><code>Condvar::wait_timeout</code></td><td><code>schedule</code> 之後 <code>notify_one()</code>——executor drill 的 park-token 近親</td></tr>
+      <tr><td><code>epoll_wait(timeout)</code></td><td>一顆 <strong>eventfd</strong> 常駐 epoll set;scheduling thread 對它 write(1) → loop 立刻返回。tokio(mio 的 Waker)在 Linux 上就是這個;eventfd 出現前的老寫法叫 self-pipe trick</td></tr>
+    </table></div>
+    <p style="margin-top:14px">醒來後 loop <strong>不需要任何特殊處理</strong>——回到迴圈開頭重算 <code>next_deadline()</code>,看到 350,重新 park。這就是「重算、再睡」迴圈形狀的好處:真事件、eventfd、spurious wakeup 一律走同一條路,天然正確。標準優化:<strong>只在新 deadline &lt; 目前最早時才戳</strong>——排 500 的話 loop 本來就會在 400 醒來自然看到,戳了是白醒。</p>
+    <blockquote class="say">
+      “Scheduling from another thread needs a wakeup path: on Linux that's an eventfd registered in the same epoll set — and you only write to it when the new deadline beats the current earliest.”
+      <em>跨 thread schedule 的一句話版。</em>
+    </blockquote>
+    <p>認模式:「<strong>資料結構被動、等待者主動、外人用一根 fd/condvar 戳醒</strong>」——executor 的 park-token、mio 的 eventfd Waker、self-pipe trick,同一題的三次出現。面試裡認出「這是同一題」比背三套實作值錢。</p>
+  </section>
+
+  <section>
+    <h2>4 · 規模轉折點 + 句庫</h2>
+    <p>heap 是 O(log n) / op。timer <strong>極多</strong>(百萬級、大多會被取消,像 TCP retransmit timer)時換 <strong>hashed timer wheel</strong>:O(1) 攤銷,代價是精度(槽粒度)——「用精度換吞吐」。kernel 和 tokio 的 timer 都是 wheel。面試預設 heap 起手,被追問再講轉折。</p>
+    <blockquote class="say">
+      “The heap answers ‘who's earliest' in O(log n); <code>next_deadline</code> is my park target — <strong>park, don't poll</strong>. I reschedule from the <strong>old</strong> deadline, not from now, so lateness never shifts the grid — missed periods replay naturally because the new deadline can still be ≤ now.”
+      <em>Q7 口述的骨幹,一口氣講完三個設計點。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Ordering-hungry APIs pay for ordering: epoll's ready list is O(1) because it promises none; a timer queue must answer ‘who's next', so it pays the log — or trades precision for O(1) with a timer wheel.”
+      <em>跟 epoll 內部那頁的收束句對接。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:Q7(彩排 h)recognition 級——讀題 → 30 秒定界 → 口述,不寫碼。題幹:<code>rehearsals/PROMPTS_EN.md</code>(h 題)· sol:<code>rehearsals/examples/sol_timer_queue.rs</code> · 近親:<code>docs/artifacts/executor.html</code>(Delay 的計時 thread = 微型 reactor)· <code>qa_epoll_stale_registry.html</code>(epoll 內部三結構)· clarify Q5 偵測線:<code>docs/clarify-playbook.md</code>。
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "old";           // "old" | "now"
+  var step = 0;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // 每步:heap 顯示(前兩名)、out、敘事
+  var S = {
+    old: {
+      max: 5,
+      heap: [
+        ["(100, t1)", "(150, t2)"],
+        ["(150, t2)", "(200, t1)"],
+        ["(200, t1)", "(450, t2)"],
+        ["(300, t1)", "(450, t2)"],
+        ["(400, t1)", "(450, t2)"],
+        ["(400, t1)", "(450, t2)"]
+      ],
+      out: ["[]", "[1]", "[1, 2]", "[1, 2, 1]", "[1, 2, 1, 1]", "[1, 2, 1, 1]"],
+      narr: [
+        "初始:heap 頂 (100, t1)。now = 300,凡 deadline ≤ 300 都到期。",
+        "pop (100, t1) ≤ 300 → 收 <b>1</b>,推回 (<b>100</b>+100 = 200, t1)——從<b>舊 deadline</b> 起算。",
+        "pop (150, t2) ≤ 300 → 收 <b>2</b>,推回 (150+300 = 450, t2)。",
+        "pop (200, t1) ≤ 300 → 收 <b>1</b>,推回 (300, t1)。<b>這就是補發</b>:重排後仍 ≤ now,迴圈自然再收。",
+        "pop (300, t1) ≤ 300 → 收 <b>1</b>,推回 (400, t1)。",
+        "peek (400, t1) &gt; 300 → break。<b>四響全補發,下一響 400——網格釘死在 100 的倍數,遲到不改節奏 ✓</b>"
+      ]
+    },
+    now: {
+      max: 3,
+      heap: [
+        ["(100, t1)", "(150, t2)"],
+        ["(150, t2)", "(400, t1)"],
+        ["(400, t1)", "(600, t2)"],
+        ["(400, t1)", "(600, t2)"]
+      ],
+      out: ["[]", "[1]", "[1, 2]", "[1, 2]"],
+      narr: [
+        "初始:heap 頂 (100, t1)。now = 300。這次改用錯誤版:重排 = <b>now</b> + interval。",
+        "pop (100, t1) ≤ 300 → 收 <b>1</b>,推回 (<b>300</b>+100 = 400, t1)——用 now 起算,200/300 兩響<b>直接蒸發</b>。",
+        "pop (150, t2) ≤ 300 → 收 <b>2</b>,推回 (300+300 = 600, t2)——t2 本該 450 響,現在變 600。",
+        "peek (400) &gt; 300 → break。<b>只收到 [1, 2],漏兩響;而且每次晚 5ms 醒,節奏永久後滑 5ms——「每分鐘一筆」悄悄變「每 61 秒一筆」✗</b>"
+      ]
+    }
+  };
+
+  function render() {
+    var m = S[mode];
+    var last = (step >= m.max);
+    $("h0").textContent = m.heap[step][0];
+    $("h0").className = "cell" + (step > 0 && !last ? " hot" : "");
+    $("h1").textContent = m.heap[step][1];
+    $("h1").className = "cell";
+    $("hcap").textContent = last ? "peek > now → break" : "now = 300,開始收帳";
+    var out = $("out");
+    out.textContent = m.out[step];
+    if (!last) { out.className = "cell" + (step > 0 ? " hot" : ""); }
+    else { out.className = "cell " + (mode === "old" ? "ok" : "bad"); }
+    var v = $("verdict");
+    if (!last) { v.className = "cell dim"; v.innerHTML = "&nbsp;"; }
+    else if (mode === "old") { v.className = "cell ok"; v.textContent = "下一響 400,網格不飄 ✓"; }
+    else { v.className = "cell bad"; v.textContent = "漏 2 響 + 節奏飄移 ✗"; }
+    $("ocap").innerHTML = step > 0 && !last ? "每收一筆就地重排" : "&nbsp;";
+    $("narr").innerHTML = m.narr[step];
+    $("stepcap").textContent = "步驟 " + step + " / " + m.max;
+    $("next").disabled = last;
+  }
+
+  $("next").addEventListener("click", function () { if (step < S[mode].max) { step++; render(); } });
+  $("reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("mode");
+  toggle.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1,"uint32_t":1};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i], j;
+      if(c==="/"&&src[i+1]==="/"){ j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c>="0"&&c<="9"){
+        var nm=/^[0-9][0-9_xA-Fa-f]*/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
+})();
+</script>

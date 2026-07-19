@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、11 頁問答圖解,加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、10 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -772,11 +772,6 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="hook">flag 三族(事件/免訂事件/模式開關)+ ADD/MOD/DEL/wait 生命週期;LT vs ET 時序圖、backpressure 關水龍頭、退訂暗坑(fd + generation)。</span>
       <span class="hits">ERR/HUP 免訂必回報 · MOD 是 backpressure 開關</span>
     </a>
-    <a class="card" href="qa_epoll_stale_registry.html">
-      <span class="name">qa · epoll 內部與 stale fd(e2 的 why)</span>
-      <span class="hook">kernel 三結構(紅黑樹/ready list/events 卷)複雜度圖解;entry 上沒有 fd 欄位、data 是證件;stale 事件的一生 stepper(裸 fd 💥 vs generation ✓)、三放大器、O(max_fd)+4B 的帳、tokio ScheduledIo 雙 waker。</span>
-      <span class="hits">close 收不回你手上的卷 · 鎖擋同時、generation 擋時間 · e2 電梯句</span>
-    </a>
     <a class="card" href="qa_unbounded_lockfree.html">
       <span class="name">qa · unbounded × lock-free</span>
       <span class="hook">佇列 2×2 的刻意空白格:Michael–Scott / SegQueue 認臉、回收沼澤四出路(arena / hazard / epoch / GC)、run queue 為什麼敢 unbounded。</span>
@@ -880,6 +875,37 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       </tbody>
     </table>
   </div>
+</section>
+
+<section class="stage-block">
+  <div class="stage-head">
+    <span class="stage-num pri">Q4–Q7</span>
+    <span class="stage-title">彩排題教學</span>
+    <span class="stage-sub">recognition 題(e / e2 / f / h)的認題與口述底稿——每頁一個 stepper 走一次核心陷阱;讀完就能 30 秒定界 + 口述 arc</span>
+  </div>
+  <div class="cards">
+    <a class="card" href="qa_event_registry.html">
+      <span class="name">e · event registry(Q4)</span>
+      <span class="hook">查找階梯(線性掃 → HashMap → id 密集直接當索引,O(1) worst-case 零 hashing);After::Keep/Remove = 控制反轉繞開 borrow checker;remove(i) vs swap_remove stepper——親眼看 D 被跳過 + 註冊順序毀。</span>
+      <span class="hits">第一問:id 密集還是稀疏? · O(max_id) 的入場券是密集性</span>
+    </a>
+    <a class="card" href="qa_epoll_stale_registry.html">
+      <span class="name">e2 · epoll 內部與 stale fd(Q4 進階,JD sleeper)</span>
+      <span class="hook">kernel 三結構(紅黑樹/ready list/events 卷)複雜度圖解;entry 上沒有 fd 欄位、data 是證件;stale 事件的一生 stepper(裸 fd 💥 vs generation ✓)、三放大器、O(max_fd)+4B 的帳、tokio ScheduledIo 雙 waker。</span>
+      <span class="hits">close 收不回你手上的卷 · 鎖擋同時、generation 擋時間 · e2 電梯句</span>
+    </a>
+    <a class="card" href="qa_telemetry_windows.html">
+      <span class="name">f · telemetry windows(Q5)</span>
+      <span class="hook">換索引軸:event time 純函數讓亂序蒸發;摺疊四數字的可交換性、min/max 為何只在 tumbling O(1);亂序落格 stepper;聚合划算判準(crossover ~2 筆/格)與不可逆代價。三個實作邊界只點名——7/24 動手才解。</span>
+      <span class="hits">記憶體與速率脫鉤 · 空 window 為何不能 zero-init(自答)</span>
+    </a>
+    <a class="card" href="qa_timer_queue.html">
+      <span class="name">h · timer queue(Q7)</span>
+      <span class="hook">park 到 next_deadline 不輪詢;pop_due(300) stepper:舊 deadline 起算(補發、網格不飄)vs now 起算(漏發、節奏永久後滑);跨 thread schedule 的 eventfd 戳醒 + 只在更早時才戳;heap → timer wheel 轉折點。</span>
+      <span class="hits">認題:periodic / interval / what runs next · 資料結構跟著 API 的問題走</span>
+    </a>
+  </div>
+  <p class="note">g(bounded_channel)的教學住在 <a href="bounded_queue.html">bounded_queue</a>(close 語意、兩顆 condvar、喚醒≠條件成立);a–d 主菜的近親頁見上方模組區(ring/spsc、thread_pool、hw_bridge)。</p>
 </section>
 
 <section>

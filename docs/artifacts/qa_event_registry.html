@@ -1,0 +1,315 @@
+<title>event registry:id 密集就直接當索引、Remove 用回報的</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .row { display: flex; gap: 8px; }
+  .cell { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; flex: 1; overflow: hidden; }
+  .col .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .cell.dim { opacity: .38; }
+  .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+  @media (max-width: 640px) { .scene { grid-template-columns: 1fr; } }
+  .tk-cm{color:var(--muted);} .tk-kw{color:var(--hl-kw);} .tk-ty{color:var(--hl-ty);} .tk-fn{color:var(--hl-fn);}
+  .tk-mac{color:var(--hl-mac);} .tk-str{color:var(--hl-str);} .tk-num{color:var(--hl-num);} .tk-attr{color:var(--hl-attr);}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · event registry · Q4 認題:event id / handlers / thousands of signals</div>
+  <h1>event registry:id 密集就直接當索引、Remove 用回報的</h1>
+  <p class="lede">硬體訊號帶著 event id 進來,掛 handler、事件來就 dispatch——幾千種 id、高事件率。這題考兩件事:<strong>查找結構的階梯</strong>(第一個 clarify:id 密集還是稀疏?)和一個 Rust 特有的殺手:<strong>dispatch 進行中 handler 想把自己移除,撞上 borrow checker</strong>——<code>After::Keep / Remove</code> 回報制就是為它而生。這頁是 e2(fd_registry)的前傳:同一套「id 當索引」思想,少了 generation 那層。</p>
+
+  <section>
+    <h2>0 · 查找結構的階梯:第一問永遠是「id 密集還是稀疏?」</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>結構</th><th>dispatch 查找</th><th>記憶體</th><th>什麼時候對</th></tr>
+      <tr><td>naive <code>Vec&lt;(id, handler)&gt;</code> 線性掃</td><td>O(n)</td><td>O(live)</td><td>十幾個 handler 的玩具;高事件率下每次 dispatch 全掃 = 自殺</td></tr>
+      <tr><td><code>HashMap&lt;id, Vec&lt;Handler&gt;&gt;</code></td><td>O(1) 攤銷(hash + probe,常數大、cache 差)</td><td>O(live)</td><td>id 稀疏 / 無界(隨機 u64、字串)時的正解</td></tr>
+      <tr><td><strong>direct-index <code>Vec&lt;Vec&lt;Handler&gt;&gt;</code></strong></td><td><strong>O(1) worst-case,一次 array load,零 hashing</strong></td><td>O(max_id)</td><td><strong>id 密集有界</strong>(硬體 opcode、中斷號、fd)——本題的正解</td></tr>
+    </table></div>
+    <p style="margin-top:14px">O(max_id) 的入場券是<strong>密集性</strong>:硬體 event id 是人定的小整數表(幾千種、從 0 編起),max_id ≈ 種類數,不會稀疏爆炸——跟 fd 的「最小可用號碼」同一個入場券。id 若是隨機 u64,這招就死,退回 HashMap。<strong>把這個判準問出口</strong>,就是 Q4 的 clarify 得分點。</p>
+    <blockquote class="say">
+      “Are the ids dense and bounded — like hardware opcodes — or sparse? Dense means the id <strong>is</strong> the index: one array load, O(1) worst-case, no hashing on the hot path. Sparse means HashMap and I pay hash-plus-probe per event.”
+      <em>階梯一句話講完,附帶把 clarify 問了。</em>
+    </blockquote>
+  </section>
+
+  <section>
+    <h2>1 · 為什麼是 After::Keep / Remove,不是 handler 自己 unregister?</h2>
+    <p>直覺 API 是給 handler 一個 <code>registry.unregister(...)</code>。在 Rust 裡這直接撞牆:dispatch 正拿著 <code>&amp;mut handlers[i]</code> 在呼叫它,handler 再回頭改同一個 registry = <strong>同一份資料的兩個 &amp;mut 同時活著</strong>——borrow checker 拒編。這不是 Rust 找碴:C++ 版同樣的寫法是「iterator 失效 + 邊走邊改」的經典 UB,只是 C++ 讓你編過、上線才炸。</p>
+    <p>繞法是<strong>控制反轉</strong>:handler 不動手,只<strong>回報意圖</strong>(<code>After::Keep</code> / <code>After::Remove</code>),移除由 dispatch 迴圈自己做——同一時間只有迴圈一個人拿著 &amp;mut。題目那句「dispatch 進行中不會有人 register(caller 保證)」是同一個問題的另一半:對 registry 的其他寫入也被推到 dispatch 之外。</p>
+<pre><code><span class="cmt">// canonical:手動控制 index 的迴圈——Remove 時「刪、不前進」</span>
+pub fn dispatch(&amp;mut self, id: usize, payload: &amp;[u8]) -&gt; usize {
+    let Some(list) = self.table.get_mut(id) else { return 0 };  <span class="cmt">// 未知 id = no-op</span>
+    let mut i = 0;
+    let mut ran = 0;
+    while i &lt; list.len() {
+        ran += 1;
+        match list[i](payload) {
+            After::Keep   =&gt; i += 1,          <span class="cmt">// 留任 → 前進</span>
+            After::Remove =&gt; { list.remove(i); } <span class="cmt">// 移除 → 原地(下一位滑進 i)</span>
+        }
+    }
+    ran
+}</code></pre>
+    <p><code>Vec::remove(i)</code> 是 O(n) 搬移,但<strong>保序</strong>——「依註冊順序執行」是題目的 contract。想省搬移用 <code>swap_remove</code>?下面 stepper 親手走一次它的雙重災難。</p>
+  </section>
+
+  <section>
+    <h2>2 · 互動:dispatch 中途移除——remove(i) vs swap_remove(i)</h2>
+    <p>id 7 掛了四個 handler [A, B, C, D](註冊順序)。這次 dispatch 裡 <strong>B 回報 Remove</strong>,其他都 Keep。切換兩種移除法:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="mode">
+          <button data-mode="rm" class="on">remove(i)·保序(正解)</button>
+          <button data-mode="sw">swap_remove(i)·O(1)</button>
+        </div>
+        <button id="next">下一步 ▸</button>
+        <button id="reset">重置</button>
+        <span class="stepcap" id="stepcap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>handlers[id 7](i = 游標)</h4>
+          <div class="row" id="cells">
+            <div class="cell" id="c0">A</div>
+            <div class="cell" id="c1">B</div>
+            <div class="cell" id="c2">C</div>
+            <div class="cell" id="c3">D</div>
+          </div>
+          <div class="ord" id="icap">i = 0</div>
+        </div>
+        <div class="lane">
+          <h4>這輪跑過誰</h4>
+          <div class="cell" id="ran">—</div>
+          <div class="ord" id="rcap">&nbsp;</div>
+          <div class="cell dim" id="verdict">&nbsp;</div>
+        </div>
+      </div>
+      <div class="step-narr" id="narr"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · 跟 e2(fd_registry)的關係:同一招,差一層</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>e · event_registry</th><th>e2 · fd_registry</th></tr>
+      <tr><td>key</td><td>event id(人定的、<strong>不回收</strong>)</td><td>fd(OS 發的、<strong>會回收重發</strong>)</td></tr>
+      <tr><td>結構</td><td>direct-index <code>Vec&lt;Vec&lt;Handler&gt;&gt;</code></td><td>direct-index slot map</td></tr>
+      <tr><td>多的那層</td><td>——</td><td><strong>generation</strong>:key 會被重發,身份要帶「第幾輪」</td></tr>
+    </table></div>
+    <p style="margin-top:14px">所以答 e 時順口補一句「if the ids could be recycled — like fds — I'd add a generation per slot」,就是把 e 和 e2 一起收掉的加分動作。</p>
+  </section>
+
+  <section>
+    <h2>4 · 面試句庫</h2>
+    <blockquote class="say">
+      “A handler can't unregister itself mid-dispatch — that's two mutable borrows of the same registry, and in C++ the same shape is iterator invalidation. So handlers <strong>report</strong> Keep-or-Remove, and the dispatch loop — the sole borrower — applies it: remove-at-i without advancing, preserving registration order.”
+      <em>控制反轉 + borrow checker,一次講完。</em>
+    </blockquote>
+    <blockquote class="say">
+      “<code>swap_remove</code> is O(1) but double-broken here: it skips the swapped-in handler this round, and it permanently breaks registration order. <code>remove</code> is O(n) on a rare path — removal — to keep the hot path contract correct.”
+      <em>被追問「為什麼不用 swap_remove」的完整回答。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:Q4(彩排 e)recognition 級——讀題 → 30 秒定界 → 口述,不寫碼。題幹:<code>rehearsals/PROMPTS_EN.md</code>(e 題)· 進階層:<code>qa_epoll_stale_registry.html</code>(fd 會回收 → generation)+ <code>docs/fd_registry.md</code> · 記憶體帳同款:O(max_id) vs O(live) 的對比見那頁 §6。
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "rm";
+  var step = 0;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // cells 每步顯示:label 陣列 + 游標位置 + 誰 hot/bad/dim
+  var S = {
+    rm: {
+      max: 5,
+      cells: [
+        [["A",""],["B",""],["C",""],["D",""]],
+        [["A","hot"],["B",""],["C",""],["D",""]],
+        [["A",""],["B","bad"],["C",""],["D",""]],
+        [["A",""],["C","hot"],["D",""],["",'gone']],
+        [["A",""],["C",""],["D","hot"],["",'gone']],
+        [["A",""],["C",""],["D",""],["",'gone']]
+      ],
+      i:    ["i = 0", "i = 0", "i = 1", "i = 1", "i = 2", "完"],
+      ran:  ["—", "A", "A, B", "A, B, C", "A, B, C, D", "A, B, C, D"],
+      narr: [
+        "初始:handlers = [A, B, C, D],依註冊順序。dispatch(7) 開始,i = 0。",
+        "跑 <b>A</b> → Keep → i = 1。",
+        "跑 <b>B</b> → <b>Remove</b> → <code>remove(1)</code>:B 走人,C、D <b>整段左移補位</b>(O(n) 搬移)。<b>i 不前進</b>。",
+        "i 還是 1,現在住的是 <b>C</b> → 跑 C → Keep → i = 2。<b>沒有人被跳過。</b>",
+        "跑 <b>D</b> → Keep → i = 3 = len → 結束。",
+        "<b>四個全跑到、留下 [A, C, D] 保持註冊順序 ✓</b>——O(n) 花在罕見的移除路徑,熱路徑 contract 不破。"
+      ],
+      verdict: "跑 4/4 · 順序保留 ✓"
+    },
+    sw: {
+      max: 4,
+      cells: [
+        [["A",""],["B",""],["C",""],["D",""]],
+        [["A","hot"],["B",""],["C",""],["D",""]],
+        [["A",""],["D","bad"],["C",""],["",'gone']],
+        [["A",""],["D","dim"],["C","hot"],["",'gone']],
+        [["A",""],["D","dim"],["C",""],["",'gone']]
+      ],
+      i:    ["i = 0", "i = 0", "i = 1", "i = 2", "完"],
+      ran:  ["—", "A", "A, B", "A, B, C", "A, B, C"],
+      narr: [
+        "初始:handlers = [A, B, C, D]。dispatch(7) 開始,i = 0。",
+        "跑 <b>A</b> → Keep → i = 1。",
+        "跑 <b>B</b> → <b>Remove</b> → <code>swap_remove(1)</code>:<b>尾巴的 D 跳進 i=1</b>(O(1),不搬移)。",
+        "迴圈以為 i=1 處理完了 → i = 2 → 跑 <b>C</b>。<b>D 被跳過了——它這輪永遠不會跑。</b>",
+        "結束。<b>D 沒跑到(漏 dispatch)+ 之後的順序變 [A, D, C](註冊順序毀)✗</b>——O(1) 的代價是兩條 contract 一起破。"
+      ],
+      verdict: "跑 3/4(D 漏)· 順序毀 ✗"
+    }
+  };
+
+  function render() {
+    var m = S[mode];
+    var last = (step >= m.max);
+    var cs = m.cells[step];
+    for (var k = 0; k < 4; k++) {
+      var el = $("c" + k);
+      var lab = cs[k][0], cls = cs[k][1];
+      if (cls === "gone") { el.textContent = "·"; el.className = "cell dim"; }
+      else { el.textContent = lab; el.className = "cell" + (cls ? " " + cls : ""); }
+    }
+    $("icap").textContent = m.i[step];
+    var r = $("ran");
+    r.textContent = m.ran[step];
+    r.className = "cell" + (step > 0 && !last ? " hot" : "");
+    var v = $("verdict");
+    if (!last) { v.className = "cell dim"; v.innerHTML = "&nbsp;"; }
+    else { v.className = "cell " + (mode === "rm" ? "ok" : "bad"); v.textContent = m.verdict; }
+    $("rcap").innerHTML = last ? "dispatch 回傳 ran = " + (mode === "rm" ? 4 : 3) : "&nbsp;";
+    $("narr").innerHTML = m.narr[step];
+    $("stepcap").textContent = "步驟 " + step + " / " + m.max;
+    $("next").disabled = last;
+  }
+
+  $("next").addEventListener("click", function () { if (step < S[mode].max) { step++; render(); } });
+  $("reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("mode");
+  toggle.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1,"uint32_t":1};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i], j;
+      if(c==="/"&&src[i+1]==="/"){ j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c>="0"&&c<="9"){
+        var nm=/^[0-9][0-9_xA-Fa-f]*/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
+})();
+</script>
