@@ -53,7 +53,7 @@
 //! 未知 opcode → Error frame(連線活著)、framing 損毀 → 斷線、
 //! 送半個 frame 就斷線(server 不倒)。
 //!
-//! 對應 docs/hw_bridge.md:45 分鐘增量順序、binary vs text、
+//! 對應 docs/io/hw_bridge.md:45 分鐘增量順序、binary vs text、
 //! length-prefix vs delimiter 的取捨。
 
 pub mod client;

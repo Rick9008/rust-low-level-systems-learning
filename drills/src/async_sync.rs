@@ -7,7 +7,7 @@
 //! 一句話抓住全部:**blocking 原語 = 睡執行緒的佇列 + park/unpark;
 //! async 原語 = 存 Waker 的佇列 + Pending/wake**。
 //! 「登記」與「查狀態」要在同一把 std Mutex 下原子完成,lost wakeup
-//! 才在結構上不可能。設計取捨見 `docs/async_sync.md`。
+//! 才在結構上不可能。設計取捨見 `docs/async/async_sync.md`。
 
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;

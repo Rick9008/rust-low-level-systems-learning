@@ -75,12 +75,12 @@ repo 裡兩個活例子:`spsc_ring/core_impl.rs:40` 與 `async_sync.rs` 的
 
 - **`gen` 是保留字**(RFC 3513):手寫 generational index 時 `let gen = ...`
   直接編不過——命名用 `generation` / `gens`(repo 的 `fd_registry` 已避開)。
-- temporary drop scope 變更:見 [thread-safe-spectrum](thread-safe-spectrum.md)
+- temporary drop scope 變更:見 [thread-safe-spectrum](concurrency/thread-safe-spectrum.md)
   的 `if let` + Mutex 地雷。
 
 ## repo 交叉對映
 
-軸 2 的 arena+index 繞道 → `lru`/`tree`/`dsu` + `docs/fd_registry.md`;
+軸 2 的 arena+index 繞道 → `lru`/`tree`/`dsu` + `docs/io/fd_registry.md`;
 軸 3 辯護 → `spsc_ring`、`async_sync`;軸 4 → `spsc_ring` 的 loom、
 `signal_pipeline` 的 SB litmus(掛牌握手是「唯一沒有網的軸」的實戰位);
 軸 5 → `executor`(pin! 兩行,別多花時間)。

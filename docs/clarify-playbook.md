@@ -57,7 +57,7 @@ Note:
 
 結構陷阱:**SPSC ring 上做不到 drop-oldest**(`head` 是 consumer 單寫的,
 producer 動不了)——SPSC-safe 的是 drop-newest(push `Err` + 計數);
-要「新蓋舊」得換 per-key conflation slot(見 [signal_pipeline](signal_pipeline.md))。
+要「新蓋舊」得換 per-key conflation slot(見 [signal_pipeline](concurrency/signal_pipeline.md))。
 
 #### 「就地聚合」到底在做什麼
 

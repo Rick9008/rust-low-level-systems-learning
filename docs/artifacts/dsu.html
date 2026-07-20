@@ -744,7 +744,7 @@ td.num.a { color: var(--accent); font-weight: 600; }
     貴不了第二次。
   </p>
 
-  <pre class="code"><i>// reference/src/dsu.rs</i>
+  <pre class="code"><i>// reference/src/ds/dsu.rs</i>
 pub fn find(&amp;mut self, mut x: usize) -&gt; usize {
     let mut root = x;
     <i>// 第一趟:爬到根</i>
@@ -911,7 +911,7 @@ pub fn find(&amp;mut self, mut x: usize) -&gt; usize {
 </main>
 
 <footer>
-  <div>原始碼:<code>reference/src/dsu.rs</code> · 設計取捨:<code>docs/dsu.md</code></div>
+  <div>原始碼:<code>reference/src/ds/dsu.rs</code> · 設計取捨:<code>docs/dsu.md</code></div>
   <div>驗證:<code>cargo test -p reference dsu</code> — 含 proptest 對照「天真連通標號」oracle,
        以及直接檢查壓縮後 <code>parent[x]</code> 距根不超過 1 步的內部不變量</div>
   <div>同階:<code>lru</code>(index-based 雙向鏈表)· <code>graph</code>(Kruskal MST 就是拿 DSU 當連通性判定)</div>

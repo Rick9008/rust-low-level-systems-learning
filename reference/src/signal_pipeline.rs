@@ -59,7 +59,7 @@
 //! shutdown drain(殘料處理完才退);扇入版另有多源守恆、
 //! 慢源不被爆源拖累(隔離)、多源喚醒。
 //!
-//! 對應 docs/signal_pipeline.md:等待策略階梯、SB litmus 手 trace
+//! 對應 docs/concurrency/signal_pipeline.md:等待策略階梯、SB litmus 手 trace
 //! (含「x86 上真的會炸」與 park token 的精確分界)、
 //! drop-newest vs conflation、control plane vs data plane、HFT 對照。
 

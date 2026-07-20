@@ -2,7 +2,7 @@
 //!
 //! ## [Clarify]
 //! 解決:面試圖論四件套的 std-only 標準寫法。
-//! Constraints:節點是 `0..n`(dense id;外部實體先映射,同 [`crate::dsu`]);
+//! Constraints:節點是 `0..n`(dense id;外部實體先映射,同 [`crate::ds::dsu`]);
 //! 邊權 `u64` 非負(Dijkstra 前提!有負邊要 Bellman-Ford,聲明不做);
 //! 稀疏圖(E ≪ V²)——所以 adjacency list 不是 matrix。
 //!

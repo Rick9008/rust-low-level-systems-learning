@@ -1,6 +1,6 @@
 # file_io_offload 設計取捨
 
-對應程式碼:`reference/src/file_io_offload.rs`。上游:[thread_pool](thread_pool.md)、[executor](executor.md)。
+對應程式碼:`reference/src/file_io_offload.rs`。上游:[thread_pool](../concurrency/thread_pool.md)、[executor](../async/executor.md)。
 
 ## 為什麼 epoll 管不了 regular file
 

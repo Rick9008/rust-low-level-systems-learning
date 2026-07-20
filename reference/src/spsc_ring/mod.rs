@@ -13,9 +13,9 @@
 //! caller 自己決定;面試時聲明「backpressure 策略是呼叫端的事」往前走。
 //!
 //! ## [Iterate]
-//! 演進線:[`crate::ring_buffer`](head+len,單執行緒)→ 本模組
+//! 演進線:[`crate::ds::ring_buffer`](head+len,單執行緒)→ 本模組
 //! (自由跑計數器 + acquire/release,雙執行緒)。len 為什麼不能用了、
-//! 為什麼換自由跑計數器,見 `docs/spsc_ring.md`。
+//! 為什麼換自由跑計數器,見 `docs/concurrency/spsc_ring.md`。
 //!
 //! ## [Trade-offs]
 //! - `#[repr(align(64))]` 把 head/tail 隔進不同 cache line:

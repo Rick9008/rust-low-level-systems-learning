@@ -50,6 +50,11 @@ Requirements:
 
 std only (`std::thread` / `std::sync`).
 
+1. what's graceful means?
+So we need to holds a thread pool to handle the services check
+and provide new(workers: usize) and submit(job: FnOnce)
+We need to holds a shutdown() for pool to ends -> Atomic Flag to handle 
+
 ## c · frame_parser_heartbeat
 
 > **用途**:Q3 預測題(認題:"byte stream" / "protocol" / "frames")。🔴 主菜 ×2(7/22、7/25),**傷疤區,永不砍**。

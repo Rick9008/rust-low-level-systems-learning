@@ -9,7 +9,7 @@ use std::thread;
 
 /// boundary:空 buffer——pop 回 None、len/is_empty/dropped 全零。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn empty_ring() {
     let mut r = SensorRing::new(4);
     assert_eq!(r.pop(), None);
@@ -20,7 +20,7 @@ fn empty_ring() {
 
 /// boundary:單元素容量——第二次 push 就觸發 drop-oldest,留下的是新值。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn capacity_one_overwrites_oldest() {
     let mut r = SensorRing::new(1);
     r.push(1);
@@ -34,7 +34,7 @@ fn capacity_one_overwrites_oldest() {
 
 /// boundary:滿時 drop 計數——容量恰好是上限(不許偷偷上取 2 的冪)。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn full_drops_oldest_and_counts() {
     let mut r = SensorRing::new(3);
     for v in 1..=5 {
@@ -51,7 +51,7 @@ fn full_drops_oldest_and_counts() {
 /// boundary:wrap 跨界——push/pop 交錯讓實體索引繞回開頭,
 /// 之後的 FIFO 順序與 drop 計數都必須不受影響。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn wrap_across_boundary() {
     let mut r = SensorRing::new(4);
     for v in 1..=4 {
@@ -81,7 +81,7 @@ fn wrap_across_boundary() {
 /// 消費序列嚴格遞增(FIFO + drop-oldest 不重排)、最後一筆必到
 /// (沒有 push 跟在它後面,不可能被丟)、收到數 + 丟棄數 = 總 push 數。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn spsc_concurrent_no_loss_no_reorder() {
     const N: u32 = 10_000;
     let (mut tx, mut rx) = channel(64);

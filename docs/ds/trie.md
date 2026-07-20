@@ -1,6 +1,6 @@
 # trie 設計取捨
 
-對應程式碼:`reference/src/trie.rs`。相關:[lru](lru.md)、[tree](tree.md)(同為 index-based 手法)。
+對應程式碼:`reference/src/ds/trie.rs`。相關:[lru](lru.md)、[tree](tree.md)(同為 index-based 手法)。
 
 ## children 的三種存法
 
@@ -49,7 +49,7 @@
 ## 懶刪除
 
 remove 只清 is_end,節點留在 arena。真回收需要:引用計數(每節點記
-子樹詞數)或 free list——後者是 [arena_lockfree](arena_lockfree.md) 的主題。
+子樹詞數)或 free list——後者是 [arena_lockfree](../concurrency/arena_lockfree.md) 的主題。
 記憶體換簡單性,對「詞典只增不減」的主流場景是零成本。
 
 ## 複雜度

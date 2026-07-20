@@ -1,7 +1,7 @@
 # hw_bridge 設計取捨 + 45 分鐘作戰順序
 
 對應程式碼:`reference/src/hw_bridge/`(protocol → framer → handler → 雙 server → client)。
-上游:[tcp_echo](tcp_echo.md)(IO 骨架)、[event_loop](event_loop.md)、[thread_pool](thread_pool.md)。
+上游:[tcp_echo](tcp_echo.md)(IO 骨架)、[event_loop](event_loop.md)、[thread_pool](../concurrency/thread_pool.md)。
 
 ## 45 分鐘增量順序(面試實戰)
 

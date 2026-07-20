@@ -19,7 +19,7 @@
 //! - children 用 `[Option<usize>; 26]`(**424 bytes/node**,不是直覺的 208——
 //!   `usize` 沒有 niche,所以 `size_of::<Option<usize>>() == 16` 而非 8;
 //!   換 `Option<NonZeroUsize>` 是 216B,換 `u32` + sentinel 是 108B。
-//!   見 docs/trie.md):child 查找 O(1) 零 hash;
+//!   見 docs/ds/trie.md):child 查找 O(1) 零 hash;
 //!   代價是稀疏節點浪費——字母表大(Unicode)或極稀疏時換 `HashMap<char, usize>`
 //!   (O(1) 期望 + heap 開銷)或排序 `Vec<(char, usize)>`(O(log deg) 二分)。
 //! - arena 只長不縮:刪除詞只清 `is_end`,不回收節點(懶刪除)。
@@ -140,7 +140,7 @@ mod tests {
             16,
             "usize 無 niche,Option 必須另配 discriminant word"
         );
-        assert_eq!(size_of::<Node>(), 424, "docs/trie.md 宣稱的每節點空間");
+        assert_eq!(size_of::<Node>(), 424, "docs/ds/trie.md 宣稱的每節點空間");
     }
 
     /// [Dry-Run] 重疊前綴 trace:

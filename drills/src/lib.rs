@@ -19,19 +19,14 @@
 #![allow(unused_variables, dead_code, unused_imports, clippy::ptr_arg)]
 
 pub mod bounded_queue;
-pub mod dsu;
+pub mod ds;
 pub mod fd_registry;
-pub mod graph;
 pub mod hw_bridge;
 pub mod iter_mutate;
-pub mod lru;
-pub mod ring_buffer;
 pub mod sharded_map;
 pub mod signal_pipeline;
 pub mod spsc_ring;
 pub mod thread_pool;
-pub mod tree;
-pub mod trie;
 
 pub mod arena_lockfree;
 pub mod async_sync;

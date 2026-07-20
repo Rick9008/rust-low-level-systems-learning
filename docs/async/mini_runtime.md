@@ -2,8 +2,8 @@
 
 對應程式碼:`reference/src/mini_runtime.rs`。相關:
 [executor](executor.md)(Waker 協議與 park token)、
-[event_loop](event_loop.md)(V1 poller 的底層)、
-[fd_registry](fd_registry.md)(interest table)、
+[event_loop](../io/event_loop.md)(V1 poller 的底層)、
+[fd_registry](../io/fd_registry.md)(interest table)、
 [async-runtime-anatomy](async-runtime-anatomy.md)(概念總圖——本模組是它的可執行版)。
 
 ## 缺的那條線
@@ -43,7 +43,7 @@ V0 合法的原因是契約:**wait 允許 spurious,醒了不代表好了,re-try 
 
 token 帶 generation:連線關閉(`Drop` → unregister,gen +1)後,
 poller 裡可能還躺著舊 token 的 readiness——查表 `None`,事件自然丟棄。
-[fd_registry](fd_registry.md) 的 stale-dispatch 防禦在 runtime 裡的實戰位。
+[fd_registry](../io/fd_registry.md) 的 stale-dispatch 防禦在 runtime 裡的實戰位。
 
 ## 誠實邊界
 
@@ -55,7 +55,7 @@ poller 裡可能還躺著舊 token 的 readiness——查表 `None`,事件自然
 - **connect 是同步的**:真 async connect = `EINPROGRESS` + 等 WRITABLE
   + `SO_ERROR` 檢查,聲明後略過。
 - 單執行緒:CPU-bound task 凍住一切(與 `server_evented_inline` 同病;
-  解法同樣是 offload,見 [file_io_offload](file_io_offload.md))。
+  解法同樣是 offload,見 [file_io_offload](../io/file_io_offload.md))。
 
 ## Production 對照
 

@@ -1,6 +1,6 @@
-//! 驗收:challenges::dsu。完成後移除 #[ignore]。
+//! 驗收:challenges::ds::dsu。完成後移除 #[ignore]。
 
-use challenges::dsu::Dsu;
+use challenges::ds::dsu::Dsu;
 
 /// 基本連通性與 components 計數。
 #[test]

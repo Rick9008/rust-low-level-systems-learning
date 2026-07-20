@@ -1,6 +1,6 @@
 # tree:index-based arena vs `Rc<RefCell>` 設計取捨
 
-對應程式碼:`reference/src/tree.rs`(兩版並列,同一組測試)。
+對應程式碼:`reference/src/ds/tree.rs`(兩版並列,同一組測試)。
 
 ## 核心問題:Rust 為什麼寫鏈式結構「難」
 
@@ -39,7 +39,7 @@
 + RefCell(內部可變性)+ Weak(斷環),並主動指出上表的稅。
 能並排講清楚,比只會寫其中一版強一個檔次。
 
-相關:[lru](lru.md)(index-based 鏈表實戰)、[arena_lockfree](arena_lockfree.md)(arena 槽位回收 + 世代)。
+相關:[lru](lru.md)(index-based 鏈表實戰)、[arena_lockfree](../concurrency/arena_lockfree.md)(arena 槽位回收 + 世代)。
 
 ## 互動教材
 

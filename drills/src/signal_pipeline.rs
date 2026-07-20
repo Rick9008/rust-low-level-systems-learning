@@ -5,7 +5,7 @@
 //! 核心不變量:**consumer「掛牌 → 再查一次」、producer「push → 查牌」,
 //! 兩邊中間各一道 `fence(SeqCst)`**——這是教科書 store-buffering litmus,
 //! Release/Acquire 擋不住「雙方都讀到舊值 → 帶著貨睡死」。
-//! 設計取捨見 `docs/signal_pipeline.md`。
+//! 設計取捨見 `docs/concurrency/signal_pipeline.md`。
 
 use reference::spsc_ring::{Consumer, Producer, channel};
 use std::sync::Arc;

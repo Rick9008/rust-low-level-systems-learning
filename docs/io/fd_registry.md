@@ -1,9 +1,9 @@
 # fd_registry 設計取捨
 
 對應程式碼:`reference/src/fd_registry.rs`。相關:
-[arena_lockfree](arena_lockfree.md)(generation 防 ABA 的 lock-free 版)、
+[arena_lockfree](../concurrency/arena_lockfree.md)(generation 防 ABA 的 lock-free 版)、
 [event_loop](event_loop.md)(interest table 的使用場景)、
-[cost-model](cost-model.md) 第三節(poll vs epoll 的 Big-O 故事)。
+[cost-model](../cost-model.md) 第三節(poll vs epoll 的 Big-O 故事)。
 
 ## 這題在考什麼
 
@@ -34,7 +34,7 @@ handler → 資料錯亂。低流量測試抓不到,高 churn 的 production 半
 
 解法一個欄位:`gens[fd]` 在 unregister 時 +1;舊 token 的 gen 對不上,
 `get` 回 `None`,過期事件自然被丟棄。
-與 [arena_lockfree](arena_lockfree.md) 同構:那邊 generation 防 CAS 的 ABA,
+與 [arena_lockfree](../concurrency/arena_lockfree.md) 同構:那邊 generation 防 CAS 的 ABA,
 這邊防 stale dispatch——同一個「index 會被回收,持有者要驗明正身」問題。
 
 ## token = (gen << 32) | fd

@@ -1,6 +1,6 @@
 # executor(mini block_on)設計取捨
 
-對應程式碼:`reference/src/executor.rs`。相關:[bounded_queue](bounded_queue.md)(predicate-wait 的同構)、[event_loop](event_loop.md)(reactor 端)。
+對應程式碼:`reference/src/executor.rs`。相關:[bounded_queue](../concurrency/bounded_queue.md)(predicate-wait 的同構)、[event_loop](../io/event_loop.md)(reactor 端)。
 
 ## Future 協定,一句話版
 

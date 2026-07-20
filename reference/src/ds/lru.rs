@@ -14,7 +14,7 @@
 //! ## [Iterate]
 //! 鏈表不用 `Rc<RefCell<Node>>` 也不用裸指標,而是 **node 放 `Vec`、
 //! prev/next 存索引**:借用檢查零阻力、cache locality 好、沒有 unsafe。
-//! 這是 Rust 寫鏈式結構的第一選擇(對照見 [`crate::tree`] 的兩版並列)。
+//! 這是 Rust 寫鏈式結構的第一選擇(對照見 [`crate::ds::tree`] 的兩版並列)。
 //!
 //! ## [Trade-offs]
 //! - key 存兩份(map 的 key + node 裡的 key):淘汰 tail 時要能從 node 反查

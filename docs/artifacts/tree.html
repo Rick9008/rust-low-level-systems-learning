@@ -755,7 +755,7 @@ pre.code .good { color: var(--ok); font-weight: 600; }
     <code>Ref&lt;T&gt;</code> guard 的生命週期綁在 <code>borrow()</code> 呼叫點,帶不出去,只能 clone。
   </p>
   <p class="note">
-    注意:<code>reference/src/tree.rs</code> 的兩版<strong>都沒有 parent 欄位</strong>(BST 用不到)。
+    注意:<code>reference/src/ds/tree.rs</code> 的兩版<strong>都沒有 parent 欄位</strong>(BST 用不到)。
     這裡把 parent 加回來,因為那正是兩版真正分岔的地方——下一節就是為了它而存在。
   </p>
 </section>
@@ -884,7 +884,7 @@ pre.code .good { color: var(--ok); font-weight: 600; }
   </div>
 
   <p class="note">
-    <code>reference/src/tree.rs</code> 的 <code>rc_refcell::insert</code> 為什麼把 <code>borrow()</code> 包在一個
+    <code>reference/src/ds/tree.rs</code> 的 <code>rc_refcell::insert</code> 為什麼把 <code>borrow()</code> 包在一個
     <code>{ ... }</code> 裡、還特地註解「<code>Ref</code> 在此釋放」?就是為了避開這個 panic。
     第三顆按鈕跑的就是那個版本:block 結束 → <code>Ref</code> 的 <code>Drop</code> 把 flag 減回 <code>UNUSED</code>
     → <code>borrow_mut()</code> 才拿得到 <code>Writing</code>。
@@ -1062,7 +1062,7 @@ tree.nodes[i].val;         <span class="cm">// 99。<span class="bad">安靜地�
 </main>
 
 <footer>
-  <div>原始碼:<code>reference/src/tree.rs</code>(兩版並列,同一組測試)· 設計取捨:<code>docs/tree.md</code></div>
+  <div>原始碼:<code>reference/src/ds/tree.rs</code>(兩版並列,同一組測試)· 設計取捨:<code>docs/tree.md</code></div>
   <div>驗證:<code>cargo test -p reference tree</code>(含 proptest:inorder == 去重排序)</div>
   <div>相關:<code>lru</code>(index-based 雙向鏈表實戰)· <code>arena_lockfree</code>(槽位回收 + generation tag,治 stale index)· <code>trie</code>(children 放 arena)</div>
 </footer>

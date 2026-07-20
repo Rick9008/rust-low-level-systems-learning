@@ -74,7 +74,7 @@ trait Poller {
 整條梯子的可執行版在 `reference/src/mini_runtime.rs`(階段 2 的 run queue +
 階段 3 的 reactor;V0 O(n) scan → V1 epoll,runtime 一行不改)。
 
-背景知識見 [`docs/async-runtime-anatomy.md`](../docs/async-runtime-anatomy.md);
+背景知識見 [`docs/async/async-runtime-anatomy.md`](../docs/async/async-runtime-anatomy.md);
 邊講邊用的數字在 [`docs/cost-model.md`](../docs/cost-model.md)。
 
 ## 當天認題(掃描表)

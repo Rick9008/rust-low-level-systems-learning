@@ -1,6 +1,6 @@
 # lru 設計取捨
 
-對應程式碼:`reference/src/lru.rs`。相關:[tree](tree.md)(index-based vs Rc<RefCell> 的完整對照)。
+對應程式碼:`reference/src/ds/lru.rs`。相關:[tree](tree.md)(index-based vs Rc<RefCell> 的完整對照)。
 
 ## 為什麼一定是「HashMap + 雙向鏈表」
 
@@ -38,7 +38,7 @@ K: Clone 是最便宜的解;省 clone 的路(map key 用 `Rc<K>`、hashbrown raw
 ## 沒做的:remove()
 
 remove 會在 `nodes` 留洞,需要 free list 管理空槽——這正是
-[arena_lockfree](arena_lockfree.md) 的主題(free list + 世代標記)。
+[arena_lockfree](../concurrency/arena_lockfree.md) 的主題(free list + 世代標記)。
 LeetCode 版 LRU 沒有 remove,先收斂範圍。
 
 ## Production 對照

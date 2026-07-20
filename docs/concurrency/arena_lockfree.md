@@ -1,6 +1,6 @@
 # arena_lockfree 設計取捨
 
-對應程式碼:`reference/src/arena_lockfree/`。前置:[spsc_ring](spsc_ring.md)(acquire/release 基礎)、[lru](lru.md)/[tree](tree.md)(index-based 手法)。
+對應程式碼:`reference/src/arena_lockfree/`。前置:[spsc_ring](spsc_ring.md)(acquire/release 基礎)、[lru](../ds/lru.md)/[tree](../ds/tree.md)(index-based 手法)。
 
 ## ABA:lock-free 的第一大坑
 

@@ -17,10 +17,9 @@
 // 空殼狀態下簽名的參數/佔位欄位還沒被使用;動手寫時建議先拿掉這行自查。
 #![allow(unused_variables, dead_code)]
 
-pub mod dsu;
+pub mod ds;
 pub mod executor;
 pub mod hw_bridge;
-pub mod lru;
 pub mod sharded_map;
 pub mod signal_pipeline;
 pub mod spsc_ring;

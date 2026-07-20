@@ -1,9 +1,9 @@
 # async_sync 設計取捨
 
 對應程式碼:`reference/src/async_sync.rs`。相關:
-[thread_pool](thread_pool.md)(JobHandle:condvar 睡的 one-shot)、
-[file_io_offload](file_io_offload.md)(JoinFuture:waker 睡的 one-shot)、
-[bounded_queue](bounded_queue.md)(predicate-wait 的 blocking 原版)、
+[thread_pool](../concurrency/thread_pool.md)(JobHandle:condvar 睡的 one-shot)、
+[file_io_offload](../io/file_io_offload.md)(JoinFuture:waker 睡的 one-shot)、
+[bounded_queue](../concurrency/bounded_queue.md)(predicate-wait 的 blocking 原版)、
 [executor](executor.md)(park/unpark 的 token 語意——Notify 的前身)。
 
 ## 一個變換打通全部

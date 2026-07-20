@@ -1,6 +1,6 @@
 # thread_pool 設計取捨
 
-對應程式碼:`reference/src/thread_pool.rs`。相關:[bounded_queue](bounded_queue.md)(內部佇列同 idiom)、[file_io_offload](file_io_offload.md)(用池 offload 阻塞 IO)。
+對應程式碼:`reference/src/thread_pool.rs`。相關:[bounded_queue](bounded_queue.md)(內部佇列同 idiom)、[file_io_offload](../io/file_io_offload.md)(用池 offload 阻塞 IO)。
 
 ## Worker 迴圈的唯一難點:shutdown 不卡死
 
@@ -48,12 +48,12 @@ job 是 `FnOnce`,panic 後不會再被呼叫,無人能觀察到被撕一半的�
 |---|---|---|
 | caller 自帶 channel | `pool.execute(move ‖ { tx.send(f()); })` | 零改動、最短;panic 變成 `RecvError`,資訊丟失 |
 | **`submit` → `JobHandle::join`(本實作)** | `Mutex<Option<thread::Result<T>>>` + Condvar | 同步等;panic 在 join 端 `resume_unwind` 重拋;45 分鐘寫得完 |
-| `spawn_blocking` → `JoinFuture`([file_io_offload](file_io_offload.md)) | 同上,Condvar 換成 `Waker` | 可組合 `await`;與 async 生態同形 |
+| `spawn_blocking` → `JoinFuture`([file_io_offload](../io/file_io_offload.md)) | 同上,Condvar 換成 `Waker` | 可組合 `await`;與 async 生態同形 |
 
 condvar 睡 vs waker 睡——把這句講出來,兩個模組就縫成一張圖。
 每 job 成本:一次 Arc 配置 + 兩次鎖(~百 ns 級,對比 job 排隊 + 喚醒整趟 ~μs)。
 三部曲的第三章(可重複使用的原語:AsyncMutex / Notify)見
-[async_sync](async_sync.md)。
+[async_sync](../async/async_sync.md)。
 
 ## 邊界:execute-after-shutdown 為何不用處理
 

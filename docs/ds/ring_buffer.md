@@ -1,6 +1,6 @@
 # ring_buffer 設計取捨
 
-對應程式碼:`reference/src/ring_buffer.rs`。相關:[spsc_ring](spsc_ring.md)(並發版,講 memory ordering;本篇講 index 算術)。
+對應程式碼:`reference/src/ds/ring_buffer.rs`。相關:[spsc_ring](../concurrency/spsc_ring.md)(並發版,講 memory ordering;本篇講 index 算術)。
 
 ## 三種索引表示法
 

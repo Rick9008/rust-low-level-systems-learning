@@ -1,6 +1,6 @@
-//! 驗收:challenges::lru。完成後移除 #[ignore]。
+//! 驗收:challenges::ds::lru。完成後移除 #[ignore]。
 
-use challenges::lru::LruCache;
+use challenges::ds::lru::LruCache;
 
 /// 核心驗收:promotion 改變淘汰受害者。
 #[test]

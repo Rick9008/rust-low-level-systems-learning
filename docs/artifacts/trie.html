@@ -973,7 +973,7 @@ pub fn starts_with(&amp;self, prefix: &amp;str) -&gt; bool {
 </main>
 
 <footer>
-  <div>原始碼:<code>reference/src/trie.rs</code> &middot; 設計取捨:<code>docs/trie.md</code></div>
+  <div>原始碼:<code>reference/src/ds/trie.rs</code> &middot; 設計取捨:<code>docs/trie.md</code></div>
   <div>驗證:<code>cargo test -p reference trie</code> &middot; 觀察前綴共享:<code>node_count()</code></div>
   <div>同一招(索引當指標):<code>lru</code>(雙向鏈表)&middot; <code>tree</code>(parent/child)&middot; <code>arena_lockfree</code>(free list + generation tag)</div>
 </footer>
@@ -984,7 +984,7 @@ pub fn starts_with(&amp;self, prefix: &amp;str) -&gt; bool {
 (function () {
   "use strict";
 
-  // ── 模型:一份 JS 版的 reference/src/trie.rs ─────────────────────
+  // ── 模型:一份 JS 版的 reference/src/ds/trie.rs ─────────────────────
   // nodes 就是 arena;kids 是 [Option<usize>; 26] 的稀疏投影,語意等價。
   function makeTrie() {
     var nodes = [mk("", -1, 0)];

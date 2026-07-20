@@ -25,13 +25,14 @@ Other common invocations:
 cargo test -p reference <test_name>              # single test by name
 cargo test -p reference --test loom_spsc         # loom model check: SPSC ring
 cargo test -p reference --test loom_arena        # loom model check: lock-free arena stack
+cargo test -p reference --test loom_dsu          # loom model check: lock-free DSU
 cargo test -p drills -- --include-ignored        # show which drill tests are red
 cargo test -p challenges -- --include-ignored    # show which challenge tests are red
 ```
 
 ## Architecture
 
-Four workspace crates; the first three share module names (exceptions: the single-threaded idiom modules don't span all layers — `iter_mutate` has no challenge, `inplace_leetcode` exists only in reference):
+Four workspace crates; the first three share module names, and the six single-threaded data-structure modules (`dsu`, `graph`, `lru`, `ring_buffer`, `tree`, `trie`) live under a `ds/` submodule in all three crates (exceptions: the single-threaded idiom modules don't span all layers — `iter_mutate` has no challenge, `inplace_leetcode` exists only in reference; the locked/lock-free pairing layer `ds_sync` exists only in reference):
 
 - **`reference/`** — complete implementations + tests + teaching comments. The answer key.
 - **`drills/`** — same module tree, but core functions are hollowed to `todo!("spec: ...")` with a spec doc comment above each. Skeleton, helpers, and `#[ignore]`d tests are provided.
@@ -63,5 +64,5 @@ Consequences: keep the shim API surface identical on both sides, and remember lo
 - Every reference module's `//!` doc follows the 5-pillar structure, in order: `[Clarify]` → `[Abstract]` → `[Iterate]` → `[Trade-offs]` → `[Dry-Run]`. Every core function has at least one boundary test whose doc comment hand-traces the execution line by line.
 - Every `unsafe` block has a safety-invariant comment above it. Workspace lints deny `unsafe_op_in_unsafe_fn` and `clippy::all`.
 - Complexity annotations (Big-O) in docs must match the implementation.
-- `docs/*.md` holds per-topic design trade-off write-ups (why the design, not what the code does) — update them if a design changes, don't duplicate code into them.
+- `docs/` holds per-topic design trade-off write-ups (why the design, not what the code does), sorted into `ds/`, `concurrency/`, `async/`, `io/` mirroring the module stages; interview-craft docs (clarify-playbook, coderpad-constraints, cost-model, rust-five-axis) stay at the root. Update them if a design changes, don't duplicate code into them.
 - Data structures prefer index-based designs (indices into a `Vec` arena) over pointer/`Rc<RefCell>` graphs; `tree.rs` shows both side by side deliberately.

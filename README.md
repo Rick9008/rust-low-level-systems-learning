@@ -64,6 +64,12 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 
 - `arena_lockfree`:arena + generation-tagged index 的 lock-free stack,
   示範 index-ABA 與 generation 解法(`spsc_ring` 的延伸)
+- `ds_sync`:同步策略對照組——同一個結構的鎖版/無鎖版並排:
+  `arena_locked`(Mutex slab,對照 arena_lockfree 看機關怎麼塌縮)、
+  `dsu_lockfree`(CAS parent + 隨機 priority + path halving;loom 驗證)、
+  `lru_locked`(sharded LRU——「精確 LRU 的 get 是寫」的實證)、
+  `list_fine`(hand-over-hand 交手鎖排序 set——coarse 與 lock-free 中間那階);
+  選型帳(含鎖階梯)見 `docs/concurrency/ds_sync.md`
 - `epoll_sys`:unsafe extern "C" 的最小 epoll 綁定 + 安全 wrapper(不依賴 libc crate)
 - `event_loop`:register / epoll_wait / dispatch;LT 與 ET 都示範;eventfd self-wake
 - `tcp_echo`:nonblocking TCP echo;write 塞住 → 緩存 + EPOLLOUT
@@ -81,11 +87,11 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
   (framer 本身在優先級,見上)
 
 executor / event_loop / file_io_offload 這三塊 + proactor(io_uring)怎麼接成一張圖:
-[`docs/async-runtime-anatomy.md`](docs/async-runtime-anatomy.md),
+[`docs/async/async-runtime-anatomy.md`](docs/async/async-runtime-anatomy.md),
 互動版 [`docs/artifacts/async_runtime.html`](docs/artifacts/async_runtime.html)。
 
 兩份跨模組的口述底稿(面試選型題的骨架):
-[`docs/thread-safe-spectrum.md`](docs/thread-safe-spectrum.md)(把 X 變
+[`docs/concurrency/thread-safe-spectrum.md`](docs/concurrency/thread-safe-spectrum.md)(把 X 變
 thread-safe 的七站光譜)、[`docs/rust-five-axis.md`](docs/rust-five-axis.md)
 (Send/Sync 推導表 + unsafe impl 三段式辯護);互動深挖版在 `html_p/`。
 
@@ -358,7 +364,7 @@ rayon(data parallelism)、mio(跨平台 epoll/kqueue 抽象)、bytes(zero-copy b
 各模組 doc 有註明對應的 production crate。唯一的非 std 依賴是 `epoll_sys` 的
 raw syscall 綁定(自寫 `unsafe extern "C"`,不依賴 libc crate)。
 
-**允許用 crate 的話 epoll 長什麼樣?** 見 [`docs/epoll_libc.md`](docs/epoll_libc.md)——
+**允許用 crate 的話 epoll 長什麼樣?** 見 [`docs/io/epoll_libc.md`](docs/io/epoll_libc.md)——
 libc 版的完整可跑實作(已編過跑過)、它省掉什麼(`repr(packed)`、errno)、
 它沒省掉而且會咬你什麼(常數是 `i32` 但欄位是 `u32`,而 `EPOLLET` 是負數),
 以及 `raw syscall → libc → mio → tokio` 這條線各自把什麼扛走。

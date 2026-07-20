@@ -1,6 +1,6 @@
 # dsu(union-find)設計取捨
 
-對應程式碼:`reference/src/dsu.rs`。
+對應程式碼:`reference/src/ds/dsu.rs`。
 
 ## 兩個優化各自擋什麼
 

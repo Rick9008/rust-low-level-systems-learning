@@ -4,7 +4,7 @@
 //! 要填:四個核心方法。核心不變量一句話:**`gens[fd]` 只在成功 unregister
 //! 時 +1;token 的 gen 對不上就當作查無此人**——這一個欄位就是在擋
 //! 「fd 回收後,舊 event dispatch 到新住戶」的經典 bug。
-//! 設計取捨見 `docs/fd_registry.md`。
+//! 設計取捨見 `docs/io/fd_registry.md`。
 
 /// 進出 `epoll_event.data`(u64)的身份憑證:`(gen << 32) | fd`。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

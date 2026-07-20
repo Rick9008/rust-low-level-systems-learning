@@ -1,6 +1,6 @@
 # graph 設計取捨
 
-對應程式碼:`reference/src/graph.rs`。
+對應程式碼:`reference/src/ds/graph.rs`。
 
 ## 表示法:adjacency list vs matrix
 
