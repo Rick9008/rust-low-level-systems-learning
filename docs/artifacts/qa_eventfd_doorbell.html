@@ -198,13 +198,40 @@
   </section>
 
   <section>
-    <h2>5 · 兩個特殊客戶:signal 與 timer</h2>
+    <h2>5 · 誰把 task 放進 queue?wake 的真身,與 Mutex 的帳</h2>
+    <p>分層圖裡「wake = task 進 queue」的實體藏在 <code>mini_runtime.rs:193-200</code>——<strong>沒有任何外部模組負責入隊,是 task 自己的 <code>Wake</code> impl 在做</strong>:</p>
+<pre><code>impl Wake for Task {
+    <span class="cmt">// wake = 把自己 push 回 run queue——thread pool 的骨架,payload 換成「re-poll 這個 future」</span>
+    fn wake(self: Arc&lt;Self&gt;) {
+        let inner = Arc::clone(&amp;self.inner);
+        inner.queue.lock().unwrap().push_back(self);   <span class="cmt">// ← 入隊就是這行</span>
+    }
+}</code></pre>
+    <p>看不出來的原因是身分偽裝:<strong>Waker 就是 type-erased 的 <code>Arc&lt;Task&gt;</code></strong>(block_on ② 的 <code>Waker::from(Arc::clone(&amp;task))</code>,std 的 Wake trait 提供轉換)。整條鏈:</p>
+<pre><code>首次入隊:  Handle::spawn → queue.push(task)                       (:215)
+之後每次:  poll 裡 leaf future 遇 WouldBlock
+            → arm_io(…, cx.waker())——waker(偽裝的 Arc&lt;Task&gt;)存進 FdRegistry
+            → 事件來:reactor wakers.get(token) → w.wake_by_ref()  (:344)
+            → Task::wake:queue.push_back(self)                     (:198) ✓</code></pre>
+    <p>reactor 以為自己只是「叫了一聲」,實際執行的是 task 把自己排回佇列。root future 走另一個 impl(<code>RootWake</code>,:257)——單 task 不需要 queue,wake = 設 <code>woken</code> 旗,單元素 queue 塌縮成 bool。</p>
+    <p><strong>那 queue 為什麼 <code>Mutex&lt;VecDeque&gt;</code> 不用 lock-free?</strong>——lock-free 的價錢是用爭用換的,而這條 queue 幾乎零爭用:</p>
+    <ul>
+      <li><strong>爭用畫像</strong>:executor 單執行緒 pop + 偶發跨執行緒 wake push。uncontended Mutex 走 futex fast path ≈ 20–25ns 純 userspace CAS、<strong>零 syscall</strong>——跟 lock-free push 的 atomic 成本同數量級。</li>
+      <li><strong>臨界區奈秒級</strong>:<code>push_back</code>/<code>pop_front</code> 兩下指標;且 block_on ② 刻意<strong>不持鎖 poll</strong>(:316「poll 期間不持 queue 鎖——poll 內可能 spawn」)。紀律是「臨界區小」,不是「無鎖」。</li>
+      <li><strong>lock-free 的真價</strong>:這裡是 MPSC unbounded——CAS loop + <strong>記憶體回收沼澤</strong>(hazard/epoch;見 qa_unbounded_lockfree:難點是回收,不是佇列)。兩行 Mutex vs 一整篇論文。</li>
+      <li><strong>tokio 實況</strong>:全域 injection queue <strong>也是 Mutex</strong>!lock-free 的是 per-worker local queue(固定容量、單消費者 ring)+ work-stealing——<strong>熱路徑給便宜結構,冷路徑給鎖</strong>。「production = 處處 lock-free」是迷思。</li>
+      <li><strong>判準</strong>(五軸那套):lock-free 買的是爭用下的尾延遲;沒量到這條 queue 的爭用就上,= 白付複雜度稅。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>6 · 兩個特殊客戶:signal 與 timer</h2>
     <p><strong>signal = self-pipe trick 本尊</strong>(這招就是為 signal 發明的,eventfd 是它的 Linux 後代)。signal handler 會在任意兩條指令間打斷任意執行緒,裡面只准呼叫 async-signal-safe 白名單(不能 malloc / 拿鎖 / println——被打斷的可能正是持鎖中的自己)。而 <code>sigaction</code> 是 process 一張表、同一 signal 只能一個 handler,所以架構天生是漏斗:kernel 呼叫 <code>handler(signum)</code> <strong>把編號當參數點名</strong> → handler 只做兩件白名單的事:<code>PENDING[signum].store(true)</code> + 對唯一那根 pipe write 一 byte → driver 醒(TOKEN_SIGNAL)→ 讀乾 pipe → 掃 64 格 flag 表 → 對每種 pending 的 signal 喚醒它的訂閱者清單。「哪種 signal」在狀態表,「誰要收」在訂閱表,pipe 只負責叫醒。(Linux 有 signalfd 但 tokio 不用:它要求全 process 所有執行緒 block 該 signal,library 保證不了;而且 kqueue 平台沒有。)</p>
     <p><strong>timer = 零 fd</strong>。timer driver 只是<strong>包住</strong> IO driver:查 wheel 最早 deadline → 換算成 <code>epoll_wait</code> 的 timeout 參數。它不需要被通知——<strong>返回路徑必經它家門口</strong>(呼叫堆疊退回時穿過包裝層),每次返回無條件拿 now 對 wheel 查「誰到期」,不管返回原因是 fd 事件、門鈴還是超時。睡著時冒出更早的 deadline?——按 eventfd 門鈴,醒來重算 timeout。所以那顆 eventfd 是萬用門鈴:spawn 新 task、跨執行緒 wake、更早的 deadline、<strong>offload 完成(下一節)</strong>,全是同一句「醒來,重查你的狀態表」。</p>
   </section>
 
   <section>
-    <h2>6 · 互動:file IO 的 offload 回收——門鈴的第四個客戶</h2>
+    <h2>7 · 互動:file IO 的 offload 回收——門鈴的第四個客戶</h2>
     <p>regular file 進不了 epoll:它永遠報 ready,<code>read()</code> 照樣卡在磁碟上——readiness 模型對檔案無意義。std-only 正解:把 blocking 讀寫丟給 thread pool,<strong>用 completion queue + eventfd 把結果送回 loop</strong>。這正是 tokio <code>spawn_blocking</code> / <code>tokio::fs</code> 的做法,沒有魔法 async file syscall:</p>
     <div class="step">
       <div class="step-controls">
@@ -235,7 +262,7 @@
   </section>
 
   <section>
-    <h2>7 · Handle 通行證:誰拿票、怎麼傳、await 為什麼不用它</h2>
+    <h2>8 · Handle 通行證:誰拿票、怎麼傳、await 為什麼不用它</h2>
     <p><code>#[derive(Clone)] pub struct Handle { inner: Arc&lt;Inner&gt; }</code>(<code>mini_runtime.rs:204</code>)是 <strong>capability(通行證)模式</strong>:<code>Inner</code> 裝著 runtime 僅有的兩個共享結構(run queue + reactor),Handle 就是「允許使用 runtime 服務」的門票——clone 一次 refcount bump,Send 跨執行緒。三種持票人:</p>
     <div class="tbl-scroll"><table>
       <tr><th>持票人</th><th>拿票做什麼</th><th>票怎麼到手</th></tr>
@@ -255,7 +282,7 @@
   </section>
 
   <section>
-    <h2>8 · 面試句庫</h2>
+    <h2>9 · 面試句庫</h2>
     <blockquote class="say">
       “An fd is just a handle to a kernel object with its own read/write implementation — eventfd implements them as ‘add to a counter’ and ‘take and reset’. It exists so a wakeup signal can sit in the same <code>epoll_wait</code> as the sockets.”
       <em>fd 動態分派 + 門鈴為什麼是 fd,一句講完。</em>
@@ -275,6 +302,10 @@
     <blockquote class="say">
       “tokio doesn't skip the handle — it defaults to ambient context in a thread-local and keeps the explicit <code>Handle</code> as the escape hatch. Explicit passing would tax every async signature in the ecosystem; ambient moves that cost to a runtime panic instead.”
       <em>Handle 三設計的一句話收束;await 自己從不碰票——只有 leaf future 的 poll 會。</em>
+    </blockquote>
+    <blockquote class="say">
+      “An uncontended mutex around a two-pointer VecDeque op is ~25ns with zero syscalls; a lock-free MPSC queue costs me a reclamation scheme. Even tokio's global injection queue is a mutex — the lock-free part is the per-worker local queue. I'd pay for lock-free only after measuring contention here.”
+      <em>run queue 的 Mutex 帳:熱路徑給便宜結構,冷路徑給鎖。</em>
     </blockquote>
   </section>
 

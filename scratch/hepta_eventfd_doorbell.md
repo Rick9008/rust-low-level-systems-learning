@@ -47,6 +47,21 @@
 - **timer**:零 fd;deadline → epoll_wait timeout;返回路徑必經包裝層 → 無條件查 wheel;更早 deadline → 按門鈴
 - **file offload**:file 進不了 epoll(永遠 ready、read 照卡磁碟)→ blocking pool + completion queue + eventfd 回收 = tokio spawn_blocking / tokio::fs
 
+## 誰把 task 放進 queue?—— task 自己
+
+- 入隊沒有外部負責人:`impl Wake for Task`(mini_runtime.rs:193)——`wake = inner.queue.push_back(self)`,「thread pool 骨架,payload 換成 re-poll」
+- **Waker = type-erased `Arc<Task>`**(`Waker::from(Arc::clone(&task))`);reactor「叫一聲」實際執行的是 task 自己入隊
+- 鏈:spawn 首次入隊(:215)→ poll 遇 WouldBlock → arm_io 存 waker → 事件來 → `wake_by_ref`(:344)→ `queue.push_back(self)`(:198)
+- root future 對照:`RootWake` = 設 bool 旗(單元素 queue 塌縮)
+
+## run queue 為什麼 Mutex 不 lock-free
+
+- **爭用畫像**:單執行緒 pop + 偶發 wake push ≈ 零爭用;uncontended Mutex = futex fast path ~20-25ns、零 syscall
+- 臨界區奈秒級(push/pop 兩下指標);且 **poll 期間不持鎖**(:316)——紀律是「臨界區小」不是「無鎖」
+- lock-free 真價:MPSC unbounded = CAS loop + 記憶體回收沼澤(難點是回收不是佇列)
+- **tokio 的全域 injection queue 也是 Mutex**;lock-free 的是 per-worker local queue + work-stealing——熱路徑給便宜結構,冷路徑給鎖
+- 判準:lock-free 買的是爭用下的尾延遲;沒量到爭用就上 = 白付複雜度稅
+
 ## Handle 通行證(capability 模式)
 
 - `#[derive(Clone)] Handle { inner: Arc<Inner> }`;Inner = run queue + reactor。clone = refcount bump,Send 跨執行緒
