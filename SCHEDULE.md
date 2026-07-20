@@ -20,7 +20,7 @@
 | **7/21 二** | **卡#4+卡#6 開場連打**(15+15;#4 自 7/20 滑入)→ 🔴**e2#1 fd_registry**(45+30m)→ **b#1 補課**(45–60m:紅測 ×3 + lost-wakeup dry-run + 回放 + 英文錄音 a#1+b#1 合場——code 凌晨已全綠,不用再修)→ **executor 讀 + challenge 空白手搓**(60–90m,7/19 裁決落位)+ Q7 timer 口述接尾(10m,qa_timer_queue 頁)。睡眠債下預設:executor challenge 第一個滑 7/22 晚尾、Q7 口述併 7/26 recognition | ~4h |
 | **7/22 三** | **卡#5 口述設計版開場**(25–30m:sensor bridge 分 threads/tasks + 定通訊協定 + 五問,JD 複核 #4)→ 🔴**c#1 frame_parser_heartbeat**(45+30m)→ 修 e2#1 的洞(45m)→ **spsc 空白 #2**(20m)。〔v8.1〕日讀 p8 排 **c#1 回放之後**(晚尾;通勤槽已作廢) | ~3.5h |
 | **7/23 四** | **開機:pool 骨架默寫 15m**(白紙寫 `struct Pool` + `new/submit/shutdown` 簽名 + worker loop 形狀〔兩條件、wait_while、drop guard 執行 job〕到能編譯 → diff → 0 錯;spsc 默寫同款流程。**不寫完整邏輯、不開 oracle**——練骨架流暢度,保 7/26 b#2 驗收斂乾淨)→ 〔v8.1〕`signal_pipeline` **110m**:**扇入先於 litmus**——讀 `start_fan_in` 6 tests + SB stepper 走四組合 + 3 trade-off 口述(不寫碼)→ drill 2 洞 → litmus 口述(**最後一份新材料**)→ 🔴**a#2**(45+20m,驗收斂)→ 修 c#1 的洞(30m) | ~3.5h |
-| **7/24 五** | 🔴**e2#2**(45+20m)→ 🔴**d#1 tokio_frame_server**(45+20m,**只跑一遍**——「面試官說可用 crate」那條分支的保險;預設仍 std-only + 陳述假設)。日讀:p6 →〔v8.1〕**配套動手:aggregator 延伸**(含「未來 ts 清 window」case) | ~3h |
+| **7/24 五** | 🔴**e2#2**(45+20m)→ 🔴**d#1 tokio_frame_server**(45+20m,**只跑一遍**——「面試官說可用 crate」那條分支的保險;預設仍 std-only + 陳述假設)→ **h 快寫**(30m 非計時:`BinaryHeap<Reverse>` + `schedule`/`pop_due` 核心寫到綠,戳醒/wheel 用講的——**九題中唯一沒親手寫過的題型**,7/21 裁補上)。日讀:p6 →〔v8.1〕**配套動手:aggregator 延伸**(含「未來 ts 清 window」case;**它就是 f 題 contract 的手寫**) | ~3.5h |
 | **7/25 六** | 六張 clarify 卡**快打重來一輪**(40m;卡3 認題 30 秒帶過即可)→ 🔴**c#2**(45+20m)→ 🔴**浮動 #3**(45+30m):給兩遍都爆的那題;**無兩遍都爆 → 預設跑 d-std:std-only TCP frame server**(`std::net` accept loop + thread-per-conn(講清何時換 acceptor+pool)+ framer 重用 + graceful shutdown——JD 原文「without relying on external libraries」;tokio 版只是 port:accept→spawn→async handle_conn 同構)→ **口述錄音 ~75m(技術)**:ordering / Waker 鏈 / 光譜 / 選型 + executor×reactor + 五 server p99.9,內含「**unsafe impl 三段式脫口(spsc_ring 實例)**」(仍餵 coding round trade-off 收尾)+ **硬體記憶體邊界 3 分鐘**(volatile vs atomic、`repr(C)`/packed/alignment、endianness——JD「Low-Level IO」唯一沒動手的詞,口述收攏)+ hw_bridge=「RPC over TCP 骨架」一句對映。~~②主管面 45m~~ → **post-TPS**(7/21 裁:7/28 只有 TPS 第一關,deep-dive 是第四關;履歷 walk-through/最難問題/WLB/反問整塊過了 TPS 再排。僅留:**TPS 尾聲反問 2 題**,5m,併 7/26 英文句庫段) | ~4.5h |
 | **7/26 日** | 🔴**b#2**(45+20m,累了這場先砍)→ recognition 級 e/f/g/h:讀題→30 秒定界→口述 arc(60m)→ 經驗故事 3 條寫成 bullet(40m)→ 英文句庫整份唸出聲(30m,**含 TPS 尾聲反問 2 題**——問 firmware 面試官的 stack/observability 日常,不問 WLB)→ **spsc 空白 #3**(20m,最後手熱檢查)→ 讀自己的 challenge code(60m) | ~4.5h,早睡 |
 | **7/27 一** | **Taper。不碰新題(命令)。** 10 分鐘暖手 drill → 背時間預算(0-3/3-5/5-10/10-35/35-40/40-45)+ 五 pillar + 開場三句 → 檢查 CoderPad link / Meet / 耳機 / 水 → **早睡** | ≤1.5h |
@@ -28,6 +28,8 @@
 
 彩排間隔(同題 ≥3 天,近了是背答案):a 7/19→7/23|b 7/20→7/26|e2 7/21→7/24|c 7/22→7/25|d 7/24 一遍。
 SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
+
+**彩排覆蓋帳(7/21 裁——「每個題型至少親手寫過一次」)**:a=a#1✓|b=b#1✓|c=framer drill✓+c#1|d=d#1+d-std|e=**e2 即其進階版**✓|f=**7/24 aggregator 延伸即 f contract**|g=**bounded_queue drill 即 g**✓|h=**7/24 快寫 30m 補上**(唯一沒寫過的)。e/g 不升全程——那是練已經最強的地方;g 的 lock-free 版不寫:block-on-full 是等待問題,condvar 繞不掉,try_push 版 = spsc_ring 本人(會講即可)。
 
 ## 每日輸入(當天要開的檔案)
 
