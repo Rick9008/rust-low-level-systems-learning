@@ -44,11 +44,11 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 |---|---|
 | arena_lockfree | ☐ |
 | epoll_sys | ☐ |
-| event_loop | ☐ |
+| event_loop | ☑ 2026-07-20(原「通勤略讀」升級為桌前深讀 Q&A:WAKE_TOKEN 旁路/woken 字條/Arc&lt;EventFd&gt; 兩張臉;沉澱 `qa_eventfd_doorbell.html`) |
 | tcp_echo | ☐ |
 | file_io_offload | ☐ |
 | hw_bridge 五 server 對照組(threaded / inline壞 / evented / sharded / spsc) | ☐ |
-| mini_runtime(V0 scan → V1 epoll) | ☐ |
+| mini_runtime(V0 scan → V1 epoll) | ☑ 2026-07-20(block_on 三段迴圈/arm_io/FdRegistry&lt;Waker&gt; interest table 走讀;Events 死在 reactor 邊界、Waker 唯一介面) |
 | async_sync(AsyncMutex / Notify;有 drill 四洞,選練) | ☐ |
 | docs/async-runtime-anatomy.md | ☐ |
 | docs/thread-safe-spectrum.md(7/25 口述底稿) | ☐ |
@@ -83,4 +83,4 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 
 | 日期 | 要複習什麼 | 為什麼 |
 |---|---|---|
-| | | |
+| 2026-07-25 | `qa_eventfd_doorbell.html` 五化身表 + 面試句庫 | 口述底稿彈藥:「訊號帶狀態」五化身、executor×reactor 接縫、Poller 命名品味 |

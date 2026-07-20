@@ -1,0 +1,410 @@
+<title>eventfd 與門鈴哲學:誰叫醒 event loop、憑什麼、然後呢</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+    }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code.bad { color: var(--danger); }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  /* 分層 stack 圖 */
+  .stack { margin-top: 14px; display: flex; flex-direction: column; }
+  .stack .sbox { border: 1px solid var(--ring); border-radius: 10px; background: var(--surface); padding: 10px 14px; }
+  .stack .sbox h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+  .stack .sbox .sub { font-size: 13px; color: var(--ink-2); margin-top: 3px; line-height: 1.6; }
+  .stack .sarr { text-align: center; font-size: 12px; color: var(--muted); padding: 3px 0; font-family: ui-monospace, monospace; }
+  .stack .sarr b { color: var(--ink); }
+  /* stepper(qa 家族慣用式) */
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cell { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s; overflow: hidden; }
+  .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .cell.gone { opacity: .38; }
+  .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+  @media (max-width: 640px) { .scene { grid-template-columns: 1fr; } }
+  .tk-cm{color:var(--muted);} .tk-kw{color:var(--hl-kw);} .tk-ty{color:var(--hl-ty);} .tk-fn{color:var(--hl-fn);}
+  .tk-mac{color:var(--hl-mac);} .tk-str{color:var(--hl-str);} .tk-num{color:var(--hl-num);} .tk-attr{color:var(--hl-attr);}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · event loop 喚醒機制 · executor×reactor 的接縫</div>
+  <h1>eventfd 與門鈴哲學:誰叫醒 event loop、憑什麼、然後呢</h1>
+  <p class="lede">一條追問鏈的完整沉澱:eventfd 是 spawn 專用嗎(不是)、<code>write(efd,1)</code> 到底寫了什麼(一顆計數器)、回來的事件怎麼分辨是誰(號碼牌)、<strong>events 怎麼交給 executor(不交——只有 wake 跨界)</strong>。加上三個特殊客戶:signal 的 self-pipe 本尊、timer 的零 fd 方案、file IO 的 offload 回收。行號全部指 <code>reference/src/event_loop.rs</code> 與 <code>mini_runtime.rs</code>。</p>
+
+  <section>
+    <h2>0 · fd 是 kernel 物件的 handle,read/write 是動態分派</h2>
+    <p><code>write(2)</code> 不是 epoll 的 API(epoll 只有 create/ctl/wait 三招,完全不做 IO)。fd 本質是「process 檔案表的索引 → kernel 物件」,而每種物件自帶一張 function pointer 表(<code>struct file_operations</code>)——同一個 syscall,語意由物件決定,像 <code>Box&lt;dyn FileLike&gt;</code> 的動態分派:</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>fd 背後的物件</th><th><code>write</code> 做什麼</th><th><code>read</code> 做什麼</th></tr>
+      <tr><td>regular file</td><td>拷 bytes 進 page cache(→磁碟)</td><td>從檔案偏移拷 bytes 出來</td></tr>
+      <tr><td>socket</td><td>bytes 排進 send buffer(→網路)</td><td>從 receive buffer 取 bytes</td></tr>
+      <tr><td>pipe</td><td>bytes 進 kernel 環形 buffer</td><td>消費 buffer 裡的 bytes</td></tr>
+      <tr><td><strong>eventfd</strong></td><td><strong>把 8-byte 值當 u64:counter += v</strong></td><td><strong>回傳 counter 並歸零</strong></td></tr>
+      <tr><td>timerfd</td><td>—</td><td>回傳「到期了幾次」</td></tr>
+    </table></div>
+    <p>eventfd <strong>沒有 buffer、不存你的 bytes</strong>——整個 kernel 物件就是一顆 u64。它是偽裝成檔案的同步原語。而它為什麼要偽裝?因為 <strong><code>epoll_wait</code> 只聽得見 fd</strong>:event loop 要在一個 blocking call 裡同時等「千條 socket」和「有人要我醒」,後者本是 condvar 的地盤,但一條執行緒不能同時睡在兩種等待裡——把喚醒訊號做成 fd,它就能跟 socket 們睡同一張床。LT 語意下:<code>counter &gt; 0 ⟺ 可讀 ⟺ epoll_wait 會醒(或根本不睡)</code>。</p>
+  </section>
+
+  <section>
+    <h2>1 · 互動:門鈴的一生——兩種時序,同一結局</h2>
+    <p>門鈴協定永遠兩步:<strong>先放貨(queue.push),再按鈴(write efd)</strong>。切換 loop 當下的狀態,走一遍看計數器怎麼把「wake 先於睡」的 race 變成非事件:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="d_mode">
+          <button data-mode="busy" class="on">loop 還醒著(wake 先於睡)</button>
+          <button data-mode="asleep">loop 已睡在 epoll_wait</button>
+        </div>
+        <button id="d_next">下一步 ▸</button>
+        <button id="d_reset">重置</button>
+        <span class="stepcap" id="d_cap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>別的執行緒(按鈴的人)</h4>
+          <div class="cell" id="d_q">queue: []</div>
+          <div class="ord" id="d_qcap">ready queue = 資料</div>
+        </div>
+        <div class="lane">
+          <h4>eventfd</h4>
+          <div class="cell" id="d_efd">counter = 0</div>
+          <div class="ord" id="d_ecap">counter &gt; 0 ⟺ 可讀</div>
+        </div>
+        <div class="lane">
+          <h4>event loop 執行緒</h4>
+          <div class="cell" id="d_loop">處理 socket 事件中</div>
+          <div class="ord" id="d_lcap">&nbsp;</div>
+        </div>
+      </div>
+      <div class="step-narr" id="d_narr"></div>
+    </div>
+    <p style="margin-top:14px">關鍵在 toggle 左邊那條:wake 落在「還沒睡」的窗口裡,<strong>counter 已經掛著</strong>,隨後的 <code>epoll_wait</code> 看到 efd 可讀直接返回、根本不睡——跟 <code>thread::park</code> 的 permit 穿過一模一樣。多次 wake 合併成一次計數(write 是加值),loop 反正整條 queue 收割,一聲不多、一件不漏。</p>
+  </section>
+
+  <section>
+    <h2>2 · 同一課的五個化身:訊號不可靠,狀態才可靠</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>原語</th><th>訊號的「狀態」存哪</th><th>解掉的 race</th></tr>
+      <tr><td>condvar + predicate</td><td>訊號本身無狀態 → <strong>醒來重查條件</strong></td><td>notify 先於 wait 就蒸發</td></tr>
+      <tr><td><code>park</code> / <code>unpark</code></td><td>permit,<strong>飽和在 1</strong></td><td>wake 先於 park 不丟</td></tr>
+      <tr><td><strong>eventfd</strong></td><td>counter,<strong>累加</strong>(fd 版 permit)</td><td>wake 先於 epoll_wait 不丟</td></tr>
+      <tr><td>signal handler</td><td>per-signal atomic flag + self-pipe 一 byte</td><td>handler 環境放射性,正常手段全禁用</td></tr>
+      <tr><td>timer(§5)</td><td>timeout 只是提示,真相 = <strong>時鐘 vs deadline 表</strong></td><td>提早醒/晚醒/假醒全無害——醒來重查</td></tr>
+    </table></div>
+    <p>裸訊號在五個場景全都會蒸發或說謊;每次解法都是同一句:<strong>讓訊號留下狀態,醒來查狀態</strong>。面試被追問任何一個,拿另外四個當佐證,就是深度。</p>
+  </section>
+
+  <section>
+    <h2>3 · 回程:號碼牌分流,woken 是字條、不是喚醒</h2>
+    <p>token 是註冊時<strong>每個 fd 各掛各的</strong>號碼牌(<code>epoll_data</code> u64,kernel 不看不存、事件時原樣奉還):socket 們掛 slab index(0、1、2…),<strong>只有 loop 自己的 eventfd 掛保留牌 <code>WAKE_TOKEN = u64::MAX</code></strong>(<code>event_loop.rs:47</code>;<code>register()</code> 直接 <code>assert!</code> 不准外人用,行 183/196——否則某條 socket 的事件會被誤認成門鈴、整條連線沒人理)。dispatch 就是認牌:</p>
+<pre><code>for raw in &amp;events.raw[..n] {
+    let raw = *raw;                       <span class="cmt">// packed struct:整值 copy 再讀欄位</span>
+    if raw.data == WAKE_TOKEN {
+        self.wake.drain()?;               <span class="cmt">// 消音:read 歸零。LT 不 drain 下輪還報 → 空轉</span>
+        events.woken = true;              <span class="cmt">// 字條:「你這次醒,是因為有人按鈴」</span>
+        continue;                         <span class="cmt">// 不進事件列表——它不在連線註冊表裡,查表只會查空</span>
+    }
+    <span class="cmt">// 走到這的才是真連線事件 → (token, readiness) 進列表給 caller 查表</span>
+}</code></pre>
+    <p>時序上要看清:<strong>整條鏈只有一次「真正叫醒執行緒」——kernel 讓 <code>epoll_wait</code> 返回的那一瞬</strong>。執行到 <code>drain()</code> 時你早就醒了;它不喚醒任何人,只是把計數歸零免得 LT 下輪空轉。而 <code>woken</code> 存在的理由:按鈴的證據(counter)剛被 drain 消滅了,不留字條,「有人找過你」這個資訊就丟了——caller(擁有 task queue 的那層,例如 mini_runtime 的 run loop)拿這個 bool 決定要不要去收割自己的佇列。</p>
+    <p>順帶:<code>self.wake</code> 的型別是 <code>Arc&lt;EventFd&gt;</code>——同一顆鈴兩張臉:<code>WakeHandle</code>(發給別的執行緒,write 側按鈕)與 loop 自己(drain 側消音器)。Arc 的理由是 handle 可能活得比 loop 久:loop 先 drop 就 close fd,handle 再 wake 就是對<strong>可能已被 kernel 重發給別人</strong>的 fd 編號寫 8 bytes——fd 重用大坑,與 fd_registry 的 generation 同族。</p>
+  </section>
+
+  <section>
+    <h2>4 · Events 死在 reactor 邊界:分層與唯一介面</h2>
+    <p>「events 怎麼吐給 executor?」——<strong>不吐。</strong>token 在 reactor 手上換到的唯一東西是 <code>Waker</code>;executor 從頭到尾沒見過 token。<code>mini_runtime.rs:299-348</code> 的 block_on 三段迴圈就是這張圖:</p>
+    <div class="stack">
+      <div class="sbox">
+        <h4>executor(block_on ②段)</h4>
+        <div class="sub"><code>queue.pop() → task.poll(cx)</code>——對 token / fd <strong>零知識</strong>;poll 期間不持 queue 鎖(poll 內可能 spawn);完成後 slot=None,晚到的 wake 變 no-op</div>
+      </div>
+      <div class="sarr">▲ 唯一介面:<b>Waker</b>(wake = task 進 queue / 設旗)——事件到不了這層</div>
+      <div class="sbox">
+        <h4>reactor 收割段(block_on ③段)</h4>
+        <div class="sub"><code>poller.wait() → for token → FdRegistry&lt;Waker&gt;.get(token) → wake_by_ref()</code>;generation 不合 → <strong>事件默默丟棄</strong>(stale 防禦)。每圈都走:只在 idle 才收割,自旋 task 會餓死 IO——忙時 timeout=0 純收割,閒時才睡</div>
+      </div>
+      <div class="sarr">▲ (token, readiness) 列表 + woken 字條</div>
+      <div class="sbox">
+        <h4>翻譯層 event_loop(其實是 mio 的 <code>Poll</code>)</h4>
+        <div class="sub"><code>register / reregister / deregister</code> 1:1 映射 kernel 三 opcode;WAKE_TOKEN 走旁路(drain + woken + continue)。它不 loop——<code>loop { }</code> 在 caller 手上,所以 mio 誠實地叫它 Poll 不叫 EventLoop</div>
+      </div>
+      <div class="sarr">▲ raw <code>epoll_event</code></div>
+      <div class="sbox">
+        <h4>epoll_sys</h4>
+        <div class="sub"><code>epoll_create1 / epoll_ctl / epoll_wait</code> + <code>eventfd</code> 手寫 syscall 綁定</div>
+      </div>
+    </div>
+    <p style="margin-top:14px">那被 wake 的 task 怎麼拿到資料?——<strong>自己再試一次</strong>。readiness 模型的事件不帶資料,只帶「現在再試會成功」:task 下輪被 poll 時重跑 <code>read()</code>,有資料就 <code>Ready</code>,又 <code>WouldBlock</code> 就再登記 waker(<code>arm_io</code>:更新 slot 裡的 waker + <code>poller.arm</code>)。對照組:io_uring 的 completion 模型才是「事件帶著讀好的資料回來」。</p>
+    <p>而 <code>arm</code> 為什麼分 register / reregister?<strong>kernel 本來就是三個 opcode、沒有 upsert</strong>:double-ADD 回 <code>EEXIST</code>(暴露「兩處 code 都以為自己擁有這個 fd」)、MOD 不存在的 fd 回 <code>ENOENT</code>(暴露 use-after-deregister)。翻譯層不發明 kernel 沒有的語意;想要 upsert 的便利,上層轉接頭自己搭(<code>mini_runtime.rs:144</code>:查 <code>registered: HashSet</code> 決定走 ADD 還是 MOD)。</p>
+  </section>
+
+  <section>
+    <h2>5 · 兩個特殊客戶:signal 與 timer</h2>
+    <p><strong>signal = self-pipe trick 本尊</strong>(這招就是為 signal 發明的,eventfd 是它的 Linux 後代)。signal handler 會在任意兩條指令間打斷任意執行緒,裡面只准呼叫 async-signal-safe 白名單(不能 malloc / 拿鎖 / println——被打斷的可能正是持鎖中的自己)。而 <code>sigaction</code> 是 process 一張表、同一 signal 只能一個 handler,所以架構天生是漏斗:kernel 呼叫 <code>handler(signum)</code> <strong>把編號當參數點名</strong> → handler 只做兩件白名單的事:<code>PENDING[signum].store(true)</code> + 對唯一那根 pipe write 一 byte → driver 醒(TOKEN_SIGNAL)→ 讀乾 pipe → 掃 64 格 flag 表 → 對每種 pending 的 signal 喚醒它的訂閱者清單。「哪種 signal」在狀態表,「誰要收」在訂閱表,pipe 只負責叫醒。(Linux 有 signalfd 但 tokio 不用:它要求全 process 所有執行緒 block 該 signal,library 保證不了;而且 kqueue 平台沒有。)</p>
+    <p><strong>timer = 零 fd</strong>。timer driver 只是<strong>包住</strong> IO driver:查 wheel 最早 deadline → 換算成 <code>epoll_wait</code> 的 timeout 參數。它不需要被通知——<strong>返回路徑必經它家門口</strong>(呼叫堆疊退回時穿過包裝層),每次返回無條件拿 now 對 wheel 查「誰到期」,不管返回原因是 fd 事件、門鈴還是超時。睡著時冒出更早的 deadline?——按 eventfd 門鈴,醒來重算 timeout。所以那顆 eventfd 是萬用門鈴:spawn 新 task、跨執行緒 wake、更早的 deadline、<strong>offload 完成(下一節)</strong>,全是同一句「醒來,重查你的狀態表」。</p>
+  </section>
+
+  <section>
+    <h2>6 · 互動:file IO 的 offload 回收——門鈴的第四個客戶</h2>
+    <p>regular file 進不了 epoll:它永遠報 ready,<code>read()</code> 照樣卡在磁碟上——readiness 模型對檔案無意義。std-only 正解:把 blocking 讀寫丟給 thread pool,<strong>用 completion queue + eventfd 把結果送回 loop</strong>。這正是 tokio <code>spawn_blocking</code> / <code>tokio::fs</code> 的做法,沒有魔法 async file syscall:</p>
+    <div class="step">
+      <div class="step-controls">
+        <button id="o_next">下一步 ▸</button>
+        <button id="o_reset">重置</button>
+        <span class="stepcap" id="o_cap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>event loop 執行緒</h4>
+          <div class="cell" id="o_loop">task 要讀檔</div>
+          <div class="ord" id="o_lcap">loop 絕不准阻塞</div>
+        </div>
+        <div class="lane">
+          <h4>blocking pool worker</h4>
+          <div class="cell" id="o_wk">idle</div>
+          <div class="ord" id="o_wcap">阻塞在這裡是合法的</div>
+        </div>
+        <div class="lane">
+          <h4>completion queue + eventfd</h4>
+          <div class="cell" id="o_cq">completion: []</div>
+          <div class="cell" id="o_oefd">counter = 0</div>
+        </div>
+      </div>
+      <div class="step-narr" id="o_narr"></div>
+    </div>
+    <p style="margin-top:14px">帳要會算:worker 阻塞在磁碟 IO 是<strong>設計內</strong>(它不是 loop thread,卡住不擋任何 socket);loop 從頭到尾零阻塞。std-only 手刻 = thread pool + mpsc 佇列 + eventfd 回收——三個你都寫過的零件。</p>
+  </section>
+
+  <section>
+    <h2>7 · 面試句庫</h2>
+    <blockquote class="say">
+      “An fd is just a handle to a kernel object with its own read/write implementation — eventfd implements them as ‘add to a counter’ and ‘take and reset’. It exists so a wakeup signal can sit in the same <code>epoll_wait</code> as the sockets.”
+      <em>fd 動態分派 + 門鈴為什麼是 fd,一句講完。</em>
+    </blockquote>
+    <blockquote class="say">
+      “The doorbell carries no payload — state lives in the queue. Ring it three times before I wake and I still read the counter once and drain the whole queue.”
+      <em>門鈴≠資料;合併喚醒無害。</em>
+    </blockquote>
+    <blockquote class="say">
+      “The reactor's job ends at <code>waker.wake()</code>; the executor's job starts at <code>queue.pop()</code>. Events never cross that boundary — the Waker is the only interface, and data moves when the task retries its syscall.”
+      <em>executor×reactor 接縫的滿分收束。</em>
+    </blockquote>
+    <blockquote class="say">
+      “I'm calling it <code>Poller</code>, not <code>EventLoop</code> — the loop belongs to the caller. mio makes the same distinction with its <code>Poll</code> type.”
+      <em>命名品味,一句話的 green flag。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    檔次:deep-dive,讀懂能講即可——<strong>不是手搓目標</strong>;面試遇 IO 題的正確動作是 3 行 Poller trait stub(Abstract the Noise)。身份面(token/generation/雙 waker):<code>qa_epoll_stale_registry.html</code> · 訂閱面:<code>qa_epoll_subscribe.html</code> · waker 那層:<code>qa_waker_lifecycle.html</code> + <code>qa_async_followups.html</code> · LT/ET 與 readiness vs completion 深挖:<code>html_p/p3-epoll-readiness-event-loop.html</code> · 本頁行號的家:<code>reference/src/event_loop.rs</code>、<code>reference/src/mini_runtime.rs</code>、<code>docs/file_io_offload.md</code>。
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "busy";          // "busy" | "asleep"
+  var step = 0;
+  var MAX = 5;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var narr = {
+    busy: [
+      "初始:loop 正在處理 socket 事件(<b>還醒著</b>)。queue 空、counter = 0。",
+      "別的執行緒:<b>queue.push(task)</b>——先放貨。資料進的是 queue,不是門鈴。",
+      "別的執行緒:<b>write(efd, 1)</b> → counter 0→1。loop 還沒睡——沒關係,<b>訊號帶狀態,掛著等</b>。",
+      "loop 忙完,呼叫 <b>epoll_wait</b>:counter &gt; 0 ⟹ efd 可讀 ⟹ <b>立刻返回,根本不睡</b>。這就是 park permit 的 fd 版。",
+      "翻譯層:認出 data == WAKE_TOKEN → <b>drain</b>(counter → 0,LT 消音)→ <b>woken = true</b>(字條)→ continue。",
+      "caller 看字條 → 收割 queue(1 → 0)→ <b>poll task ✓</b>。wake 先於睡,一件不丟。"
+    ],
+    asleep: [
+      "初始:loop 沒事做,<b>睡在 epoll_wait 裡</b>。queue 空、counter = 0。",
+      "別的執行緒:<b>queue.push(task)</b>——先放貨。",
+      "<b>write(efd, 1)</b> → counter 0→1 → kernel:efd 可讀 → <b>喚醒睡著的執行緒</b>。整條鏈唯一一次「真正叫醒」,kernel 做的。",
+      "epoll_wait 返回,卷上一格:<b>{ events: EPOLLIN, data: u64::MAX }</b>——跟 socket 事件同一批送達。",
+      "翻譯層:WAKE_TOKEN → <b>drain</b> 歸零 → <b>woken = true</b> → continue(不進事件列表)。",
+      "caller 收割 queue → <b>poll task ✓</b>。兩種時序,同一結局。"
+    ]
+  };
+
+  function render() {
+    var q = $("d_q");
+    q.textContent = (step >= 1 && step < 5) ? "queue: [task]" : (step >= 5 ? "queue: []（已收割）" : "queue: []");
+    q.className = "cell" + (step === 1 ? " hot" : "") + (step === 5 ? " ok" : "");
+    var e = $("d_efd");
+    e.textContent = (step >= 2 && step < 4) ? "counter = 1" : "counter = 0";
+    e.className = "cell" + (step === 2 ? " hot" : "") + (step === 4 ? " hot" : "");
+    $("d_ecap").textContent = (step >= 2 && step < 4) ? "可讀!(counter > 0)" : (step >= 4 ? "已 drain 歸零" : "counter > 0 ⟺ 可讀");
+    var l = $("d_loop");
+    var busy = (mode === "busy");
+    if (step === 0) { l.textContent = busy ? "處理 socket 事件中" : "睡在 epoll_wait 裡"; l.className = "cell"; }
+    else if (step < 3) { l.textContent = busy ? "還在忙(沒睡)" : "睡在 epoll_wait 裡"; l.className = "cell" + ((!busy && step === 2) ? " hot" : ""); }
+    else if (step === 3) { l.textContent = busy ? "epoll_wait → 立刻返回" : "epoll_wait 返回"; l.className = "cell hot"; }
+    else if (step === 4) { l.textContent = "翻譯層:drain + woken"; l.className = "cell hot"; }
+    else { l.textContent = "poll(task) ✓"; l.className = "cell ok"; }
+    $("d_lcap").textContent = step === 3 ? (busy ? "根本不睡 = permit 穿過" : "kernel 喚醒") : (step >= 5 ? "同一結局" : " ");
+    $("d_narr").innerHTML = narr[mode][step];
+    $("d_cap").textContent = "步驟 " + step + " / " + MAX;
+    $("d_next").disabled = (step >= MAX);
+  }
+
+  $("d_next").addEventListener("click", function () { if (step < MAX) { step++; render(); } });
+  $("d_reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("d_mode");
+  toggle.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>
+
+<script>
+(function () {
+  var step = 0;
+  var MAX = 6;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var narr = [
+    "初始:某 task 要讀檔。file fd <b>進不了 epoll</b>——它永遠報 ready,read() 照樣卡在磁碟上。",
+    "loop:把 job(路徑 + 讀完該叫醒誰)丟進 pool 的 job queue → <b>立刻回去顧 socket</b>。loop 零阻塞。",
+    "worker:撿走 job,<b>阻塞在 read(file)</b>。卡住的是 worker——合法,它不是 event loop thread。",
+    "同時:loop 照常 epoll_wait、處理 socket 事件。<b>兩個世界並行,互不擋路</b>。",
+    "worker 讀完:result 推進 <b>completion queue</b>(先放貨)→ <b>write(eventfd)</b>(再按鈴)。門鈴協定原樣重演。",
+    "loop:epoll_wait 返回 <b>WAKE_TOKEN</b> → drain 歸零 → woken = true。",
+    "caller 收割 completion queue → 拿 result <b>叫醒等檔案的 task ✓</b>。這就是 tokio spawn_blocking / tokio::fs。"
+  ];
+
+  function render() {
+    var l = $("o_loop");
+    if (step === 0) { l.textContent = "task 要讀檔"; l.className = "cell hot"; }
+    else if (step === 1) { l.textContent = "丟 job → 回去顧 socket"; l.className = "cell hot"; }
+    else if (step <= 4) { l.textContent = "照常處理 socket 事件"; l.className = "cell" + (step === 3 ? " hot" : ""); }
+    else if (step === 5) { l.textContent = "epoll_wait → WAKE_TOKEN"; l.className = "cell hot"; }
+    else { l.textContent = "跑 continuation ✓"; l.className = "cell ok"; }
+    var w = $("o_wk");
+    if (step < 2) { w.textContent = "idle"; w.className = "cell" + (step === 1 ? "" : ""); }
+    else if (step < 4) { w.textContent = "阻塞在 read(file)…"; w.className = "cell" + (step === 2 ? " hot" : ""); }
+    else if (step === 4) { w.textContent = "讀完 → 交貨 + 按鈴"; w.className = "cell hot"; }
+    else { w.textContent = "idle(等下一份 job)"; w.className = "cell gone"; }
+    $("o_wcap").textContent = (step >= 2 && step < 4) ? "卡住的不是 loop,沒人被擋" : "阻塞在這裡是合法的";
+    var cq = $("o_cq");
+    cq.textContent = (step >= 4 && step < 6) ? "completion: [result]" : (step >= 6 ? "completion: []（已收割)" : "completion: []");
+    cq.className = "cell" + (step === 4 ? " hot" : "") + (step === 6 ? " ok" : "");
+    var ef = $("o_oefd");
+    ef.textContent = (step >= 4 && step < 5) ? "counter = 1" : "counter = 0";
+    ef.className = "cell" + (step === 4 ? " hot" : "") + (step === 5 ? " hot" : "");
+    $("o_narr").innerHTML = narr[step];
+    $("o_cap").textContent = "步驟 " + step + " / " + MAX;
+    $("o_next").disabled = (step >= MAX);
+  }
+
+  $("o_next").addEventListener("click", function () { if (step < MAX) { step++; render(); } });
+  $("o_reset").addEventListener("click", function () { step = 0; render(); });
+  render();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1,"uint32_t":1};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i], j;
+      if(c==="/"&&src[i+1]==="/"){ j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c>="0"&&c<="9"){
+        var nm=/^[0-9][0-9_xA-Fa-f]*/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
+})();
+</script>
