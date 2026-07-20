@@ -36,9 +36,9 @@ pub fn try_decode(buf: &[u8]) -> Result<Option<(RawFrame, usize)>, DecodeError> 
     }
     let (frame_len, frame) = buf.split_at(4);
     let frame_len = u32::from_be_bytes(
-        *frame_len
-            .as_array()
-            .expect("Invariant: buf should not be empty."),
+        frame_len
+            .try_into()
+            .expect("Invariant: buf should not be empty and len of frame_len is 4 by split_at."),
     );
     if frame_len == 0 {
         return Err(DecodeError::EmptyFrame);

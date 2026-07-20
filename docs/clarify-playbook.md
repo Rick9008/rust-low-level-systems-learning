@@ -22,6 +22,11 @@ network flakiness、跨 rack 規模)——面試官等你把線索變成問題,�
 | **SLA** | 追平均還是尾延遲?(決定 lock-free 值不值) | *"Are we optimizing average throughput, or tail latency?"* |
 | **偵測** | 對端死了怎麼知道?(決定 heartbeat/timer) | *"How do we learn a node died — does TCP tell us, or do we own heartbeats?"* |
 
+Note: 
+1. rack:一整櫃機器(幾十台 node,每台又可能有多個訊號源)。
+2. SLA is Service Level Agreement
+   Decide how the data should be handled, like if it read by human, latency can target on average, if it need to be machine(automata) it need to target to tail
+
 ## JD 線索 → 該問的問題
 
 | JD 裡的字眼 | 觸發哪一問 | 為什麼 |
