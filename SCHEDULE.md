@@ -17,11 +17,11 @@
 | **7/18 六** | 〔v8.1〕~~上午開場:iter_mutate 殘洞 ≤40m~~(**7/17 已補完清空**;framer drill 不需讓位,7/20 那條保險解除)→ 卡#3 → ★`spsc` challenge 空白手搓 + diff + 跑 loom(90m)→ ★`executor` drill+challenge 含 park-token 口述 + Delay(120m)→ Q7 timer 接尾(20m)→ `hw_bridge` framer **drill**(45m;standalone challenge 砍掉,c 就是它的 challenge) | ~5h |
 | **7/19 日** | 卡#4 → 🔴**a#1 ring_drop_oldest**(45m+review 30m,pillar1 先打分)→ 漏洞清單 → `fd_registry` artifact 讀 + drill 3 洞(90m,弱點提前)→ **spsc 空白 #1**(20m) | ~4.5h,晚上休 |
 | **7/20 一** | 卡#5 → **修 a#1 的洞**(targeted,60–90m)→ 🔴**b#1 pool_graceful**(45+30m)。通勤:event_loop / mini_runtime 略讀(餵 executor×reactor 那句) | ~3.5h |
-| **7/21 二** | 卡#6(最後一張新卡)→ 🔴**e2#1 fd_registry**(45+30m)→ 修 b#1 的洞(45m) | ~3h |
+| **7/21 二** | 卡#6(最後一張新卡)→ 🔴**e2#1 fd_registry**(45+30m)→ 修 b#1 的洞(45m)→ **executor 讀 + challenge 空白手搓**(60–90m,7/19 裁決落位)+ Q7 timer 口述接尾(10m,qa_timer_queue 頁)。塞不下:challenge 滑 7/22 晚尾、Q7 口述併 7/26 recognition | ~4h |
 | **7/22 三** | 🔴**c#1 frame_parser_heartbeat**(45+30m)→ 修 e2#1 的洞(45m)→ **spsc 空白 #2**(20m)。〔v8.1〕日讀 p8 排 **c#1 回放之後**(晚尾或 7/23 通勤) | ~3h |
 | **7/23 四** | 〔v8.1〕`signal_pipeline` **110m**:**扇入先於 litmus**——讀 `start_fan_in` 6 tests + SB stepper 走四組合 + 3 trade-off 口述(不寫碼)→ drill 2 洞 → litmus 口述(**最後一份新材料**)→ 🔴**a#2**(45+20m,驗收斂)→ 修 c#1 的洞(30m) | ~3.5h |
 | **7/24 五** | 🔴**e2#2**(45+20m)→ 🔴**d#1 tokio_frame_server**(45+20m,**只跑一遍**——「面試官說可用 crate」那條分支的保險;預設仍 std-only + 陳述假設)。日讀:p6 →〔v8.1〕**配套動手:aggregator 延伸**(含「未來 ts 清 window」case) | ~3h |
-| **7/25 六** | 六張 clarify 卡**快打重來一輪**(40m;卡3 認題 30 秒帶過即可)→ 🔴**c#2**(45+20m)→ 🔴**浮動 #3**:給兩遍都爆的那題(45+30m)→ 口述錄音 120m **拆兩塊**(7/19 內線情報:deep-dive 面 = 主管聊履歷/WLB/最難問題,非技術深挖):①技術口述 ~75m:ordering / Waker 鏈 / 光譜 / 選型 + executor×reactor + 五 server p99.9,內含「**unsafe impl 三段式脫口(spsc_ring 實例)**」(仍餵 coding round trade-off 收尾)②主管面 ~45m:3 分鐘履歷 walk-through、最難問題故事、WLB 答案、反問清單(英文錄音) | ~5h |
+| **7/25 六** | 六張 clarify 卡**快打重來一輪**(40m;卡3 認題 30 秒帶過即可)→ 🔴**c#2**(45+20m)→ 🔴**浮動 #3**(45+30m):給兩遍都爆的那題;**無兩遍都爆 → 預設跑 d-std:std-only TCP frame server**(`std::net` accept loop + thread-per-conn(講清何時換 acceptor+pool)+ framer 重用 + graceful shutdown——JD 原文「without relying on external libraries」;tokio 版只是 port:accept→spawn→async handle_conn 同構)→ 口述錄音 120m **拆兩塊**(7/19 內線情報:deep-dive 面 = 主管聊履歷/WLB/最難問題,非技術深挖):①技術口述 ~75m:ordering / Waker 鏈 / 光譜 / 選型 + executor×reactor + 五 server p99.9,內含「**unsafe impl 三段式脫口(spsc_ring 實例)**」(仍餵 coding round trade-off 收尾)+ **硬體記憶體邊界 3 分鐘**(volatile vs atomic、`repr(C)`/packed/alignment、endianness——JD「Low-Level IO」唯一沒動手的詞,口述收攏)+ hw_bridge=「RPC over TCP 骨架」一句對映 ②主管面 ~45m:3 分鐘履歷 walk-through、最難問題故事、WLB 答案、反問清單(英文錄音) | ~5h |
 | **7/26 日** | 🔴**b#2**(45+20m,累了這場先砍)→ recognition 級 e/f/g/h:讀題→30 秒定界→口述 arc(60m)→ 經驗故事 3 條寫成 bullet(40m)→ 英文句庫整份唸出聲(30m)→ **spsc 空白 #3**(20m,最後手熱檢查)→ 讀自己的 challenge code(60m) | ~4.5h,早睡 |
 | **7/27 一** | **Taper。不碰新題(命令)。** 10 分鐘暖手 drill → 背時間預算(0-3/3-5/5-10/10-35/35-40/40-45)+ 五 pillar + 開場三句 → 檢查 CoderPad link / Meet / 耳機 / 水 → **早睡** | ≤1.5h |
 | **7/28 二** | 8:00 暖手(小 drill 10m + pillar-5 清單 + 時間預算)→ **8:45–9:30 TPS** | — |
@@ -78,7 +78,7 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 **系統性修正**:**通勤讀槽全部作廢**(騎機車,已入 memory)——今後「通勤讀」一律改排桌前或砍;7/22 p8 只剩「c#1 回放後晚尾」一個選項。
 
-**晚上(回家)待辦**:卡#4+#5(30m)→ a#1 回放三輪(10m,改壞→紅→還原)→ 🔴b#1(45+30m)→ 英文口述一場錄完(a#1 trade-off + b#1 收尾合併)。b#1 今晚必跑——7/21 的「修 b#1」依賴它;真不行則修 b#1 滑 7/22(仍有 5 天間隔,安全)。
+**晚上(回家)待辦**:卡#4(15m)→ **卡#5 sensor bridge 升級為完整口述設計**(25–30m:分 threads/tasks + 定通訊協定 + 五問——JD 複核 #4「HW-adjacent system design」的落地,不只答 clarify)→ a#1 回放三輪(10m,改壞→紅→還原)→ 🔴b#1(45+30m)→ 英文口述一場錄完(a#1 trade-off + b#1 收尾合併)。b#1 今晚必跑——7/21 的「修 b#1」依賴它;真不行則修 b#1 滑 7/22(仍有 5 天間隔,安全)。
 
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
@@ -119,7 +119,8 @@ Timeline:8 月找 HR 的目標不變。
   規格照 rehearsals 題目 f 的 contract,寫在 ring_buffer 同檔)。
 - **Overflow 池規則(每天適用)**:dsu / graph / trie / tree 只在三條件**全**成立時碰:
   ①當天產出欄全勾(含卡、含錄音)②明天沒欠債 ③還有力氣。
-  優先序固定:spsc 空白加跑(20m)> 沒修完的彩排洞 > lru challenge >
+  優先序固定:spsc 空白加跑(20m)> 沒修完的彩排洞 > **fd_registry 空白加跑
+  (e2 題幹再手搓一遍,25m;7/20 裁——JD sleeper 多一遍不虧)** > lru challenge >
   才輪到 dsu → graph → trie/tree,每個 timebox 25m。
   (這四題的家在 7/29 後的 coding rounds;graph 是 comfort-zone 陷阱。)
 - **Google 舊 block**(277/158/588、LRU/LFU、segtree):無日期 → 每週最多 1–2 題
@@ -150,6 +151,17 @@ Timeline:8 月找 HR 的目標不變。
 4. **HW-adjacent system design(唯一薄弱點)**:JD 列為核心 topic,目前只有 signal_pipeline
    (JD 本尊圖)+ clarify 卡覆蓋。7/25 前把一張卡(sensor bridge / health prober)跑成
    **完整口述設計**(分執行緒/任務 + 定通訊協定),不只答五問。
+
+**7/20 全詞掃描增補**(JD 逐詞比對,殘項全數落位;彩排場次一場不動):
+
+- RPCs → 卡#2 已練(RPC gateway)+ 7/25 口述「hw_bridge = RPC over TCP 骨架」一句對映
+- "without relying on external libraries" → **d-std(std-only TCP frame server)= 7/25 浮動#3 預設題**;d#1(7/24 tokio)照排不動——std 保險用寫的、tokio 保險照原計畫跑
+- "strict hardware memory boundaries"(Low-Level IO)→ 7/25 口述 3 分鐘:volatile vs atomic / `repr(C)`/packed(epoll_sys 已有)/ endianness(hw_bridge 已有)
+- HW-adjacent system design → 7/20 晚卡#5 升級完整口述設計(複核 #4 落地)
+- executor challenge → 7/21 落位(7/19 裁決一直沒進逐日表)|fd_registry 加跑 → overflow 池第三位
+
+其餘 JD 名詞本就全中:ring/packets=a、pool/health checks=b、lockless queue=spsc、
+event registry=e2、telemetry 記憶體帳=f+aggregator(7/24)、runtime asynchrony=executor+7/25 口述。
 
 不理會(JD 有提但非 coding round):Zero-Touch OS 佈署 / provisioning / stress-testing
 framework = 角色風味;588 以外 Google block 全停(JD 本身反 LeetCode)。
