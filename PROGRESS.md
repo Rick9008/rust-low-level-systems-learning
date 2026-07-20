@@ -50,8 +50,8 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | hw_bridge 五 server 對照組(threaded / inline壞 / evented / sharded / spsc) | ☐ |
 | mini_runtime(V0 scan → V1 epoll) | ☑ 2026-07-20(block_on 三段迴圈/arm_io/FdRegistry&lt;Waker&gt; interest table 走讀;Events 死在 reactor 邊界、Waker 唯一介面) |
 | async_sync(AsyncMutex / Notify;有 drill 四洞,選練) | ☐ |
-| docs/async-runtime-anatomy.md | ☐ |
-| docs/thread-safe-spectrum.md(7/25 口述底稿) | ☐ |
+| docs/async/async-runtime-anatomy.md | ☐ |
+| docs/concurrency/thread-safe-spectrum.md(7/25 口述底稿) | ☐ |
 | docs/rust-five-axis.md(7/25 口述底稿;unsafe impl 辯護模板) | ☐ |
 
 ## rehearsal 計時紀錄
@@ -61,7 +61,7 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 日期 | 題 | clarify | skeleton | core | boundary | trade-offs | 一次編過? | 哪段爆 / 對照漏了什麼 |
 |---|---|---|---|---|---|---|---|---|
 | 2026-07-19 | a ring_drop_oldest | ~5 | ~5 | ~25 | **0(自行跳過)** | ~5 | 未記錄 | oracle 4/5 紅,全數 pillar-5 miss:①pop 判空用 head==tail(滿=空二義,連鎖 len>cap+FIFO 毀)②drop_cnt 整條沒 ++ ③Part 2 擅改 contract 成阻塞 pop(clarify miss)。亮點:SPSC×drop-oldest 衝突當場談判降級。修洞 7/20 紅測先行 |
-| | b pool_graceful_shutdown | | | | | | | |
+| 2026-07-21(凌晨,7/20 場)| b pool_graceful_shutdown | ~5(只問 1 題:graceful 語意——好問但獨苗;漏 queue 上限/job panic)| —(題檔附簽名)| **~33(溢時 +13)** | **1(只點名 1 條 case,沒 trace)** | 0(末段改抓 join 漏)| 整場沒按 Run | oracle 2 綠 3 紅,紅全 pillar-5:①worker 見 flag 即退不清 queue(0/16)②空佇列 shutdown hang(wait predicate 漏查 shutdown)③repeated_shutdown 連鎖。**亮點:boundary 唯一點名的 case 正是 hang 那條**(死因=core 溢時吃掉 trace 時間);**時限內自抓 shutdown 忘 join**(JD:finding your own bug = stronger signal)。三個 thread_pool drill 老 bug 全回歸。當場自行診斷②的兩條件(退出=shutdown∧空;睡=空∧¬shutdown)。待驗:shutdown 側 store+notify 有無 mutex 同步(lost-wakeup 族)、修後全綠截圖 |
 | | c frame_parser_heartbeat | | | | | | | |
 | | d tokio_frame_server | | | | | | | |
 | | e2 fd_registry | | | | | | | |

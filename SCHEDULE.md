@@ -39,13 +39,13 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 |---|---|
 | **7/17** | 掀牌:`drills/src/bounded_queue.rs`(移 `#[ignore]`)→ 卡#2:`rehearsals/PROMPTS_EN.md`(Card 2)+ `rehearsals/clarify-cards.md`(規則 5 自我批改)→ `drills/src/thread_pool.rs` → `drills/src/spsc_ring.rs` + 三段式 `docs/rust-five-axis.md`。日讀:`docs/artifacts/bounded_queue.html` → `docs/artifacts/ring_buffer.html`(§5 len 之死,spsc 前置)→ `docs/artifacts/spsc_ring.html` → `html_p/p1-rust-atomic-spsc-ordering.html`(追問鏈 + quiz) |
 | **7/18** | 卡#3(同兩檔)→ `challenges/src/spsc_ring.rs` + `reference/tests/loom_spsc.rs` → `drills/src/executor.rs` + `challenges/src/executor.rs` + `docs/artifacts/executor.html` → Q7:PROMPTS_EN(h 題)→ `drills/src/hw_bridge/`。日讀:`html_p/p2-async-executor-handbook.html` |
-| **7/19** | 卡#4 → a#1:PROMPTS_EN(a 題;寫完才開 `rehearsals/examples/sol_ring_drop_oldest.rs`)→ `docs/fd_registry.md` + `drills/src/fd_registry.rs` → spsc 空白(白紙) |
-| **7/20** | 卡#5 → 修 a#1(照漏洞清單)→ b#1:PROMPTS_EN(b 題)。通勤:`docs/event_loop.md` + `docs/mini_runtime.md` + `docs/artifacts/event_loop.html` + `html_p/p3-epoll-readiness-event-loop.html` |
+| **7/19** | 卡#4 → a#1:PROMPTS_EN(a 題;寫完才開 `rehearsals/examples/sol_ring_drop_oldest.rs`)→ `docs/io/fd_registry.md` + `drills/src/fd_registry.rs` → spsc 空白(白紙) |
+| **7/20** | 卡#5 → 修 a#1(照漏洞清單)→ b#1:PROMPTS_EN(b 題)。通勤:`docs/io/event_loop.md` + `docs/async/mini_runtime.md` + `docs/artifacts/event_loop.html` + `html_p/p3-epoll-readiness-event-loop.html` |
 | **7/21** | 卡#6 → e2#1:PROMPTS_EN(e2 題)→ 修 b#1 |
 | **7/22** | c#1:PROMPTS_EN(c 題)→ 修 e2#1 → spsc 空白。晚尾日讀:`html_p/p8-hw_bridge_teaching.html`(c#1 回放後才開) |
-| **7/23** | signal_pipeline 110m:`docs/signal_pipeline.md` → `docs/artifacts/signal_pipeline.html`(SB stepper)→ `reference/src/signal_pipeline.rs`(`start_fan_in` 6 tests)→ `drills/src/signal_pipeline.rs` → a#2 → 修 c#1 |
+| **7/23** | signal_pipeline 110m:`docs/concurrency/signal_pipeline.md` → `docs/artifacts/signal_pipeline.html`(SB stepper)→ `reference/src/signal_pipeline.rs`(`start_fan_in` 6 tests)→ `drills/src/signal_pipeline.rs` → a#2 → 修 c#1 |
 | **7/24** | e2#2 → d#1:PROMPTS_EN(d 題,tokio)。日讀:`html_p/p6-telemetry-spsc-ring-reference.html` → aggregator 延伸動手(f 題 contract,寫在 `drills/src/ring_buffer.rs` 同檔) |
-| **7/25** | 六卡快打:`rehearsals/clarify-cards.md` 全六張 → c#2 → 浮動#3 → 口述底稿:`docs/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/hw_bridge.md`(五 server 對照組)+ `docs/async-runtime-anatomy.md` + `docs/cost-model.md`(數字與「再快呢」三句) |
+| **7/25** | 六卡快打:`rehearsals/clarify-cards.md` 全六張 → c#2 → 浮動#3 → 口述底稿:`docs/concurrency/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/io/hw_bridge.md`(五 server 對照組)+ `docs/async/async-runtime-anatomy.md` + `docs/cost-model.md`(數字與「再快呢」三句) |
 | **7/26** | b#2 → e/f/g/h 題幹:PROMPTS_EN + 認題掃描表 `rehearsals/README.md` → 英文 I/O 唸出聲:PROMPTS_EN + `docs/clarify-playbook.md`(五問英文問法)→ spsc 空白 → 讀自己的 `challenges/src/` |
 | **7/27** | 只開兩份:`rehearsals/README.md`(45 分鐘 protocol + 時間預算)+ `docs/coderpad-constraints.md`(環境確認) |
 | **7/28** | 暖手小 drill 一題 + pillar-5 dry-run 清單(`rehearsals/README.md`)→ 上場 |
@@ -80,6 +80,12 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 **晚上(回家)待辦**:卡#4(15m)→ **卡#5 sensor bridge 升級為完整口述設計**(25–30m:分 threads/tasks + 定通訊協定 + 五問——JD 複核 #4「HW-adjacent system design」的落地,不只答 clarify)→ a#1 回放三輪(10m,改壞→紅→還原)→ 🔴b#1(45+30m)→ 英文口述一場錄完(a#1 trade-off + b#1 收尾合併)。b#1 今晚必跑——7/21 的「修 b#1」依賴它;真不行則修 b#1 滑 7/22(仍有 5 天間隔,安全)。
 
+## 進度校正(2026-07-21 凌晨實況,7/20 場收尾)
+
+**完成**:a#1 全收工(含回放三輪)|🔴**b#1 已跑**(2 綠 3 紅,帳在 PROGRESS 計時表:core 溢時 +13 吃掉 boundary/收尾;時限內自抓 join 漏;當場診斷清 queue + wait predicate 兩洞)。**未動**:卡#4、卡#5、英文錄音(半夜錄音價值低,裁掉併後)。
+
+**7/21 修訂**:卡#4+卡#6 開場連打(15+15)→ 🔴e2#1(45+30)→ **修 b#1 補課**(每洞紅測先行 → 綠;含 shutdown 側 store+notify 有無 mutex 同步的 lost-wakeup dry-run;回放;英文 trade-off 收尾補錄——b#1 沒講到的那 5 分鐘)→ executor challenge **滑 7/22 晚尾**(p8 前)。卡#5 口述設計版 → 7/22(deadline 7/25 前不變)。
+
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
 對口是 firmware 面試官 → 網友(firmware 入職)判斷**考題同款**。五條增量,前四條全是「既有裁決的確認」:
@@ -111,7 +117,7 @@ Timeline:8 月找 HR 的目標不變。
   「面試追問鏈(≥3 層)+ Self-quiz」形式,當天讀完 artifact 後翻對應篇的
   追問鏈自測。日子對映:7/16→p7(ring 節)|7/17→p1(atomic/SPSC)|
   7/18→p2(executor)|7/20→p3(epoll)+epoll-eventloop(封包→callback)|7/22→p8(hw_bridge)|
-  7/24→p6(telemetry,已排)+lockfree 佇列家族+mpsc 交錯 stepper|**7/25 口述底稿→`docs/thread-safe-spectrum.md` +
+  7/24→p6(telemetry,已排)+lockfree 佇列家族+mpsc 交錯 stepper|**7/25 口述底稿→`docs/concurrency/thread-safe-spectrum.md` +
   `docs/rust-five-axis.md`(已從 p5/five-axis 濃縮成 repo docs,含 repo 模組對映;
   互動深挖版仍在 html_p)**。
 - **7/16 產出欄**:drills/ring_buffer 綠 ✓|卡#1|drills/iter_mutate 綠 ✓(7/17 補完)|
