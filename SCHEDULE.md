@@ -86,6 +86,8 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 **7/21 修訂**:卡#4+卡#6 開場連打(15+15)→ 🔴e2#1(45+30)→ **修 b#1 補課**(每洞紅測先行 → 綠;含 shutdown 側 store+notify 有無 mutex 同步的 lost-wakeup dry-run;回放;英文 trade-off 收尾補錄——b#1 沒講到的那 5 分鐘)→ executor challenge **滑 7/22 晚尾**(p8 前)。卡#5 口述設計版 → 7/22(deadline 7/25 前不變)。
 
+**收尾補記(7/21 ~2:30am 定帳)**:🔴b#1 凌晨已修至 **oracle 5/5 全綠(驗過)**——明晚「修 b#1」只剩補課(紅測×3/dry-run/回放/錄音),不用再修 code|主管面 45m 塊移 post-TPS(7/28 只有 TPS)|**平行大產出入帳(user 自寫)**:`ds_sync` 對照組(reference 4 模組 + loom_dsu + 教學頁,已 publish ⚖️)+ 全 repo 重構(ds/ 子目錄、docs 四分類)——**此後開檔按新路徑**|凌晨概念課沉澱:`scratch/trade_off_map_ab.md`(a 四軸/b 五軸/lock-free 應對/fan-in),**7/25 錄音直接照它講**|**鐵律檢查:今天打 code ✓(b#1+修洞),張嘴英文 ✗**——錄音兩天欠帳,明晚必還|明晚睡眠債下的預設砍序:executor challenge 第一個滑(閥門已設)。
+
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
 對口是 firmware 面試官 → 網友(firmware 入職)判斷**考題同款**。五條增量,前四條全是「既有裁決的確認」:
