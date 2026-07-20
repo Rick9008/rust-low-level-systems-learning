@@ -47,6 +47,15 @@
 - **timer**:零 fd;deadline → epoll_wait timeout;返回路徑必經包裝層 → 無條件查 wheel;更早 deadline → 按門鈴
 - **file offload**:file 進不了 epoll(永遠 ready、read 照卡磁碟)→ blocking pool + completion queue + eventfd 回收 = tokio spawn_blocking / tokio::fs
 
+## Handle 通行證(capability 模式)
+
+- `#[derive(Clone)] Handle { inner: Arc<Inner> }`;Inner = run queue + reactor。clone = refcount bump,Send 跨執行緒
+- 三持票人:①user code(`spawn`)②**IO 物件**(建構收 `&Handle` clone 進口袋;WouldBlock → `arm_io`、Drop → `disarm_io`)③Task 自己(Wake impl push 回 queue)
+- **`.await` 零知識**:await = 純狀態機機械;Handle 只在 **leaf future 的 poll 內部**出場(組合層 join/select 從不碰票)
+- tokio 為什麼不用塞:「遞票」→「摸口袋」——thread-local ambient(`Handle::current()`);前提 = async code 只在 runtime worker 上被 poll;代價 = "no reactor running" **執行期 panic**(顯式票是編譯期錯)
+- 三設計:顯式 Handle(mini_runtime;編譯期保證,病毒式簽名)/ TLS ambient(tokio;API 同 std)/ 全域單例(async-std、smol;永不 panic 但不可配置)
+- 敘事:**tokio 預設 ambient、保留顯式當逃生門**(`handle.spawn` / `handle.block_on` 治跨 runtime 與 runtime 外部)
+
 ## 面試句庫
 
 - "The doorbell carries no payload — state lives in the queue."

@@ -89,7 +89,7 @@
 <div class="wrap">
   <div class="eyebrow">qa 圖解 · event loop 喚醒機制 · executor×reactor 的接縫</div>
   <h1>eventfd 與門鈴哲學:誰叫醒 event loop、憑什麼、然後呢</h1>
-  <p class="lede">一條追問鏈的完整沉澱:eventfd 是 spawn 專用嗎(不是)、<code>write(efd,1)</code> 到底寫了什麼(一顆計數器)、回來的事件怎麼分辨是誰(號碼牌)、<strong>events 怎麼交給 executor(不交——只有 wake 跨界)</strong>。加上三個特殊客戶:signal 的 self-pipe 本尊、timer 的零 fd 方案、file IO 的 offload 回收。行號全部指 <code>reference/src/event_loop.rs</code> 與 <code>mini_runtime.rs</code>。</p>
+  <p class="lede">一條追問鏈的完整沉澱:eventfd 是 spawn 專用嗎(不是)、<code>write(efd,1)</code> 到底寫了什麼(一顆計數器)、回來的事件怎麼分辨是誰(號碼牌)、<strong>events 怎麼交給 executor(不交——只有 wake 跨界)</strong>。加上三個特殊客戶:signal 的 self-pipe 本尊、timer 的零 fd 方案、file IO 的 offload 回收,收尾補 <strong>Handle 通行證與 tokio 的 thread-local 魔法</strong>。行號全部指 <code>reference/src/event_loop.rs</code> 與 <code>mini_runtime.rs</code>。</p>
 
   <section>
     <h2>0 · fd 是 kernel 物件的 handle,read/write 是動態分派</h2>
@@ -235,7 +235,27 @@
   </section>
 
   <section>
-    <h2>7 · 面試句庫</h2>
+    <h2>7 · Handle 通行證:誰拿票、怎麼傳、await 為什麼不用它</h2>
+    <p><code>#[derive(Clone)] pub struct Handle { inner: Arc&lt;Inner&gt; }</code>(<code>mini_runtime.rs:204</code>)是 <strong>capability(通行證)模式</strong>:<code>Inner</code> 裝著 runtime 僅有的兩個共享結構(run queue + reactor),Handle 就是「允許使用 runtime 服務」的門票——clone 一次 refcount bump,Send 跨執行緒。三種持票人:</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>持票人</th><th>拿票做什麼</th><th>票怎麼到手</th></tr>
+      <tr><td>使用者 code</td><td><code>handle.spawn(fut)</code>:背景 task 進 run queue</td><td>runtime 建構時發的</td></tr>
+      <tr><td><strong>IO 物件</strong>(<code>AsyncTcpListener</code>,行 355)</td><td>poll 遇 <code>WouldBlock</code> → <code>arm_io</code>(waker 進 reactor);<code>Drop</code> → <code>disarm_io</code>(退租 + bump generation)</td><td>建構函式收 <code>&amp;Handle</code>,clone 進口袋(行 365)</td></tr>
+      <tr><td>Task 自己(行 213)</td><td><code>Wake</code> impl 把自己 push 回 queue</td><td>spawn 時 <code>Arc::clone(&amp;inner)</code></td></tr>
+    </table></div>
+    <p><strong><code>.await</code> 完全不認識 Handle</strong>——await 編譯出來只是「poll 內層,Pending 往上傳」的純狀態機機械。Handle 唯一出場點是 <strong>leaf future 的 poll 內部</strong>(accept / read 遇 WouldBlock → arm_io);中間所有組合層(async fn / join / select)對它零知識。</p>
+    <p>那 tokio 為什麼不用塞?——<strong>把「遞票」變「摸口袋」</strong>:worker 啟動 / <code>block_on</code> / <code>enter()</code> 時把 handle 存進 thread-local,<code>TcpStream::connect</code> 內部 <code>Handle::current()</code> 讀 TLS 拿票。前提:async code 只會在 runtime 自己的 worker 上被 poll,所以口袋恆有票。代價:runtime 外呼叫 = 著名的 <code class="bad">"there is no reactor running, must be called from the context of a Tokio 1.x runtime"</code> panic——<strong>錯誤從編譯期搬到執行期</strong>(mini_runtime 的顯式票沒票根本編不過):</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>設計</th><th>誰用</th><th>好處</th><th>代價</th></tr>
+      <tr><td><strong>顯式 Handle</strong></td><td>mini_runtime</td><td>編譯期保證、零魔法、可測試</td><td><strong>病毒式</strong>:每個做 IO 的函式簽名都多一個參數,感染整個生態</td></tr>
+      <tr><td><strong>thread-local ambient</strong></td><td>tokio</td><td>API 與 std 同形(<code>connect(addr)</code> 就是 <code>connect(addr)</code>)、生態乾淨</td><td>錯誤變執行期 panic;TLS 讀取 ~ns;多 runtime 要 enter guard 管「current 是誰」</td></tr>
+      <tr><td><strong>全域單例</strong></td><td>async-std、smol(async-io 全域 reactor thread)</td><td>連票都沒有,永不 panic</td><td>只能一個 runtime,不可配置</td></tr>
+    </table></div>
+    <p>決定性理由是「病毒式」那格:顯式路線會讓生態系每個 async library 函式都多收一個 handle 參數——function coloring 問題長出第二種顏色。正確敘事不是「tokio 不用 Handle」,是 <strong>「tokio 預設 ambient、保留顯式當逃生門」</strong>:<code>Handle::current()</code> 之外,<code>handle.spawn</code> / <code>handle.block_on</code> 都存在,專治跨 runtime 與 runtime 外部這些 TLS 罩不到的場景。教學品(mini_runtime)顯式是美德——機制全攤在檯面上;公共 runtime ambient 是生存需求。</p>
+  </section>
+
+  <section>
+    <h2>8 · 面試句庫</h2>
     <blockquote class="say">
       “An fd is just a handle to a kernel object with its own read/write implementation — eventfd implements them as ‘add to a counter’ and ‘take and reset’. It exists so a wakeup signal can sit in the same <code>epoll_wait</code> as the sockets.”
       <em>fd 動態分派 + 門鈴為什麼是 fd,一句講完。</em>
@@ -251,6 +271,10 @@
     <blockquote class="say">
       “I'm calling it <code>Poller</code>, not <code>EventLoop</code> — the loop belongs to the caller. mio makes the same distinction with its <code>Poll</code> type.”
       <em>命名品味,一句話的 green flag。</em>
+    </blockquote>
+    <blockquote class="say">
+      “tokio doesn't skip the handle — it defaults to ambient context in a thread-local and keeps the explicit <code>Handle</code> as the escape hatch. Explicit passing would tax every async signature in the ecosystem; ambient moves that cost to a runtime panic instead.”
+      <em>Handle 三設計的一句話收束;await 自己從不碰票——只有 leaf future 的 poll 會。</em>
     </blockquote>
   </section>
 

@@ -814,7 +814,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
     </a>
     <a class="card" href="qa_eventfd_doorbell.html">
       <span class="name">qa · eventfd 與門鈴哲學</span>
-      <span class="hook">fd = kernel 物件 handle(write 語意動態分派表);門鈴的一生 stepper(wake 先於睡 vs 睡著,counter 兩時序同結局)、訊號帶狀態五化身、WAKE_TOKEN 分流與 woken 字條、Events 死在 reactor 邊界分層圖、signal self-pipe / timer 零 fd、file offload 回收 stepper。</span>
+      <span class="hook">fd = kernel 物件 handle(write 語意動態分派表);門鈴的一生 stepper(wake 先於睡 vs 睡著,counter 兩時序同結局)、訊號帶狀態五化身、WAKE_TOKEN 分流與 woken 字條、Events 死在 reactor 邊界分層圖、signal self-pipe / timer 零 fd、file offload 回收 stepper、Handle 通行證三持票人與 tokio ambient vs 顯式三設計。</span>
       <span class="hits">門鈴≠資料 · token 換到的唯一東西是 Waker · Poller 不叫 EventLoop</span>
     </a>
   </div>
