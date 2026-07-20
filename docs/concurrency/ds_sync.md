@@ -44,7 +44,9 @@
 
 Herlihy 教科書的經典演進,repo 各階對應:
 
-1. **coarse**(`arena_locked`、`lru_locked` 單 shard):一把鎖包全部。正確先行。
+1. **coarse**(`arena_locked`、`lru_locked::LockedLru`):一把鎖包全部。
+   正確先行——LRU 這格的 coarse 版還是**精確全域逐出序的唯一保有者**,
+   升級到 sharded 是拿逐出品質換吞吐,先量到鎖競爭再升。
 2. **fine / hand-over-hand**(`list_fine`):每節點一鎖,走訪時「鎖下一個、
    才放上一個」。並行度來自不同區段互不擋(pipeline)。死鎖自由的證明
    = 所有人按鏈表位置順序拿鎖(全序)+ free-list 是葉鎖。
@@ -68,7 +70,8 @@ Herlihy 教科書的經典演進,repo 各階對應:
   換成固定隨機 priority(單字 link);攤銷 α 弱化為期望 O(log n) 樹高。
 - 精確 LRU 不適合:**get 是寫**(promote 要動鏈表)⇒ RwLock 無效;
   promote = unlink + relink at head,多字原子、熱點全砸在 head;
-  節點會被逐出 ⇒ 還要 reclamation。工程解是放棄精確:sharding(本組的
+  節點會被逐出 ⇒ 還要 reclamation。單鎖精確版(`LockedLru`)扛不住
+  鎖競爭時,工程解是放棄精確:sharding(本組的
   `lru_locked`)或近似 recency(CLOCK 的 per-entry atomic flag、Redis 抽樣
   timestamp、W-TinyLFU/moka 的 per-thread buffer + frequency sketch)。
 

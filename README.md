@@ -67,7 +67,8 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 - `ds_sync`:同步策略對照組——同一個結構的鎖版/無鎖版並排:
   `arena_locked`(Mutex slab,對照 arena_lockfree 看機關怎麼塌縮)、
   `dsu_lockfree`(CAS parent + 隨機 priority + path halving;loom 驗證)、
-  `lru_locked`(sharded LRU——「精確 LRU 的 get 是寫」的實證)、
+  `lru_locked`(LockedLru 單鎖精確 + ShardedLru 分片——
+  「精確 LRU 的 get 是寫」的實證)、
   `list_fine`(hand-over-hand 交手鎖排序 set——coarse 與 lock-free 中間那階);
   選型帳(含鎖階梯)見 `docs/concurrency/ds_sync.md`
 - `epoll_sys`:unsafe extern "C" 的最小 epoll 綁定 + 安全 wrapper(不依賴 libc crate)

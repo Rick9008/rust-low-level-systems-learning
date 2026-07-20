@@ -12,7 +12,7 @@
 //! | bounded queue | [`crate::ds::ring_buffer`] | [`crate::bounded_queue`] (+condvar) | [`crate::spsc_ring`] |
 //! | arena / slab | — | [`arena_locked`] | [`crate::arena_lockfree`] |
 //! | union-find | [`crate::ds::dsu`] | `Mutex<Dsu>`(不值得開檔,見下) | [`dsu_lockfree`] |
-//! | LRU cache | [`crate::ds::lru`] | [`lru_locked`] (sharded) | **不存在**(get=寫,見 docs) |
+//! | LRU cache | [`crate::ds::lru`] | [`lru_locked`] (LockedLru 精確 / Sharded 分片) | **不存在**(get=寫,見 docs) |
 //! | sorted list/set | — | [`list_fine`] (hand-over-hand) | Harris list(mark bit,研究級,不實作) |
 //! | tree / trie / graph | [`crate::ds`] 各模組 | `Mutex<T>` 或 shard | 研究級(Ctrie 等),docs 講為什麼 |
 //!

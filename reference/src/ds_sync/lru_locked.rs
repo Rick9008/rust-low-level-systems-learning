@@ -1,23 +1,29 @@
-//! # lru_locked —— sharded LRU(N 把 Mutex,每 shard 一個獨立 LRU)
+//! # lru_locked —— 鎖版 LRU 兩級:LockedLru(精確)與 ShardedLru(分片)
 //!
 //! ## [Clarify]
 //! 解決:多執行緒共享的 LRU cache。關鍵事實:**精確 LRU 的 get 是寫操作**
 //! (promote-to-MRU 要動鏈表)⇒ RwLock 無效、每次讀都要寫鎖。
-//! 本模組給 production 的實際落點:sharding。
-//! Constraints:容量 = shards × cap_per_shard **靜態切分**;
-//! 逐出品質是 per-shard 近似(熱點 shard 不能借冷 shard 的額度);
-//! `get` 回 `V: Clone` 的複製(借用出不了 MutexGuard)。
+//! 本模組給階梯的前兩級:
+//! - [`LockedLru`]:一把 Mutex 包整個 LRU——**精確全域 LRU 序**,非分片非近似。
+//! - [`ShardedLru`]:production 的實際落點——吞吐 ×N,
+//!   代價是逐出品質降為 per-shard 近似(熱 shard 借不到冷 shard 額度)。
+//!
+//! Constraints:`get` 回 `V: Clone` 的複製(借用出不了 MutexGuard);
+//! sharded 版容量 = shards × cap_per_shard **靜態切分**。
 //!
 //! ## [Abstract]
-//! 單 shard 的 LRU 邏輯完全復用 `crate::ds::lru::LruCache`——本模組只做
-//! 「hash 選 shard + 鎖」這一層。全域精確 LRU、TTL、weigher 都不做
-//! (要近似 recency 的無鎖讀路徑見 docs 的 CLOCK / W-TinyLFU 討論)。
+//! LRU 邏輯完全復用 `crate::ds::lru::LruCache`——本模組只做
+//! 「鎖」(LockedLru)與「hash 選 shard + 鎖」(ShardedLru)這兩層。
+//! TTL、weigher 都不做(要近似 recency 的無鎖讀路徑見 docs 的
+//! CLOCK / W-TinyLFU 討論)。
 //!
 //! ## [Iterate]
-//! 階梯:`Mutex<LruCache>` 全域一把鎖(level 0,正確先行)→ **本模組**
-//! (吞吐 ×N,犧牲全域逐出順序)→ 讀路徑去鎖化 = 放棄精確 LRU
-//! (CLOCK 的 atomic flag / W-TinyLFU 的 per-thread buffer——那是另一個模組
-//! 量級的工程,見 docs/concurrency/ds_sync.md)。
+//! 階梯:[`LockedLru`] 全域一把鎖(level 0,正確先行、逐出品質最好)
+//! → [`ShardedLru`](吞吐 ×N,犧牲全域逐出順序)→ 讀路徑去鎖化 =
+//! 放棄精確 LRU(CLOCK 的 atomic flag / W-TinyLFU 的 per-thread buffer——
+//! 那是另一個模組量級的工程,見 docs/concurrency/ds_sync.md)。
+//! 選型判準:先量 get 路徑的鎖競爭;沒證據前,LockedLru 的「精確 + 簡單」
+//! 就是答案——升級到 sharded 是拿逐出品質換吞吐,不是免費的。
 //!
 //! ## [Trade-offs]
 //! - shard 數 × 單 shard 容量在建構時定死:實作零 rebalance 成本,
@@ -32,15 +38,67 @@
 //! - 時間 O(1) + 單 shard 鎖競爭;空間 O(shards × cap_per_shard)。
 //!
 //! ## [Dry-Run]
-//! 見 `per_shard_eviction_not_global`(教學主場:全域還有空位卻逐出)、
-//! 單 shard 退化測試(行為 == 裸 LruCache)、8 執行緒不相交 key 煙霧測試。
+//! LockedLru:`exact_global_eviction_order`(get promote vs peek 不 promote
+//! 逐出誰的手 trace)、`global_capacity_no_premature_eviction`
+//! (sharded 的劣化場景在單鎖下不發生)。
+//! ShardedLru:`per_shard_eviction_not_global`(教學主場:全域還有空位
+//! 卻逐出)、單 shard 退化測試、8 執行緒不相交 key 煙霧測試。
 
 use crate::ds::lru::LruCache;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{BuildHasher, BuildHasherDefault, Hash};
 use std::sync::Mutex;
 
-/// N 把 Mutex 的 sharded LRU。所有操作 `&self`。
+/// Level 0:一把 Mutex 包整個 LRU。**精確全域 LRU 序**——
+/// 這正是 ShardedLru 犧牲掉的保證;代價是所有操作序列化在同一把鎖後。
+pub struct LockedLru<K, V> {
+    inner: Mutex<LruCache<K, V>>,
+}
+
+impl<K: Hash + Eq + Clone, V> LockedLru<K, V> {
+    /// 全域容量 `cap`。O(1)。
+    pub fn new(cap: usize) -> Self {
+        Self {
+            inner: Mutex::new(LruCache::new(cap)),
+        }
+    }
+
+    /// 讀 + promote(**全域** MRU)。O(1) + 鎖競爭。
+    pub fn get(&self, key: &K) -> Option<V>
+    where
+        V: Clone,
+    {
+        self.inner.lock().unwrap().get(key).cloned()
+    }
+
+    /// 讀但**不** promote(觀測用,不影響逐出順序)。O(1) + 鎖競爭。
+    pub fn peek(&self, key: &K) -> Option<V>
+    where
+        V: Clone,
+    {
+        self.inner.lock().unwrap().peek(key).cloned()
+    }
+
+    /// 寫入;回傳被逐出的 (K, V)——**真正的全域 LRU 犧牲者**。O(1) + 鎖競爭。
+    pub fn put(&self, key: K, value: V) -> Option<(K, V)> {
+        self.inner.lock().unwrap().put(key, value)
+    }
+
+    /// 精確值(單鎖之下沒有跨 shard 快照問題)。O(1)。
+    pub fn len(&self) -> usize {
+        self.inner.lock().unwrap().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.inner.lock().unwrap().capacity()
+    }
+}
+
+/// Level 1:N 把 Mutex 的 sharded LRU。所有操作 `&self`。
 pub struct ShardedLru<K, V> {
     shards: Box<[Mutex<LruCache<K, V>>]>,
 }
@@ -98,6 +156,62 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::thread;
+
+    /// [Dry-Run] LockedLru 手 trace(cap=2):
+    ///   put(a,1) put(b,2) → 鏈序(LRU→MRU)[a, b]
+    ///   get(a) → promote → [b, a];put(c,3) → 逐出 b(全域精確犧牲者)
+    ///   重來一輪換 peek(a) → 不 promote → [a, b] 不變;put(c) → 逐出 a
+    /// get 與 peek 的差異直接反映在「誰被逐出」上。
+    #[test]
+    fn exact_global_eviction_order() {
+        let c = LockedLru::new(2);
+        assert_eq!(c.put("a", 1), None);
+        assert_eq!(c.put("b", 2), None);
+        assert_eq!(c.get(&"a"), Some(1)); // promote a
+        assert_eq!(c.put("c", 3), Some(("b", 2))); // 犧牲者是 b
+
+        let c = LockedLru::new(2);
+        assert_eq!(c.put("a", 1), None);
+        assert_eq!(c.put("b", 2), None);
+        assert_eq!(c.peek(&"a"), Some(1)); // 不 promote
+        assert_eq!(c.put("c", 3), Some(("a", 1))); // 犧牲者是 a
+    }
+
+    /// 對照組:ShardedLru 的 `per_shard_eviction_not_global` 劣化場景,
+    /// 在單鎖精確版**不會發生**——容量是全域的,2 個 key 住進 cap=2 零逐出。
+    #[test]
+    fn global_capacity_no_premature_eviction() {
+        let c: LockedLru<u32, u32> = LockedLru::new(2);
+        assert_eq!(c.put(0, 10), None);
+        assert_eq!(c.put(1, 20), None); // sharded 版同場景在這裡逐出了 k1
+        assert_eq!(c.len(), 2, "全域容量 2 住滿 2 個,無人被冤");
+    }
+
+    /// LockedLru 並發煙霧測試:8 執行緒寫不相交 key(cap 夠大不逐出),
+    /// join 後全部讀得到、len 精確。
+    #[test]
+    fn locked_concurrent_disjoint_puts_all_visible() {
+        let c = Arc::new(LockedLru::new(1024));
+        let handles: Vec<_> = (0..8u32)
+            .map(|t| {
+                let c = Arc::clone(&c);
+                thread::spawn(move || {
+                    for i in 0..100 {
+                        assert_eq!(c.put(t * 1000 + i, i), None);
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(c.len(), 800);
+        for t in 0..8u32 {
+            for i in 0..100 {
+                assert_eq!(c.get(&(t * 1000 + i)), Some(i));
+            }
+        }
+    }
 
     /// shards=1 退化:行為必須與裸 LruCache 完全一致
     /// (cap=2:put a,b → get a(promote)→ put c ⇒ 逐出的是 b)。

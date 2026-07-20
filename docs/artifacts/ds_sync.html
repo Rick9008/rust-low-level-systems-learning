@@ -94,7 +94,7 @@
       <tr><td>bounded queue</td><td><code>ds/ring_buffer</code></td><td><code>bounded_queue</code>(+Condvar)</td><td><code>spsc_ring</code></td></tr>
       <tr><td>arena / slab</td><td>—</td><td><strong><code>ds_sync/arena_locked</code></strong></td><td><code>arena_lockfree</code></td></tr>
       <tr><td>union-find</td><td><code>ds/dsu</code></td><td><code>Mutex&lt;Dsu&gt;</code>(一行包裝,不開檔)</td><td><strong><code>ds_sync/dsu_lockfree</code></strong>(loom 驗證)</td></tr>
-      <tr><td>LRU cache</td><td><code>ds/lru</code></td><td><strong><code>ds_sync/lru_locked</code></strong>(sharded)</td><td><strong>不存在</strong>(§6)</td></tr>
+      <tr><td>LRU cache</td><td><code>ds/lru</code></td><td><strong><code>ds_sync/lru_locked</code></strong>(LockedLru 精確 / Sharded 分片)</td><td><strong>不存在</strong>(§6)</td></tr>
       <tr><td>sorted set</td><td>—</td><td><strong><code>ds_sync/list_fine</code></strong>(交手鎖)</td><td>Harris list(研究級,不實作)</td></tr>
       <tr><td>tree / trie / graph</td><td><code>ds/*</code></td><td><code>Mutex</code> 或 shard</td><td>研究級(Ctrie、lock-free BST)</td></tr>
     </table></div>
@@ -224,7 +224,8 @@ x = gp;            // 失敗照樣前進:gp 必在祖先鏈上,正確性無關</
     <h2>6 · LRU:無鎖版為什麼不存在</h2>
     <p>第一個殘酷事實:<strong>精確 LRU 的 get 是寫操作</strong>——promote-to-MRU 要動雙向鏈表。這直接判了 <code>RwLock</code> 死刑:你以為 cache 讀多寫少是 RwLock 完美場景,結果每次讀都要寫鎖。而真無鎖化要在<strong>同一個熱點(list head)</strong>上做多指標原子改 + 逐出節點的記憶體回收——成本 &gt; 價值,整個工業界都繞道:</p>
     <ul>
-      <li><strong>sharding</strong>(<code>lru_locked</code>):hash 選 shard、每 shard 一把鎖一個 LRU。代價是<strong>逐出品質變 per-shard 近似</strong>:2 個 shard 各 cap 1,兩個 key 撞同一 shard——全域容量還有空位,照樣逐出。容量是靜態切分的,熱 shard 借不到冷 shard 的額度。</li>
+      <li><strong>單鎖精確</strong>(<code>LockedLru</code>):一把 Mutex 包整個 LRU——非分片、非近似,<strong>精確全域逐出序的唯一保有者</strong>。流量不大時它就是答案;先量到鎖競爭再往下走。</li>
+      <li><strong>sharding</strong>(<code>ShardedLru</code>):hash 選 shard、每 shard 一把鎖一個 LRU。代價是<strong>逐出品質變 per-shard 近似</strong>:2 個 shard 各 cap 1,兩個 key 撞同一 shard——全域容量還有空位,照樣逐出。容量是靜態切分的,熱 shard 借不到冷 shard 的額度。</li>
       <li><strong>放棄精確,recency 降級成 per-entry atomic</strong>:CLOCK(get 只做一個 <code>Relaxed</code> store,OS page cache 的做法)、Redis 抽樣 timestamp、W-TinyLFU(moka/caffeine:per-thread buffer 批次 replay)。讀路徑零鎖,換近似逐出。</li>
     </ul>
     <blockquote class="say">
