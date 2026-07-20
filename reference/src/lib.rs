@@ -27,6 +27,10 @@ pub mod signal_pipeline;
 pub mod spsc_ring;
 pub(crate) mod sync_shim;
 
+// stage 4.5:同步策略對照組——同一個資料結構,鎖版/無鎖版並排
+// (誰值得無鎖、誰上鎖就夠、無鎖版為何有時不存在:docs/concurrency/ds_sync.md)
+pub mod ds_sync;
+
 // stage 5:async internals
 pub mod executor;
 // blocking 同步原語的 async 化(rendezvous 三部曲第三章):AsyncMutex + Notify
