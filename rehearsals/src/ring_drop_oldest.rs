@@ -35,9 +35,7 @@ impl SensorRing {
 
     // 0 .. cap .. 2 *cap
     // helper: wrap the index, we will use head and tail between 0 ~ 2*cap and we can use
-    // wrap(tail + cap) != head to check if it is full
-    // head is push side, tail is pop side.
-    // if idx > cap, idx - cap
+    // if idx >= cap, idx - cap
     // ex.
     //  3 is the tail, cap is 4
     //  wrap(3 + 4) = wrap(7) = return 7 - 4 = 3
@@ -99,7 +97,6 @@ use std::sync::Arc;
 
 struct Spsc {
     ring: Mutex<SensorRing>,
-    // not_empty: Condvar,
 }
 
 pub struct Producer {
@@ -111,10 +108,8 @@ pub struct Consumer {
 }
 
 pub fn channel(capacity: usize) -> (Producer, Consumer) {
-    // todo!("rehearsal")
     let spsc = Arc::new(Spsc {
         ring: Mutex::new(SensorRing::new(capacity)),
-        // not_empty: Condvar::new(),
     });
     (Producer { spsc: spsc.clone() }, Consumer { spsc })
 }
@@ -128,7 +123,6 @@ impl Producer {
         let mut st = self.spsc.ring.lock().unwrap();
         st.push(value);
         drop(st);
-        // self.spsc.not_empty.notify_one();
     }
 
     /// 累計被丟棄的筆數。
@@ -146,18 +140,42 @@ impl Consumer {
         if st.len == 0 {
             return None;
         }
-        // st = self.spsc.not_empty.wait_while(st, |s| {
-        //     s.len == 0
-        // }).unwrap();
         st.pop()
     }
 }
 
-fn dryrun_part_ii() {
-    let (mut pro, mut con) = channel(2);
-    std::thread::spawn(move || {
-        con.pop(); // wait on not_empty
-    });
+#[cfg(test)]
+mod test {
 
-    pro.push(2); // push and notify_one
+    use crate::ring_drop_oldest::channel;
+    #[test]
+    fn full_pop() {
+        let (mut p, mut c) = channel(2);
+        p.push(2);
+        p.push(1);
+        assert_eq!(c.pop(), Some(2));
+    }
+
+    #[test]
+    fn drop_cnt_k() {
+        let (mut p, _c) = channel(2);
+        p.push(2);
+        p.push(1);
+        p.push(0);
+        p.push(0);
+        assert_eq!(p.dropped(), 2);
+    }
+
+    #[test]
+    fn pop_on_empty_is_nonblocking_none() {
+        let (_pro, mut con) = channel(2);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(con.pop());
+        });
+        match rx.recv_timeout(std::time::Duration::from_millis(50)) {
+            Ok(res) => assert!(res.is_none()),
+            Err(_) => panic!("pop() blocked on empty - contract says non-blocking here"),
+        }
+    }
 }
