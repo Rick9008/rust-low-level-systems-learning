@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    19 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、11 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    20 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、11 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -636,6 +636,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">arena_lockfree</span>
       <span class="hook">ABA 重現器。拔掉 generation tag,T1 的 CAS 會「成功」——成功指向一個已經死掉的節點。</span>
       <span class="hits">index-ABA · generation 打包進 usize · spsc_ring 的延伸</span>
+    </a>
+    <a class="card" href="ds_sync.html">
+      <span class="name">ds_sync</span>
+      <span class="hook">同一個 DS,三檔同步:Mutex 就夠、值得無鎖、還是無鎖根本不存在。塌縮 stepper + DSU 兩種 CAS 對撞。</span>
+      <span class="hits">塌縮定理 · 鎖階梯五階 · ABA 免疫 = 單調性 · LRU 的 get 是寫</span>
     </a>
     <a class="card" href="epoll_sys.html">
       <span class="name">epoll_sys</span>

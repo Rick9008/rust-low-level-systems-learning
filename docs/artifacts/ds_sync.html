@@ -1,0 +1,441 @@
+<title>DS 同步三檔:Mutex 就夠、值得無鎖、無鎖不存在</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #fbf1c7; --surface: #f2e5bc; --ink: #654735; --ink-2: #7c6f64;
+    --muted: #928374; --grid: #ebdbb2; --ring: rgba(101,71,53,0.16);
+    --accent: #45707a; --s2: #6c782e; --danger: #c14a4a; --code-bg: rgba(101,71,53,0.06); --hl-kw:#c14a4a; --hl-ty:#b47109; --hl-fn:#4c7a5d; --hl-mac:#c35e0a; --hl-str:#6c782e; --hl-num:#945e80; --hl-attr:#c35e0a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+      --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+      --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #1d2021; --surface: #282828; --ink: #d4be98; --ink-2: #a89984;
+    --muted: #928374; --grid: #3c3836; --ring: rgba(212,190,152,0.14);
+    --accent: #7daea3; --s2: #a9b665; --danger: #ea6962; --code-bg: rgba(212,190,152,0.07); --hl-kw:#ea6962; --hl-ty:#d8a657; --hl-fn:#89b482; --hl-mac:#e78a4e; --hl-str:#a9b665; --hl-num:#d3869b; --hl-attr:#e78a4e;
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em; font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .warn { font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--grid); margin-top: 44px; padding-top: 14px; }
+  .step { margin-top: 16px; border: 1px solid var(--ring); border-radius: 12px; background: var(--surface); padding: 16px; }
+  .step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .step button { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); cursor: pointer; }
+  .step button:hover:not(:disabled) { border-color: var(--accent); }
+  .step button:disabled { opacity: .4; cursor: not-allowed; }
+  .toggle { display: inline-flex; border: 1px solid var(--ring); border-radius: 7px; overflow: hidden; }
+  .toggle button { border: none; border-radius: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .stepcap { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .scene { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; margin: 6px 0 12px; }
+  .lane { border: 1px solid var(--grid); border-radius: 9px; padding: 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .row { display: flex; gap: 8px; }
+  .cell { font-family: ui-monospace, monospace; font-size: 12.5px; font-weight: 700; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 7px; background: var(--page); text-align: center; transition: background .15s, border-color .15s, opacity .15s; flex: 1; overflow: hidden; }
+  .col .cell + .cell { margin-top: 8px; }
+  .cell.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .cell.ok { border-color: var(--s2); color: var(--s2); }
+  .cell.bad { border-color: var(--danger); color: var(--danger); }
+  .cell.dim { opacity: .38; }
+  .cell.struck { opacity: .45; text-decoration: line-through; }
+  .ord { font-size: 11px; color: var(--muted); margin-top: 5px; text-align: center; font-family: ui-monospace, monospace; }
+  .step-narr { font-size: 14px; color: var(--ink-2); min-height: 3.4em; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .step-narr b { color: var(--ink); }
+  .ladder { display: flex; gap: 6px; align-items: stretch; margin-top: 14px; overflow-x: auto; padding-bottom: 6px; }
+  .rung { flex: 1; min-width: 118px; border: 1px solid var(--ring); border-radius: 9px; background: var(--surface); padding: 10px 11px; }
+  .rung b { display: block; font-size: 13.5px; color: var(--ink); }
+  .rung i { display: block; font-style: normal; font-family: ui-monospace, monospace; font-size: 11px; color: var(--accent); margin: 3px 0 5px; }
+  .rung small { font-size: 12px; color: var(--muted); line-height: 1.5; display: block; }
+  .larr { align-self: center; color: var(--muted); font-weight: 700; }
+  details.quiz { margin-top: 14px; border: 1px solid var(--ring); border-radius: 10px; background: var(--surface); padding: 12px 16px; }
+  details.quiz summary { cursor: pointer; font-weight: 600; color: var(--ink); font-size: 14.5px; }
+  details.quiz[open] summary { border-bottom: 1px solid var(--grid); padding-bottom: 8px; margin-bottom: 8px; }
+  details.quiz p { font-size: 14px; margin: 8px 0; }
+  @media (max-width: 640px) { .scene { grid-template-columns: 1fr; } }
+  .tk-cm{color:var(--muted);} .tk-kw{color:var(--hl-kw);} .tk-ty{color:var(--hl-ty);} .tk-fn{color:var(--hl-fn);}
+  .tk-mac{color:var(--hl-mac);} .tk-str{color:var(--hl-str);} .tk-num{color:var(--hl-num);} .tk-attr{color:var(--hl-attr);}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">ds_sync · 同步策略對照組 · reference/src/ds_sync/</div>
+  <h1>DS 同步三檔:Mutex 就夠、值得無鎖、無鎖不存在</h1>
+  <p class="lede">同一個資料結構,多執行緒要共享時你有三檔:<strong>上鎖</strong>(整組機關塌縮)、<strong>無鎖</strong>(付語意稅買 progress 保證)、或承認<strong>無鎖版根本不存在</strong>(精確 LRU)。這頁把 repo 裡的配對組串成一堂選型課:塌縮定理、老實的成本帳、鎖階梯、以及「什麼結構值得無鎖」的判準——面試被問 “how would you make X thread-safe” 時,答案的骨架就是這張圖。</p>
+
+  <section>
+    <h2>0 · 全家福:repo 的配對地圖</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>結構</th><th>單執行緒</th><th>鎖版</th><th>無鎖版</th></tr>
+      <tr><td>bounded queue</td><td><code>ds/ring_buffer</code></td><td><code>bounded_queue</code>(+Condvar)</td><td><code>spsc_ring</code></td></tr>
+      <tr><td>arena / slab</td><td>—</td><td><strong><code>ds_sync/arena_locked</code></strong></td><td><code>arena_lockfree</code></td></tr>
+      <tr><td>union-find</td><td><code>ds/dsu</code></td><td><code>Mutex&lt;Dsu&gt;</code>(一行包裝,不開檔)</td><td><strong><code>ds_sync/dsu_lockfree</code></strong>(loom 驗證)</td></tr>
+      <tr><td>LRU cache</td><td><code>ds/lru</code></td><td><strong><code>ds_sync/lru_locked</code></strong>(sharded)</td><td><strong>不存在</strong>(§6)</td></tr>
+      <tr><td>sorted set</td><td>—</td><td><strong><code>ds_sync/list_fine</code></strong>(交手鎖)</td><td>Harris list(研究級,不實作)</td></tr>
+      <tr><td>tree / trie / graph</td><td><code>ds/*</code></td><td><code>Mutex</code> 或 shard</td><td>研究級(Ctrie、lock-free BST)</td></tr>
+    </table></div>
+    <p style="margin-top:14px">讀法有兩個方向:<strong>塌縮方向</strong>(無鎖 → 鎖,§1)看複雜度住在哪;<strong>解放方向</strong>(鎖 → 無鎖,§4)看你付了什麼、買到什麼。</p>
+  </section>
+
+  <section>
+    <h2>1 · 互動:塌縮定理——把 Mutex 放回 lock-free arena</h2>
+    <p><code>arena_lockfree</code> 的 200 行機關,沒有一行在描述「stack / slab」本身,全部在服務「無鎖」這個約束。按「下一步」把 Mutex 放回去,看機關逐項蒸發:</p>
+    <div class="step">
+      <div class="step-controls">
+        <button id="cs-next">下一步 ▸</button>
+        <button id="cs-reset">重置</button>
+        <span class="stepcap" id="cs-cap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane col">
+          <h4>lock-free 版的機關</h4>
+          <div class="cell" id="cs-l0">gen-tag head(AtomicU64)</div>
+          <div class="cell" id="cs-l1">atomic next 侵入鏈</div>
+          <div class="cell" id="cs-l2">MaybeUninit + unsafe</div>
+          <div class="cell" id="cs-l3">Acquire/Release 論證</div>
+          <div class="cell" id="cs-l4">loom 窮舉</div>
+        </div>
+        <div class="lane col">
+          <h4>Mutex 版(arena_locked)</h4>
+          <div class="cell dim" id="cs-r0">·</div>
+          <div class="cell dim" id="cs-r1">·</div>
+          <div class="cell dim" id="cs-r2">·</div>
+          <div class="cell dim" id="cs-r3">·</div>
+          <div class="cell dim" id="cs-r4">·</div>
+        </div>
+      </div>
+      <div class="step-narr" id="cs-narr"></div>
+    </div>
+    <p style="margin-top:14px">反向讀法同樣成立:看到 generation tag、侵入鏈、<code>MaybeUninit</code>,不用讀函式體就知道這份程式碼想無鎖。<strong>複雜度住在同步策略裡,不住在資料結構裡。</strong></p>
+  </section>
+
+  <section>
+    <h2>2 · 老實帳:Mutex vs lock-free,誰快?</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>情境</th><th>Mutex</th><th>lock-free</th></tr>
+      <tr><td>無競爭</td><td>futex fast path:一個 CAS 進、一個 store 出</td><td>單發 CAS——<strong>幾乎同價</strong></td></tr>
+      <tr><td>高競爭</td><td>等待者去睡:不燒 CPU、不 ping-pong cache line</td><td>CAS 重試風暴,<strong>可能更慢</strong></td></tr>
+      <tr><td>持有者被 preempt</td><td>全員卡住等它醒</td><td><strong>別人仍有進展</strong>(lock-free 的定義)</td></tr>
+      <tr><td>複合操作</td><td>同臨界區<strong>天生原子</strong>(alloc + 寫值)</td><td>只有單字原子性,靠所有權轉移協議拼</td></tr>
+      <tr><td>tail latency / priority inversion</td><td>有暴露</td><td>可控 / 免疫</td></tr>
+    </table></div>
+    <blockquote class="say">
+      “Uncontended, a mutex <strong>is</strong> one CAS — same price as lock-free. What lock-free buys is progress guarantees: no priority inversion, and if a thread gets preempted mid-operation, everyone else still makes progress. It's about latency and liveness, not throughput.”
+      <em>被問「lock-free 比較快嗎」的標準開場——先否定前提。</em>
+    </blockquote>
+  </section>
+
+  <section>
+    <h2>3 · 升級階梯:下一步從來不是直接跳 lock-free</h2>
+    <div class="ladder">
+      <div class="rung"><b>coarse 全域鎖</b><i>arena_locked</i><small>一把 Mutex 包全部。正確先行,面試永遠從這裡開始。</small></div>
+      <div class="larr">→</div>
+      <div class="rung"><b>sharded</b><i>lru_locked · sharded_map</i><small>hash 選 shard,吞吐 ×N;犧牲全域順序/逐出品質。</small></div>
+      <div class="larr">→</div>
+      <div class="rung"><b>fine 交手鎖</b><i>list_fine</i><small>每節點一鎖、鎖下一個才放上一個。長鏈+分散存取才贏;單點熱點比大鎖慢。</small></div>
+      <div class="larr">→</div>
+      <div class="rung"><b>per-thread</b><i>(jemalloc 式)</i><small>fast path 零同步。最快的同步是不同步。</small></div>
+      <div class="larr">→</div>
+      <div class="rung"><b>lock-free</b><i>spsc_ring · dsu_lockfree</i><small>最後一站:CAS + 不變量證明 + loom。</small></div>
+    </div>
+    <p style="margin-top:14px">交手鎖(hand-over-hand)的死鎖自由證明一句話:<strong>所有人按鏈表位置順序拿鎖(全序)+ free-list 是葉鎖 ⇒ 等待圖無環</strong>。unlink 要同時持 prev + cur 兩把;splice 只需 prev——因為「別人 unlink cur」也得先拿 prev 的鎖。optimistic / lazy / Harris list 是這階往上的研究級延伸,面試口述即可。</p>
+  </section>
+
+  <section>
+    <h2>4 · 互動:lock-free DSU 的兩種 CAS——一個承載正確性、一個只是 hint</h2>
+    <p><code>dsu_lockfree</code> 丟掉 union-by-rank(兩處寫,單 CAS 做不到),換固定隨機 priority:link 塌縮成一個字的 CAS,而 <strong>expected value 就是「root 的定義」本身</strong>(<code>parent[lo] == lo</code>)。切換兩個劇本:</p>
+    <div class="step">
+      <div class="step-controls">
+        <div class="toggle" id="du-mode">
+          <button data-mode="race" class="on">union 對撞:恰一人贏</button>
+          <button data-mode="hint">halving:失敗就棄</button>
+        </div>
+        <button id="du-next">下一步 ▸</button>
+        <button id="du-reset">重置</button>
+        <span class="stepcap" id="du-cap"></span>
+      </div>
+      <div class="scene">
+        <div class="lane">
+          <h4>parent[](自指 = 根)</h4>
+          <div class="row">
+            <div class="cell" id="du-p0">p[0]=0</div>
+            <div class="cell" id="du-p1">p[1]=1</div>
+            <div class="cell" id="du-p2">p[2]=2</div>
+          </div>
+          <div class="ord" id="du-pcap">&nbsp;</div>
+        </div>
+        <div class="lane col">
+          <h4>兩執行緒</h4>
+          <div class="cell" id="du-t1">T1 —</div>
+          <div class="cell" id="du-t2">T2 —</div>
+          <div class="cell dim" id="du-verdict">&nbsp;</div>
+        </div>
+      </div>
+      <div class="step-narr" id="du-narr"></div>
+    </div>
+<pre><code>// link:expected = lo 自己——「root 的定義」同時就是 CAS 的 guard
+if self.parent[lo].compare_exchange(lo, hi, Release, Relaxed).is_ok() {
+    self.components.fetch_sub(1, Relaxed);
+    return true;   // 失敗則整段重來:重新 find(有人成功了,世界變了)
+}
+
+// find 裡的 path halving:CAS 失敗「不重試」——它只是效能 hint
+let _ = self.parent[x].compare_exchange(p, gp, Release, Relaxed);
+x = gp;            // 失敗照樣前進:gp 必在祖先鏈上,正確性無關</code></pre>
+    <p style="margin-top:14px">同一支演算法裡的兩個 CAS,失敗處置完全相反——判準只有一條:<strong>這個寫入承載不變量(連通性),還是只是加速 hint(壓縮)?</strong>前者失敗必須重來,後者失敗直接走人。</p>
+  </section>
+
+  <section>
+    <h2>5 · 為什麼 DSU 免 generation tag,arena 卻必須掛?</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>arena_lockfree(要 gen)</th><th>dsu_lockfree(免 gen)</th></tr>
+      <tr><td>expected value</td><td><code>head == (gen, idx)</code></td><td><code>parent[lo] == lo</code>(root 自指)</td></tr>
+      <tr><td>舊值會回來嗎</td><td><strong>會</strong>:idx pop → free → 再 push,同一索引帶不同 next 回到 head</td><td><strong>永不</strong>:root 資格一去不返(parent 單調向根)</td></tr>
+      <tr><td>結論</td><td>CAS 只比 idx 會誤成功 → 掛 gen 讓舊讀者必敗</td><td>expected 失效即永久失效,ABA 無從發生</td></tr>
+    </table></div>
+    <p style="margin-top:14px">一句話講穿 ABA:<strong>問題從來不是「CAS 比對值」,是「expected value 會不會失而復得」</strong>。單調性(一去不返)是最便宜的 ABA 免疫。</p>
+  </section>
+
+  <section>
+    <h2>6 · LRU:無鎖版為什麼不存在</h2>
+    <p>第一個殘酷事實:<strong>精確 LRU 的 get 是寫操作</strong>——promote-to-MRU 要動雙向鏈表。這直接判了 <code>RwLock</code> 死刑:你以為 cache 讀多寫少是 RwLock 完美場景,結果每次讀都要寫鎖。而真無鎖化要在<strong>同一個熱點(list head)</strong>上做多指標原子改 + 逐出節點的記憶體回收——成本 &gt; 價值,整個工業界都繞道:</p>
+    <ul>
+      <li><strong>sharding</strong>(<code>lru_locked</code>):hash 選 shard、每 shard 一把鎖一個 LRU。代價是<strong>逐出品質變 per-shard 近似</strong>:2 個 shard 各 cap 1,兩個 key 撞同一 shard——全域容量還有空位,照樣逐出。容量是靜態切分的,熱 shard 借不到冷 shard 的額度。</li>
+      <li><strong>放棄精確,recency 降級成 per-entry atomic</strong>:CLOCK(get 只做一個 <code>Relaxed</code> store,OS page cache 的做法)、Redis 抽樣 timestamp、W-TinyLFU(moka/caffeine:per-thread buffer 批次 replay)。讀路徑零鎖,換近似逐出。</li>
+    </ul>
+    <blockquote class="say">
+      “Exact LRU makes every read a write — the promote touches the list — so RwLock buys nothing. Production either shards it, accepting per-shard eviction, or downgrades recency to a per-entry atomic like CLOCK. Nobody ships a lock-free exact LRU; the cost of exactness exceeds its value.”
+      <em>「LRU 怎麼 thread-safe」的完整答案,25 秒。</em>
+    </blockquote>
+  </section>
+
+  <section>
+    <h2>7 · 語意稅:無鎖化之後,回傳值的含義變了</h2>
+    <ul>
+      <li><code>connected(a,b) == false</code>:「<strong>曾有一瞬間</strong>不連通」——回傳途中可能已被 union。線性化靠複查 <code>parent[rx]==rx</code>(root 資格單向消失,撐起整段區間)。</li>
+      <li><code>components()</code> / sharded <code>len()</code>:Relaxed 統計計數 / 行進中快照——<strong>不能當同步旗標</strong>。</li>
+      <li>單操作可線性化,操作的<strong>組合</strong>不原子:兩次查詢之間世界可以整個換掉,呼叫端要自己帶外部同步。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>8 · 自測:四題預測題(先想再翻)</h2>
+    <details class="quiz"><summary>1 · DSU:halving 的 CAS 失敗可以不管,link 的 CAS 失敗必須整段重來——為什麼?</summary>
+      <p>兩個 CAS 守的東西不同。<strong>link 承載連通性不變量</strong>:失敗代表 lo 已不是根(expected 永久失效),硬寫會把樹接錯——必須重新 find 再試。<strong>halving 只是效能 hint</strong>:失敗代表別人已把 parent[x] 推得更遠(單調向根),此刻的結構比你想寫的還好,棄之即可;gp 仍在祖先鏈上,繼續爬完全正確。</p>
+    </details>
+    <details class="quiz"><summary>2 · CLOCK 把 LRU 的 get 降成一個 Relaxed store——為什麼 Relaxed 不會出正確性問題?</summary>
+      <p>因為那個 flag <strong>不承載任何正確性</strong>,只是逐出品質的 hint。讀者丟失/晚到一個 flag,最壞結果是「某個最近用過的 entry 被提早逐出」——cache 語意本來就允許任意逐出(miss 只是變慢,不是錯)。沒有任何不變量掛在這個 store 的可見性順序上,所以不需要 happens-before,Relaxed 剛好。跟 DSU 的 halving 是同一根脊椎:<strong>hint 寫入不需要 ordering 保證</strong>。</p>
+    </details>
+    <details class="quiz"><summary>3 · arena 的 lock-free pop:如果把 free_slot(idx) 挪到讀值之前(先還槽、再讀),會發生什麼?</summary>
+      <p>還槽的瞬間,另一執行緒就能 alloc 到同一個槽並開始<strong>寫入新值</strong>——你的 <code>assume_init_read</code> 跟它的寫入形成 data race(UB),讀到撕裂值。<code>free_slot</code> 的 Release-CAS 是「我讀完了」的發佈點:它必須排在讀之後,下一任的 Acquire 才能保證看到槽位已交還。Mutex 版三件事隨便排——因為整段在同一臨界區裡,沒有「別人」。</p>
+    </details>
+    <details class="quiz"><summary>4 · sharded LRU 在什麼 workload 下逐出品質明顯劣化?</summary>
+      <p>熱度跨 shard 不均時:熱 key 集中撞進同一 shard(hash 不均、或 key 天然聚簇),該 shard 反覆逐出<strong>還很熱的資料</strong>,而冷 shard 大片空著——容量靜態切分,借不過去。極端例:N-1 個 shard 全空,一個 shard 承受全部流量,等效容量從 cap 掉到 cap/N。這就是 §6 的「全域有空位照樣逐出」放大成 workload 級的樣子。</p>
+    </details>
+  </section>
+
+  <section>
+    <h2>9 · 面試句庫</h2>
+    <blockquote class="say">
+      “My ladder is: one mutex first — correctness before cleverness. If contention shows up, shard by key. If the structure is a long chain with scattered access, hand-over-hand locking. Lock-free is the last rung, and only for structures whose writes are monotonic — like union-find, where a root never comes back, so CAS needs no ABA tag.”
+      <em>選型題的 30 秒骨架:階梯 + 判準,一次講完。</em>
+    </blockquote>
+    <blockquote class="say">
+      “Union-find is unusually lock-free-friendly: parent pointers only ever move toward a root, so a stale CAS expectation fails permanently instead of being spoofed — no ABA, no generation tag. The price is semantic: connected-false is a snapshot, and I drop rank for randomized linking because rank needs a two-word atomic update.”
+      <em>dsu_lockfree 的一分鐘版本。</em>
+    </blockquote>
+  </section>
+
+  <div class="warn">
+    程式碼:<code>reference/src/ds_sync/</code>(arena_locked · dsu_lockfree · lru_locked · list_fine)· loom:<code>reference/tests/loom_dsu.rs</code> · 設計帳全文:<code>docs/concurrency/ds_sync.md</code> · 鄰頁:<code>artifacts/arena_lockfree.html</code>(ABA 現場)·<code>html_p/p5-thread-safe-spectrum.html</code>(七站光譜口述版)·<code>artifacts/dsu.html</code>(單執行緒版)
+  </div>
+</div>
+
+<script>
+(function () {
+  var step = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var L = ["gen-tag head(AtomicU64)", "atomic next 侵入鏈", "MaybeUninit + unsafe", "Acquire/Release 論證", "loom 窮舉"];
+  var R = ["消失:臨界區裡沒有 ABA 窗口", "Vec<u32> 普通 stack", "Option<T>:型別系統接手", "lock/unlock 自帶 happens-before", "幾乎不必要:只剩「誰先拿鎖」"];
+  var NARR = [
+    "左邊五個機關,右邊是 Mutex 版的對應物。開始把 Mutex 放回去。",
+    "<b>gen-tag 蒸發。</b>ABA 需要「讀與 CAS 之間的窗口」——pop 整段搬進臨界區後,窗口不存在,(gen,idx) 打包、wrapping 論證全部退場。",
+    "<b>atomic next 蒸發。</b>「落後 popper 讀 stale next」的並發讀者不存在了,侵入鏈塌縮成一個 <code>Vec&lt;u32&gt;</code> free stack。",
+    "<b>unsafe 歸零。</b>不再手動追蹤「邏輯初始化」——<code>Option&lt;T&gt;</code> 把它交還型別系統,double-free 變成回 <code>None</code>。",
+    "<b>ordering 論證蒸發。</b>lock/unlock 自帶 happens-before,Acquire/Release 的逐行註解整包不用寫。",
+    "<b>loom 幾乎不必要。</b>interleaving 只剩「誰先拿到鎖」。結算:200 行機關 → 約 60 行安全 Rust。<b>複雜度住在同步策略裡,不住在資料結構裡。</b>"
+  ];
+  function render() {
+    for (var k = 0; k < 5; k++) {
+      var l = $("cs-l" + k), r = $("cs-r" + k);
+      if (k < step) {
+        l.className = "cell struck"; l.textContent = L[k];
+        r.className = "cell ok"; r.textContent = R[k];
+      } else {
+        l.className = "cell" + (k === step && step < 5 ? " hot" : ""); l.textContent = L[k];
+        r.className = "cell dim"; r.textContent = "·";
+      }
+    }
+    $("cs-narr").innerHTML = NARR[step];
+    $("cs-cap").textContent = "步驟 " + step + " / 5";
+    $("cs-next").disabled = (step >= 5);
+  }
+  $("cs-next").addEventListener("click", function () { if (step < 5) { step++; render(); } });
+  $("cs-reset").addEventListener("click", function () { step = 0; render(); });
+  render();
+})();
+</script>
+
+<script>
+(function () {
+  var mode = "race";
+  var step = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  // p: [p0文字, p0類, p1文字, p1類, p2文字, p2類](race 模式 p2 隱藏成 dim ·)
+  var S = {
+    race: {
+      max: 5,
+      pcap: "n=2,設 pri(0) < pri(1) ⇒ 輸家是 0(方向由 priority 決定,結論不變)",
+      p: [
+        [["p[0]=0",""],["p[1]=1",""],["·","dim"]],
+        [["p[0]=0","hot"],["p[1]=1",""],["·","dim"]],
+        [["p[0]=1","ok"],["p[1]=1",""],["·","dim"]],
+        [["p[0]=1","bad"],["p[1]=1",""],["·","dim"]],
+        [["p[0]=1",""],["p[1]=1","hot"],["·","dim"]],
+        [["p[0]=1",""],["p[1]=1",""],["·","dim"]]
+      ],
+      t1: ["T1 —", "T1 find:0、1 都是根 → 準備 CAS(p[0]: 0→1)", "T1 CAS 成功 → true", "T1 已返回 true", "T1 已返回 true", "T1 = true"],
+      t2: ["T2 —", "T2 同時 find 完 → 準備同一個 CAS(p[0]: 0→1)", "T2 還沒出手", "T2 CAS:expected 0,實際 1 → 失敗", "T2 重新 find:find(0)=1、find(1)=1 → rx==ry", "T2 = false"],
+      narr: [
+        "兩執行緒同時 <code>union(0,1)</code>。初始:兩個 singleton,components = 2。",
+        "兩邊都 find 完、都認定「0 是根、1 是根」,都準備 <b>CAS(parent[0]: 0→1)</b>——expected value 是 0 自己:root 的定義就是 guard。",
+        "T1 的 CAS 先落地:p[0]=1,components 2→1,回 <b>true</b>。0 的 root 資格<b>永久</b>消失。",
+        "T2 的 CAS 帶著 expected=0 來,實際已是 1 → <b>自動失敗</b>。不需要 gen tag:p[0] 永遠不會再變回 0(單調性 = ABA 免疫)。",
+        "T2 整段重來:重新 find,兩邊的根都是 1 → rx == ry。",
+        "<b>T2 回 false(已同集合)。恰好一人 true ✓</b>——這正是 loom_racing_unions 窮舉驗證的不變量;若 link 用 blind store,雙贏就會發生。"
+      ],
+      verdict: "恰一人 true · components=1 ✓"
+    },
+    hint: {
+      max: 4,
+      pcap: "n=3,鏈 0→1→2(2 是根)。T1 做 find(0),T2 搶先幫忙壓縮",
+      p: [
+        [["p[0]=1",""],["p[1]=2",""],["p[2]=2",""]],
+        [["p[0]=1","hot"],["p[1]=2","hot"],["p[2]=2",""]],
+        [["p[0]=2","ok"],["p[1]=2",""],["p[2]=2",""]],
+        [["p[0]=2","bad"],["p[1]=2",""],["p[2]=2",""]],
+        [["p[0]=2",""],["p[1]=2",""],["p[2]=2","ok"]]
+      ],
+      t1: ["T1 —", "T1 load p[0]=1、load p[1]=2 → 準備 halving CAS(p[0]: 1→2)", "T1 還沒出手", "T1 CAS:expected 1,實際 2 → 失敗 → 不重試", "T1 從 gp=2 繼續:p[2]==2 → 回 2 ✓"],
+      t2: ["T2 —", "T2 也在 find(0) 的路上", "T2 搶先完成同一個壓縮:p[0]=2", "T2 已完事", "T2 已完事"],
+      narr: [
+        "鏈 0→1→2。<code>find(0)</code> 要做 path halving:讓 0 直接指祖父 2。",
+        "T1 讀到 p=1、gp=2,準備 <b>CAS(parent[0]: 1→2)</b>。同一時刻 T2 也在做同樣的事。",
+        "T2 先落地:p[0]=2。結構<b>已經被推到 T1 想要的樣子</b>(甚至可能更好)。",
+        "T1 的 CAS 失敗——<b>不重試、不重來,直接棄</b>。這個寫入只是效能 hint:失敗代表別人已幫你壓縮,正確性零損失。",
+        "T1 拿著 gp=2 繼續爬:p[2]==2,目擊根 → <b>回 2 ✓</b>。對照 §4 程式碼:同一支演算法,link CAS 失敗要整段重來,halving CAS 失敗直接走人。"
+      ],
+      verdict: "hint 失敗棄之 · 回傳正確 ✓"
+    }
+  };
+  function render() {
+    var m = S[mode];
+    var last = (step >= m.max);
+    var ps = m.p[step];
+    for (var k = 0; k < 3; k++) {
+      var el = $("du-p" + k);
+      el.textContent = ps[k][0];
+      el.className = "cell" + (ps[k][1] ? " " + ps[k][1] : "");
+    }
+    $("du-pcap").textContent = m.pcap;
+    $("du-t1").textContent = m.t1[step];
+    $("du-t1").className = "cell" + (step > 0 && !last ? " hot" : "");
+    $("du-t2").textContent = m.t2[step];
+    $("du-t2").className = "cell";
+    var v = $("du-verdict");
+    if (!last) { v.className = "cell dim"; v.innerHTML = "&nbsp;"; }
+    else { v.className = "cell ok"; v.textContent = m.verdict; }
+    $("du-narr").innerHTML = m.narr[step];
+    $("du-cap").textContent = "步驟 " + step + " / " + m.max;
+    $("du-next").disabled = last;
+  }
+  $("du-next").addEventListener("click", function () { if (step < S[mode].max) { step++; render(); } });
+  $("du-reset").addEventListener("click", function () { step = 0; render(); });
+  var toggle = $("du-mode");
+  toggle.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-mode]");
+    if (!b) return;
+    mode = b.getAttribute("data-mode");
+    Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+      x.classList.toggle("on", x === b);
+    });
+    step = 0; render();
+  });
+  render();
+})();
+</script>
+
+<script>
+(function(){
+  "use strict";
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var RS_KW = {"fn":1,"let":1,"mut":1,"if":1,"else":1,"return":1,"for":1,"while":1,"loop":1,"match":1,
+    "unsafe":1,"impl":1,"struct":1,"enum":1,"trait":1,"pub":1,"use":1,"as":1,"const":1,"static":1,
+    "move":1,"ref":1,"in":1,"where":1,"mod":1,"type":1,"dyn":1,"self":1,"Self":1,"crate":1,"super":1,
+    "break":1,"continue":1,"true":1,"false":1};
+  var RS_TY = {"usize":1,"isize":1,"u8":1,"u16":1,"u32":1,"u64":1,"i32":1,"i64":1,"bool":1,"char":1,"str":1};
+  function hlRust(src){
+    var out="", i=0, n=src.length;
+    function idA(c){ return /[A-Za-z_]/.test(c); }
+    function idB(c){ return /[A-Za-z0-9_]/.test(c); }
+    while(i<n){
+      var c=src[i], j;
+      if(c==="/"&&src[i+1]==="/"){ j=src.indexOf("\n",i); if(j<0)j=n; out+="<span class='tk-cm'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==="#"&&src[i+1]==="["){ j=src.indexOf("]",i); j=(j<0)?n:j+1; out+="<span class='tk-attr'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c==='"'){ j=i+1; while(j<n){ if(src[j]==="\\"){ j+=2; continue; } if(src[j]==='"'){ j++; break; } j++; } out+="<span class='tk-str'>"+esc(src.slice(i,j))+"</span>"; i=j; continue; }
+      if(c>="0"&&c<="9"){
+        var nm=/^[0-9][0-9_xA-Fa-f]*/.exec(src.slice(i));
+        var tk=nm?nm[0]:c; out+="<span class='tk-num'>"+esc(tk)+"</span>"; i+=tk.length; continue;
+      }
+      if(idA(c)){
+        j=i+1; while(j<n&&idB(src[j])) j++;
+        var w=src.slice(i,j);
+        var cls=null, macro=(src[j]==="!"&&/[\(\[\{]/.test(src[j+1]||""));
+        if(RS_KW[w]) cls="tk-kw";
+        else if(macro) cls="tk-mac";
+        else if(RS_TY[w]||/^[A-Z]/.test(w)) cls="tk-ty";
+        else if(src[j]==="(") cls="tk-fn";
+        out+= cls ? "<span class='"+cls+"'>"+esc(w)+"</span>" : esc(w);
+        i=j; continue;
+      }
+      out+=esc(c); i++;
+    }
+    return out;
+  }
+  document.querySelectorAll("pre code").forEach(function(el){ el.innerHTML = hlRust(el.textContent); });
+})();
+</script>
