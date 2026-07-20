@@ -45,7 +45,7 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 | **7/22** | c#1:PROMPTS_EN(c 題)→ 修 e2#1 → spsc 空白。晚尾日讀:`html_p/p8-hw_bridge_teaching.html`(c#1 回放後才開) |
 | **7/23** | signal_pipeline 110m:`docs/concurrency/signal_pipeline.md` → `docs/artifacts/signal_pipeline.html`(SB stepper)→ `reference/src/signal_pipeline.rs`(`start_fan_in` 6 tests)→ `drills/src/signal_pipeline.rs` → a#2 → 修 c#1 |
 | **7/24** | e2#2 → d#1:PROMPTS_EN(d 題,tokio)。日讀:`html_p/p6-telemetry-spsc-ring-reference.html` → aggregator 延伸動手(f 題 contract,寫在 `drills/src/ring_buffer.rs` 同檔) |
-| **7/25** | 六卡快打:`rehearsals/clarify-cards.md` 全六張 → c#2 → 浮動#3 → 口述底稿:`docs/concurrency/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/io/hw_bridge.md`(五 server 對照組)+ `docs/async/async-runtime-anatomy.md` + `docs/cost-model.md`(數字與「再快呢」三句) |
+| **7/25** | 六卡快打:`rehearsals/clarify-cards.md` 全六張 → c#2 → 浮動#3 → 口述底稿:`docs/concurrency/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/io/hw_bridge.md`(五 server 對照組)+ `docs/async/async-runtime-anatomy.md` + `docs/cost-model.md`(數字與「再快呢」三句)。光譜口述的互動版收尾:`docs/artifacts/ds_sync.html`——**先口頭答 §8 四題自測再翻答案**(7/20 積欠的預測題;`ds_sync/` 原始碼與 `list_fine` 是選讀 deep-dive,不排主線) |
 | **7/26** | b#2 → e/f/g/h 題幹:PROMPTS_EN + 認題掃描表 `rehearsals/README.md` → 英文 I/O 唸出聲:PROMPTS_EN + `docs/clarify-playbook.md`(五問英文問法)→ spsc 空白 → 讀自己的 `challenges/src/` |
 | **7/27** | 只開兩份:`rehearsals/README.md`(45 分鐘 protocol + 時間預算)+ `docs/coderpad-constraints.md`(環境確認) |
 | **7/28** | 暖手小 drill 一題 + pillar-5 dry-run 清單(`rehearsals/README.md`)→ 上場 |
