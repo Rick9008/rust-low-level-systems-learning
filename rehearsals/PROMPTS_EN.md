@@ -481,6 +481,8 @@ Ok, I'll start to code with the spsc ring side.
 > UDP 丟包 = 看不見計數的 drop-newest,和你的可觀測性目標自相矛盾;
 > "need to google" 的面試正解 = 當場換熟的(in-proc bounded queue)。
 > 對應實作:彩排 a(ring_drop_oldest)就是本卡核心結構。
+> **五問歸屬**:漏的是「容量算式」那格的第二因子——那格永遠是乘法
+> `capacity = 速率 × 要撐的時長`,兩個因子都問到才算問完(你只問了速率)。
 
 
 
@@ -530,4 +532,8 @@ Ok, I'll start to code with the status table.
 > 做對的:push/pull 當場變決策 ✓;**沒掏 lock-free/SPSC**(答案卷
 > 「常見錯誤」第一條完美避開,節制正確)✓;100 threads 可辯護(瓶頸在 RTT)。
 > 跨卡教訓:**題幹句句是參數,句句要消費**(兩卡漏的都是白給的句子)。
+> **反推法**(面試官直接給 W 時):`window ≈ N×interval + timeout` →
+> 你選 N(去抖理由)與 timeout(≥健康 p99 RTT)→ 反推 interval →
+> 推 probes/s 與在飛數 → pool 大小(驗 don't hammer / don't blow up)。
+> 式子不變,只換數字——這就是 "predictable" 的全部內容。
 > 對應實作:彩排 h(timer_queue)+ thread_pool 的 bounded submit。
