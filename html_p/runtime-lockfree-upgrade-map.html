@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runtime 逐元件 lock-free 升級地圖</title>
+<style>
+  /* ── gruvbox-material (dark, medium) ── */
+  :root {
+    --bg0: #282828; --bg1: #32302f; --bg2: #3c3836; --bg3: #45403d;
+    --fg: #d4be98; --fg-dim: #a89984; --grey: #928374;
+    --red: #ea6962; --orange: #e78a4e; --yellow: #d8a657;
+    --green: #a9b665; --aqua: #89b482; --blue: #7daea3; --purple: #d3869b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 6rem;
+    background: var(--bg0); color: var(--fg);
+    font-family: "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { color: var(--yellow); font-size: 1.6rem; border-bottom: 2px solid var(--bg3); padding-bottom: .5rem; }
+  h2 { color: var(--aqua); font-size: 1.25rem; margin-top: 3rem; border-left: 4px solid var(--aqua); padding-left: .6rem; }
+  h3 { color: var(--blue); font-size: 1.05rem; }
+  a { color: var(--blue); }
+  code, pre {
+    font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+    font-size: .86em;
+  }
+  code { background: var(--bg2); padding: .1em .35em; border-radius: 4px; }
+  pre {
+    background: var(--bg1); border: 1px solid var(--bg3); border-radius: 8px;
+    padding: .9rem 1rem; overflow-x: auto; line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92em; }
+  th, td { border: 1px solid var(--bg3); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--bg2); color: var(--yellow); }
+  tr:nth-child(even) td { background: var(--bg1); }
+  .lead { color: var(--fg-dim); }
+  .tag {
+    display: inline-block; padding: .05em .55em; border-radius: 99px;
+    font-size: .78em; font-weight: 700; vertical-align: middle;
+  }
+  .tag.mutex   { background: color-mix(in srgb, var(--orange) 22%, transparent); color: var(--orange); border: 1px solid var(--orange); }
+  .tag.atomic  { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); border: 1px solid var(--green); }
+  .tag.kernel  { background: color-mix(in srgb, var(--blue) 22%, transparent); color: var(--blue); border: 1px solid var(--blue); }
+  .tag.gap     { background: color-mix(in srgb, var(--red) 22%, transparent); color: var(--red); border: 1px solid var(--red); }
+  .card {
+    background: var(--bg1); border: 1px solid var(--bg3); border-radius: 10px;
+    padding: 1rem 1.25rem; margin: 1.25rem 0;
+  }
+  .card h3 { margin-top: .2rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .cell { background: var(--bg0); border: 1px solid var(--bg3); border-radius: 8px; padding: .6rem .8rem; }
+  .cell b { color: var(--yellow); }
+  .callout {
+    border-left: 4px solid var(--purple); background: var(--bg1);
+    padding: .6rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0;
+  }
+  .callout.warn { border-color: var(--red); }
+  .callout.ok { border-color: var(--green); }
+  details {
+    background: var(--bg1); border: 1px solid var(--bg3); border-radius: 8px;
+    padding: .55rem .9rem; margin: .6rem 0;
+  }
+  summary { cursor: pointer; color: var(--yellow); font-weight: 600; }
+  details[open] summary { margin-bottom: .4rem; }
+  /* stepper */
+  .stepper { background: var(--bg1); border: 1px solid var(--bg3); border-radius: 10px; padding: 1rem; }
+  .stepper .stage {
+    font-family: ui-monospace, monospace; font-size: .9em; white-space: pre;
+    background: var(--bg0); border: 1px solid var(--bg3); border-radius: 8px;
+    padding: .8rem 1rem; overflow-x: auto; min-height: 9.5em;
+  }
+  .stepper .desc { min-height: 3.2em; margin: .6rem 0 .2rem; }
+  .stepper button {
+    background: var(--bg3); color: var(--fg); border: 1px solid var(--grey);
+    border-radius: 6px; padding: .35rem 1.1rem; font-size: 1em; cursor: pointer;
+  }
+  .stepper button:hover { background: var(--bg2); }
+  .stepper button:disabled { opacity: .35; cursor: default; }
+  .stepper .idx { color: var(--grey); margin: 0 .8rem; }
+  .k-red { color: var(--red); } .k-green { color: var(--green); }
+  .k-yellow { color: var(--yellow); } .k-blue { color: var(--blue); }
+  .k-orange { color: var(--orange); } .k-purple { color: var(--purple); }
+  .k-aqua { color: var(--aqua); } .k-grey { color: var(--grey); }
+  svg text { font-family: ui-monospace, monospace; }
+  figcaption { color: var(--grey); font-size: .85em; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Runtime 逐元件 lock-free 升級地圖</h1>
+<p class="lead">
+對象:<code>reference/src/runtime/mini_runtime.rs</code>(行號以它為準)。
+問題只有一個:<b>裡面每一把 Mutex,是「不可避免」還是「第一步的正確選擇」?
+換成 lock-free 要怎麼換、什麼場景才值得換?</b><br>
+配套程式碼:<code>concurrency/mpsc_list</code>(tokio 遠端 wake queue 同款,本頁 §2 的主角)、
+<code>concurrency/mpmc_ring</code>(Vyukov MPMC)。取捨文件:<code>docs/concurrency/mpsc_list.md</code>。
+</p>
+
+<h2 id="sec-map">§0 解剖圖:同步點在哪裡</h2>
+
+<figure>
+<svg viewBox="0 0 880 400" role="img" aria-label="mini_runtime 同步點解剖圖">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#928374"/>
+    </marker>
+  </defs>
+  <!-- block_on loop -->
+  <rect x="20" y="30" width="250" height="330" rx="10" fill="#32302f" stroke="#45403d"/>
+  <text x="145" y="55" text-anchor="middle" fill="#d8a657" font-size="15" font-weight="bold">block_on 執行緒(:299)</text>
+  <text x="145" y="85" text-anchor="middle" fill="#d4be98" font-size="13">① root 醒了就 poll</text>
+  <text x="145" y="110" text-anchor="middle" fill="#d4be98" font-size="13">② 清空 run queue</text>
+  <text x="145" y="135" text-anchor="middle" fill="#d4be98" font-size="13">③ poll reactor(忙0 / 閒20ms)</text>
+  <!-- RootWake -->
+  <rect x="45" y="160" width="200" height="52" rx="8" fill="#282828" stroke="#a9b665"/>
+  <text x="145" y="182" text-anchor="middle" fill="#a9b665" font-size="13" font-weight="bold">RootWake.woken(:254)</text>
+  <text x="145" y="200" text-anchor="middle" fill="#928374" font-size="12">AtomicBool — 已無鎖 ✓</text>
+  <!-- Task -->
+  <rect x="45" y="230" width="200" height="52" rx="8" fill="#282828" stroke="#e78a4e"/>
+  <text x="145" y="252" text-anchor="middle" fill="#e78a4e" font-size="13" font-weight="bold">Task.future(:189)</text>
+  <text x="145" y="270" text-anchor="middle" fill="#928374" font-size="12">Mutex&lt;Option&lt;Pin&lt;Box&gt;&gt;&gt;</text>
+  <!-- sleep cap -->
+  <rect x="45" y="300" width="200" height="46" rx="8" fill="#282828" stroke="#ea6962"/>
+  <text x="145" y="320" text-anchor="middle" fill="#ea6962" font-size="13" font-weight="bold">SLEEP_CAP = 20ms(:173)</text>
+  <text x="145" y="337" text-anchor="middle" fill="#928374" font-size="12">沒有 doorbell 的代價</text>
+
+  <!-- run queue -->
+  <rect x="330" y="30" width="230" height="110" rx="10" fill="#32302f" stroke="#e78a4e" stroke-width="2"/>
+  <text x="445" y="55" text-anchor="middle" fill="#e78a4e" font-size="14" font-weight="bold">run queue(:183)</text>
+  <text x="445" y="78" text-anchor="middle" fill="#d4be98" font-size="12">Mutex&lt;VecDeque&lt;Arc&lt;Task&gt;&gt;&gt;</text>
+  <text x="445" y="100" text-anchor="middle" fill="#928374" font-size="12">形狀:MPSC(wake 多、pop 一)</text>
+  <text x="445" y="122" text-anchor="middle" fill="#a9b665" font-size="12">升級:mpsc_list(§2)</text>
+
+  <!-- reactor -->
+  <rect x="330" y="170" width="230" height="190" rx="10" fill="#32302f" stroke="#e78a4e" stroke-width="2"/>
+  <text x="445" y="195" text-anchor="middle" fill="#e78a4e" font-size="14" font-weight="bold">reactor(:184)Mutex&lt;Reactor&gt;</text>
+  <rect x="350" y="210" width="190" height="60" rx="8" fill="#282828" stroke="#7daea3"/>
+  <text x="445" y="232" text-anchor="middle" fill="#7daea3" font-size="13" font-weight="bold">poller(epoll)</text>
+  <text x="445" y="252" text-anchor="middle" fill="#928374" font-size="11">kernel 本身執行緒安全(§3)</text>
+  <rect x="350" y="282" width="190" height="60" rx="8" fill="#282828" stroke="#d3869b"/>
+  <text x="445" y="304" text-anchor="middle" fill="#d3869b" font-size="13" font-weight="bold">wakers: FdRegistry&lt;Waker&gt;</text>
+  <text x="445" y="324" text-anchor="middle" fill="#928374" font-size="11">真正的共享狀態(§4)</text>
+
+  <!-- outside world -->
+  <rect x="640" y="30" width="220" height="110" rx="10" fill="#32302f" stroke="#45403d"/>
+  <text x="750" y="55" text-anchor="middle" fill="#89b482" font-size="14" font-weight="bold">其他執行緒</text>
+  <text x="750" y="80" text-anchor="middle" fill="#d4be98" font-size="12">Waker::wake()(:196)</text>
+  <text x="750" y="102" text-anchor="middle" fill="#d4be98" font-size="12">Handle::spawn(:210)</text>
+  <text x="750" y="124" text-anchor="middle" fill="#928374" font-size="12">Waker 是 Send+Sync:契約!</text>
+
+  <rect x="640" y="190" width="220" height="90" rx="10" fill="#32302f" stroke="#45403d"/>
+  <text x="750" y="215" text-anchor="middle" fill="#7daea3" font-size="14" font-weight="bold">kernel</text>
+  <text x="750" y="240" text-anchor="middle" fill="#d4be98" font-size="12">epoll_wait / epoll_ctl</text>
+  <text x="750" y="262" text-anchor="middle" fill="#928374" font-size="12">可並發,無需 user-space 鎖</text>
+
+  <!-- arrows -->
+  <line x1="662" y1="90" x2="562" y2="80" stroke="#928374" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="612" y="72" text-anchor="middle" fill="#928374" font-size="11">push(搶鎖)</text>
+  <line x1="330" y1="85" x2="272" y2="100" stroke="#928374" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="300" y="78" text-anchor="middle" fill="#928374" font-size="11">pop</text>
+  <line x1="272" y1="135" x2="330" y2="230" stroke="#928374" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="280" y="190" text-anchor="middle" fill="#928374" font-size="11">arm/wait</text>
+  <line x1="562" y1="240" x2="640" y2="235" stroke="#928374" stroke-width="1.6" marker-end="url(#arr)"/>
+</svg>
+<figcaption>橘框 = Mutex(兩把)/ 綠框 = 已是 atomic / 藍 = kernel 管的 / 紫 = 真正需要同步設計的共享狀態。</figcaption>
+</figure>
+
+<h2 id="sec-frame">§1 決策框架:換之前先問三題</h2>
+<ol>
+  <li><b>誰在摸它?</b>(單執行緒獨佔 → 鎖是型別稅;跨執行緒 → 才有題目)</li>
+  <li><b>是「契約逼的」還是「實作選的」?</b>(<code>Waker: Send+Sync</code> 是 std 契約,
+      run queue 的執行緒安全躲不掉;reactor 的大鎖只是實作方便)</li>
+  <li><b>換了買到什麼?</b>先量再換——低競爭時 Mutex 常常更快:</li>
+</ol>
+<table>
+  <tr><th>操作</th><th>量級</th><th>備註</th></tr>
+  <tr><td>uncontended Mutex lock+unlock</td><td>~20 ns</td><td>一來一回各一次 CAS,無 syscall</td></tr>
+  <tr><td>contended CAS(cache line 轉移)</td><td>~40–100 ns</td><td>lock-free 也逃不掉的物理成本</td></tr>
+  <tr><td>futex 陷核(鎖排隊)</td><td>~1–2 µs</td><td>Mutex 高競爭時的真正代價</td></tr>
+  <tr><td>Box 配置(mpsc_list 每 push)</td><td>~20–50 ns</td><td>lock-free 的隱藏帳單之一</td></tr>
+  <tr><td>epoll_wait 空轉一圈</td><td>~1 µs</td><td>syscall 底價</td></tr>
+  <tr><td>SLEEP_CAP 保底(mini_runtime)</td><td>20 ms</td><td>喚醒最壞延遲——本頁最大的數字</td></tr>
+</table>
+<div class="callout">
+面試句:<i>"The first question isn't how to remove the lock — it's whether anyone
+is actually waiting on it. An uncontended Mutex is ~20ns; a contended cache line
+is ~100ns <b>either way</b>. Lock-free buys you no-syscall worst case and
+no-blocking guarantees, not free throughput."</i>
+</div>
+
+<h2 id="sec-queue">§2 run queue <span class="tag mutex">Mutex</span> → mpsc_list</h2>
+<div class="card">
+  <div class="grid2">
+    <div class="cell"><b>現況(:183)</b><br>
+      <code>queue: Mutex&lt;VecDeque&lt;Arc&lt;Task&gt;&gt;&gt;</code><br>
+      push:任何執行緒的 <code>wake()</code>(:198)、<code>spawn()</code>(:215)<br>
+      pop:只有 block_on 執行緒(:317)→ 形狀是 <b>MPSC</b></div>
+    <div class="cell"><b>為什麼躲不掉「某種」同步</b><br>
+      <code>std::task::Waker</code> 型別是 <code>Send + Sync</code>——契約允許
+      waker 被 clone 到任何執行緒去 wake(<code>file_io_offload</code> 的 worker
+      就這麼做)。單執行緒 <code>RefCell</code> 版直接不合法。</div>
+    <div class="cell"><b>lock-free 怎麼換</b><br>
+      換 <code>concurrency::mpsc_list</code>(Vyukov):push = 一個 swap + 一個
+      store,<b>wait-free、不會失敗</b>;pop 單 consumer 免 CAS。
+      <code>Inconsistent</code>(縫)→ yield 重試,見 §6 stepper。</div>
+    <div class="cell"><b>什麼場景才值得</b><br>
+      ①wake 頻率高且來自多條執行緒(timer/IO/worker 同時轟)
+      ②wake 端延遲敏感(不能被 futex 排隊卡住)
+      ③喚醒路徑要「絕不阻塞」的硬保證(訊號處理、audio callback)。
+      單執行緒 runtime + 低 wake 率?<b>留著 Mutex,它是冷路徑。</b></div>
+  </div>
+  <div class="callout ok">
+  生態對照:tokio 的 run queue 是三層——per-worker 固定大小 local ring
+  (單擁有者 + 竊取者,Chase-Lev 家族)+ LIFO slot(atomic,cache 熱度)
+  + <b>全域 inject queue 至今就是一把 Mutex</b>(冷路徑);跨執行緒 remote wake
+  走的正是 Vyukov intrusive MPSC——<code>mpsc_list</code> 的原型。
+  「tokio 裡也有 Mutex」是面試裡最好用的一句話:鎖不是髒字,熱路徑才是戰場。
+  </div>
+</div>
+
+<h2 id="sec-poller">§3 poller <span class="tag mutex">Mutex</span> → 其實 kernel 已經幫你上好了</h2>
+<div class="card">
+  <div class="grid2">
+    <div class="cell"><b>現況(:184, :336)</b><br>
+      <code>reactor: Mutex&lt;Reactor&gt;</code>,而且 ③ 是<b>握著鎖呼叫
+      <code>poller.wait(20ms)</code></b>——抱著鎖睡覺。</div>
+    <div class="cell"><b>為什麼這裡它無害</b><br>
+      arm/disarm 只在 poll task 時呼叫,而 poll 只發生在 block_on 執行緒
+      ——<b>單執行緒獨佔,zero contention</b>。這把鎖是讓
+      <code>Arc&lt;Inner&gt;</code> 過 <code>Sync</code> 的型別稅。</div>
+    <div class="cell"><b>lock-free 怎麼換</b><br>
+      關鍵事實:<b>epoll 是 kernel 保證執行緒安全的</b>——
+      <code>epoll_ctl</code> 可與另一條執行緒的 <code>epoll_wait</code> 並發,
+      syscall 層根本不需要 user-space 鎖。要拆的只有 Rust 側物件:
+      poller 本體用 <code>&amp;self</code> + raw fd(它天生 Sync),
+      <b>絕不把任何鎖握過 <code>wait()</code></b>。</div>
+    <div class="cell"><b>什麼場景才值得</b><br>
+      多執行緒 runtime(多 worker 同時 arm/disarm)。thread-per-core
+      (monoio/glommio)反向操作:<code>Handle</code> 做成 <code>!Send</code>,
+      整把鎖連型別稅一起消失——<code>RefCell</code> 就夠。</div>
+  </div>
+</div>
+
+<h2 id="sec-table">§4 interest table <span class="tag mutex">Mutex 裡的紫色部分</span> → sharded slab + per-entry 狀態</h2>
+<div class="card">
+  <div class="grid2">
+    <div class="cell"><b>現況(:179)</b><br>
+      <code>wakers: FdRegistry&lt;Waker&gt;</code>(token→waker 的世代 slot map),
+      跟 poller 關在同一把大鎖裡。arm 寫(:227)、收割讀(:343)。</div>
+    <div class="cell"><b>這才是真正的共享狀態</b><br>
+      多執行緒下 arm(poll 側)與收割(reactor 側)在不同執行緒——
+      這不是型別稅,是真同步需求。大鎖的問題:每個 fd 的 arm 都跟
+      <b>所有</b> fd 的收割互斥,N 個連線共享一個鎖倉。</div>
+    <div class="cell"><b>lock-free(-ish)怎麼換</b><br>
+      tokio 的 <code>ScheduledIo</code> slab:①slot 尋址無鎖(index+generation,
+      <code>fd_registry</code> 的世代招)②readiness 是 per-entry
+      <code>AtomicUsize</code>(CAS 更新)③waker 槽用 per-entry 小鎖
+      (waker clone 不是原子操作,鎖窄到只剩它)。
+      大鎖 → 每個 entry 自己的同步:<b>競爭從 O(全部) 降到 O(同一個 fd)</b>。</div>
+    <div class="cell"><b>什麼場景才值得</b><br>
+      連線數 × worker 數都大(萬級 fd、多 worker 同時 arm)。
+      幾十個 fd 的嵌入式 bridge?大鎖完全夠——這正是 mini_runtime 的取捨。</div>
+  </div>
+  <div class="callout">
+  抽象的教訓:「把一把大鎖換成無鎖」通常是假命題,真答案是
+  <b>「把一把大鎖拆成 N 個 per-entry 的小同步點」</b>——sharding 的極限形式。
+  跟 <code>sharded_map</code>(per-shard Mutex)、<code>hw_bridge</code> sharded
+  server(per-conn shard)是同一條公理:縮小共享,而不是消滅鎖。
+  </div>
+</div>
+
+<h2 id="sec-task">§5 Task.future <span class="tag mutex">Mutex</span> → 原子狀態機;RootWake <span class="tag atomic">已無鎖</span></h2>
+<div class="card">
+  <div class="grid2">
+    <div class="cell"><b>現況(:189, :321)</b><br>
+      <code>future: Mutex&lt;Option&lt;Pin&lt;Box&lt;dyn Future&gt;&gt;&gt;&gt;</code>——
+      保證同一時刻只有一人 poll 這個 task;<code>None</code> = 已完成,
+      之後的 spurious wake 變 no-op。</div>
+    <div class="cell"><b>lock-free 怎麼換</b><br>
+      tokio 的 task 狀態是一顆 <code>AtomicUsize</code> 位元場狀態機:
+      <code>IDLE / RUNNING / NOTIFIED / COMPLETE</code> 全走 CAS。
+      殺手級好處不是省鎖,是解掉「<b>poll 進行中又被 wake</b>」:
+      CAS RUNNING→NOTIFIED 記下這筆,poll 完看到 NOTIFIED 就自我重排——
+      wake 不丟、也不用把 waker 塞回鎖裡。</div>
+    <div class="cell"><b>什麼場景才值得</b><br>
+      多 worker 搶著 poll 同一批 task(work-stealing)時是熱路徑必需品。
+      單執行緒 executor 裡這把鎖永遠 uncontended——mini_runtime 留 Mutex
+      是正確的第一步。</div>
+    <div class="cell"><b>RootWake.woken(:254)</b><br>
+      <code>AtomicBool</code> + <code>swap(AcqRel)</code>——已經是 lock-free,
+      而且是「<b>訊號帶狀態</b>」的最小形式:wake 先於 check 不會丟
+      (對照 executor 的 park token、eventfd 的 8-byte 計數,同一個靈魂)。</div>
+  </div>
+</div>
+
+<h2 id="sec-doorbell">§6 醒來的路:SLEEP_CAP <span class="tag gap">20ms</span> → eventfd doorbell</h2>
+<div class="card">
+  <p>mini_runtime 最大的延遲不在任何鎖裡:remote wake 只是把 task 放進 queue,
+  <b>沒有任何機制打斷 ③ 正在睡的 <code>epoll_wait</code></b> → 最壞等 20ms(:173 的自白)。
+  升級不是換資料結構,是<b>把 wake 接進 poller 的事件宇宙</b>:
+  eventfd 註冊進同一個 epoll,remote wake 時寫 8 bytes → <code>epoll_wait</code>
+  立刻返回。<code>event_loop.rs</code> 的 <code>WakeHandle</code>/WAKE_TOKEN
+  就是完整示範(你 7/20 深讀過的 qa_eventfd_doorbell)。</p>
+  <p class="lead">升級後的完整多執行緒圖:wake = <code>mpsc_list.push</code>(wait-free)
+  + eventfd 寫一下(有 doorbell 才需要)→ 喚醒延遲從「最壞 20ms」變「一次 syscall」。
+  queue 換無鎖但不裝 doorbell = 白換:延遲被 20ms 蓋住,誰也看不到你的 nanoseconds。</p>
+</div>
+
+<h2 id="sec-stepper">§7 Stepper:mpsc_list 的縫,一步一步看</h2>
+<p>兩個 producer(P1、P2)各 push 一個節點,consumer(C)在中間亂入。
+重點在 <b>P1 停在佔位與發布之間</b>的那幾步。</p>
+<div class="stepper" id="stepper">
+  <div class="stage" id="st-stage"></div>
+  <div class="desc" id="st-desc"></div>
+  <div>
+    <button id="st-prev">◀ 上一步</button>
+    <span class="idx" id="st-idx"></span>
+    <button id="st-next">下一步 ▶</button>
+  </div>
+</div>
+
+<h2 id="sec-chain">§8 追問鏈(面試官會這樣一路挖)</h2>
+<details><summary>L1:「你說 run queue 可以換 lock-free MPSC——為什麼不用你剛寫的 MPMC ring?」</summary>
+<p>①形狀不對:pop 只有 executor 一人,MPMC 的 head 端 CAS 是白付的錢;
+②bounded 是錯的性質:wake 絕不能因為「佇列滿」而失敗或阻塞——丟 wake = task 永眠。
+unbounded MPSC 的記憶體帳由上游保證(task 數有界)。選型先看形狀與失敗語意,再看速度。</p></details>
+<details><summary>L2:「mpsc_list 的 push 為什麼 wait-free,而 mpmc_ring 的 push 只是 lock-free(-ish)?」</summary>
+<p>swap 是無條件 RMW——硬體保證一次完成,沒有失敗路徑,每個 push 恰好兩步,
+與競爭者數量無關 ⇒ wait-free。CAS 是有條件 RMW——輸了要重試,理論上可以
+一直輸 ⇒ 至多 lock-free。而兩者其實都卡同一道縫(佔位≠發布),
+所以嚴格說都不滿足 lock-free 的全系統進度定義:lockless 是誠實的用詞。</p></details>
+<details><summary>L3:「你說單 consumer 免 reclamation——多 consumer 到底哪裡壞掉?」</summary>
+<p>釋放者不唯一後,「我越過的節點沒人再碰」不再成立:C1 讀著節點 X 時,
+C2 可能已經越過並 free 了 X——use-after-free。這正是 epoch(crossbeam)/
+hazard pointer 存在的理由:讓「還有人在讀」變成可觀測。單 consumer 是用
+型別系統(<code>Consumer: !Clone</code> + <code>&amp;mut self</code>)把整台機器拆掉。</p></details>
+<details><summary>L4:「interest table 用 per-entry 原子狀態——waker 那格為什麼還是要小鎖?」</summary>
+<p><code>Waker</code> 是兩個字寬(data + vtable)還帶 clone/drop 副作用,
+不是一條 CAS 換得掉的 POD。tokio 的做法:readiness(usize 位元場)走 CAS,
+waker 槽用窄鎖——<b>混合設計才是常態</b>,「全 lock-free」是投影片,不是工程。</p></details>
+<details><summary>L5:「如果面試官逼你:這個 runtime 全面 lock-free 化,你第一個動哪裡?」</summary>
+<p>反問負載形狀(先 clarify):幾條執行緒?wake 率?fd 數?然後照順序:
+①先裝 eventfd doorbell(20ms → 1 syscall,最大的數字先殺)
+②wake 熱就換 run queue = mpsc_list ③fd 多 worker 多才拆 interest table
+④task 狀態機留到 work-stealing 才有意義。每一步都「量了再動」——
+p99 沒動的優化是負分。</p></details>
+
+<h2 id="sec-quiz">§9 Self-quiz(先答再翻)</h2>
+<details><summary>Q1:mini_runtime 的兩把 Mutex,哪一把在單執行緒下其實從不競爭?為什麼還是需要它?</summary>
+<p>reactor 那把(:184)。arm/收割全在 block_on 執行緒。需要它是因為
+<code>Arc&lt;Inner&gt;</code> 要跨執行緒(Handle/Waker),型別系統要求 Sync
+——「型別稅」。拆法:承諾 thread-per-core(<code>!Send</code>)用 RefCell,
+或多執行緒化時拆成 per-entry 同步。</p></details>
+<details><summary>Q2:run queue 的執行緒安全是誰逼的?能不能用 RefCell?</summary>
+<p><code>Waker: Send + Sync</code> 的 std 契約逼的——wake 可以來自任何執行緒。
+RefCell 不合法(除非整個 executor 走 !Send 設計且不外洩 waker,
+但 std Waker 做不到「不外洩」)。</p></details>
+<details><summary>Q3:「queue 換成 lock-free 之後 wake 延遲還是很爛」——最可能的原因?</summary>
+<p>doorbell 沒裝:runtime 正睡在 <code>epoll_wait(20ms)</code> 裡,
+push 再快也要等它自己醒。先修最大的數字(20ms),再修 ns 級的。</p></details>
+<details><summary>Q4:mpmc_ring 為什麼 cap=1 不合法?一句話。</summary>
+<p>「已發布」(pos+1)與「下一圈輪空」(pos+cap)在 cap=1 時同值,
+三態塌縮 → producer 會把未消費的資料當空槽覆寫。</p></details>
+<details><summary>Q5:tokio 明明是 lock-free 的代表作,哪裡還留著 Mutex?這告訴你什麼?</summary>
+<p>全域 inject queue、ScheduledIo 的 waker 槽(per-entry 窄鎖)、各種冷路徑。
+教訓:工程上的答案是「熱路徑無鎖、冷路徑用鎖、共享縮到最小」,
+不是意識形態的全面無鎖。</p></details>
+
+<script>
+(function () {
+  // 節點圖:S=stub, A=P1 的節點, B=P2 的節點
+  const steps = [
+    {
+      d: "初始:stub S 一人;head(C 腳下)與 tail(佔位點)都指著 S。",
+      g: ["  head ─▶ [S]&#9666;─ tail", "  S.next = ∅", "", "  P1: 準備 push(A)", "  P2: 準備 push(B)", "  C : (等著 pop)"]
+    },
+    {
+      d: "P1 佔位:tail.swap(A) —— 全世界立刻看到 tail=A,但 S.next 還是 ∅。縫開了。",
+      g: ["  head ─▶ [S]      [A]&#9666;─ tail", "  S.next = ∅   ⚠ 鏈是斷的", "", "  <b class='k-red'>P1: swap 完成,store 還沒做(縫!)</b>", "  P2: 準備 push(B)", "  C : (等著 pop)"]
+    },
+    {
+      d: "P1 被 OS deschedule(就停在縫裡)。P2 照常佔位:tail.swap(B),拿到 prev=A。",
+      g: ["  head ─▶ [S]      [A]      [B]&#9666;─ tail", "  S.next = ∅   A.next = ∅", "", "  <b class='k-red'>P1: 睡死在縫裡</b>", "  <b class='k-yellow'>P2: prev=A,準備接鏈</b>", "  C : (等著 pop)"]
+    },
+    {
+      d: "P2 發布:A.next.store(B)。注意:B 接上了 A,但 A 還沒接上 S——P2 的工作做完了,鏈仍然斷在 P1 手上。",
+      g: ["  head ─▶ [S]      [A] ─▶ [B]&#9666;─ tail", "  S.next = ∅   ⚠ 斷點在 S→A", "", "  <b class='k-red'>P1: 還在縫裡</b>", "  <b class='k-green'>P2: 完工退場</b>", "  C : (等著 pop)"]
+    },
+    {
+      d: "C 來 pop:head=S,S.next==∅…但 tail(=B)≠ head(=S) ⇒ 回 Inconsistent。「佇列裡有兩個元素,我一個都拿不到」——這就是縫的語意。",
+      g: ["  head ─▶ [S]      [A] ─▶ [B]&#9666;─ tail", "  S.next = ∅", "", "  <b class='k-red'>P1: 還在縫裡</b>", "  P2: (退場)", "  <b class='k-purple'>C : pop() → Inconsistent(yield 重試)</b>"]
+    },
+    {
+      d: "P1 醒來,補上發布:S.next.store(A)。鏈瞬間全通:S→A→B。縫關上。",
+      g: ["  head ─▶ [S] ─▶ [A] ─▶ [B]&#9666;─ tail", "", "", "  <b class='k-green'>P1: store 完成,退場</b>", "  P2: (退場)", "  C : (再試一次)"]
+    },
+    {
+      d: "C pop:S.next=A ⇒ head 前進到 A、free S、take A.val ⇒ Item。A 值被取走,原地變成新 stub。",
+      g: ["  head ─▶ [A*] ─▶ [B]&#9666;─ tail   (S 已 free)", "  * A 的值已取走 = 新 stub", "", "  C : <b class='k-green'>pop() → Item(P1 的值)</b>"]
+    },
+    {
+      d: "C 再 pop:A.next=B ⇒ 前進、free A、take B.val ⇒ Item。之後 next=∅ 且 tail==head ⇒ Empty(真空,不是縫)。",
+      g: ["  head ─▶ [B*]&#9666;─ tail   (S、A 已 free)", "", "", "  C : pop() → Item(P2 的值)", "  C : pop() → <b class='k-blue'>Empty</b>(tail==head:真的空了)"]
+    }
+  ];
+  let i = 0;
+  const stage = document.getElementById("st-stage");
+  const desc = document.getElementById("st-desc");
+  const idx = document.getElementById("st-idx");
+  const prev = document.getElementById("st-prev");
+  const next = document.getElementById("st-next");
+  function render() {
+    stage.innerHTML = steps[i].g.join("\n");
+    desc.innerHTML = "<b>Step " + i + "</b> — " + steps[i].d;
+    idx.textContent = (i + 1) + " / " + steps.length;
+    prev.disabled = i === 0;
+    next.disabled = i === steps.length - 1;
+  }
+  prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
+  next.addEventListener("click", () => { if (i < steps.length - 1) { i++; render(); } });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft" && i > 0) { i--; render(); }
+    if (e.key === "ArrowRight" && i < steps.length - 1) { i++; render(); }
+  });
+  render();
+})();
+</script>
+
+</main>
+</body>
+</html>

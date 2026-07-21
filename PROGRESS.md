@@ -34,6 +34,8 @@ SCHEDULE 裁決:inplace_leetcode 選配暖手;graph / trie / tree **本輪砍**�
 | graph | ☐ | ☐ | — |
 | trie | ☐ | ☐ | — |
 | tree | ☐ | ☐ | — |
+| mpmc_ring(7/21 加產:MPMC 保險題,spsc 後續) | ☐ | ☐ | ☐ ★ |
+| mpsc_list(7/21 加產:tokio remote-wake queue;縫顯式化) | ☐ | ☐ | — |
 
 ### deep-dive(讀懂能講即可,不手搓)
 
@@ -43,6 +45,8 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 模組 | 讀 |
 |---|---|
 | arena_lockfree | ☐ |
+| mpmc_list(Michael–Scott;7/21 加產:help vs 縫、reclamation 攤開講) | ☐ |
+| ws_deque(Chase–Lev;7/21 加產:SB fence 第二實戰位、loom 抓洞實錄) | ☐ |
 | epoll_sys | ☐ |
 | event_loop | ☑ 2026-07-20(原「通勤略讀」升級為桌前深讀 Q&A:WAKE_TOKEN 旁路/woken 字條/Arc&lt;EventFd&gt; 兩張臉;沉澱 `qa_eventfd_doorbell.html`) |
 | tcp_echo | ☐ |

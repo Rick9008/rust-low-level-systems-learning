@@ -13,6 +13,14 @@ pub mod arena_lockfree;
 // JD 本尊圖:訊號源 → SPSC → spin-then-park 消費(掛牌握手 = SeqCst 的實戰位)
 pub mod signal_pipeline;
 pub mod spsc_ring;
+// spsc 的兩刀升級:CAS 取號 + per-slot seq(佔位/發布分家)
+pub mod mpmc_ring;
+// 多生產單消費的 unbounded 連結串列(tokio 遠端 wake queue 同款;含「縫」的顯式 API)
+pub mod mpsc_list;
+// Michael–Scott unbounded MPMC(佔位=發布合一 ⇒ 正式 lock-free;reclamation 攤開講)
+pub mod mpmc_list;
+// Chase–Lev work-stealing deque(SeqCst fence 的第二個實戰位;tokio/rayon per-worker queue)
+pub mod ws_deque;
 
 // stage 4.5:同步策略對照組——同一個資料結構,鎖版/無鎖版並排
 // (誰值得無鎖、誰上鎖就夠、無鎖版為何有時不存在:docs/concurrency/ds_sync.md)

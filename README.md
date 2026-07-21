@@ -58,7 +58,12 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 
 次優先(CoderPad 做得了、一般面試常見,但非 TPS 核心考點,時間有限就往後排):
 `inplace_leetcode`(27/75/80/88/189 五道 in-place 題,`iter_mutate` 的實戰應用)、
-`graph`(BFS / DFS / Kahn's topo / Dijkstra)、`trie`、`tree`。
+`graph`(BFS / DFS / Kahn's topo / Dijkstra)、`trie`、`tree`;
+**lock-free 佇列家族續集**(spsc_ring 的後續題保險,內線情報說沒考過但練過不虧):
+`mpmc_ring`(Vyukov bounded MPMC:CAS 取號 + per-slot seq,三層全有)、
+`mpsc_list`(Vyukov intrusive MPSC = tokio 遠端 wake queue,讀+drill;
+「縫」= `PopResult::Inconsistent` 顯式化)——runtime 元件的 lock-free
+升級地圖見 `html_p/runtime-lockfree-upgrade-map.html`。
 
 優先級練完 → `rehearsals/` 計時彩排(見下方「rehearsals 使用法」)。
 
@@ -69,6 +74,11 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 
 - `arena_lockfree`:arena + generation-tagged index 的 lock-free stack,
   示範 index-ABA 與 generation 解法(`spsc_ring` 的延伸)
+- `mpmc_list`:Michael–Scott unbounded MPMC(教學版)——「佔位=發布合一
+  ⇒ 正式 lock-free」與 help 機制;retired 節點 Drop 才回收,把
+  reclamation 問題攤開講
+- `ws_deque`:Chase–Lev work-stealing deque(教學版)——SeqCst fence 的
+  第二個實戰位(SB litmus);loom 抓出論文版 Relaxed 降 bottom 的洞的實錄
 - `ds_sync`:同步策略對照組——同一個結構的鎖版/無鎖版並排:
   `arena_locked`(Mutex slab,對照 arena_lockfree 看機關怎麼塌縮)、
   `dsu_lockfree`(CAS parent + 隨機 priority + path halving;loom 驗證)、
