@@ -24,6 +24,9 @@ pub mod mpmc_list;
 // Chase–Lev work-stealing deque(SeqCst fence 的第二個實戰位;tokio/rayon per-worker queue)
 pub mod ws_deque;
 
+// 讀多寫少的快照發布(std 版 poor-man's ArcSwap;零 unsafe,光譜「快照」站實體)
+pub mod rcu_snapshot;
+
 // stage 4.5:同步策略對照組——同一個資料結構,鎖版/無鎖版並排
 // (誰值得無鎖、誰上鎖就夠、無鎖版為何有時不存在:docs/concurrency/ds_sync.md)
 pub mod ds_sync;

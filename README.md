@@ -80,6 +80,9 @@ lock-free 升級地圖見 `html_p/runtime-lockfree-upgrade-map.html`。
   reclamation 問題攤開講
 - `ws_deque`:Chase–Lev work-stealing deque(教學版)——SeqCst fence 的
   第二個實戰位(SB litmus);loom 抓出論文版 Relaxed 降 bottom 的洞的實錄
+- `rcu_snapshot`:讀多寫少的快照發布(std 版 poor-man's ArcSwap,零 unsafe)
+  ——Arc 計數 = 免費寬限期;「load 指標 + 計數 +1 非原子」= std 沒有
+  AtomicArc 的原因;並發 trie/graph 的工程解就是這個形狀
 - `ds_sync`:同步策略對照組——同一個結構的鎖版/無鎖版並排:
   `arena_locked`(Mutex slab,對照 arena_lockfree 看機關怎麼塌縮)、
   `dsu_lockfree`(CAS parent + 隨機 priority + path halving;loom 驗證)、

@@ -48,6 +48,7 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | mpmc_list(Michael–Scott;7/21 加產:help vs 縫、reclamation 攤開講) | ☐ |
 | ws_deque(Chase–Lev;7/21 加產:SB fence 第二實戰位、loom 抓洞實錄) | ☐ |
 | mpsc_ring(7/21 加產:退化表實體——head 非原子;drill 由 mpmc_ring 第 5 問覆蓋) | ☐ |
+| rcu_snapshot(7/21 加產:RCU/ArcSwap 模式 std 實體——免費寬限期、無 AtomicArc 的原因) | ☐ |
 | epoll_sys | ☐ |
 | event_loop | ☑ 2026-07-20(原「通勤略讀」升級為桌前深讀 Q&A:WAKE_TOKEN 旁路/woken 字條/Arc&lt;EventFd&gt; 兩張臉;沉澱 `qa_eventfd_doorbell.html`) |
 | tcp_echo | ☐ |
