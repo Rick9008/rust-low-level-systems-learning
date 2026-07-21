@@ -17,7 +17,7 @@ SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ri
 | 4 | ring_buffer | ☑ 2026-07-16 | ☑ 2026-07-16 | — | 7 tests 全開綠(含 oracle+白箱 guard);challenge = 彩排 a |
 | 5 | spsc_ring | ☐ | ☑ 2026-07-18 | ☑ 2026-07-18 ★ | challenge 空白手搓綠(12 測試,含 DropSpy 驗 Drop);Miri 單執行緒 UB + loom 並發窮舉三重驗過;空白 20 分 ×3:7/19 ✗(35 編譯錯;Ordering 全對,傷在 use 塊/impl&lt;T&gt;/&amp;self+UnsafeCell,五類清單見 7/19 journal)、7/22(目標 ≤5 錯)、7/26。7/20 開機默寫(讀卡→默寫→修綠,非冷測):35→12→3→1→0,三類肌肉傷全清,剩拼字/分號/turbofish 手滑(存底 commit 5387a04 scratch/skeleton.rs) |
 | 6 | executor | ☐ | ☑ 2026-07-18 | ☐ ★ | drill 填綠(commit 538c624;檔內 `todo!()` 是註解掉的規格提示);challenge 空白 7/21 晚加碼場(自 7/22 拉回) |
-| 7 | lru | ☐ | ☐ | ☐ ★ | 降級:超前才寫 |
+| 7 | lru | ☐ | ☐(3/3 綠,2 洞) | ☐ ★ | 7/22 凌晨加時場:oracle 3/3 綠但 review 抓 2 洞(**連三場「零紅≠零洞」**):①put 淘汰路徑缺 map.insert(新 key)+promote——新 key 查不到/len 縮水/下次 put 反淘汰新 key ②unlink 頭/尾分支殘留鄰居髒指標(暫被 push_front 先 unlink 設計蓋住)。**7/22 白天公司修,紅測先行×2**,TODO 已標檔內 |
 | 8 | fd_registry | ☑ 2026-07-19 | ☑ 2026-07-20(凌晨) | — | 6 測試全綠(stale/forged token 含);讀+概念 Q&A 全打通(epoll 三結構/generation/雙 waker);彩排 e2:7/21、7/24 |
 | 9 | hw_bridge(protocol+framer) | ☐ | ☑ 2026-07-19 | ~~☐ ★~~ | 10 測試全開綠(含壓實 counterexample,red→green 驗過);standalone challenge 砍——彩排 c 即 challenge |
 | 10 | dsu | ☐ | ☐ | ☐ ★ | **本輪砍**(doc 零訊號) |
@@ -32,7 +32,7 @@ SCHEDULE 裁決:inplace_leetcode 選配暖手;graph / trie / tree **本輪砍**�
 |---|---|---|---|
 | inplace_leetcode | ☐ | — | — |
 | graph | ☐ | ☐ | — |
-| trie | ☐ | ☐ | — |
+| trie | ☐ | ☑ 2026-07-21(深夜) | — |
 | tree | ☐ | ☐ | — |
 | mpmc_ring(7/21 加產:MPMC 保險題,spsc 後續) | ☐ | ☐ | ☐ ★ |
 | mpsc_list(7/21 加產:tokio remote-wake queue;縫顯式化) | ☐ | ☐ | — |

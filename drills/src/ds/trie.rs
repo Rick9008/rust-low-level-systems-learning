@@ -44,13 +44,31 @@ impl Trie {
     /// 並接上(新索引 = push 前的 nodes.len())。走完把終點 is_end = true。
     /// O(L)。注意:空字串也合法(root 自己標 is_end)。
     pub fn insert(&mut self, word: &str) {
-        todo!("spec: 沿路徑走,缺就配;終點 is_end = true")
+        // todo!("spec: 沿路徑走,缺就配;終點 is_end = true")
+        let mut cur = 0;
+        for ch in word.chars() {
+            let idx = Self::idx(ch);
+            if self.nodes[cur].children[idx].is_none() {
+                let node_idx = self.nodes.len();
+                self.nodes.push(Node::new());
+                self.nodes[cur].children[idx] = Some(node_idx);
+            }
+
+            cur = self.nodes[cur].children[idx].expect("Invariant: we just insert this.");
+        }
+        self.nodes[cur].is_end = true;
     }
 
     /// spec:沿 s 走到底,回終點節點索引;任一步斷掉回 None。O(L)。
     /// 提示:`self.nodes[cur].children[Self::idx(c)]?`(? 對 Option 直接用)。
     fn walk(&self, s: &str) -> Option<usize> {
-        todo!("spec: 從 root(0) 沿字元走,斷掉 None")
+        // todo!("spec: 從 root(0) 沿字元走,斷掉 None")
+        let mut cur = 0;
+        for ch in s.chars() {
+            let idx = Self::idx(ch);
+            cur = self.nodes[cur].children[idx]?
+        }
+        Some(cur)
     }
 
     pub fn contains(&self, word: &str) -> bool {
@@ -82,7 +100,7 @@ mod tests {
 
     /// boundary:重疊前綴共享節點;詞 vs 前綴之辨。
     #[test]
-    #[ignore = "填完 insert/walk 後移除"]
+    // #[ignore = "填完 insert/walk 後移除"]
     fn overlap_and_word_vs_prefix() {
         let mut t = Trie::new();
         t.insert("app");
@@ -97,7 +115,7 @@ mod tests {
 
     /// boundary:空字串與單字元。
     #[test]
-    #[ignore = "填完 insert/walk 後移除"]
+    // #[ignore = "填完 insert/walk 後移除"]
     fn empty_string_and_single_char() {
         let mut t = Trie::new();
         assert!(!t.contains(""));
