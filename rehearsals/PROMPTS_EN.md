@@ -443,7 +443,7 @@ logging call must never block. Design the agent's buffering and shipping.
     2. drop the oldest data
     3. just return Err to not write this data
     if we cannot drop the data:
-    Use unbounded queue for the logs to line up, but it might cost too many memory, we might can swap to disk?
+    Use unbounded queue for the logs to line up, but it might cost too many memory(the log might goes very very large when remote disconnect a day(TB level, 2MB *60*3600*24)), we might can swap to disk?
     To clarify this to think of the back-pressure policy.
     And I will use UDP in processes side so that it won't block the logging call
     Or we can provide a async tcp connection task interface for logging call side.
@@ -457,20 +457,29 @@ logging call must never block. Design the agent's buffering and shipping.
 
 Let looks into the assumption:
 we make process less than 1000.
-10^3 * 1MB(thread size) = 0.1GB
+10^3 * 1MB(thread size) = 1GB
 the data rate is 200 Hz
 a log size is 1KB
 200 * 1KB = 200KB per seconds for a process
 200 KB * 1000 = 200 MB per seconds for all processes
-so the data throughput we need to second to remote is 200 MB per seconds
-and 200 MB / 1 KB = 200*10^3 = 2 ^ 10^5 logs we need to handle 1 second
+so the data throughput we need to second to remote is 200 MB per seconds, too large, take lower Hz
+
+the data rate is 2 Hz
+then it will be 2MB per seoncds.
 
 I will use per process queue for different process to send the data, then we can use spsc ring to handle all the data.
-We can use UDP for those processes send their data.
-And we can drop oldest data in this log shipper.
+~~We can use UDP for those processes send their data.~~ -> should not discuss here, we only focus on buffering and shipping
+Because we don't block the log func and network flake in minutes, we can drop oldest data in this log shipper.
 And we use TCP connection to send data to remote collector, and we need to recreate the tcp connection in ourself.
-But I'm not sure about the UDP interface, if we really have time to handle udp side, I need little time to google search and learn it.
+~~But I'm not sure about the UDP interface, if we really have time to handle udp side, I need little time to google search and learn it.~~
 Ok, I'll start to code with the spsc ring side.
+
+## Q5 for supplementary question
+The network flakes a few times a day, from seconds to minimum, how long should we assume, i guess it's 60s
+then 2 MB * 60 = 0.12 GB, then it can put all in the memory!
+The capacity is 0.12GB
+we can use bounded ring for the logs with in 0.12GB and drop-oldest and counter for the drops.
+
 
 > **詳批(7/21,逐問;取代先前簡批)** — 診斷總綱:五問**類別**你幾乎全開了
 > (4/5),漏的是每一問的**結帳條件**——問了 ≠ 結清。結帳表見
@@ -534,33 +543,33 @@ machines (TCP connect + application-level ping). A dead node must be
 flagged within a predictable window; the prober must not hammer its targets
 or blow itself up. Design the scheduling and concurrency.
 
-(Scale, Data rate, Use case)
-1. How big is the ping / pong data size? Are we receiving the ping from machine, or we send the ping to machine to check? 
+(Scale, Data rate, Use case, SLA)
+1. How big is the ping / pong data size? Are we receiving the ping from machine, or we send the ping to machine to check? How many probe per seconds we produces? How long a window should be?
 machines below hundred, we just assume this is 10^2.
 The data size is ping and pong, so we can assume this only 1 byte
 And the data rate is decided by the prober strategy.
 I think we need to send the ping from our prober side.
+probes per second = machines / window size = 100 / window size.
+Let's guess the healthy window is 1 min
+probes per second = 100 / 60 = 1.6 probe
+1.6 probe * 1 byte = 1.6 byte per second
 
 (Data Loss, Detect)
-2. How long do we can decide a machine is dead while waiting the ping pong? And how to decide the machine is dead? If we can connect but cannot recv pong, is it dead?
-    The ping pong timeout is 60 secs, then the predictable window will be impacted too
-    The ping pong timeout is 100ms, than the predictable window can be shorter
-
+2. How long do we can decide a machine is dead while waiting the ping pong? And how to decide the machine is dead? If we can connect but cannot recv pong, is it dead? Should we retry to prevent network jitter?
     To decide a machine is dead, TCP connection is down or ping / pong timeout.
+    And if continuous 5 times down or ping/pong timeout, machine turns down.
+    So 5 times retry and the window assume as 1 min
+    60 / 5 = 12s 
+    12s intervals retry 5 times
+    and guess time out 2 s
     
-(SLA)
-3. How long the predictable window we want to target at? Are we targeting average throughput or tail latency in updating newest status?
-    Lets guess we use 1s to get the newest data, then we need to handle the machine ping pong concurrently
-    if it's 1 hour, then one thread to handle all the connection is enough.
+(Hammer)
+3.  I guess Not Hammer tell us not to connect too frequent and not blow it up means use fixed pool to handle
 
 Lets looks into assumption:
 
-100 machines with 1 byte ping / pong transfer
-And 1s is the predictable window, and timeout is 100ms.
-We can open 100 threads to handle all the ping pong tcp connection check.
-And per thread a boolean status in a huge table
-Every turn we try to create connection if connection is down and send ping / pong within 100ms.
-Ok, I'll start to code with the status table.
+100 machines probes, 12s send ping pong, fixed pool and bounded queue for Jobs and a Timer queue.
+window = 5(retry) * 12s + 2s timeout = 62s ~= 60s 
 
 > **詳批(7/21,逐問;取代先前簡批)**
 >
