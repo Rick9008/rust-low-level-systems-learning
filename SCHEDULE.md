@@ -46,7 +46,7 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 | **7/21** | 卡#6 → e2#1:PROMPTS_EN(e2 題)→ 修 b#1 |
 | **7/22** | c#1:PROMPTS_EN(c 題)→ 修 e2#1 → spsc 空白。晚尾日讀:`html_p/p8-hw_bridge_teaching.html`(c#1 回放後才開) |
 | **7/23** | signal_pipeline 110m:`docs/concurrency/signal_pipeline.md` → `docs/artifacts/signal_pipeline.html`(SB stepper)→ `reference/src/concurrency/signal_pipeline.rs`(`start_fan_in` 6 tests)→ `drills/src/concurrency/signal_pipeline.rs` → a#2 → 修 c#1 |
-| **7/24** | e2#2 → d#1:PROMPTS_EN(d 題,tokio)。日讀:`html_p/p6-telemetry-spsc-ring-reference.html` → aggregator 延伸動手(f 題 contract,寫在 `drills/src/ds/ring_buffer.rs` 同檔) |
+| **7/24** | e2#2 → d#1:PROMPTS_EN(d 題,tokio)。日讀:`html_p/p6-telemetry-spsc-ring-reference.html` → aggregator 延伸動手(f 題 contract,寫在 `drills/src/ds/ring_buffer.rs` 同檔)→ lockfree 佇列家族段配 `html_p/runtime-lockfree-upgrade-map.html`(§2/§7),收尾把「SPSC→MPSC→MPMC 要改哪裡」唸成 30 秒口述(≤10m,不加場) |
 | **7/25** | 六卡快打:`rehearsals/clarify-cards.md` 全六張 → c#2 → 浮動#3 → 口述底稿:`docs/concurrency/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/io/hw_bridge.md`(五 server 對照組)+ `docs/async/async-runtime-anatomy.md` + `docs/cost-model.md`(數字與「再快呢」三句)。光譜口述的互動版收尾:`docs/artifacts/ds_sync.html`——**先口頭答 §8 四題自測再翻答案**(7/20 積欠的預測題;`ds_sync/` 原始碼與 `list_fine` 是選讀 deep-dive,不排主線) |
 | **7/26** | b#2 → e/f/g/h 題幹:PROMPTS_EN + 認題掃描表 `rehearsals/README.md` → 英文 I/O 唸出聲:PROMPTS_EN + `docs/clarify-playbook.md`(五問英文問法)→ spsc 空白 → 讀自己的 `challenges/src/` |
 | **7/27** | 只開兩份:`rehearsals/README.md`(45 分鐘 protocol + 時間預算)+ `docs/coderpad-constraints.md`(環境確認) |
@@ -102,6 +102,11 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 Timeline:8 月找 HR 的目標不變。
 
+## 內線情報 #3(2026-07-21,BurgerDragon @ Discord)
+
+1. **MPMC/MPSC 未考**(本人上場沒遇到、但有練過)→「g lock-free 版不寫、MPMC 口述應對」的裁決獲第二實證。7/21 午休已加產保險材料入庫(mpmc_ring 三層、mpsc_list、M-S、Chase-Lev + `html_p/runtime-lockfree-upgrade-map.html`,帳在 PROGRESS)——**主線場次一場不動**,材料走 7/24 日讀配套與 overflow 池。
+2. **「這難度至少練 5 題到 strong hire」**→ 帳已超標:計時彩排 5 題型 10 場(a/b/c/e2 各兩遍 + d + 浮動#3),親手寫過 ≥9 題型(見彩排覆蓋帳)。
+
 ## 砍掉 / 降級(已裁,不用再想)
 
 - **砍掉不練**:dsu、graph、trie、tree(doc 零訊號)
@@ -130,7 +135,8 @@ Timeline:8 月找 HR 的目標不變。
 - **Overflow 池規則(每天適用)**:dsu / graph / trie / tree 只在三條件**全**成立時碰:
   ①當天產出欄全勾(含卡、含錄音)②明天沒欠債 ③還有力氣。
   優先序固定:spsc 空白加跑(20m)> 沒修完的彩排洞 > **fd_registry 空白加跑
-  (e2 題幹再手搓一遍,25m;7/20 裁——JD sleeper 多一遍不虧)** > lru challenge >
+  (e2 題幹再手搓一遍,25m;7/20 裁——JD sleeper 多一遍不虧)** >
+  **mpmc_ring drill(30m;7/21 加產的 MPMC 保險,情報 #3 說沒考——超前才碰)** > lru challenge >
   才輪到 dsu → graph → trie/tree,每個 timebox 25m。
   (這四題的家在 7/29 後的 coding rounds;graph 是 comfort-zone 陷阱。)
 - **Google 舊 block**(277/158/588、LRU/LFU、segtree):無日期 → 每週最多 1–2 題
