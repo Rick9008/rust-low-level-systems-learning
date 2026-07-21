@@ -26,6 +26,7 @@ cargo test -p reference <test_name>              # single test by name
 cargo test -p reference --test loom_spsc         # loom model check: SPSC ring
 cargo test -p reference --test loom_mpmc         # loom model check: MPMC ring (Vyukov)
 cargo test -p reference --test loom_mpsc         # loom model check: MPSC list (Vyukov)
+cargo test -p reference --test loom_mpsc_ring    # loom model check: MPSC ring (Vyukov degenerate)
 cargo test -p reference --test loom_mpmc_list    # loom model check: MPMC list (Michael-Scott)
 cargo test -p reference --test loom_ws_deque     # loom model check: work-stealing deque (Chase-Lev)
 cargo test -p reference --test loom_arena        # loom model check: lock-free arena stack
@@ -39,7 +40,7 @@ cargo test -p challenges -- --include-ignored    # show which challenge tests ar
 Four workspace crates; the first three share module names, organized into four category submodules mirroring `docs/`'s four folders (`async` is a Rust keyword, so the source module is named `runtime`):
 
 - `ds/` — the six single-threaded data-structure modules (`dsu`, `graph`, `lru`, `ring_buffer`, `tree`, `trie`)
-- `concurrency/` — `bounded_queue`, `thread_pool`, `sharded_map`, `spsc_ring`, `mpmc_ring`, `mpsc_list`, `arena_lockfree`, `signal_pipeline`; reference-only: `mpmc_list` (Michael-Scott), `ws_deque` (Chase-Lev), and the locked/lock-free pairing layer `ds_sync`
+- `concurrency/` — `bounded_queue`, `thread_pool`, `sharded_map`, `spsc_ring`, `mpmc_ring`, `mpsc_list`, `arena_lockfree`, `signal_pipeline`; reference-only: `mpsc_ring` (Vyukov degenerate), `mpmc_list` (Michael-Scott), `ws_deque` (Chase-Lev), and the locked/lock-free pairing layer `ds_sync`
 - `runtime/` (docs: `docs/async/`) — `executor`, `async_sync`, plus (reference-only) `mini_runtime`
 - `io/` — `epoll_sys`, `event_loop`, `fd_registry`, `file_io_offload`, `tcp_echo`, `hw_bridge`
 
@@ -62,7 +63,7 @@ Practice tests carry `#[ignore = "..."]` so `cargo test --workspace` stays green
 
 The library is std-only, but loom needs code under test to use *its* atomic/UnsafeCell types. The trick (`reference/src/sync_shim.rs`):
 
-- Lock-free core algorithms live in standalone `core_impl.rs` files (under `concurrency/{spsc_ring,mpmc_ring,mpsc_list,mpmc_list,ws_deque,arena_lockfree}/` and `concurrency/ds_sync/dsu_lockfree/`) that only reference `crate::sync_shim as sync`.
+- Lock-free core algorithms live in standalone `core_impl.rs` files (under `concurrency/{spsc_ring,mpsc_ring,mpmc_ring,mpsc_list,mpmc_list,ws_deque,arena_lockfree}/` and `concurrency/ds_sync/dsu_lockfree/`) that only reference `crate::sync_shim as sync`.
 - Lib build: `sync_shim` re-exports std types → zero production dependencies.
 - Loom tests (`reference/tests/loom_*.rs`): define their own `sync_shim` module re-exporting loom types, then `#[path]`-include **the same** `core_impl.rs` source. Loom verifies the exact logic the lib ships.
 

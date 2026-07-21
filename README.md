@@ -62,8 +62,9 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 **lock-free 佇列家族續集**(spsc_ring 的後續題保險,內線情報說沒考過但練過不虧):
 `mpmc_ring`(Vyukov bounded MPMC:CAS 取號 + per-slot seq,三層全有)、
 `mpsc_list`(Vyukov intrusive MPSC = tokio 遠端 wake queue,讀+drill;
-「縫」= `PopResult::Inconsistent` 顯式化)——runtime 元件的 lock-free
-升級地圖見 `html_p/runtime-lockfree-upgrade-map.html`。
+「縫」= `PopResult::Inconsistent` 顯式化)、`mpsc_ring`(單消費退化實體,
+reference-only:pop 免 CAS、head 連 atomic 都不是)——runtime 元件的
+lock-free 升級地圖見 `html_p/runtime-lockfree-upgrade-map.html`。
 
 優先級練完 → `rehearsals/` 計時彩排(見下方「rehearsals 使用法」)。
 

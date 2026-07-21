@@ -66,7 +66,9 @@ MPMC 下 head/tail 都在動,任何 `tail-head` 都是「算出來那刻就過�
 
 規則:**哪端是「多」,哪端就要 CAS 取號、就有縫、就需要 per-slot 訊號;
 哪端是「單」,那端 index 保持單寫者、plain store 就夠。**
-mpsc_ring = 本模組把 pop 的 CAS 換成 store,一行的參數化退化,不值一個模組。
+mpsc_ring = 本模組把 pop 的 CAS 換成 store 的參數化退化——reference 已有
+實體([mpsc_ring](mpsc_ring.md)),看點是 head 直接降級成 consumer 私有的
+**非原子**欄位(producer 從不讀 head,滿的判定走 seq)。
 SPMC 的隱藏坑值得口述:consumer CAS 搶到號 ≠ 讀完了——producer 只看
 head 推進就覆寫會撕掉進行中的讀,所以「讀完」需要 per-slot 訊號
 (seq 跳下一圈),縫對稱地搬到消費側。unbounded 的 MPSC 另有專屬解:

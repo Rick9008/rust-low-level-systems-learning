@@ -17,6 +17,8 @@ pub mod spsc_ring;
 pub mod mpmc_ring;
 // 多生產單消費的 unbounded 連結串列(tokio 遠端 wake queue 同款;含「縫」的顯式 API)
 pub mod mpsc_list;
+// mpmc_ring 的單消費退化(退化表實體):pop 免 CAS、head 連 atomic 都不是
+pub mod mpsc_ring;
 // Michael–Scott unbounded MPMC(佔位=發布合一 ⇒ 正式 lock-free;reclamation 攤開講)
 pub mod mpmc_list;
 // Chase–Lev work-stealing deque(SeqCst fence 的第二個實戰位;tokio/rayon per-worker queue)

@@ -13,7 +13,8 @@
 //! 5. 退化題:單 consumer(= mpsc_ring)時哪一個 CAS 可以換成 plain store?
 //!    per-slot seq 為什麼一個都不能省?SPMC 呢——縫搬到哪一端?
 //!    (答案的形狀:哪端是「多」,哪端就要 CAS+seq;哪端是「單」,
-//!    那端 index 保持單寫者。所以 mpsc_ring 不用另立模組。)
+//!    那端 index 保持單寫者。對答案:reference::concurrency::mpsc_ring——
+//!    head 在那裡連 atomic 都不是。)
 //!
 //! 填完後跑 `cargo test -p reference --test loom_mpmc` 感受窮舉;
 //! 這裡的煙霧測試只是「跑很多次沒炸」等級。
