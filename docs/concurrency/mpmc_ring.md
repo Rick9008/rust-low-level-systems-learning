@@ -55,6 +55,23 @@ MPMC 下 head/tail 都在動,任何 `tail-head` 都是「算出來那刻就過�
 `if !q.is_empty() { q.pop() }` 這種 TOCTOU。要觀測深度,用 metrics
 (採樣容忍過期)而不是 API。
 
+## 退化表:為什麼沒有 mpsc_ring / spmc_ring 模組
+
+| 佇列 | producer 端 | consumer 端 | 縫在哪 |
+|---|---|---|---|
+| spsc_ring | store | store | 無縫——index 本身就是發布訊號 |
+| mpsc_ring | CAS + seq | store(讀 seq) | producer 側(佔位→發布) |
+| spmc_ring | store | CAS + seq | consumer 側(佔位→**讀完**釋放) |
+| mpmc_ring | CAS + seq | CAS + seq | 兩側都有 |
+
+規則:**哪端是「多」,哪端就要 CAS 取號、就有縫、就需要 per-slot 訊號;
+哪端是「單」,那端 index 保持單寫者、plain store 就夠。**
+mpsc_ring = 本模組把 pop 的 CAS 換成 store,一行的參數化退化,不值一個模組。
+SPMC 的隱藏坑值得口述:consumer CAS 搶到號 ≠ 讀完了——producer 只看
+head 推進就覆寫會撕掉進行中的讀,所以「讀完」需要 per-slot 訊號
+(seq 跳下一圈),縫對稱地搬到消費側。unbounded 的 MPSC 另有專屬解:
+[mpsc_list](mpsc_list.md)(push 端 wait-free,tokio 的選擇)。
+
 ## 選型帳:什麼時候用它
 
 | 情境 | 選擇 | 理由 |

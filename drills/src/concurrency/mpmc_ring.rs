@@ -10,6 +10,10 @@
 //! 2. CAS 取號為什麼可以 Relaxed?happens-before 走哪條邊?
 //! 3. `seq - pos` 的三態各代表什麼?為什麼 cap=1 會讓其中兩態撞在一起?
 //! 4. pop 回 None 時,佇列一定是空的嗎?(誠實邊界——lockless ≠ lock-free)
+//! 5. 退化題:單 consumer(= mpsc_ring)時哪一個 CAS 可以換成 plain store?
+//!    per-slot seq 為什麼一個都不能省?SPMC 呢——縫搬到哪一端?
+//!    (答案的形狀:哪端是「多」,哪端就要 CAS+seq;哪端是「單」,
+//!    那端 index 保持單寫者。所以 mpsc_ring 不用另立模組。)
 //!
 //! 填完後跑 `cargo test -p reference --test loom_mpmc` 感受窮舉;
 //! 這裡的煙霧測試只是「跑很多次沒炸」等級。
