@@ -472,17 +472,55 @@ And we use TCP connection to send data to remote collector, and we need to recre
 But I'm not sure about the UDP interface, if we really have time to handle udp side, I need little time to google search and learn it.
 Ok, I'll start to code with the spsc ring side.
 
-> **批改(7/21)**:五問 4/5。漏「斷線多久算常態」——題幹白給的
-> "seconds to minutes" 沒被消費;它存在就是要你立 canonical 式:
-> **capacity = 寫入率 × 最大容忍斷線**。用你的數字:200MB/s × 60s ≈ 12GB
-> → 荒謬 → 反推 rate 假設過高或必須激進掉——**算出的數字要餵回決策**。
-> full policy 收斂正確(bounded + drop-oldest + 計數)✓、app 不卡當硬約束 ✓。
-> 數字失分:1MB×1000 = **1GB** 不是 0.1GB。UDP(本地段)可辯護但未辯護:
-> UDP 丟包 = 看不見計數的 drop-newest,和你的可觀測性目標自相矛盾;
-> "need to google" 的面試正解 = 當場換熟的(in-proc bounded queue)。
-> 對應實作:彩排 a(ring_drop_oldest)就是本卡核心結構。
-> **五問歸屬**:漏的是「容量算式」那格的第二因子——那格永遠是乘法
-> `capacity = 速率 × 要撐的時長`,兩個因子都問到才算問完(你只問了速率)。
+> **詳批(7/21,逐問;取代先前簡批)** — 診斷總綱:五問**類別**你幾乎全開了
+> (4/5),漏的是每一問的**結帳條件**——問了 ≠ 結清。結帳表見
+> `docs/clarify-playbook.md` 新增段。
+>
+> **Q1 規模/速率**(你問:processes 幾個、rate、log size)
+> - 拿分:參數化 if-else 形狀正確(<1000 → thread-per-conn / >1000 → epoll);
+>   rate 標了 "i guess" ✓(標假設就是正確行為,不是心虛)。
+> - 缺口 a(算術):1MB × 1000 = **1GB**,你寫 0.1GB——算完唸一遍單位。
+> - 缺口 b(荒謬檢查沒跑):200Hz × 1KB × 1000 procs = 200MB/s = **1.6Gbps**
+>   ——一台 host 的 log 把 NIC 吃滿?算式對、結果荒謬,荒謬就回頭砍假設。
+>   健康錨點:單 host 全體程序 ~10³–10⁴ lines/s × ~200B ≈ **0.2–2MB/s**。
+> - 結帳條件:數字要**活進算式、過荒謬檢查、餵回假設**,不是問到就好。
+>
+> **Q2 SLA**(你問:avg throughput vs tail latency)
+> - 方向對、**軸錯**:那是 server 題的軸。log shipper 的 SLA 軸是
+>   **送達延遲(freshness)**——「log 幾秒內要出現在 collector?」
+>   它決定 batch 窗口(100ms vs 10s)與重試節奏。
+> - 結帳條件:留下一句**數字承諾**("logs visible within X s"),
+>   不是留下一個二選一。
+>
+> **Q3 掉不掉**(你列:drop-newest / oldest / Err / unbounded+disk)
+> - 拿分:分支枚舉完整、"must not block" 當硬約束 ✓——類別分拿滿。
+> - 缺口:**列完沒裁決**。要的是選邊+理由鏈:「app 不能卡」×「網路斷分鐘級」
+>   兩約束相乘 ⇒ 極端下必掉 ⇒ bounded + drop-oldest + dropped 計數。
+>   你到 assumption 段才選 drop-oldest,理由鏈沒接回約束。
+> - 你自己寫的 "unbounded... too many memory"——"too many" 沒有數字,
+>   因為 Q5 沒問(見下):兩個洞是同一個洞。
+>
+> **Q4 偵測**(你問:process dead / collector dead)
+> - collector 側相關 ✓,但要接**用途**:偵測到斷線 → 切 buffer 模式 +
+>   重連 backoff。process 側是題外(來源死了沒 log 可收,不歸 shipper 管)
+>   ——半題 scope creep。
+>
+> **Q5 容量算式(漏——全卡最貴的一問)**
+> - 這格永遠是乘法:`capacity = 寫入率 × 最大容忍斷線`。你問了因子一(速率),
+>   因子二(時長)題幹白給("flakes... seconds to minutes")沒消費。
+> - 修正後數字:2MB/s × 60s ≈ **120MB** → 可行,「不掉」買得起;
+>   用你原 200MB/s → 12GB → 荒謬 → 倒逼修 rate。
+>   這一問就是把 Q3 的 "too many" 變成數字的鑰匙。
+>
+> **UDP(本地段)**
+> - 題目只考 "**agent's** buffering and shipping"——process→agent 的 IPC
+>   在考綱外,一句 stub 帶過(Abstract the Noise,同 Poller)。
+> - "never block" 的正解在 library 層:`log()` → in-process bounded queue
+>   (drop-oldest+計數),背景執行緒外送。UDP 把 drop 搬進 kernel =
+>   **無帳的 drop-newest**:與你的可觀測目標矛盾、與你選的 drop-oldest 相反。
+> - 場上鐵律:不熟的不掏("need to google" = 當場換熟的)。
+> - 認出來:本卡核心結構 = **彩排 a(ring_drop_oldest)**,你 7/19 寫過、
+>   修過、全綠——你不缺知識,缺的是認出「這是我寫過的東西」。
 
 
 
@@ -524,16 +562,41 @@ And per thread a boolean status in a huge table
 Every turn we try to create connection if connection is down and send ping / pong within 100ms.
 Ok, I'll start to code with the status table.
 
-> **批改(7/21)**:五問 3/5。漏 ①題幹第二硬約束 "must **not hammer**"
-> ——重試/併發無上限,連不上就重連 = 重試風暴(固定 worker pool =
-> 天然限流,bounded submit 就是答案);漏 ②判死去抖:連續 N 次失敗才標紅,
-> 而 predictable window 因此 = **interval + N × timeout**——你有方向
-> (60s vs 100ms ✓)但沒立式,這張卡的 "predictable" 就是在要這條公式。
-> 做對的:push/pull 當場變決策 ✓;**沒掏 lock-free/SPSC**(答案卷
-> 「常見錯誤」第一條完美避開,節制正確)✓;100 threads 可辯護(瓶頸在 RTT)。
-> 跨卡教訓:**題幹句句是參數,句句要消費**(兩卡漏的都是白給的句子)。
-> **反推法**(面試官直接給 W 時):`window ≈ N×interval + timeout` →
-> 你選 N(去抖理由)與 timeout(≥健康 p99 RTT)→ 反推 interval →
-> 推 probes/s 與在飛數 → pool 大小(驗 don't hammer / don't blow up)。
-> 式子不變,只換數字——這就是 "predictable" 的全部內容。
-> 對應實作:彩排 h(timer_queue)+ thread_pool 的 bounded submit。
+> **詳批(7/21,逐問;取代先前簡批)**
+>
+> **Q1 規模/形態**(你問:size、push or pull、幾台)
+> - 拿分:push/pull 當場變決策 ✓——而且這問是你把「自己的疑問」轉成
+>   clarify 問句的成功案例,記住這個動作。規模 10² ✓、1B ping 合理 ✓。
+> - 缺口:「**每秒幾個 probe**」沒算——負載 = 機器數 ÷ interval,
+>   它是 pool 大小的分子。
+>
+> **Q2 判死**(你問:等多久算死、connect 通但 pong 不回算不算)
+> - 拿分:"connect but cannot recv pong, is it dead?" 已經摸到門——
+>   你在懷疑單一訊號的可靠性。
+> - 缺口:懷疑沒變機制:**連續 N 次失敗才標紅**(去抖)。
+>   單次 timeout 判死 = 網路抖一下就誤殺一台好機器。
+>
+> **Q3 SLA/window**(你問:window 多長 → 1s 併發 / 1hr 單執行緒)
+> - 拿分:參數化方向 ✓(60s vs 100ms 的對比是對的形狀)。
+> - 缺口:沒立式。`window ≈ N × interval + timeout`——"predictable"
+>   就是在要這條式子。有式子,面試官給任何 W 都能反推:
+>   選 N(去抖理由)、選 timeout(≥ 健康 p99 RTT)→ 解 interval →
+>   推 probes/s → pool 大小。範例:W=30s、N=3、timeout=2s →
+>   interval ≤ 9s;300 台 ÷ 8s ≈ 38 probes/s、在飛 ≤ 76 → pool ~80。
+>
+> **Q4 hammer(漏——題幹白給)**
+> - "must not hammer its targets or blow itself up" 一句兩約束:
+>   對外限流(per-target rate = 1/interval、重試帶 backoff)+
+>   對內有界(fixed pool、bounded queue)。
+> - 你的設計句 "Every turn we try to create connection if connection is
+>   down" 就是 hammer 的實體:斷線機器每輪被重連、無 backoff。
+> - 正解形狀:fixed worker pool = 天然限流 + bounded submit——
+>   本卡 = **thread_pool + timer queue(彩排 h)**,兩個你都寫過。
+>
+> **設計段**
+> - 100 threads 對 100 台可辯護(瓶頸在 RTT 不在結構);boolean table
+>   方向對,但 status 要帶「連續失敗計數」欄位才能去抖。
+> - 最大拿分點:**沒掏 lock-free/SPSC**——答案卷「常見錯誤」第一條
+>   完美避開,節制正確。cost-model 台詞順手背:「每秒幾百 probe、
+>   mutex 20ns、RTT ms 級——結構優化不值得,力氣花在 timeout 與去抖。」
+> - 跨卡教訓:**題幹句句是參數,句句要消費**(兩卡漏的都是白給句)。
