@@ -51,9 +51,9 @@ Requirements:
 std only (`std::thread` / `std::sync`).
 
 1. what's graceful means?
-So we need to holds a thread pool to handle the services check
-and provide new(workers: usize) and submit(job: FnOnce)
-We need to holds a shutdown() for pool to ends -> Atomic Flag to handle 
+   So we need to holds a thread pool to handle the services check
+   and provide new(workers: usize) and submit(job: FnOnce)
+   We need to holds a shutdown() for pool to ends -> Atomic Flag to handle
 
 ## c · frame_parser_heartbeat
 
@@ -205,56 +205,47 @@ Design the ingestion side.
 Clarify question:
 
 (Scale and Data rate)
+
 1. How many nodes are we covering? And what's the data input frequencies? How the data comes? How big the data is?
-    I assume that the data arrives over tcp, because it might monitoring a rack 
-    If nodes less than 20, maybe we can use thread-per-connections and simple mutex on data structure are enough.
-    But when  0 <= nodes <= 3000, we need to use event loop to handle the connections
-    
-    And if the data frequencies is 1 Hz then we can handle the connections very simple.
-    But if the freq >= 1k Hz, then it's hard to handle all the data input, we might need to use a data structure to store the inputs and batch process or other tech skill
-    And the description says the volume is far more than you can store, we need to know it's the per second volume very large or we are saying one day's data size is very large.
-    I will take freq as 1k Hz now.
+   I assume that the data arrives over tcp, because it might monitoring a rack
+   If nodes less than 20, maybe we can use thread-per-connections and simple mutex on data structure are enough.
+   But when 0 <= nodes <= 3000, we need to use event loop to handle the connections
 
-    I assume: 
-    1. 0 <= the temperatures <= 200, so use u8
-    2. 0 <= voltages <= 1200, so use u16
-    3. 0 <= error counts <= 255, so use u8
-    4. 0 <= ts(data time) <= 2^31 - 1, so use u32
-    5. 0 <= nodeid <= 3000, so use u16
-    1 + 2 + 1 + 4 + 2 =  10 bytes
-    10 * 3000 nodes * 1000 Hz = 30000000 bytes ~= 30000 KB = 30 MB
-    30000 * 60 * 60 * 24 = 1.8 GB * 60 * 24 ~= 2.6 TB 1 day
-    so it's very hard to store all the data in on day even 1 sec we received.
+   And if the data frequencies is 1 Hz then we can handle the connections very simple.
+   But if the freq >= 1k Hz, then it's hard to handle all the data input, we might need to use a data structure to store the inputs and batch process or other tech skill
+   And the description says the volume is far more than you can store, we need to know it's the per second volume very large or we are saying one day's data size is very large.
+   I will take freq as 1k Hz now.
 
-(Usage / Spec)
-2.  What do the dashboard need to show in telemetry? How do we aggregate them?
-    If we need to show every node in separate, we need to store the data from every node in shard
-    If all data need to aggregates together, we need a lock on a single data structure, or we just use a single thread to aggregate every new data into the only info we store. 
+   I assume:
+   1. 0 <= the temperatures <= 200, so use u8
+   2. 0 <= voltages <= 1200, so use u16
+   3. 0 <= error counts <= 255, so use u8
+   4. 0 <= ts(data time) <= 2^31 - 1, so use u32
+   5. 0 <= nodeid <= 3000, so use u16
+      1 + 2 + 1 + 4 + 2 = 10 bytes
+      10 _ 3000 nodes _ 1000 Hz = 30000000 bytes ~= 30000 KB = 30 MB
+      30000 _ 60 _ 60 _ 24 = 1.8 GB _ 60 \* 24 ~= 2.6 TB 1 day
+      so it's very hard to store all the data in on day even 1 sec we received.
+
+(Usage / Spec) 2. What do the dashboard need to show in telemetry? How do we aggregate them?
+If we need to show every node in separate, we need to store the data from every node in shard
+If all data need to aggregates together, we need a lock on a single data structure, or we just use a single thread to aggregate every new data into the only info we store.
 
     Maybe we can aggregate the data into minimum and maximum and count and error counts and sum by statistics? However when sum going overflow, we need to know how long the data we need to keep
     With statistics we can store the data within a window we care.
     -> per-window aggregation
-    single consumer read from the windows 
+    single consumer read from the windows
 
-(Data Loss)
-3. Under pressure, can we drop or aggregate, or is every sample required?
-    1. we must need to track every data, we need to use back pressure to keep the data
-    2. we can kick off the old data, then we can just pop oldest and push. memorize how many data we kickoff
-    3. we can just discard the data we cannot serve.
-    4. but if we can use statistics to aggregate the data, the data can just aggregates in-place(but the real data in that time might lose) 
-    Back-pressure -> memory is fixed so no need to care this 
+(Data Loss) 3. Under pressure, can we drop or aggregate, or is every sample required? 1. we must need to track every data, we need to use back pressure to keep the data 2. we can kick off the old data, then we can just pop oldest and push. memorize how many data we kickoff 3. we can just discard the data we cannot serve. 4. but if we can use statistics to aggregate the data, the data can just aggregates in-place(but the real data in that time might lose)
+Back-pressure -> memory is fixed so no need to care this
 
-(SLA)
-4. What's the scenario of this solution? Are we optimizing average throughput, or tail latency?
-    1. It's for human read, then it's average throughput
-    2. It's for machine / automata read, then we need to care about tail latency
-    Because we are targeting dashboard, it's human read 
-    
-(Failure Detection)
-5. How do we learn a node died?
-    If it's TCP, we can check the pipe healthy, if node breaks itself, however we still need to own heartbeats for those disconnect not healthy
-    We need to own heartbeats? -> it's might need to use ping and deadline timer 
-    Tcp -> on shutdown, drain and exit
+(SLA) 4. What's the scenario of this solution? Are we optimizing average throughput, or tail latency? 1. It's for human read, then it's average throughput 2. It's for machine / automata read, then we need to care about tail latency
+Because we are targeting dashboard, it's human read
+
+(Failure Detection) 5. How do we learn a node died?
+If it's TCP, we can check the pipe healthy, if node breaks itself, however we still need to own heartbeats for those disconnect not healthy
+We need to own heartbeats? -> it's might need to use ping and deadline timer
+Tcp -> on shutdown, drain and exit
 
 Let me look into our assumption:
 3000 nodes at about 1k Hz
@@ -265,7 +256,6 @@ So single-thread event loop with batched reads, per-window aggregation, single c
 Memory is fixed, 'full' can't happen. Back-pressure isn't needed.
 On shutdown, drain and exit.
 I'll start coding.
-
 
 > **重寫清單(7/17 批改;寫完就刪掉這塊)** — 方法論已進
 > [`clarify-playbook.md`](../docs/clarify-playbook.md):Q1 的「就地聚合到底在做什麼」
@@ -293,50 +283,45 @@ queuing and flow control.
 
 7/19
 (Scale and Data rate)
+
 1. What's the request rate and how big is a request data size? And how the backend architecture we need to handle? How long does backend handle the request?
-    For request rate:
-        1. Under 10^4, then thread-per-request might be enough, 1MB * 10000 = 10GB, very close
-        2. Larger than 10^5 and lower than 10^7, use epoll is good.
-        3. Larger than 10^7, we need cluster and L3 router for different RPC gateway instance, because the memory will too large
-    For request data size:
-        I guess there's a backend name and payload and session token for auth state: 128 u8 + 1024 u8 + 256u8 ~= 1400 bytes ~= 1KB
-    For backend:
-        Let try this in only simple backend name with only one instance now.
-        And we need different backend queue for the rpc request we need to route to the backend.
-    For backend handle rate:
-        1 request 50ms now.
-(Data loss)
+   For request rate: 1. Under 10^4, then thread-per-request might be enough, 1MB \* 10000 = 10GB, very close 2. Larger than 10^5 and lower than 10^7, use epoll is good. 3. Larger than 10^7, we need cluster and L3 router for different RPC gateway instance, because the memory will too large
+   For request data size:
+   I guess there's a backend name and payload and session token for auth state: 128 u8 + 1024 u8 + 256u8 ~= 1400 bytes ~= 1KB
+   For backend:
+   Let try this in only simple backend name with only one instance now.
+   And we need different backend queue for the rpc request we need to route to the backend.
+   For backend handle rate:
+   1 request 50ms now.
+   (Data loss)
 2. Under pressure, can we return a error code for the requests we can't handle? Or we need a back-pressure strategy. If do, how long does a client give up request.
-    Let guess that the client will wait for 1s and if exceed return Error code
-    And if the requests is too large, we need to back-pressure. We can close the epollin for client requests to the full queue backend, and gateway we need to handle the connection and check if the queue full.
-    If queue full we return Error code instantly.
+   Let guess that the client will wait for 1s and if exceed return Error code
+   And if the requests is too large, we need to back-pressure. We can close the epollin for client requests to the full queue backend, and gateway we need to handle the connection and check if the queue full.
+   If queue full we return Error code instantly.
 
-(Failure Detection)
-3. If a backend is dead how do we learn? And if the client request drop how do we know?
-    If backend can know from TCP, good. Otherwise we need a heartbeat detect and request timeout.
-    If client request drop, I think we can know from tcp connection dead.
+(Failure Detection) 3. If a backend is dead how do we learn? And if the client request drop how do we know?
+If backend can know from TCP, good. Otherwise we need a heartbeat detect and request timeout.
+If client request drop, I think we can know from tcp connection dead.
 
-(SLA)
-4. Are we optimizing average throughput or tail latency?
-    If tail latency, the queue need lock-free queue, because mutex holder will be preempt by scheduler, and lock-free is targeting for p99.9 but not the throughput
-    If average throughput, we can only use the lock with simple data structure, 
-
+(SLA) 4. Are we optimizing average throughput or tail latency?
+If tail latency, the queue need lock-free queue, because mutex holder will be preempt by scheduler, and lock-free is targeting for p99.9 but not the throughput
+If average throughput, we can only use the lock with simple data structure,
 
 Let's look into the assumptions:
 10^5 request per sec, with 1KB
-10^5 * 1KB = 100000 KB = 100MB per seconds coming
+10^5 \* 1KB = 100000 KB = 100MB per seconds coming
 
 And we need to record the client connection socket and fd data and request id, maybe 16B for id and fd.
-10^5 * 16B = 1600000 B = 1600 KB = 1.6 MB per second in normal time
+10^5 _ 16B = 1600000 B = 1600 KB = 1.6 MB per second in normal time
 1s drop the client request.
 1000 / 50ms = 20 requests for sequential requests
-10^5 * 0.05 = 5000 requests concurrency
-5000 * 16 B = 80 KB, cheap
-queue capacity = 10^5 * 1 sec = 100k entries
+10^5 _ 0.05 = 5000 requests concurrency
+5000 _ 16 B = 80 KB, cheap
+queue capacity = 10^5 _ 1 sec = 100k entries
 And body will store in the kernel buffer, epoll will care this for us when tcp flow control
 Under pressure:
 the handle time become 500 ms
-10^5 * 0.5 = 50000 requests concurrency
+10^5 \* 0.5 = 50000 requests concurrency
 
 I will use per queue for different backend service
 And use a map for name to queue.
@@ -348,34 +333,30 @@ I'll start with a plain bounded queue behind the event loop - single threaded, n
 If we later shard across threads and tail latency matters, that's where lock-free in.
 Ok I'll start to code, begin with the backend queue and event loop
 
-
 Bad version:
 (Scale and Data rate and Scenario SLA)
+
 1. how many client requests and backends we need to handle? And what's the backend structure? Backend is a cluster or one service one node.
-    1. client requests = cr
-        if 0 <= cr <= 10^7 per seconds then we need to use a cluster to handle this, distribute by a machine and multiple machine with shard request
-        if 0 <= cr <= 10^5, we can use event loop to handle in a single machine, we take it in this time.
-    2. backends are one service one node, and we need to authorize, and redirect to the node
-        if backend is cluster then it's more complicated because we need to prepare the strategy for those nodes with same service.
+   1. client requests = cr
+      if 0 <= cr <= 10^7 per seconds then we need to use a cluster to handle this, distribute by a machine and multiple machine with shard request
+      if 0 <= cr <= 10^5, we can use event loop to handle in a single machine, we take it in this time.
+   2. backends are one service one node, and we need to authorize, and redirect to the node
+      if backend is cluster then it's more complicated because we need to prepare the strategy for those nodes with same service.
 
-    we take cr <= 10^5, backend is a service a node
-    then for the client requests we need to use event loop to handle the connections and requests.
-    If the client requests are <= 10^5 , the cpu-bound task isn't on the rpc gateway, so we can just use single-thread event loop without thread pool.
-    and we need a map for backend name and the node address
-    Furthermore, we can use some threads as thread per service, and create a queue for them.
-    However, there's lots of strategy we can use for different scenario so it's complex, we use the most simple way here.
-    If you think there is some constraint or condition we need to care about, we can discuss more.
+   we take cr <= 10^5, backend is a service a node
+   then for the client requests we need to use event loop to handle the connections and requests.
+   If the client requests are <= 10^5 , the cpu-bound task isn't on the rpc gateway, so we can just use single-thread event loop without thread pool.
+   and we need a map for backend name and the node address
+   Furthermore, we can use some threads as thread per service, and create a queue for them.
+   However, there's lots of strategy we can use for different scenario so it's complex, we use the most simple way here.
+   If you think there is some constraint or condition we need to care about, we can discuss more.
 
-(Data loss)
-2. Under pressure, the requests are too much, how do we handle this?
-    If we can just discard, then we can return with a error code ask user to request later
-    If we can't, we need to back-pressure and timeout for exhaust case.
-    We need to protect the DDOS scenario too?
+(Data loss) 2. Under pressure, the requests are too much, how do we handle this?
+If we can just discard, then we can return with a error code ask user to request later
+If we can't, we need to back-pressure and timeout for exhaust case.
+We need to protect the DDOS scenario too?
 
-(Fail Detection)
-3. If there's some service nodes going down, should we do anything to backup? Or there's some request died?
-    1. If the service going down and no replica nodes, we can just return Error code and ask admin to repair
-    2. If request died, when we try to return the result, we will know that
+(Fail Detection) 3. If there's some service nodes going down, should we do anything to backup? Or there's some request died? 1. If the service going down and no replica nodes, we can just return Error code and ask admin to repair 2. If request died, when we try to return the result, we will know that
 
 Let we look into the assumptions:
 10^5 requests, one event loop for every request
@@ -389,21 +370,22 @@ redis cache for some cheap and simple request like CDN?
 
 > **批改(7/17;修完這輪可刪或保留當對照)** — canonical 見
 > [`clarify-answers.md`](clarify-answers.md) 卡 2;台詞:
-> *"RPC can't drop, but it can **reject** — bounded + timeout makes failure
-> predictable; unbounded makes it an OOM."*
+> _"RPC can't drop, but it can **reject** — bounded + timeout makes failure
+> predictable; unbounded makes it an OOM."_
 >
 > **失分點:**
+>
 > 1. **題幹 contract 沒讀進去**:"every request must get a response" 已經回答了
 >    「可不可以丟」——不可 drop,只能「拒絕(拒絕也是回應)」或 backpressure。
 >    該問的是**壓回去的邊界**(排隊上限、超時多久),不是能不能丟。
 > 2. **SLA 掛名沒問(4/5 類)**:這題最值錢的數字是 client timeout budget
->    (*"How long will a client wait before giving up?"*);gateway 看 **p99**。
+>    (_"How long will a client wait before giving up?"_);gateway 看 **p99**。
 > 3. **零算術**——卡#1 的單位鏈沒帶過來(該算什麼見下表)。
 > 4. **timeout 的第二層**:不只回錯——**過期請求要踢出隊**,不替死人排隊
 >    (每請求 deadline 進 timer queue = 彩排 h;超時回 504、不佔位)。
 > 5. **backpressure 機制沒具體化**:對 client **停止讀**(關 EPOLLIN),
 >    TCP 收窗自動把壓力傳回 client。
-> 6. **宣言缺 shutdown、full policy 沒數字**,沒 *"I'll start coding."* 收尾;
+> 6. **宣言缺 shutdown、full policy 沒數字**,沒 _"I'll start coding."_ 收尾;
 >    "Let **me** look"。
 > 7. **Scope creep**:authorize / DDoS / redis cache 都不是 queuing and flow
 >    control;Furthermore 段面試時整段不要講。
@@ -411,6 +393,7 @@ redis cache for some cheap and simple request like CDN?
 >    不是等回程才發現;補一句 health check / circuit breaker。
 >
 > **缺的姿勢:**
+>
 > - **EPOLLIN 是什麼**:epoll 訂閱遮罩裡「這個 fd 可讀」的 bit。「關掉」=
 >   `EPOLL_CTL_MOD` 改成不含 EPOLLIN 的遮罩(訂閱還在,只是 kernel 不再叫你讀)
 >   → 你不讀 → rcv buffer 積滿 → **TCP 收窗縮到 0 → client 的 `send()` 塞住**
@@ -424,13 +407,12 @@ redis cache for some cheap and simple request like CDN?
 >
 > **該算什麼 → 導向什麼答案:**
 >
-> | 算式 | 導向 |
-> |---|---|
-> | in-flight ≈ rate × client timeout(10⁵/s × 1s = 100k)| queue 深度上限(Little's law)|
-> | in-flight × per-request size(100k × ~1KB ≈ 100MB)| 記憶體存不存得下 → bounded 的具體數字 |
-> | 到達率 λ vs backend 服務率 µ,λ > µ 的期間 | 隊伍以 (λ−µ)/s 成長 → bounded 只需撐過 timeout 窗,再多是替死人排隊 |
-> | 隊中等待 > client timeout? | 過期踢出隊——每省一筆就是還 backend 一份容量 |
-
+> | 算式                                                 | 導向                                                               |
+> | ---------------------------------------------------- | ------------------------------------------------------------------ |
+> | in-flight ≈ rate × client timeout(10⁵/s × 1s = 100k) | queue 深度上限(Little's law)                                       |
+> | in-flight × per-request size(100k × ~1KB ≈ 100MB)    | 記憶體存不存得下 → bounded 的具體數字                              |
+> | 到達率 λ vs backend 服務率 µ,λ > µ 的期間            | 隊伍以 (λ−µ)/s 成長 → bounded 只需撐過 timeout 窗,再多是替死人排隊 |
+> | 隊中等待 > client timeout?                           | 過期踢出隊——每省一筆就是還 backend 一份容量                        |
 
 **Card 3 · market data feed** — A market data feed pushes high-frequency
 price ticks per symbol. The strategy side only cares about the **latest**
@@ -442,6 +424,66 @@ all local processes and ships them to a remote collector. The network
 flakes a few times a day, from seconds to minutes; the application's
 logging call must never block. Design the agent's buffering and shipping.
 
+(Scale and Data Rate)
+1. How many processes do we want expected to handle? What's the request rate and a log average size?
+   Processes be less than 1000 -> we can use thread-per-connections for the processes to handle 1MB \* 1000 for the threads, and for those need a log queue to line up
+   Processes be grater than 1000 -> we need to use epoll to handle the processes connections
+
+   Request rate, 200 Hz i guess?
+   Log average size i assume less than 1 KB, log should not be too large
+(SLA)
+2. Are we targeting average throughput for the data transfer or tail latency for data actually send to remote collector?
+    If Average throughput, we can just send the data sequentially to remote.
+    If Tail latency, we might need to concurrently send the data.
+
+(Data Loss)
+3. Under pressure or remote dead, how do we decide data policy to not block the logging call? Or we must to write every data?
+    if we can drop the data:
+    1. we might drop the newest data
+    2. drop the oldest data
+    3. just return Err to not write this data
+    if we cannot drop the data:
+    Use unbounded queue for the logs to line up, but it might cost too many memory, we might can swap to disk?
+    To clarify this to think of the back-pressure policy.
+    And I will use UDP in processes side so that it won't block the logging call
+    Or we can provide a async tcp connection task interface for logging call side.
+
+(Detection)
+4. How do we know a process is dead or the remote collector dead?
+    1. if process dead, tcp connection will break?
+    2. and if process dead but tcp silently dead, we might need a way to heartbeat the process pid?
+
+    remote collector is same way to check.
+
+Let looks into the assumption:
+we make process less than 1000.
+10^3 * 1MB(thread size) = 0.1GB
+the data rate is 200 Hz
+a log size is 1KB
+200 * 1KB = 200KB per seconds for a process
+200 KB * 1000 = 200 MB per seconds for all processes
+so the data throughput we need to second to remote is 200 MB per seconds
+and 200 MB / 1 KB = 200*10^3 = 2 ^ 10^5 logs we need to handle 1 second
+
+I will use per process queue for different process to send the data, then we can use spsc ring to handle all the data.
+We can use UDP for those processes send their data.
+And we can drop oldest data in this log shipper.
+And we use TCP connection to send data to remote collector, and we need to recreate the tcp connection in ourself.
+But I'm not sure about the UDP interface, if we really have time to handle udp side, I need little time to google search and learn it.
+Ok, I'll start to code with the spsc ring side.
+
+> **批改(7/21)**:五問 4/5。漏「斷線多久算常態」——題幹白給的
+> "seconds to minutes" 沒被消費;它存在就是要你立 canonical 式:
+> **capacity = 寫入率 × 最大容忍斷線**。用你的數字:200MB/s × 60s ≈ 12GB
+> → 荒謬 → 反推 rate 假設過高或必須激進掉——**算出的數字要餵回決策**。
+> full policy 收斂正確(bounded + drop-oldest + 計數)✓、app 不卡當硬約束 ✓。
+> 數字失分:1MB×1000 = **1GB** 不是 0.1GB。UDP(本地段)可辯護但未辯護:
+> UDP 丟包 = 看不見計數的 drop-newest,和你的可觀測性目標自相矛盾;
+> "need to google" 的面試正解 = 當場換熟的(in-proc bounded queue)。
+> 對應實作:彩排 a(ring_drop_oldest)就是本卡核心結構。
+
+
+
 **Card 5 · sensor bridge** — A single hardware device pushes signals in via
 interrupts/DMA — millions per second in bursts. Your bridge hands them to
 an upstream consumer. The device has no pause mechanism whatsoever. Design
@@ -451,3 +493,41 @@ the bridge.
 machines (TCP connect + application-level ping). A dead node must be
 flagged within a predictable window; the prober must not hammer its targets
 or blow itself up. Design the scheduling and concurrency.
+
+(Scale, Data rate, Use case)
+1. How big is the ping / pong data size? Are we receiving the ping from machine, or we send the ping to machine to check? 
+machines below hundred, we just assume this is 10^2.
+The data size is ping and pong, so we can assume this only 1 byte
+And the data rate is decided by the prober strategy.
+I think we need to send the ping from our prober side.
+
+(Data Loss, Detect)
+2. How long do we can decide a machine is dead while waiting the ping pong? And how to decide the machine is dead? If we can connect but cannot recv pong, is it dead?
+    The ping pong timeout is 60 secs, then the predictable window will be impacted too
+    The ping pong timeout is 100ms, than the predictable window can be shorter
+
+    To decide a machine is dead, TCP connection is down or ping / pong timeout.
+    
+(SLA)
+3. How long the predictable window we want to target at? Are we targeting average throughput or tail latency in updating newest status?
+    Lets guess we use 1s to get the newest data, then we need to handle the machine ping pong concurrently
+    if it's 1 hour, then one thread to handle all the connection is enough.
+
+Lets looks into assumption:
+
+100 machines with 1 byte ping / pong transfer
+And 1s is the predictable window, and timeout is 100ms.
+We can open 100 threads to handle all the ping pong tcp connection check.
+And per thread a boolean status in a huge table
+Every turn we try to create connection if connection is down and send ping / pong within 100ms.
+Ok, I'll start to code with the status table.
+
+> **批改(7/21)**:五問 3/5。漏 ①題幹第二硬約束 "must **not hammer**"
+> ——重試/併發無上限,連不上就重連 = 重試風暴(固定 worker pool =
+> 天然限流,bounded submit 就是答案);漏 ②判死去抖:連續 N 次失敗才標紅,
+> 而 predictable window 因此 = **interval + N × timeout**——你有方向
+> (60s vs 100ms ✓)但沒立式,這張卡的 "predictable" 就是在要這條公式。
+> 做對的:push/pull 當場變決策 ✓;**沒掏 lock-free/SPSC**(答案卷
+> 「常見錯誤」第一條完美避開,節制正確)✓;100 threads 可辯護(瓶頸在 RTT)。
+> 跨卡教訓:**題幹句句是參數,句句要消費**(兩卡漏的都是白給的句子)。
+> 對應實作:彩排 h(timer_queue)+ thread_pool 的 bounded submit。
