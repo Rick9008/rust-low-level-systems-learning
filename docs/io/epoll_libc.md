@@ -27,7 +27,7 @@
 
 ### 1. `repr(packed)` 的架構差異
 
-手寫版必須自己知道這件事(`reference/src/epoll_sys.rs:35`):
+手寫版必須自己知道這件事(`reference/src/io/epoll_sys.rs:35`):
 
 ```rust
 #[repr(C)]
@@ -106,7 +106,7 @@ if e.kind() == io::ErrorKind::Interrupted { continue; }
 ## 完整可跑的最小版本
 
 以下這段是**真的編過、真的跑過**的(`libc = "0.2"`,edition 2024,三個 `nc` client 打進去)。
-對照 `reference/src/epoll_sys.rs` 看,你會發現結構一模一樣——只是 `unsafe extern "C"` 區塊消失了。
+對照 `reference/src/io/epoll_sys.rs` 看,你會發現結構一模一樣——只是 `unsafe extern "C"` 區塊消失了。
 
 ```rust
 use std::collections::HashMap;

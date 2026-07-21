@@ -1,6 +1,6 @@
 # ds_sync(同步策略對照組)設計取捨
 
-對應程式碼:`reference/src/ds_sync/`。相關:[arena_lockfree](arena_lockfree.md)、
+對應程式碼:`reference/src/concurrency/ds_sync/`。相關:[arena_lockfree](arena_lockfree.md)、
 [spsc_ring](spsc_ring.md)、[bounded_queue](bounded_queue.md)、
 [dsu](../ds/dsu.md)、[lru](../ds/lru.md)、[fd_registry](../io/fd_registry.md)、
 [thread-safe-spectrum](thread-safe-spectrum.md)(七站光譜的口述版)。

@@ -27,7 +27,7 @@
 //!
 //! Ctrl-C 結束。
 
-use reference::tcp_echo::EchoServer;
+use reference::io::tcp_echo::EchoServer;
 use std::env;
 use std::process;
 

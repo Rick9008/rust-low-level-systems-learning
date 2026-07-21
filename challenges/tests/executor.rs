@@ -1,6 +1,6 @@
-//! 驗收:challenges::executor。完成後移除 #[ignore]。
+//! 驗收:challenges::runtime::executor。完成後移除 #[ignore]。
 
-use challenges::executor::{Delay, block_on};
+use challenges::runtime::executor::{Delay, block_on};
 use std::future::Future;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};

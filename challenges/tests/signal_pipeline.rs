@@ -1,7 +1,7 @@
 //! challenge 驗收測試:signal_pipeline。
 //! `cargo test -p challenges --test signal_pipeline -- --include-ignored`
 
-use challenges::signal_pipeline::{Signal, start};
+use challenges::concurrency::signal_pipeline::{Signal, start};
 use std::time::Duration;
 
 /// 守恆:狂灌 100k 筆(capacity 8)——accepted + dropped == sent,

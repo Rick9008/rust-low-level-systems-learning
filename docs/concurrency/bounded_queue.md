@@ -1,6 +1,6 @@
 # bounded_queue 設計取捨
 
-對應程式碼:`reference/src/bounded_queue.rs`。相關:[thread_pool](thread_pool.md)(同 idiom 的消費端)、[spsc_ring](spsc_ring.md)(無鎖版的對照)。
+對應程式碼:`reference/src/concurrency/bounded_queue.rs`。相關:[thread_pool](thread_pool.md)(同 idiom 的消費端)、[spsc_ring](spsc_ring.md)(無鎖版的對照)。
 
 ## 為什麼是 predicate wait,不是 if + wait
 

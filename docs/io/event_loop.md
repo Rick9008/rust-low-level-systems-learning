@@ -1,6 +1,6 @@
 # event_loop 設計取捨
 
-對應程式碼:`reference/src/event_loop.rs`。上游:[epoll_sys](epoll_sys.md);下游:[tcp_echo](tcp_echo.md)、hw_bridge 的 evented server。
+對應程式碼:`reference/src/io/event_loop.rs`。上游:[epoll_sys](epoll_sys.md);下游:[tcp_echo](tcp_echo.md)、hw_bridge 的 evented server。
 
 ## 為什麼是「薄 poller」而不是「胖 framework」
 

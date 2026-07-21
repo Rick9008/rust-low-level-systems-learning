@@ -138,7 +138,7 @@ Requirements:
 
 ## f · telemetry_aggregator(Q5)
 
-> **用途**:Q5 預測題(認題:"can't store them all" / "aggregate" / "windows")。recognition + **7/24 配套動手**(延伸寫在 `drills/src/ring_buffer.rs` 同檔)。
+> **用途**:Q5 預測題(認題:"can't store them all" / "aggregate" / "windows")。recognition + **7/24 配套動手**(延伸寫在 `drills/src/ds/ring_buffer.rs` 同檔)。
 > = 卡#1 的實作版:playbook Q1「就地聚合」留白的三個邊界(slot 重用 / 遲到樣本 / 未來 ts 清格)在這題落地。第一個 clarify:**window 多大?timestamp 會亂序嗎?**
 
 A whole rack produces billions of signals — storing them all is off the

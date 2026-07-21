@@ -17,10 +17,10 @@
 //! 兩種 mode 對同一組操作的外顯行為完全相同——差別只在 `top -H` 看得到的
 //! thread 數(threaded 每連線一條;evented 固定 2 條:event loop + command worker)。
 
-use reference::hw_bridge::handler::{CommandHandler, MockHardware};
-use reference::hw_bridge::protocol::{Command, Response};
-use reference::hw_bridge::server_evented::EventedServer;
-use reference::hw_bridge::server_threaded::ThreadedServer;
+use reference::io::hw_bridge::handler::{CommandHandler, MockHardware};
+use reference::io::hw_bridge::protocol::{Command, Response};
+use reference::io::hw_bridge::server_evented::EventedServer;
+use reference::io::hw_bridge::server_threaded::ThreadedServer;
 use std::env;
 use std::io;
 use std::process;

@@ -3,7 +3,7 @@
 //! ## [Clarify]
 //! 解決:固定容量的 FIFO,push/pop O(1)、零 realloc、記憶體上限可預測——
 //! telemetry、log buffer、固定深度 pipeline 的典型底層。
-//! Constraints:單執行緒(並發版見 [`crate::spsc_ring`],那邊講 memory ordering,
+//! Constraints:單執行緒(並發版見 [`crate::concurrency::spsc_ring`],那邊講 memory ordering,
 //! 這邊講 index 算術)。容量不必是 2 的冪。
 //!
 //! ## [Abstract]

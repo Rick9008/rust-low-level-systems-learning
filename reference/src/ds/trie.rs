@@ -23,7 +23,7 @@
 //!   代價是稀疏節點浪費——字母表大(Unicode)或極稀疏時換 `HashMap<char, usize>`
 //!   (O(1) 期望 + heap 開銷)或排序 `Vec<(char, usize)>`(O(log deg) 二分)。
 //! - arena 只長不縮:刪除詞只清 `is_end`,不回收節點(懶刪除)。
-//!   回收要 free list + 世代標記——那是 [`crate::arena_lockfree`] 的主題。
+//!   回收要 free list + 世代標記——那是 [`crate::concurrency::arena_lockfree`] 的主題。
 //! - insert/contains/starts_with 都是 O(L) 時間,L = key 長;空間 O(Σ L × 424B) 最壞。
 //!
 //! ## [Dry-Run]

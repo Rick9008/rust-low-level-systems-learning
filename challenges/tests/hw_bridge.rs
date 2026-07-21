@@ -1,11 +1,11 @@
-//! 驗收:challenges::hw_bridge。完成後移除 #[ignore]。
+//! 驗收:challenges::io::hw_bridge。完成後移除 #[ignore]。
 //! 注意:編碼端刻意用 **reference 的 encode**——你的解碼要與它互通
 //! (自己編自己解會把「兩邊都錯」的 bug 藏起來)。
 
-use challenges::hw_bridge::{DecodeError, FrameReader, MAX_FRAME_LEN, try_decode};
-use reference::hw_bridge::protocol as ref_proto;
+use challenges::io::hw_bridge::{DecodeError, FrameReader, MAX_FRAME_LEN, try_decode};
+use reference::io::hw_bridge::protocol as ref_proto;
 
-fn drain(r: &mut FrameReader) -> Vec<challenges::hw_bridge::RawFrame> {
+fn drain(r: &mut FrameReader) -> Vec<challenges::io::hw_bridge::RawFrame> {
     let mut out = Vec::new();
     while let Some(f) = r.next_frame().unwrap() {
         out.push(f);
@@ -82,8 +82,8 @@ fn frame_reader_reassembles_any_split() {
 #[test]
 #[ignore = "完成 challenge 後移除"]
 fn end_to_end_against_reference_server() {
-    use reference::hw_bridge::handler::MockHardware;
-    use reference::hw_bridge::server_threaded::ThreadedServer;
+    use reference::io::hw_bridge::handler::MockHardware;
+    use reference::io::hw_bridge::server_threaded::ThreadedServer;
     use std::io::{Read, Write};
     use std::net::TcpStream;
 

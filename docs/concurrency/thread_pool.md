@@ -1,6 +1,6 @@
 # thread_pool 設計取捨
 
-對應程式碼:`reference/src/thread_pool.rs`。相關:[bounded_queue](bounded_queue.md)(內部佇列同 idiom)、[file_io_offload](../io/file_io_offload.md)(用池 offload 阻塞 IO)。
+對應程式碼:`reference/src/concurrency/thread_pool.rs`。相關:[bounded_queue](bounded_queue.md)(內部佇列同 idiom)、[file_io_offload](../io/file_io_offload.md)(用池 offload 阻塞 IO)。
 
 ## Worker 迴圈的唯一難點:shutdown 不卡死
 

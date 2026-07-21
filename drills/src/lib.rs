@@ -10,6 +10,8 @@
 //! 3. 先在紙上 dry-run 測試裡標注的 boundary(空、滿、wrap、overflow)。
 //! 4. 填掉 `todo!()`,移除測試上的 `#[ignore]`,轉綠。
 //! 5. 卡住就 diff `reference/` 的同名模組(最後手段)。
+//!
+//! 模組樹鏡射 `docs/` 的四分類:`ds` → `concurrency` → `runtime` → `io`。
 
 // 挖空的函式參數/為你準備的 import 在你填完之前用不到;
 // 骨架 helper 也可能暫時沒人呼叫。這些 allow 讓 drills 在「全部挖空」
@@ -18,20 +20,8 @@
 // 需要 Vec 的方法(truncate / retain_mut)而誤判成該收窄成 &mut [T]。填完即消失。
 #![allow(unused_variables, dead_code, unused_imports, clippy::ptr_arg)]
 
-pub mod bounded_queue;
+pub mod concurrency;
 pub mod ds;
-pub mod fd_registry;
-pub mod hw_bridge;
+pub mod io;
 pub mod iter_mutate;
-pub mod sharded_map;
-pub mod signal_pipeline;
-pub mod spsc_ring;
-pub mod thread_pool;
-
-pub mod arena_lockfree;
-pub mod async_sync;
-pub mod epoll_sys;
-pub mod event_loop;
-pub mod executor;
-pub mod file_io_offload;
-pub mod tcp_echo;
+pub mod runtime;

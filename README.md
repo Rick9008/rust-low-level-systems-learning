@@ -15,6 +15,11 @@ std-only 的 low-level systems 面試學習教材:concurrency、event loop、bin
 `challenges/` 對應面試 live coding 的真實條件(空白起點)。execution 的缺口只有靠
 `drills/` 和 `challenges/` 補;純讀 `reference/` 不能取代手搓。
 
+三個 crate 的模組樹鏡射 `docs/` 的四分類:`ds/`(單執行緒資料結構)·
+`concurrency/`(鎖與 lock-free)· `runtime/`(async internals;`async` 是保留字,
+docs 端叫 `docs/async/`)· `io/`(event loop 與軟硬體橋接);
+`iter_mutate` / `inplace_leetcode` 是語言慣用法,留在 crate 根。
+
 ## 學習路徑(依面試環境分兩級)
 
 面試在 CoderPad:單檔、Cargo 只有固定 crate 清單——實測 Rust 1.92(2024 Edition),
@@ -313,8 +318,8 @@ UnsafeCell 存取都會回報給 loom 的執行期。這就是為什麼被測程
 矛盾:library 本體要 std-only(零依賴),但 loom 要求被測程式用**它的**型別——
 總不能為了測試把 production 程式碼綁上 loom。
 
-解法在 `reference/src/sync_shim.rs`。核心演算法(`spsc_ring/core_impl.rs`、
-`arena_lockfree/core_impl.rs`)一律寫 `use crate::sync_shim as sync`,**不直接碰 std**:
+解法在 `reference/src/sync_shim.rs`。核心演算法(`concurrency/spsc_ring/core_impl.rs`、
+`concurrency/arena_lockfree/core_impl.rs`)一律寫 `use crate::sync_shim as sync`,**不直接碰 std**:
 
 - **lib 編譯時**:`sync_shim` 是 std 型別的薄殼(`UnsafeCell` 的閉包式 API 必然內聯)
   → production 路徑零依賴、零開銷。

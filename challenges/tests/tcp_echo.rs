@@ -1,6 +1,6 @@
-//! 驗收:challenges::tcp_echo。完成後移除 #[ignore]。
+//! 驗收:challenges::io::tcp_echo。完成後移除 #[ignore]。
 
-use challenges::tcp_echo::EchoServer;
+use challenges::io::tcp_echo::EchoServer;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::thread;
@@ -8,7 +8,7 @@ use std::time::Duration;
 
 fn spawn_server() -> (
     std::net::SocketAddr,
-    challenges::tcp_echo::ShutdownHandle,
+    challenges::io::tcp_echo::ShutdownHandle,
     thread::JoinHandle<std::io::Result<()>>,
 ) {
     let mut server = EchoServer::bind("127.0.0.1:0").unwrap();

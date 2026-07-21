@@ -14,7 +14,7 @@ mod sync_shim {
 
 // 測試只用到部分 API;其餘(len/is_empty 等)是 lib 的事,不算 dead code。
 #[allow(dead_code)]
-#[path = "../src/ds_sync/dsu_lockfree/core_impl.rs"]
+#[path = "../src/concurrency/ds_sync/dsu_lockfree/core_impl.rs"]
 mod core_impl;
 
 use core_impl::DsuLockFree;

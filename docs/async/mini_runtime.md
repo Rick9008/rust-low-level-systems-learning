@@ -1,6 +1,6 @@
 # mini_runtime 設計取捨
 
-對應程式碼:`reference/src/mini_runtime.rs`。相關:
+對應程式碼:`reference/src/runtime/mini_runtime.rs`。相關:
 [executor](executor.md)(Waker 協議與 park token)、
 [event_loop](../io/event_loop.md)(V1 poller 的底層)、
 [fd_registry](../io/fd_registry.md)(interest table)、

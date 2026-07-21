@@ -1,6 +1,6 @@
 # sharded_map 設計取捨
 
-對應程式碼:`reference/src/sharded_map.rs`。
+對應程式碼:`reference/src/concurrency/sharded_map.rs`。
 
 ## 分片的數學
 

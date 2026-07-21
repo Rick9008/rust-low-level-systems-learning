@@ -1,6 +1,6 @@
-//! 驗收:challenges::spsc_ring。完成後移除 #[ignore]。
+//! 驗收:challenges::concurrency::spsc_ring。完成後移除 #[ignore]。
 
-use challenges::spsc_ring::channel;
+use challenges::concurrency::spsc_ring::channel;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;

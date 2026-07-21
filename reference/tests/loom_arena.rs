@@ -12,7 +12,7 @@ mod sync_shim {
 
 // 測試只用到 push/pop;capacity 等其餘 API 是 lib 的事,不算 dead code。
 #[allow(dead_code)]
-#[path = "../src/arena_lockfree/core_impl.rs"]
+#[path = "../src/concurrency/arena_lockfree/core_impl.rs"]
 mod core_impl;
 
 use core_impl::ArenaStack;

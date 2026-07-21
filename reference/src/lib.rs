@@ -6,46 +6,29 @@
 //! 閱讀順序見 repo 根目錄 README 的「學習路徑」。
 //! 每個模組頂端的 `//!` doc 依 5 pillars 結構撰寫:
 //! [Clarify] → [Abstract] → [Iterate] → [Trade-offs] → [Dry-Run]。
+//!
+//! 模組樹鏡射 `docs/` 的四分類:
+//! `ds`(單執行緒資料結構)→ `concurrency`(鎖與 lock-free)
+//! → `runtime`(async internals)→ `io`(event loop 與橋接)。
 
-// stage 2:mutex/condvar 基礎
-pub mod bounded_queue;
-pub mod sharded_map;
-pub mod thread_pool;
-
-// stage 3:單執行緒資料結構(index-based 優先),集中在 ds/ 子模組
+// 單執行緒資料結構(stage 3,index-based 優先)
 pub mod ds;
+
+// 執行緒、鎖、atomic / lock-free(stage 2 + 4 + 4.5)
+pub mod concurrency;
+
+// async internals(stage 5)
+pub mod runtime;
+
+// event loop / IO / 軟硬體橋接(stage 6–7)
+pub mod io;
 
 // 語言慣用法(std-only,面試高頻):邊迭代邊修改 Vec / slice
 pub mod iter_mutate;
 // 上面 pattern 的高頻 LeetCode in-place 題示範
 pub mod inplace_leetcode;
 
-// stage 4:atomic / lock-free(loom 驗證見 tests/loom_*.rs)
-pub mod arena_lockfree;
-// JD 本尊圖:訊號源 → SPSC → spin-then-park 消費(掛牌握手 = SeqCst 的實戰位)
-pub mod signal_pipeline;
-pub mod spsc_ring;
+// loom 機關:lib 端 re-export std 同步原語;loom 測試以 #[path] include
+// 同一份 core_impl.rs 並自帶 loom 版 sync_shim(見模組 doc)。留在 crate 根,
+// core_impl.rs 的 `crate::sync_shim` 路徑才不隨分類搬動而變。
 pub(crate) mod sync_shim;
-
-// stage 4.5:同步策略對照組——同一個資料結構,鎖版/無鎖版並排
-// (誰值得無鎖、誰上鎖就夠、無鎖版為何有時不存在:docs/concurrency/ds_sync.md)
-pub mod ds_sync;
-
-// stage 5:async internals
-pub mod executor;
-// blocking 同步原語的 async 化(rendezvous 三部曲第三章):AsyncMutex + Notify
-pub mod async_sync;
-// executor × reactor 縫起來:兩階 reactor(V0 O(n) scan → V1 epoll)的 mini-tokio
-pub mod mini_runtime;
-
-// event loop 的 interest table 基底(std-only、平台無關):generational slot map
-pub mod fd_registry;
-
-// stage 6:event loop / IO(Linux-only:epoll)
-pub mod epoll_sys;
-pub mod event_loop;
-pub mod file_io_offload;
-pub mod tcp_echo;
-
-// stage 7:橋接軟硬體(binary protocol + framing + 雙 server)
-pub mod hw_bridge;

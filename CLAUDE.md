@@ -32,7 +32,14 @@ cargo test -p challenges -- --include-ignored    # show which challenge tests ar
 
 ## Architecture
 
-Four workspace crates; the first three share module names, and the six single-threaded data-structure modules (`dsu`, `graph`, `lru`, `ring_buffer`, `tree`, `trie`) live under a `ds/` submodule in all three crates (exceptions: the single-threaded idiom modules don't span all layers — `iter_mutate` has no challenge, `inplace_leetcode` exists only in reference; the locked/lock-free pairing layer `ds_sync` exists only in reference):
+Four workspace crates; the first three share module names, organized into four category submodules mirroring `docs/`'s four folders (`async` is a Rust keyword, so the source module is named `runtime`):
+
+- `ds/` — the six single-threaded data-structure modules (`dsu`, `graph`, `lru`, `ring_buffer`, `tree`, `trie`)
+- `concurrency/` — `bounded_queue`, `thread_pool`, `sharded_map`, `spsc_ring`, `arena_lockfree`, `signal_pipeline`, plus (reference-only) the locked/lock-free pairing layer `ds_sync`
+- `runtime/` (docs: `docs/async/`) — `executor`, `async_sync`, plus (reference-only) `mini_runtime`
+- `io/` — `epoll_sys`, `event_loop`, `fd_registry`, `file_io_offload`, `tcp_echo`, `hw_bridge`
+
+The single-threaded idiom modules stay at crate root and don't span all layers — `iter_mutate` has no challenge, `inplace_leetcode` exists only in reference; `sync_shim` stays at reference's root so `core_impl.rs`'s `crate::sync_shim` path survives moves (see the loom mechanism below). The crates:
 
 - **`reference/`** — complete implementations + tests + teaching comments. The answer key.
 - **`drills/`** — same module tree, but core functions are hollowed to `todo!("spec: ...")` with a spec doc comment above each. Skeleton, helpers, and `#[ignore]`d tests are provided.
@@ -51,7 +58,7 @@ Practice tests carry `#[ignore = "..."]` so `cargo test --workspace` stays green
 
 The library is std-only, but loom needs code under test to use *its* atomic/UnsafeCell types. The trick (`reference/src/sync_shim.rs`):
 
-- Lock-free core algorithms live in standalone files (`spsc_ring/core_impl.rs`, `arena_lockfree/core_impl.rs`) that only reference `crate::sync_shim as sync`.
+- Lock-free core algorithms live in standalone files (`concurrency/spsc_ring/core_impl.rs`, `concurrency/arena_lockfree/core_impl.rs`) that only reference `crate::sync_shim as sync`.
 - Lib build: `sync_shim` re-exports std types → zero production dependencies.
 - Loom tests (`reference/tests/loom_*.rs`): define their own `sync_shim` module re-exporting loom types, then `#[path]`-include **the same** `core_impl.rs` source. Loom verifies the exact logic the lib ships.
 

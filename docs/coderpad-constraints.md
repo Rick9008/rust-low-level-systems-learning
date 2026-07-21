@@ -118,7 +118,7 @@ trait Poller {
 
 為什麼心臟是 block_on:spawn = 很多個 parked 的 block_on 排進 run queue;
 reactor = Delay 的計時 thread 泛化成 epoll——**其餘全是它的變奏**(判準 a)。
-可執行對照:`reference/src/mini_runtime.rs`(V0 O(n) scan → V1 epoll,
+可執行對照:`reference/src/runtime/mini_runtime.rs`(V0 O(n) scan → V1 epoll,
 runtime 一行不改)。
 
 ### 實例二:「build a server」(規模決定心臟)

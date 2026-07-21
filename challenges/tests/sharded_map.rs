@@ -1,6 +1,6 @@
-//! 驗收:challenges::sharded_map。完成後移除 #[ignore]。
+//! 驗收:challenges::concurrency::sharded_map。完成後移除 #[ignore]。
 
-use challenges::sharded_map::ShardedMap;
+use challenges::concurrency::sharded_map::ShardedMap;
 use std::sync::Arc;
 use std::thread;
 

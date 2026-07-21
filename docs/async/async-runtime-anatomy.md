@@ -6,7 +6,7 @@
 並補上 repo 沒有實作的第四塊:proactor(completion 版的「誰該醒」)。
 互動版:[`docs/artifacts/async_runtime.html`](artifacts/async_runtime.html)。
 
-> 2026-07 起,「接起來」不只在紙上:`reference/src/mini_runtime.rs` 把
+> 2026-07 起,「接起來」不只在紙上:`reference/src/runtime/mini_runtime.rs` 把
 > executor × reactor 真的縫起來(多 task run queue + IO futures +
 > 可抽換 `Poller`:V0 O(n) scan → V1 epoll),取捨見
 > [`mini_runtime.md`](mini_runtime.md)。
@@ -124,7 +124,7 @@ buffer 綁在 op 上之後,task 亂跑核心的代價變高。這是「executor 
 ## 5. CoderPad 實戰對應(2026-07-15 實測)
 
 - 手搓 mini runtime **可考**:`block_on` + `Wake` + park/unpark + 一個 Delay
-  ——全 std,`reference/src/executor.rs` 就是答案卷。
+  ——全 std,`reference/src/runtime/executor.rs` 就是答案卷。
 - timer reactor 純 std 寫得出來(§2 的 heap + condvar),加分題等級的展示。
 - socket 的 std 答案是 thread-per-connection;要 async IO 就上 tokio(pad 有)。
 - raw syscall 綁定實測**可用**(`unsafe extern "C"` 宣告 `epoll_create1` /

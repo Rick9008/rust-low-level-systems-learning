@@ -23,9 +23,9 @@
 //! 這條路徑在單元測試裡是 `assert_eq!(reader.next_frame(), Ok(None))`——
 //! 跑一次 drip,那個 `Ok(None)` 就有了體感。
 
-use reference::hw_bridge::client::{ClientError, HwClient};
-use reference::hw_bridge::handler::MockHardware;
-use reference::hw_bridge::protocol::{
+use reference::io::hw_bridge::client::{ClientError, HwClient};
+use reference::io::hw_bridge::handler::MockHardware;
+use reference::io::hw_bridge::protocol::{
     Command, ERR_BAD_PAYLOAD, ERR_UNKNOWN_OPCODE, Response, encode_frame,
 };
 use std::env;

@@ -1,6 +1,6 @@
 # fd_registry 設計取捨
 
-對應程式碼:`reference/src/fd_registry.rs`。相關:
+對應程式碼:`reference/src/io/fd_registry.rs`。相關:
 [arena_lockfree](../concurrency/arena_lockfree.md)(generation 防 ABA 的 lock-free 版)、
 [event_loop](event_loop.md)(interest table 的使用場景)、
 [cost-model](../cost-model.md) 第三節(poll vs epoll 的 Big-O 故事)。

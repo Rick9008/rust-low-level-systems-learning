@@ -13,14 +13,13 @@
 //!
 //! 建議順序(★ = 先做):★ spsc_ring → ★ signal_pipeline → ★ executor
 //! → ★ lru → ★ hw_bridge → dsu → sharded_map → tcp_echo。
+//!
+//! 模組樹鏡射 `docs/` 的四分類:`ds` → `concurrency` → `runtime` → `io`。
 
 // 空殼狀態下簽名的參數/佔位欄位還沒被使用;動手寫時建議先拿掉這行自查。
 #![allow(unused_variables, dead_code)]
 
+pub mod concurrency;
 pub mod ds;
-pub mod executor;
-pub mod hw_bridge;
-pub mod sharded_map;
-pub mod signal_pipeline;
-pub mod spsc_ring;
-pub mod tcp_echo;
+pub mod io;
+pub mod runtime;

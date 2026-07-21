@@ -71,7 +71,7 @@ trait Poller {
 
 加一句「底層是 epoll,`epoll_event.data` 的 u64 就是我的 token,要的話可以展開」,
 然後回到主結構——**不要現場手搓 FFI**。
-整條梯子的可執行版在 `reference/src/mini_runtime.rs`(階段 2 的 run queue +
+整條梯子的可執行版在 `reference/src/runtime/mini_runtime.rs`(階段 2 的 run queue +
 階段 3 的 reactor;V0 O(n) scan → V1 epoll,runtime 一行不改)。
 
 背景知識見 [`docs/async/async-runtime-anatomy.md`](../docs/async/async-runtime-anatomy.md);

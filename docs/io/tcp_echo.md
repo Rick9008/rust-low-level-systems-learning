@@ -1,6 +1,6 @@
 # tcp_echo 設計取捨
 
-對應程式碼:`reference/src/tcp_echo.rs`。上游:[event_loop](event_loop.md);姊妹篇:[hw_bridge](hw_bridge.md)(在同樣的 IO 骨架上疊協定)。
+對應程式碼:`reference/src/io/tcp_echo.rs`。上游:[event_loop](event_loop.md);姊妹篇:[hw_bridge](hw_bridge.md)(在同樣的 IO 骨架上疊協定)。
 
 ## 這個模組真正在教的三件事
 

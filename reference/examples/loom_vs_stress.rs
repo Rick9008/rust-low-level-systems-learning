@@ -80,7 +80,7 @@ mod sync_shim {
 
 /// 回合 3 用的**正確版**:直接 include lib 出貨的那份原始碼,一字不改。
 #[allow(dead_code)]
-#[path = "../src/spsc_ring/core_impl.rs"]
+#[path = "../src/concurrency/spsc_ring/core_impl.rs"]
 mod good_spsc;
 
 /// 回合 1:壞版 × std 型別 → 真的能開 OS thread 壓它。

@@ -1,6 +1,6 @@
 # spsc_ring 設計取捨
 
-對應程式碼:`reference/src/spsc_ring/`(`mod.rs` 教學殼 + `core_impl.rs` 演算法)。
+對應程式碼:`reference/src/concurrency/spsc_ring/`(`mod.rs` 教學殼 + `core_impl.rs` 演算法)。
 前置閱讀:[ring_buffer](../ds/ring_buffer.md)(單執行緒版的 index 算術)。
 
 ## 從單執行緒 ring 到 SPSC:哪裡斷掉了

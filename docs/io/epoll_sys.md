@@ -1,6 +1,6 @@
 # epoll_sys 設計取捨
 
-對應程式碼:`reference/src/epoll_sys.rs`。下游:[event_loop](event_loop.md)。
+對應程式碼:`reference/src/io/epoll_sys.rs`。下游:[event_loop](event_loop.md)。
 對照:[epoll_libc](epoll_libc.md)——**允許用 `libc` crate 的話差別在哪**(以及往上的 mio / tokio)。
 
 ## Readiness vs Completion:先站對地圖

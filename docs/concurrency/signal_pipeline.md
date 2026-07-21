@@ -1,7 +1,7 @@
 # signal_pipeline 設計取捨
 
-對應程式碼:`reference/src/signal_pipeline.rs`。drill:`drills/src/signal_pipeline.rs`
-(兩洞:send、掛牌握手);challenge:`challenges/src/signal_pipeline.rs`(★)。
+對應程式碼:`reference/src/concurrency/signal_pipeline.rs`。drill:`drills/src/concurrency/signal_pipeline.rs`
+(兩洞:send、掛牌握手);challenge:`challenges/src/concurrency/signal_pipeline.rs`(★)。
 相關:[spsc_ring](spsc_ring.md)(佇列本體)、[cost-model](../cost-model.md)
 (容量算式與 queue 三型)、`hw_bridge` 的 `server_evented_spsc`
 (同一套握手接進 event loop)。
