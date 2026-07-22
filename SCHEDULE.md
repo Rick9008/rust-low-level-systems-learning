@@ -24,15 +24,15 @@
 | **7/19 日** | 卡#4 → 🔴**a#1 ring_drop_oldest**(45m+review 30m,pillar1 先打分)→ 漏洞清單 → `fd_registry` artifact 讀 + drill 3 洞(90m,弱點提前)→ **spsc 空白 #1**(20m) | ~4.5h,晚上休 |
 | **7/20 一** | 卡#5 → **修 a#1 的洞**(targeted,60–90m)→ 🔴**b#1 pool_graceful**(45+30m)。通勤:event_loop / mini_runtime 略讀(餵 executor×reactor 那句) | ~3.5h |
 | **7/21 二** | **卡#4+卡#6 開場連打**(15+15;#4 自 7/20 滑入)→ 🔴**e2#1 fd_registry**(45+30m)→ **b#1 補課**(45–60m:紅測 ×3 + lost-wakeup dry-run + 回放 + 英文錄音 a#1+b#1 合場——code 凌晨已全綠,不用再修)→ **executor 讀 + challenge 空白手搓**(60–90m,7/19 裁決落位)+ Q7 timer 口述接尾(10m,qa_timer_queue 頁)。睡眠債下預設:executor challenge 第一個滑 7/22 晚尾、Q7 口述併 7/26 recognition | ~4h |
-| **7/22 三** | 白天(公司):**lru 兩洞修 ✅**(紅測×2 + 單獨 unlink 直測×2 + mutation 複驗,commit a77aa44)+ qa_lockfree_followups 沉澱 ✅ → 剩餘時段(打字類,原晚上項目移入):**spsc 空白 #2**(20m,Y/N+用時)→ **e2#1 複核 + b#1 補課合併段**(50m:e2 回放+紅測複核;b#1 紅測×3 + lost-wakeup dry-run 紙上**先手走再翻卡**〔Heptabase e2eb0dfb〕+ 回放)→ **executor challenge**(60m)。晚(23:30–):**卡#5 口述設計版**(40m 實估:sensor bridge 分 threads/tasks + 定通訊協定 + 五問,JD 複核 #4)→ 🔴**c#1 frame_parser_heartbeat**(45+30,narrate 硬動作;錄音+漏洞清單)→ 結帳;**~01:45 熄燈** | 白 ~2h + 晚 ~2h |
-| **7/23 四** | 白天(公司):開機 pool 骨架默寫 15m(白紙到能編譯→diff→0 錯,不開 oracle)+ 重打卡#2(15m,結帳表紀律)→ **signal_pipeline 讀+drill**(~90m:start_fan_in 6 tests + SB stepper 四組合 + drill 2 洞;口述段留晚上)→ **修 c#1 的洞**(30m,照昨晚清單,紅測先行)→ 日讀 p8(c#1 已回放,合法)→ 餘裕才進 overflow 池。晚:🔴**a#2**(45+20,驗收斂)→ signal_pipeline 3 trade-off + litmus 口述(15m,**最後一份新材料**)→ 結帳 | 白 ~3h + 晚 ~1.75h |
-| **7/24 五** | 白天(公司):重打卡#1(15m)→ **h 快寫**(30m 非計時:BinaryHeap<Reverse> + schedule/pop_due 寫到綠,戳醒/wheel 用講的——唯一沒親手寫過的題型)→ **aggregator 延伸**(45m,含「未來 ts 清 window」case,= f 題 contract,寫在 ring_buffer 同檔)→ 日讀 p6 + **lockfree 家族段**(qa_lockfree_followups 複讀 + upgrade-map §2/§7 + 頁尾表逐台 stepper,~60m)。晚:🔴**e2#2**(45+20)→ 30 秒口述(SPSC→MPSC→MPMC 要改哪裡)出聲收尾 → 結帳 | 白 ~3h + 晚 ~1.5h |
-| **7/25 六(在家,出聲自由)** | 六卡快打(60–75m 實估;卡3 認題 30 秒帶過)→ 🔴**c#2**(45+20)→ 🔴**d#1 tokio_frame_server**(45+20,只跑一遍——「面試官說可用 crate」分支保險;自 7/24 移入)→ **口述錄音 ~75m(技術)**:ordering / Waker 鏈 / 光譜 / 選型 + executor×reactor + 五 server p99.9,內含 unsafe impl 三段式(spsc_ring 實例)+ 硬體記憶體邊界 3 分鐘(volatile vs atomic、repr(C)/packed/alignment、endianness)+ hw_bridge=「RPC over TCP 骨架」一句 + **TPS 尾聲反問 2 題** → ds_sync.html §8 四題**先口頭答再翻**(20m)。**浮動#3 判定**:若有題兩遍都爆 → 插這裡並砍 d#1;否則 d-std 移 7/26 | ~6h |
-| **7/26 日(在家)** | 🔴**b#2**(45+20,累了這場先砍)→ **d-std**(45m:std::net accept loop + thread-per-conn(講清何時換 acceptor+pool)+ framer 重用 + graceful shutdown——JD「without relying on external libraries」保險;寫或口述視狀態)→ recognition 級 e/f/g/h:讀題→30 秒定界→口述 arc(60m)+ Q7 timer 口述 → 經驗故事 3 條 bullet(40m)→ 英文句庫整份唸出聲(30m)→ **spsc 空白 #3**(20m,最後手熱)→ 讀自己的 challenge code(60m)→ **00:30 熄燈(調時差開始)** | ~5.5h |
+| **7/22 三** | **白天實績 ✅**:lru 兩洞修畢(紅測×2+單獨 unlink×2+mutation 複驗,a77aa44)|qa_lockfree_followups 沉澱(晨間 MPSC/MPMC 九題+stepper 導覽)|SCHEDULE v9 時間模型|spsc 空白 #2(10 分/首編 4 錯全手滑,達標)|e2#1 複核(兩洞皆無網→補紅測×2 先紅後綠,oracle 開燈)|b#1 補課完結(紅測×3 mutation 驗+新抓④⑤⑥三洞全修 0.40→0.10s;loom 三變體佐證)|signal_pipeline 頁大改(fence 全套)|telemetry_aggregator drill 新增|hepta 卡沉澱|作息梯度定案。**晚(在家)**:aggregator 填綠(45m)→ h timer 快寫(30m)→ 30 秒口述出聲(鐵律英文)→ **02:00 熄燈/明早 08:45 起**。滑帳:🔴c#1 → 7/23 晚|卡#5 → 7/25 開場|executor → 7/23 白天連打|p8 → 7/24 | 白 ~5h + 晚 ~1.5h |
+| **7/23 四** | 白天(公司):開機 pool 骨架默寫 15m + 重打卡#2(15m)→ **executor challenge 連打**(60m,兩滑後的閥門日)→ **signal_pipeline 讀+drill**(~60m 可縮:fence 全套 7/22 已深學,SB stepper 快走 + drill 2 洞;口述留晚上)→ 餘裕先補昨晚未完成的 h/aggregator 再進 overflow。晚(23:30–01:00):🔴**c#1 frame_parser_heartbeat**(45+30,自 7/22 移入;narrate 硬動作;錄音+漏洞清單)→ signal_pipeline litmus 口述(15m)→ **01:30 熄燈/08:30 起** | 白 ~3h + 晚 ~1.75h |
+| **7/24 五** | 白天(公司):重打卡#1(15m)→ **修 c#1 的洞**(30m,紅測先行)→ **日讀 p8 + 45 分鐘劇本六步**(c#1 已回放,合法;讀完當修洞底稿)→ 日讀 p6 + **lockfree 家族段**(qa_lockfree_followups 複讀 + upgrade-map §2/§7 + 頁尾表逐台 stepper,~60m)→(若欠)h 快寫/aggregator 補完。晚:🔴**e2#2**(45+20)→ 30 秒口述(SPSC→MPSC→MPMC)出聲 → **01:00 熄燈/08:15 起** | 白 ~3.5h + 晚 ~1.5h |
+| **7/25 六(在家,彩排移白天)** | 開場:**卡#5 口述設計版**(40m 實估:sensor bridge 分 threads/tasks + 定通訊協定 + 五問,JD 複核 #4——deadline 內落地)→ 六卡快打(60–75m;卡3 認題 30 秒帶過)→ 🔴**a#2**(45+20,驗收斂;自原 7/23 移入)→ 🔴**d#1 tokio_frame_server**(45+20,只跑一遍)→ **口述錄音 ~75m**(ordering / Waker 鏈 / 光譜 / 選型 + executor×reactor + 五 server p99.9 + unsafe impl 三段式 + 硬體記憶體邊界 3 分鐘 + hw_bridge=RPC over TCP 一句 + TPS 尾聲反問 2 題)→ ds_sync.html §8 先答再翻(20m)。**00:30 熄燈/08:00 起** | ~6.5h |
+| **7/26 日(在家,彩排移白天)** | 🔴**c#2**(45+20;c#1 7/23 → 間隔 3 天 ✓)→ 🔴**b#2**(45+20,累了這場先砍)→ **d-std**(45m,寫或口述視狀態)→ recognition e/f/g/h(60m)+ Q7 timer 口述 → 經驗故事 3 條(40m)→ 英文句庫唸出聲(30m)→ **spsc 空白 #3**(20m 含 smoke,首編 ≤2 錯)→ 讀自己的 challenge code(60m)→ **00:00 熄燈/07:45 起** | ~6.5h |
 | **7/27 一** | **Taper 升級版:全線回憶掃描**(7/22 定:時間多 → 從「空」升級,但鐵規不變:**不碰新題、不開 oracle、不計時跑題、不寫新 code**〔骨架默寫除外〕;卡住 → 記下、翻答案讀懂就走,**不深挖**)。①**九題型掃描** a/b/c/d/e2/f/g/h(每題 12–15m:讀 PROMPTS_EN 題幹 → 30 秒定界 → 解法 arc+選型 → trade-off 收尾 ≥2 沒選解法+Big-O → 翻 sol_*/漏洞卡對分 → 記 ✓/⚠/✗;在公司 → 定界/trade-off 筆寫兩句,回家 23:00 前補 30m 出聲快掃)②**核心骨架默寫抽查**(10m 白紙:spsc use 塊+impl、pool 兩條件、framer 簽名)③**Heptabase 漏洞卡全翻**(每張 1 分鐘:當時錯什麼、修了什麼)④原 taper 收尾:背時間預算(0-3/3-5/5-10/10-35/35-40/40-45)+ 五 pillar + 開場三句 + 檢查 CoderPad/Meet/耳機/水。**產出:「認題→開場」檢查表(題型\|定界句\|選型\|trade-off 兩句\|我的傷疤),7/28 早上暖手就讀它**。⚠/✗ 超過 3 題不是加班訊號,是「靠已會的 80% 打」的提醒。**23:00 熄燈不動** | ~3.5h |
 | **7/28 二** | 7:30 起床 → 8:00 暖手(小 drill 10m + pillar-5 清單 + 時間預算)→ **8:45–9:30 TPS** | — |
 
-彩排間隔(同題 ≥3 天,近了是背答案):a 7/19→7/23|b 7/20→7/26|e2 7/21→7/24|c 7/22→7/25|d 7/25 一遍。
+彩排間隔(同題 ≥3 天,近了是背答案):a 7/19→7/25|b 7/20→7/26|e2 7/21→7/24|c 7/23→7/26|d 7/25 一遍。
 SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
 
 **彩排覆蓋帳(7/21 裁——「每個題型至少親手寫過一次」)**:a=a#1✓|b=b#1✓|c=framer drill✓+c#1|d=d#1+d-std|e=**e2 即其進階版**✓|f=**7/24 aggregator 延伸即 f contract**|g=**bounded_queue drill 即 g**✓|h=**7/24 快寫 30m 補上**(唯一沒寫過的)。e/g 不升全程——那是練已經最強的地方;g 的 lock-free 版不寫:block-on-full 是等待問題,condvar 繞不掉,try_push 版 = spsc_ring 本人(會講即可)。
@@ -50,11 +50,11 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 | **7/19** | 卡#4 → a#1:PROMPTS_EN(a 題;寫完才開 `rehearsals/examples/sol_ring_drop_oldest.rs`)→ `docs/io/fd_registry.md` + `drills/src/io/fd_registry.rs` → spsc 空白(白紙) |
 | **7/20** | 卡#5 → 修 a#1(照漏洞清單)→ b#1:PROMPTS_EN(b 題)。通勤:`docs/io/event_loop.md` + `docs/async/mini_runtime.md` + `docs/artifacts/event_loop.html` + `html_p/p3-epoll-readiness-event-loop.html` |
 | **7/21** | 卡#6 → e2#1:PROMPTS_EN(e2 題)→ 修 b#1。晚加碼:`challenges/src/runtime/executor.rs`(空白手搓,tests 在 `challenges/tests/executor.rs`)→ `docs/cost-model.md` →(選)`docs/concurrency/thread-safe-spectrum.md` / `scratch/capacity_reps.md` |
-| **7/22** | c#1:PROMPTS_EN(c 題)→ 修 e2#1 → spsc 空白(p8 → 7/23 桌前晚尾) |
-| **7/23** | signal_pipeline 110m:`docs/concurrency/signal_pipeline.md` → `docs/artifacts/signal_pipeline.html`(SB stepper)→ `reference/src/concurrency/signal_pipeline.rs`(`start_fan_in` 6 tests)→ `drills/src/concurrency/signal_pipeline.rs` → a#2 → 修 c#1 → 晚尾:`html_p/p8-hw_bridge_teaching.html`(自 7/22 移入) |
-| **7/24** | e2#2。日讀:`html_p/p6-telemetry-spsc-ring-reference.html` → aggregator 延伸動手(f 題 contract,寫在 `drills/src/ds/ring_buffer.rs` 同檔)→ lockfree 佇列家族段配 `html_p/runtime-lockfree-upgrade-map.html`(§2/§7),收尾把「SPSC→MPSC→MPMC 要改哪裡」唸成 30 秒口述(≤10m,不加場) |
-| **7/25** | d#1:PROMPTS_EN(d 題,tokio)→ 六卡快打:`rehearsals/clarify-cards.md` 全六張 → c#2 → 浮動#3 → 口述底稿:`docs/concurrency/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/io/hw_bridge.md`(五 server 對照組)+ `docs/async/async-runtime-anatomy.md` + `docs/cost-model.md`(數字與「再快呢」三句)。光譜口述的互動版收尾:`docs/artifacts/ds_sync.html`——**先口頭答 §8 四題自測再翻答案**(7/20 積欠的預測題;`ds_sync/` 原始碼與 `list_fine` 是選讀 deep-dive,不排主線) |
-| **7/26** | b#2 → e/f/g/h 題幹:PROMPTS_EN + 認題掃描表 `rehearsals/README.md` → 英文 I/O 唸出聲:PROMPTS_EN + `docs/clarify-playbook.md`(五問英文問法)→ spsc 空白 → 讀自己的 `challenges/src/` |
+| **7/22** | 實績:`drills/src/ds/{lru,telemetry_aggregator}.rs`、`rehearsals/src/{fd_registry,pool_graceful_shutdown}.rs`、`reference/tests/loom_lost_wakeup.rs`、`docs/artifacts/{qa_lockfree_followups,signal_pipeline}.html`、`scratch/hepta_20260722_lockfree_day.md`;晚:`drills/src/ds/telemetry_aggregator.rs` + `rehearsals/src/timer_queue.rs` |
+| **7/23** | signal_pipeline:`docs/concurrency/signal_pipeline.md` → `docs/artifacts/signal_pipeline.html`(7/22 大改版:fence 六題 FAQ + SB stepper)→ `reference/src/concurrency/signal_pipeline.rs`(`start_fan_in` 6 tests)→ `drills/src/concurrency/signal_pipeline.rs` → `challenges/src/runtime/executor.rs`(連打)→ 晚:c#1:PROMPTS_EN(c 題) |
+| **7/24** | 修 c#1(照昨晚清單)→ 日讀:`html_p/p8-hw_bridge_teaching.html`(c#1 已回放)+ 45 分鐘劇本六步 + `html_p/p6-telemetry-spsc-ring-reference.html` → lockfree 家族段配 `qa_lockfree_followups.html` + `html_p/runtime-lockfree-upgrade-map.html`(§2/§7)→ 晚:e2#2:PROMPTS_EN |
+| **7/25** | 卡#5 + 六卡快打:`rehearsals/clarify-cards.md` → a#2:PROMPTS_EN(a 題)→ d#1:PROMPTS_EN(d 題,tokio)→ 口述底稿:`docs/concurrency/thread-safe-spectrum.md` + `docs/rust-five-axis.md` + `docs/io/hw_bridge.md`(五 server 對照組)+ `docs/async/async-runtime-anatomy.md` + `docs/cost-model.md` → `docs/artifacts/ds_sync.html` §8 先答再翻 |
+| **7/26** | c#2 → b#2 → e/f/g/h 題幹:PROMPTS_EN + 認題掃描表 `rehearsals/README.md` → 英文 I/O 唸出聲:PROMPTS_EN + `docs/clarify-playbook.md` → spsc 空白 → 讀自己的 `challenges/src/` |
 | **7/27** | 掃描:`rehearsals/PROMPTS_EN.md`(九題題幹)+ `rehearsals/examples/sol_*.rs`(**對分才開**)+ Heptabase 漏洞卡(e2 兩洞/b 三紅/lru 兩洞/c 的洞)+ `rehearsals/README.md`(protocol+時間預算)+ `docs/coderpad-constraints.md`;產出檢查表寫 `scratch/recall_checklist.md` |
 | **7/28** | 暖手小 drill 一題 + pillar-5 dry-run 清單(`rehearsals/README.md`)→ 上場 |
 
@@ -92,7 +92,7 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 **完成**:a#1 全收工(含回放三輪)|🔴**b#1 已跑**(2 綠 3 紅,帳在 PROGRESS 計時表:core 溢時 +13 吃掉 boundary/收尾;時限內自抓 join 漏;當場診斷清 queue + wait predicate 兩洞)。**未動**:卡#4、卡#5、英文錄音(半夜錄音價值低,裁掉併後)。
 
-**7/21 修訂**:卡#4+卡#6 開場連打(15+15)→ 🔴e2#1(45+30)→ **修 b#1 補課**(每洞紅測先行 → 綠;含 shutdown 側 store+notify 有無 mutex 同步的 lost-wakeup dry-run;回放;英文 trade-off 收尾補錄——b#1 沒講到的那 5 分鐘)→ executor challenge **滑 7/22 晚尾**(p8 前)。卡#5 口述設計版 → 7/22(deadline 7/25 前不變)。
+**7/21 修訂**:卡#4+卡#6 開場連打(15+15)→ 🔴e2#1(45+30)→ **修 b#1 補課**(每洞紅測先行 → 綠;含 shutdown 側 store+notify 有無 mutex 同步的 lost-wakeup dry-run;回放;英文 trade-off 收尾補錄——b#1 沒講到的那 5 分鐘)→ executor challenge **滑 7/22 晚尾**(p8 前)。卡#5 口述設計版 → 7/25 開場(7/22 再滑,deadline 內)(deadline 7/25 前不變)。
 
 **7/21 晚加碼(e2#1 零紅收工、有餘力,晚間定)**:executor challenge **拉回今晚**(60m,7/22 晚尾釋放給 p8+緩衝)→ cost-model.md 讀 15m(數字錨,直餵錄音)→ 錄音照舊。22:30 檢查點後選配:thread-safe-spectrum 讀 30m(7/25 底稿提前)或容量速算 3 題(scratch/capacity_reps.md,結帳表紀律)。**23:00 硬熄燈,明天 4.5h 不准借。**
 
@@ -196,7 +196,7 @@ framework = 角色風味;588 以外 Google block 全停(JD 本身反 LeetCode)�
 
 ## Clarify 配方(最弱項的處方:高頻小塊,不開大 block)
 
-- 每天 session 開場一張卡(15m 含對答案);7/25 六張快打重來。**實況(7/21 晚)**:#1 ✓|#2 ✓ 7/19|#3 裁掉(快打時認題帶過)|#4+#6 ✓ 7/21(詳批+修課完;沉澱:playbook 五問結帳表+SOP)|#5 口述設計版 → 7/22
+- 每天 session 開場一張卡(15m 含對答案);7/25 六張快打重來。**實況(7/21 晚)**:#1 ✓|#2 ✓ 7/19|#3 裁掉(快打時認題帶過)|#4+#6 ✓ 7/21(詳批+修課完;沉澱:playbook 五問結帳表+SOP)|#5 口述設計版 → 7/25 開場(7/22 再滑,deadline 內)
 - **重打排程(7/21 定,用結帳表紀律)**:7/23 開場重打 #2(RPC gateway,5m)、7/24 開場重打 #1(telemetry hub,5m)——兩張都是結帳表誕生前做的,重測「數字/式子/裁決」三結帳;7/25 快打 = 總驗收
 - **五問決策表背到能默寫**(掉不掉→full policy→容量算式→shard→SLA→怎麼知道死了)——它就是你的 clarify 演算法,每張卡、每場彩排都跑它
 - 每場彩排 review 第一個打分 = pillar 1
