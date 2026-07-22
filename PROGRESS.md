@@ -23,6 +23,7 @@ SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ri
 | 10 | dsu | ☐ | ☐ | ☐ ★ | **本輪砍**(doc 零訊號) |
 | 11 | sharded_map | ☐ | ☐ | ☐ ★ | 降級:讀 + 口述(跨 shard 鎖序用講的) |
 | 12 | signal_pipeline | ☐ | ☐(2 洞) | ☐ ★ | 7/23 drill + litmus 口述(**fence 全套 7/22 已深學**:signal_pipeline.html 大改+loom_lost_wakeup 三變體,讀段可縮);扇入(fan_in)讀+口述排 7/25;challenge post-TPS |
+| 13 | endian_pack | — | ☐(排 7/25) | — | 7/23 凌晨新增:BE/LE 讀寫+手動 shift+i16 符號擴展+token pack/unpack(e2 mask 傷疤靶場)+混合 header,8 洞 6 測;c 題 framer 與 e2 token 的共用肌肉,drill-only。⚠ `gen` 是 edition 2024 保留字 |
 
 ### 次優先
 
@@ -94,3 +95,5 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 2026-07-23 | `scratch/trade_off_map_ab.md` §fan-in(掃描聚合 + 留的那題) | signal_pipeline 讀到 SB stepper「帶著貨睡死」時回來對答案:consumer 睡誰叫醒 |
 | 2026-07-24 | `qa_lockfree_followups.html`(九題)+ 頁尾 stepper 對照表 | 7/24 lockfree 家族段的文字版前置;讀完照表逐台走 stepper |
 | 2026-07-25 | `html_p/runtime-lockfree-upgrade-map.html`(§1 三問 + §8 追問鏈)+ SPSC→MPMC 30 秒稿 | 錄音「被逼 lock-free」段現在有 repo 實體(mpmc_ring/mpsc_list/ws_deque),照地圖講;ws_deque 的 loom 抓洞實錄是「窮舉>直覺」的第一手證據 |
+| 2026-07-25 | `rehearsals/examples/tcp_skeleton_std.rs`(讀+默寫)+ `drills/src/io/endian_pack.rs` | 7/23 凌晨補位的兩個「上場怕要查」缺口:d 題 socket API 六行、c/e2 的 BE/LE+mask 肌肉 |
+| 2026-07-27 | `rehearsals/recognition-scripts-en.md`(**先講出聲才准開**) | 九題型英文認題掃描的對分底稿——口述版 sol_*,含每題傷疤句 |
