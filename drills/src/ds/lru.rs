@@ -50,9 +50,6 @@ impl<K: Hash + Eq + Clone, V> LruCache<K, V> {
     /// 提示:先取出 (prev, next),再分別修 prev 端與 next 端。
     fn unlink(&mut self, i: usize) {
         // todo!("spec: 修 nodes[prev].next / nodes[next].prev,邊界時改 head/tail")
-        // TODO(7/22 白天,紅測先行)洞②:頭/尾分支沒清「鄰居指回來的那條邊」——
-        // i 是頭時新頭 prev 仍指 i、i 是尾時新尾 next 仍指 i。
-        // 現在沒炸只因 unlink 只被 push_front 呼叫且立即重接;先寫「單獨 unlink 後驗鄰居指標」紅測再修。
         if self.head == NIL {
             return;
         }
@@ -69,11 +66,14 @@ impl<K: Hash + Eq + Clone, V> LruCache<K, V> {
 
         if self.head == i {
             self.head = self.nodes[i].next;
+            // 新頭的反向邊必須清:unlink 是獨立手術,單獨呼叫也要留下一致的鏈
+            self.nodes[self.head].prev = NIL;
             return;
         }
 
         if self.tail == i {
             self.tail = self.nodes[i].prev;
+            self.nodes[self.tail].next = NIL;
             return;
         }
 
@@ -128,7 +128,7 @@ impl<K: Hash + Eq + Clone, V> LruCache<K, V> {
             return None;
         }
 
-        if self.cap > self.nodes.len() {
+        if self.cap > self.len() {
             let idx = self.nodes.len();
             self.nodes.push(Node {
                 key: key.clone(),
@@ -141,19 +141,18 @@ impl<K: Hash + Eq + Clone, V> LruCache<K, V> {
             return None;
         }
 
-        // TODO(7/22 白天,紅測先行)洞①:淘汰路徑做一半——缺 map.insert(新 key, idx) 與 promote(push_front)。
-        // 後果:新 key 查不到、len 縮水、槽躺在 tail 下次 put 反淘汰新 key。
-        // 先寫紅測:cap=2,put a → put b → put c 後 get(&"c") 應 Some(&3);看紅再修。
         let Node {
             key: old_key,
             value: old_value,
             ..
         } = &mut self.nodes[self.tail];
         self.map.remove(old_key);
-        let key = std::mem::replace(old_key, key);
-        let value = std::mem::replace(old_value, value);
+        let old_key = std::mem::replace(old_key, key.clone());
+        let old_value = std::mem::replace(old_value, value);
+        self.map.insert(key, self.tail);
+        self.push_front(self.tail);
 
-        Some((key, value))
+        Some((old_key, old_value))
     }
 
     /// 只讀不 promote。
@@ -200,5 +199,53 @@ mod tests {
         c.put("b", 2); // list=[b,a]
         assert_eq!(c.get(&"b"), Some(&2)); // b 已在頭
         assert_eq!(c.put("c", 3), Some(("a", 1)));
+    }
+
+    #[test]
+    fn overwrite_and_get() {
+        let mut c = LruCache::new(2);
+        c.put("a", 1);
+        c.put("b", 2);
+        c.put("c", 3);
+        assert_eq!(c.get(&"a"), None);
+        assert_eq!(c.get(&"c"), Some(&3));
+    }
+
+    #[test]
+    fn overwrite_and_check_head() {
+        let mut c = LruCache::new(2);
+        c.put(1, 2);
+        assert_eq!(c.nodes[c.head].value, 2);
+        c.put(2, 3);
+        assert_eq!(c.nodes[c.head].value, 3);
+        c.put(3, 4);
+        assert_eq!(c.nodes[c.head].value, 4);
+    }
+
+    #[test]
+    fn evict_clears_new_tail_next() {
+        let mut c = LruCache::new(2);
+        c.put(2, 3);
+        c.put(3, 4);
+        c.put(4, 5);
+        assert_eq!(c.nodes[c.tail].next, NIL, "next: {}", c.tail);
+    }
+
+    #[test]
+    fn unlink_tail_and_next_nil() {
+        let mut c = LruCache::new(2);
+        c.put(2, 2);
+        c.put(3, 3);
+        c.unlink(c.tail);
+        assert_eq!(c.nodes[c.tail].next, NIL);
+    }
+
+    #[test]
+    fn unlink_head_and_prev_nil() {
+        let mut c = LruCache::new(2);
+        c.put(2, 2);
+        c.put(3, 3);
+        c.unlink(c.head);
+        assert_eq!(c.nodes[c.head].prev, NIL);
     }
 }

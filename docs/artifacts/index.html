@@ -792,6 +792,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="hook">寫者數 = 難度:SPSC 零 CAS → MPSC 的第一個 CAS(認領≠完工)→ Vyukov MPMC 的旋轉門序號 → SPMC 其實是兩題(竊取 vs 廣播)。</span>
       <span class="hits">bounded 是 lock-free 的解藥 · 序號第三用途 · std mpmc 仍 unstable</span>
     </a>
+    <a class="card" href="qa_lockfree_followups.html">
+      <span class="name">qa · lock-free 追問串(swap/CAS/seq)</span>
+      <span class="hook">7/22 晨連環追問照脈絡收錄:swap 換什麼、會失敗嗎(不會——會失敗的是 CAS);seq = 槽位時鐘為何只進不退(pos+cap 反證);dif&lt;0 判滿 cap=4 手算 + 單調性證明;「5 比 6 晚更新」三層拆解;head 為何連 atomic 都不是(兩軸判準:寫者數→CAS、他端讀者數→atomic);M-S help 分支與 lockless/lock-free 分水嶺;時代數統一(seq/gen/generation)+ AtomicPtr vs AtomicUsize(provenance)。</span>
+      <span class="hits">qa_lockfree_pc 的續集 · 對著三份 core_impl 逐行 · 7/24 日讀前置</span>
+    </a>
     <a class="card" href="qa_sync_async_oneshot.html">
       <span class="name">qa · sync vs async oneshot</span>
       <span class="hook">JobHandle ↔ JoinFuture 是同一個 oneshot 骨架,只換一個零件:Condvar(park thread)↔ Waker(讓出 task)。thread 佔用時間軸對照 + poll=join 三 arm + 正交兩軸階梯。</span>

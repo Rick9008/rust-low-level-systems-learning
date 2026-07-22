@@ -1,0 +1,269 @@
+<title>Lock-free 追問串:swap、CAS、seq 時鐘與時代數</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --s2: #1baf7a; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+      --accent: #3987e5; --s2: #199e70; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --ring: rgba(255,255,255,0.10);
+    --accent: #3987e5; --s2: #199e70; --danger: #e66767; --code-bg: rgba(255,255,255,0.08);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --ring: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --s2: #1baf7a; --danger: #d03b3b; --code-bg: rgba(11,11,11,0.05);
+  }
+  body { background: var(--page); color: var(--ink); margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+    line-height: 1.75; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 48px 24px 96px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  h1 { font-size: clamp(24px, 4vw, 34px); margin: 0 0 8px; letter-spacing: -0.015em;
+    font-weight: 750; text-wrap: balance; }
+  h2 { font-size: 19px; margin: 0 0 8px; font-weight: 700; }
+  .q { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--accent);
+    font-size: 15px; letter-spacing: 0.04em; }
+  .lede { color: var(--ink-2); max-width: 42em; margin: 0; font-size: 16px; }
+  .lede strong { color: var(--ink); }
+  section { margin-top: 56px; }
+  p, li { color: var(--ink-2); }
+  p strong, li strong, td strong { color: var(--ink); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; line-height: 1.6; margin: 14px 0 0; }
+  pre code { background: none; padding: 0; font-size: 13px; }
+  .cmt { color: var(--muted); }
+  .hot { color: var(--accent); font-weight: 700; }
+  .bad { color: var(--danger); font-weight: 700; }
+  .ok { color: var(--s2); font-weight: 700; }
+  .tbl-scroll { overflow-x: auto; border-radius: 10px; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 7px 0; }
+  blockquote.say { margin: 14px 0 0; padding: 12px 18px; border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 10px 10px 0; color: var(--ink); font-size: 15px; }
+  blockquote.say em { color: var(--muted); font-style: normal; font-size: 13px; display: block; margin-top: 6px; }
+  .fig { margin-top: 14px; border: 1px solid var(--ring); border-radius: 12px;
+    background: var(--surface); padding: 14px 16px; }
+  .cap { font-size: 12px; color: var(--muted); margin-bottom: 10px; letter-spacing: 0.03em; }
+  .rowflex { display: flex; flex-wrap: wrap; gap: 10px; }
+  .box { flex: 1 1 12rem; border: 1px solid var(--grid); border-radius: 9px;
+    padding: 10px 12px; background: var(--page); font-size: 13.5px; }
+  .box h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .box.hl { border-color: var(--accent); }
+  .box.badb { border-color: var(--danger); }
+  .box.okb { border-color: var(--s2); }
+  .arrowline { text-align: center; color: var(--muted); font-size: 13px; margin: 8px 0 2px; }
+  .axiom { margin-top: 18px; padding: 14px 18px; border: 1px solid var(--accent);
+    border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    color: var(--ink); font-size: 15px; font-weight: 600; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">qa 圖解 · lock-free 追問串 · 承接 qa_lockfree_pc</div>
+  <h1>lock-free 追問串:swap、CAS、seq 時鐘與時代數</h1>
+  <p class="lede">7/22 清晨的連環追問照原脈絡收錄:<strong>swap 換的是什麼?它會失敗嗎?CAS 長什麼樣、失敗了怎麼辦?seq 為什麼是 pos+cap、繞不繞回起點?dif&lt;0 憑什麼直接說「滿」?pop 端的 head 憑什麼連 atomic 都不是?M-S 的 help 分支是誰在幫誰?</strong>階梯總覽(why)在前置頁 <code>qa_lockfree_pc.html</code>;這頁是 how——對著 <code>reference</code> 的三份 core_impl(<code>mpsc_list</code> / <code>mpmc_ring</code> / <code>mpmc_list</code>)逐行拆。</p>
+  <div class="axiom">公理:佔位點和發布點是不是同一個位址,決定有沒有「縫」。整頁九題都是這句的展開。</div>
+
+  <section>
+    <h2><span class="q">Q1</span> · swap 換的是什麼?為什麼可以直接換?沒成功怎麼辦?</h2>
+    <p><strong>換的是一個 8-byte 指標值,而且 swap 沒有「不成功」。</strong><code>tail</code> 是 <code>AtomicPtr</code>——一個機器字,存「最新 push 的節點位址」。<code>swap(node)</code> 是一條硬體 read-modify-write 指令(x86 的 <code>XCHG</code>):原子地「把 tail 改成我的節點,同時回傳原值」。它把兩件事綁成不可分割的一步:<strong>宣告我是最新節點 + 得知前任是誰</strong>。十個 producer 同時 swap,硬體排成全序,每人拿到的 prev 互不相同、不遺失——這一發就是全部仲裁。</p>
+    <pre><code>// mpsc_list/core_impl.rs:105-127(節)
+let prev = self.list.tail.swap(node, Ordering::AcqRel);  <span class="cmt">// 佔位:必成功</span>
+<span class="bad">// ↑↓ 之間是「縫」:tail 已指向新節點,鏈還沒接——</span>
+<span class="bad">// consumer 走到 prev 見 next==null 而 tail!=prev ⇒ Inconsistent</span>
+unsafe { (*prev).next.store(node, Ordering::Release); }  <span class="cmt">// 發布</span></code></pre>
+    <ul>
+      <li><strong>AcqRel 兩半各有職責</strong>:Release 半——下一個 producer 會 swap 到「我」當 prev 並<strong>寫我的 next 欄位</strong>,我的節點必須在它眼裡建構完整;Acquire 半——我要寫 prev 的 next,得先看見 prev 完整(配對前任的 Release 半)。鏈上每人同時是接收方和提供方。</li>
+      <li><strong>無失敗路徑 = 無迴圈 = push wait-free</strong>——這是 MPSC list 的奢侈品,也是 tokio 用它收 remote wake 的原因(wake 端絕不能被卡住)。</li>
+      <li>佔位(swap 在 <code>tail</code>)與發布(store 在 <code>prev.next</code>)是<strong>兩個位址</strong>——一次原子操作最多改一個機器字,所以縫不可消除,只能顯式化成 <code>PopResult::Inconsistent</code>(不是空,等一下再來)。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="q">Q2</span> · CAS 長什麼樣?它會失敗嗎?</h2>
+    <p><strong>會,而且失敗是常態、是設計的一部分。</strong>會失敗的是 CAS,不會失敗的是 swap——兩種指令,別混。</p>
+    <pre><code>// CAS:有條件交換。「若現在還是 expected 才換」。x86 = LOCK CMPXCHG
+match tail.compare_exchange_weak(
+    expected,      <span class="cmt">// 我的快照:我以為 tail 現在是這個</span>
+    expected + 1,  <span class="cmt">// 若真是,原子地改成這個</span>
+    Ordering::Relaxed,  <span class="cmt">// 成功時(仲裁不揹資料,同步全在 seq 上)</span>
+    Ordering::Relaxed,  <span class="cmt">// 失敗時</span>
+) {
+    Ok(_)       => { <span class="cmt">/* 換到了;世界如我所知 */</span> }
+    Err(actual) => { <span class="cmt">/* 沒換;actual = 免費附贈的最新值,拿去重試 */</span> }
+}</code></pre>
+    <ul>
+      <li>失敗的語意很精確:<strong>「你以為的世界過期了」</strong>——快照與 CAS 之間有人先改了。<code>Err(actual)</code> 直接給最新值,重試不用重 load。</li>
+      <li><code>weak</code>:允許「值明明相等卻偽失敗」(ARM LL/SC 較省);反正外面就是重試迴圈,偽失敗只是多繞一圈。</li>
+      <li>進度保證的分界:<strong>swap 必成功 → wait-free;CAS 可失敗 → lock-free</strong>(我輸必因別人贏,系統整體有進展;個體可能餓)。</li>
+    </ul>
+    <div class="fig">
+      <div class="cap">原語跟著「佔位語意」走,不是隨便挑</div>
+      <div class="rowflex">
+        <div class="box hl"><h4>mpsc_list:swap</h4>佔位 =「把自己掛上鏈尾」——<strong>無條件可做</strong>,拿到 prev 就夠 → 配無條件的 swap</div>
+        <div class="box"><h4>mpsc/mpmc_ring:CAS</h4>佔位 =「領票號 pos」——<strong>有前提</strong>(槽得空、票得沒被領)→ 配有條件的 CAS</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="q">Q3</span> · seq 為什麼是 pos+cap?它跟 pos 是同一個東西嗎?</h2>
+    <p><strong>同一個數字空間(才能相減比較),不同的角色。</strong>pos 是取號機發給你的<strong>票號</strong>;seq 是<strong>槽位自己的時鐘</strong>,slot i 一輩子只取 <code>i, i+1, i+cap, i+cap+1, …</code>,單調遞增。<code>dif = seq − pos</code> 就是「拿槽位時鐘對我的票」。</p>
+    <pre><code>cap = 4,slot 0 的一生:
+初始           seq = 0            <span class="cmt">// 等第 0 圈 producer(pos=0)</span>
+producer 發布  seq = 1 (= pos+1)   <span class="cmt">// pos=0 的 consumer 可讀</span>
+consumer 釋放  seq = 4 (= pos+cap) <span class="cmt">// 等下一圈:pos'=4 的 producer</span>
+producer 發布  seq = 5 (= pos'+1)
+consumer 釋放  seq = 8 (= pos'+cap)  …只進不退</code></pre>
+    <p><strong>為什麼釋放不能把 seq 歸零回 pos?反證:</strong>假設 consumer 讀完把 seq 設回 0。下一圈 producer 拿票號 4 來,算 <code>dif = 0 − 4 = −4 &lt; 0</code> → 判「滿」→ <span class="bad">這格永遠賣不出去</span>。時鐘必須走到 pos+cap,才對得上「下一個合法客人」的票號。seq 一個數字同時編碼<strong>狀態</strong>(空/滿)和<strong>圈數</strong>(服務第幾圈)——這就是它不能回頭的原因。</p>
+    <div class="fig">
+      <div class="cap">seq 對票號 pos 的三態</div>
+      <div class="rowflex">
+        <div class="box okb"><h4>seq == pos</h4>本圈輪空,producer 可搶</div>
+        <div class="box hl"><h4>seq == pos+1</h4>已發布,consumer 可讀</div>
+        <div class="box"><h4>seq == pos+cap</h4>已釋放,等下一圈(pos' = pos+cap 的 dif 恰為 0)</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="q">Q4</span> · 計數器會 wrapping 繞回起點嗎?</h2>
+    <p>兩層「繞」,答案相反:</p>
+    <ul>
+      <li><strong>繞 ring(空間):不繞。</strong>pos 與 seq 都只增不減,槽位位址是投影算出來的:<code>buf[pos &amp; mask]</code>。自由跑的紅利:<code>tail − head</code> 直接是元素數、滿/空不用犧牲一格、三態不歧義。若計數器真繞 cap 回 0,「第 3 圈的 slot 2」和「第 7 圈的 slot 2」就無法區分——圈數情報消失。</li>
+      <li><strong>繞 2⁶⁴(數字空間):會,<code>wrapping_add/sub</code> 就是為它。</strong>所有判斷都走差值:<code>seq.wrapping_sub(pos) as isize</code> 在真實距離 ≤ cap ≪ 2⁶³ 時,跨過溢位點也給出正確符號——serial number arithmetic,TCP seq 同款。repo 的 <code>with_start</code> 測試後門就是把起點設在溢位邊上驗這件事。</li>
+    </ul>
+    <p>量級:64-bit @ 1G ops/s ≈ <strong>584 年</strong>繞一圈;但 32-bit 目標 usize 是 2³²,高流量<strong>幾十秒</strong>就繞——wrapping 是真需求,不是潔癖。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q5</span> · dif &lt; 0 憑什麼直接說「滿」?(cap=4 手算 + 單調性證明)</h2>
+    <pre><code>四個 producer 各推一件,無人消費:
+push A(票0)seq[0]←1 | push B(票1)seq[1]←2
+push C(票2)seq[2]←3 | push D(票3)seq[3]←4
+現況:tail=4,head=0,seq=[1,2,3,4]
+
+P 來推第五件:
+snapshot = 4;slot = buf[4 &amp; 3] = buf[0];seq = 1
+dif = 1 − 4 = <span class="bad">−3 &lt; 0 → Err(item)</span>
+<span class="cmt">// 票號 4 期望時鐘 = 4(pos0 的 consumer 釋放後寫 0+4);</span>
+<span class="cmt">// 時鐘停在 1 =「pos0 已發布沒人消費」——前一圈房客還在,房間沒空</span>
+
+consumer 拿走一件:pop(票0)讀走 A,seq[0]←4,head=1
+P 重試:dif = 4 − 4 = <span class="ok">0 → 輪到它</span></code></pre>
+    <p><strong>「萬一快照過期,其實有位子呢?」——不可能,三步證明:</strong></p>
+    <ol>
+      <li>seq 只增不減(Q3 的時鐘性質)。</li>
+      <li>票號 4 要被領走,領票人必須<strong>先看到 seq[0]==4</strong>(先驗貨再取票的順序保證)。</li>
+      <li>我現在讀到 seq[0]=1 &lt; 4 ⇒ seq 從未到過 4 ⇒ 票 4 從未被領 ⇒ tail 從未越過 4;而快照本身來自 tail ⇒ <strong>讀 seq 那一瞬 tail 恰好 = 4,快照不但沒過期還是精確值</strong>。</li>
+    </ol>
+    <p>所以一個 <code>dif&lt;0</code> 讀數同時證明「快照新鮮」+「我的位置上前一圈住戶還在」⇒ 隊列在那一瞬確實滿(可線性化)。而且這條路<strong>零副作用</strong>:兩次 load、零寫入、票還沒領,<code>Err(item)</code> 把所有權原封還給 caller。對照 fetch_add 流派(先取票):滿時攥著票無處寫、票不能退——<code>try_push</code> 語意直接做不出來。</p>
+  </section>
+
+  <section>
+    <h2><span class="q">Q6</span> · producer 5 比 6 晚完成怎麼辦?</h2>
+    <div class="fig">
+      <div class="cap">三層拆開,只有中間那層會亂</div>
+      <div class="rowflex">
+        <div class="box okb"><h4>取號層:嚴格有序</h4>tail 只能被 CAS 一格格推 5→6→7;B 拿到 6 的前提是 A 已拿走 5。跳號不存在</div>
+        <div class="box badb"><h4>交貨層:可以亂序</h4>A(票5)還在寫,B(票6)先 store seq=7——這正是 per-slot seq 存在的理由:全域水位線答不了「6 好了、5 還沒」</div>
+        <div class="box okb"><h4>消費層:嚴格按號</h4>head=5 的 consumer 只看 slot[5],dif&lt;0 → None。<strong>6 好了也輪不到</strong>——FIFO 按票號,不按完成順序</div>
+      </div>
+      <div class="arrowline">對外的全部可見後果:queue 暫時顯得「空」;順序永不亂</div>
+    </div>
+    <p>代價(誠實邊界):A 若在縫裡卡死,5 永不發布,6 之後所有已發布元素全被堵住——<strong>Vyukov 是 lockless,不是正式 lock-free</strong>。與 mpsc_list 的 <code>Inconsistent</code> 同病(佔位≠發布),症狀一個叫 None、一個叫 Inconsistent。</p>
+    <blockquote class="say">"Claims are strictly ordered — the ticket counter moves one step at a time. Publications can complete out of order, which is exactly why the publish signal is per-slot. Consumers take tickets too, so FIFO is by position, not completion."</blockquote>
+  </section>
+
+  <section>
+    <h2><span class="q">Q7</span> · pop 端的 head 憑什麼連 atomic 都不是?(兩軸判準)</h2>
+    <p>先糾正前提:<strong>MPSC ring 的 pop 每次仍做一個 Release store——搬到 <code>slot.seq</code> 上了</strong>(<code>seq.store(head+cap, Release)</code>)。消失的不是原子寫,是 index 的原子性。SPSC 的 head 本來身兼二職:①私有 cursor(我讀到哪)②跨執行緒水位線(producer 判滿要讀它)。Vyukov 把<strong>發布、釋放兩個方向的信號都下放到 per-slot seq</strong> 之後,head 再無任何外部讀者——職務②歸零,剩下的私有 cursor 不需要原子。</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>這個 index 被誰存取</th><th>用什麼</th><th>例子</th></tr>
+      <tr><td>多執行緒寫</td><td><strong>CAS</strong></td><td>mpmc 兩端、mpsc_ring 的 tail</td></tr>
+      <tr><td>單執行緒寫、<strong>他端要讀</strong></td><td>atomic store/load(Release/Acquire)</td><td>spsc_ring 的 head/tail(producer 判滿讀 head、consumer 判空讀 tail)</td></tr>
+      <tr><td>單執行緒寫、<strong>沒人讀</strong></td><td><code>UnsafeCell</code>(非原子)</td><td>mpsc_ring 的 head</td></tr>
+    </table></div>
+    <ul>
+      <li><strong>單寫者 ≠ 私有</strong>:SPSC 的 head 也是單寫者,但 producer 在讀 → 一寫一讀跨執行緒無同步 = data race = UB。沒有 atomic 會發生:編譯器把 load 提出迴圈(producer 對著陳年快照 spin 到死)、資料 happens-before 斷裂(看到新 tail 讀到半成品槽)、撕裂讀(語言不保證)。</li>
+      <li><strong>用 AtomicUsize 會說謊 + 廢掉 loom 驗證</strong>:atomic 語意=「預期並發存取」,但設計不變量是 head 私有(Consumer 非 Clone + <code>&amp;mut self</code>)。loom 版 <code>UnsafeCell::with/with_mut</code> 登記每筆存取、任一 interleaving 重疊即判死——「私有」是被模型檢查證明的定理,不是註解裡的主張;換 atomic,loom 就閉嘴了。</li>
+      <li><strong>順帶的 cache 紅利</strong>:producer 判滿讀的 seq 就在它即將寫資料的同一條 cache line(Slot 內);head 不再 ping-pong,連 padding 都省。</li>
+    </ul>
+    <blockquote class="say">"Single-writer tells you whether you need CAS; whether anyone on another thread reads it tells you whether you need atomicity at all."</blockquote>
+  </section>
+
+  <section>
+    <h2><span class="q">Q8</span> · M-S 的 help 分支是啥?為什麼它是正式 lock-free?</h2>
+    <p>M-S push 兩步:①接鏈 <code>CAS(t.next: null → 我)</code>——<strong>佔位+發布合一</strong>(搶到的瞬間 consumer 就走得到你);②推路標 <code>CAS(tail: t → 我)</code>。①②之間路標落後真隊尾一格。<strong>help = 路過的人替贏家做步②</strong>:</p>
+    <pre><code>let t = self.tail.load(Acquire);
+let next = unsafe { (*t).next.load(Acquire) };
+if !next.is_null() {
+    <span class="hot">// help 分支:路標落後了,幫原主推一把(資訊全公開,誰都能代勞)</span>
+    let _ = self.tail.compare_exchange_weak(t, next, Release, Relaxed);
+    continue;  <span class="cmt">// 推完(或別人推完)重讀,再找真隊尾接鏈</span>
+}</code></pre>
+    <ul>
+      <li>多人同時 help 不會推壞:大家拿同一個期望值 t 去 CAS,恰好一人成功、其餘無害失敗;tail 只往前。贏家自己的步② CAS 失敗就 <code>let _ =</code> 丟掉——「失敗 = 有人幫忙推了」。</li>
+      <li>不變量:<strong>路標最多落後一格</strong>(接鏈前提是從 tail 讀到 next==null,路標沒追上誰都接不了)→ help 工作量恆為一次 CAS。</li>
+    </ul>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>mpsc_list</th><th>mpmc_ring</th><th>mpmc_list(M-S)</th></tr>
+      <tr><td>仲裁原語</td><td>swap(必成功)</td><td>CAS 打在計數器</td><td>CAS 打在 <code>t.next</code> 指標</td></tr>
+      <tr><td>佔位 vs 發布</td><td>兩步 → 縫(Inconsistent)</td><td>兩步 → 縫(堵隊)</td><td><strong>合一 → 無縫</strong>,None 就是真空</td></tr>
+      <tr><td>進度保證</td><td>push wait-free</td><td>lockless</td><td><strong>正式 lock-free</strong></td></tr>
+      <tr><td>記憶體</td><td>每 push 一次 Box</td><td>預配置陣列,零配置</td><td>每 push 一次 Box;退休節點 Drop 才收</td></tr>
+    </table></div>
+    <p>分水嶺:<strong>懸空的工作別人幫不幫得了。</strong>M-S 的懸空步(推路標)純機械、資訊公開 → 人人可代勞 → 沒人等特定某人醒來。Vyukov 的懸空步(把 item bytes 寫進槽)只有本人知道內容 → 無人能代勞 → 卡死的贏家堵全隊。</p>
+    <blockquote class="say">"Lock-freedom isn't about avoiding waits — it's about never waiting on a specific stalled thread. Michael-Scott makes the only dangling step mechanically completable by anyone; Vyukov's dangling step is writing your own payload, which nobody can do for you."</blockquote>
+  </section>
+
+  <section>
+    <h2><span class="q">Q9</span> · 時代數統一 + AtomicPtr vs AtomicUsize</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>結構</th><th>「位置」被重用</th><th>時代數</th><th>防什麼</th></tr>
+      <tr><td>mpmc_ring 的 <code>seq</code></td><td>槽位每圈重用</td><td>seq 編碼圈數</td><td>舊圈的 P/C 誤動槽位(+揹資料 happens-before)</td></tr>
+      <tr><td>arena_lockfree 的 <code>gen</code></td><td>free 鏈節點重用</td><td>pack 進 CAS 字 <code>[gen:32|idx:32]</code></td><td><strong>ABA</strong>:舊快照的 CAS 誤成功</td></tr>
+      <tr><td>fd_registry 的 <code>generation</code></td><td>kernel 重發 fd</td><td>每 slot 一個 gen</td><td><strong>stale token</strong> 打到新連線</td></tr>
+    </table></div>
+    <p>一句收攏:<strong>位置一旦會被重用,光比位置就不夠——給位置配一個時代數,舊時代的人拿舊票,做什麼都會被拒。</strong>(ABA 場景:讀 head=A、next=B → 被 deschedule → 別人 pop A、pop B、又把 A 推回 → 醒來 CAS(A→B) 只比值、誤成功 → 鏈頭指向別人手上的 B。gen+1 讓舊快照必失敗。)</p>
+    <p><strong>AtomicPtr vs AtomicUsize 其實是 index-based vs pointer-based 的選擇</strong>:ring 共享的是「第幾個」(自由跑計數器,要做算術、編碼圈數,位址是 <code>&amp; mask</code> 投影出來的);list 共享的是「在哪裡」(節點散落 heap,唯一指認方式是位址)。且 Rust 裡位址必須保持指標身分——繞道 usize 會洗掉 <strong>provenance</strong>(strict provenance 要禁、Miri 會抓),而 swap 完馬上要 <code>(*prev).next</code> 解參考。</p>
+  </section>
+
+  <section>
+    <h2>30 秒口述(SPSC → MPSC → MPMC 要改哪裡)</h2>
+    <blockquote class="say">"SPSC works because every atomic has exactly one writer — plain acquire/release stores, no CAS. Add a second producer and the producer index needs arbitration: for an unbounded list the cheapest is Vyukov's MPSC — push is one unconditional swap, wait-free, at the cost of a per-push allocation and a pop-side gap. For a bounded ring you CAS a free-running ticket counter, and because claim order diverges from publish order, each slot carries a sequence number that encodes both state and lap. What you pay: CAS retries and cacheline ping-pong under contention; what you dodge by staying bounded: the whole memory-reclamation swamp. In an interview I'd write Mutex&lt;VecDeque&gt; + condvar first and narrate this upgrade path."<em>收尾永遠接:哪端是單,那端 index 保持單寫者,同步機制整格降級。</em></blockquote>
+  </section>
+
+  <section>
+    <h2>互動版對照(7/24 日讀:先讀本頁,再逐台走 stepper)</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>本頁的題</th><th>Stepper(html_p/)</th></tr>
+      <tr><td>Q1 swap 的縫</td><td><code>runtime-lockfree-upgrade-map.html</code>(swap 後「縫開了」逐步動畫)</td></tr>
+      <tr><td>Q1/Q8 兩式 MPSC 對照(含 help)</td><td><code>mpsc-interleaving-stepper.html</code>(專門教材頁)</td></tr>
+      <tr><td>Q3/Q5 Vyukov seq 走格</td><td><code>lockfree-queue-family-handbook.html</code>(演的就是 cap=4 那條手算)</td></tr>
+      <tr><td>Q2 CAS race / 重試</td><td><code>rmw-cas-atomics.html</code>(A 贏 B 重試、lost update 反例)</td></tr>
+      <tr><td>Q7 SPSC ordering 對照側</td><td><code>p1-rust-atomic-spsc-ordering.html</code></td></tr>
+      <tr><td>Q9 arena CAS 對撞 / ABA</td><td><code>p4-arena-index-lockfree-and-graph.html</code></td></tr>
+    </table></div>
+  </section>
+</div>
