@@ -103,3 +103,44 @@ impl Pool {
 // shutdown: O(len of jobs redundant*fn time)
 //
 // sc: O(workers + jobs size)
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    /// 洞①的測試:shutdown 前收下的工作,一件都不能丟
+    #[test]
+    fn all_accepted_jobs_run() {
+        let pool = Pool::new(4);
+        let done = Arc::new(AtomicUsize::new(0));
+        for _ in 0..16 {
+            let d = done.clone();
+            pool.submit(move || {
+                std::thread::sleep(Duration::from_millis(10));
+                d.fetch_add(1, Ordering::Relaxed);
+            })
+            .unwrap();
+        }
+        pool.shutdown(); // 合約:回來 = 全部做完
+        assert_eq!(done.load(Ordering::Relaxed), 16);
+    }
+
+    /// 洞②的測試:空佇列直接 shutdown,必須回得來(卡住=紅)
+    #[test]
+    fn shutdown_on_empty_queue_returns() {
+        let pool = Pool::new(4);
+        pool.shutdown();
+    }
+
+    /// 洞③的測試:shutdown 之後 submit 被拒;再 shutdown 一次不炸不卡
+    #[test]
+    fn shutdown_twice_and_reject() {
+        let pool = Pool::new(2);
+        pool.shutdown();
+        assert!(pool.submit(|| {}).is_err());
+        pool.shutdown();
+    }
+}

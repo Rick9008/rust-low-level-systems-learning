@@ -164,4 +164,19 @@ mod dry_run {
         assert_eq!(fd_reg.register(6, 10), Token::from_raw(Token::pack(1, 6)));
         assert_eq!(fd_reg.get(Token::from_raw(Token::pack(0, 6))), None);
     }
+    #[test]
+    fn forged_current_gen_token_on_empty_slot_is_safe() {
+        let mut reg = FdRegistry::<u32>::new();
+        let t = reg.register(0, 7);
+        assert_eq!(reg.unregister(t), Some(7)); // gen 0→1,槽空,len=0
+        let forged = Token::from_raw(Token::pack(1, 0)); // gen 剛好對上空槽
+        assert_eq!(reg.unregister(forged), None); // mutation 在:len 0-1 → panic → 紅
+    }
+
+    /// 洞②:高位 fd 的 pack/unpack roundtrip(不經 registry,這是唯一付得起的網)
+    #[test]
+    fn token_roundtrip_high_fd_bits() {
+        let fd = (1u32 << 31) + 7;
+        assert_eq!(Token::from_raw(Token::pack(3, fd)).unpack(), (3, fd));
+    }
 }
