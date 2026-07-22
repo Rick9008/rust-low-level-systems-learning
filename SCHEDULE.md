@@ -113,6 +113,8 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 3. **英文認題稿**:`rehearsals/recognition-scripts-en.md` 新增(a–h 八題型:定界宣言+clarify 問+做法枚舉+trade-off 收尾+傷疤句;a/b/c/e2 詳、d/f/g/h 簡)——7/27 掃描的對分底稿,**先講出聲才准開**,規矩同 sol_*。
 4. **Heptabase**:scratch 兩份沉澱(eventfd 門鈴、lockfree day 卡1–卡8)拆 8+1 張推板(Notes / Memory Order notes / Low level learning);journal 7/22–7/28 推新版,舊條目 Withers 自刪。
 
+**凌晨快考帳(01:50,SPSC/MPSC/MPMC 五題 10m)**:Q2 全對|Q3 缺「seq 歸零 → dif=−cap 永遠滿」半題|**Q1/Q4 同源洞:list-swap vs ring-CAS 原語混淆** + slot seq 誤記 SeqCst(正解 Acq/Rel)。7/23 待還:白天翻卡4 一分鐘 → 晚上 Claude 複測 2–3 題(先答再批)→ **Q5 英文 30 秒**(SPSC→MPMC 升級)併 c#1 場出聲,連 7/22 英文鐵律一起結。就寢裁決:02:30 熄燈 / 09:00 起(保 6.5h 紅線,梯度慢半階,7/24 歸隊)。
+
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
 對口是 firmware 面試官 → 網友(firmware 入職)判斷**考題同款**。五條增量,前四條全是「既有裁決的確認」:
