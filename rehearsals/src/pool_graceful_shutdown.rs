@@ -55,8 +55,13 @@ impl Pool {
                                         s.is_empty() && !arc_shutdown.load(Ordering::Acquire)
                                     })
                                     .unwrap();
-                                let job = jobs_guard.pop_front().unwrap();
-                                job()
+                                let job = match jobs_guard.pop_front() {
+                                    Some(job) => job,
+                                    None => continue,
+                                };
+                                drop(jobs_guard);
+                                job();
+                                jobs_guard = arc_jobs.lock().unwrap()
                             }
                         })
                     })
@@ -85,10 +90,14 @@ impl Pool {
     /// 阻塞到所有已接受的任務執行完;之後的 submit 一律拒絕;可重複呼叫。
     pub fn shutdown(&self) {
         // todo!("rehearsal")
-        self.shutdown.store(true, Ordering::Release);
+        {
+            // hold the lock prevent workers sleep while job runtime
+            let _guard = self.jobs.lock().unwrap();
+            self.shutdown.store(true, Ordering::Release);
+        }
         self.no_jobs.notify_all();
         self.pool.lock().unwrap().drain(..).for_each(|join_handle| {
-            let _ = join_handle.join();
+            join_handle.join().expect("worker thread panicked");
         });
     }
 }
@@ -116,7 +125,7 @@ mod tests {
     fn all_accepted_jobs_run() {
         let pool = Pool::new(4);
         let done = Arc::new(AtomicUsize::new(0));
-        for _ in 0..16 {
+        for _ in 0..40 {
             let d = done.clone();
             pool.submit(move || {
                 std::thread::sleep(Duration::from_millis(10));
@@ -125,7 +134,7 @@ mod tests {
             .unwrap();
         }
         pool.shutdown(); // 合約:回來 = 全部做完
-        assert_eq!(done.load(Ordering::Relaxed), 16);
+        assert_eq!(done.load(Ordering::Relaxed), 40);
     }
 
     /// 洞②的測試:空佇列直接 shutdown,必須回得來(卡住=紅)

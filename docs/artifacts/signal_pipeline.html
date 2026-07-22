@@ -1,62 +1,63 @@
 <title>signal_pipeline — 同一條 ring,五種睡法;掛牌握手的那道 fence</title>
 <style>
+/* gruvbox-material(sainnhe),dark = medium dark、light = medium light */
 :root {
-  --ground: #e9ecef;
-  --surface: #f5f7f9;
-  --raised: #fdfdfe;
-  --line: #cbd2da;
-  --line-soft: #dfe4ea;
-  --ink: #151a20;
-  --ink-2: #464f5b;
-  --muted: #6e7885;
-  --producer: #9c5c11;
-  --consumer: #106b78;
-  --danger: #9d2f46;
-  --ok: #326b4a;
-  --accent: #37509b;
-  --producer-bg: #f7ead5;
-  --consumer-bg: #d8edf1;
-  --danger-bg: #f8dfe4;
-  --ok-bg: #dbecdf;
-  --accent-bg: #dee3f5;
+  --ground: #f2e5bc;
+  --surface: #fbf1c7;
+  --raised: #fdf7dd;
+  --line: #c9b99a;
+  --line-soft: #ddcfa9;
+  --ink: #654735;
+  --ink-2: #7d6a55;
+  --muted: #928374;
+  --producer: #c35e0a;
+  --consumer: #45707a;
+  --danger: #c14a4a;
+  --ok: #6c782e;
+  --accent: #b47109;
+  --producer-bg: #f5dfbc;
+  --consumer-bg: #dcebe5;
+  --danger-bg: #f3d7cb;
+  --ok-bg: #e8e9c6;
+  --accent-bg: #f4e4b4;
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
   --serif: "Iowan Old Style", "Palatino Linotype", "Source Han Serif TC", "Noto Serif CJK TC", "Songti TC", Georgia, serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #0e1216;
-    --surface: #151a20;
-    --raised: #1d232b;
-    --line: #2b333d;
-    --line-soft: #212831;
-    --ink: #dee4eb;
-    --ink-2: #a5afbb;
-    --muted: #7b8593;
-    --producer: #d99a45;
-    --consumer: #49b8c9;
-    --danger: #dc6a80;
-    --ok: #6cbc8c;
-    --accent: #8ea4e6;
-    --producer-bg: #33260f;
-    --consumer-bg: #10333a;
-    --danger-bg: #3a1a22;
-    --ok-bg: #16321f;
-    --accent-bg: #1e2646;
+    --ground: #1d2021;
+    --surface: #282828;
+    --raised: #32302f;
+    --line: #504945;
+    --line-soft: #3c3836;
+    --ink: #d4be98;
+    --ink-2: #a89984;
+    --muted: #928374;
+    --producer: #e78a4e;
+    --consumer: #7daea3;
+    --danger: #ea6962;
+    --ok: #a9b665;
+    --accent: #d8a657;
+    --producer-bg: #3a2e22;
+    --consumer-bg: #24363b;
+    --danger-bg: #3c2628;
+    --ok-bg: #32361f;
+    --accent-bg: #3a3220;
   }
 }
 :root[data-theme="light"] {
-  --ground: #e9ecef; --surface: #f5f7f9; --raised: #fdfdfe; --line: #cbd2da;
-  --line-soft: #dfe4ea; --ink: #151a20; --ink-2: #464f5b; --muted: #6e7885;
-  --producer: #9c5c11; --consumer: #106b78; --danger: #9d2f46; --ok: #326b4a;
-  --accent: #37509b; --producer-bg: #f7ead5; --consumer-bg: #d8edf1;
-  --danger-bg: #f8dfe4; --ok-bg: #dbecdf; --accent-bg: #dee3f5;
+  --ground: #f2e5bc; --surface: #fbf1c7; --raised: #fdf7dd; --line: #c9b99a;
+  --line-soft: #ddcfa9; --ink: #654735; --ink-2: #7d6a55; --muted: #928374;
+  --producer: #c35e0a; --consumer: #45707a; --danger: #c14a4a; --ok: #6c782e;
+  --accent: #b47109; --producer-bg: #f5dfbc; --consumer-bg: #dcebe5;
+  --danger-bg: #f3d7cb; --ok-bg: #e8e9c6; --accent-bg: #f4e4b4;
 }
 :root[data-theme="dark"] {
-  --ground: #0e1216; --surface: #151a20; --raised: #1d232b; --line: #2b333d;
-  --line-soft: #212831; --ink: #dee4eb; --ink-2: #a5afbb; --muted: #7b8593;
-  --producer: #d99a45; --consumer: #49b8c9; --danger: #dc6a80; --ok: #6cbc8c;
-  --accent: #8ea4e6; --producer-bg: #33260f; --consumer-bg: #10333a;
-  --danger-bg: #3a1a22; --ok-bg: #16321f; --accent-bg: #1e2646;
+  --ground: #1d2021; --surface: #282828; --raised: #32302f; --line: #504945;
+  --line-soft: #3c3836; --ink: #d4be98; --ink-2: #a89984; --muted: #928374;
+  --producer: #e78a4e; --consumer: #7daea3; --danger: #ea6962; --ok: #a9b665;
+  --accent: #d8a657; --producer-bg: #3a2e22; --consumer-bg: #24363b;
+  --danger-bg: #3c2628; --ok-bg: #32361f; --accent-bg: #3a3220;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -71,10 +72,12 @@ header h1 { font-size: 1.9rem; margin: 0.2rem 0 0.6rem; }
 header .lede { max-width: 46rem; color: var(--ink-2); }
 section { margin-top: 2.4rem; }
 h2 { font-size: 1.15rem; margin-bottom: 0.7rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line-soft); }
+h3 { font-size: 1rem; margin: 1.4rem 0 0.5rem; color: var(--accent); }
 p.note { font-size: 0.88rem; color: var(--muted); margin-top: 0.5rem; }
 table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
 th, td { text-align: left; padding: 0.4rem 0.55rem; border: 1px solid var(--line-soft); vertical-align: top; }
 th { background: var(--surface); font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em; }
+.tbl-scroll { overflow-x: auto; margin-top: 0.6rem; }
 .quote { border-left: 3px solid var(--ok); background: var(--ok-bg); border-radius: 0 8px 8px 0; padding: 0.55rem 0.75rem; font-size: 0.9rem; margin-top: 0.7rem; }
 
 /* 選擇鈕 */
@@ -96,6 +99,32 @@ th { background: var(--surface); font-family: var(--mono); font-size: 0.72rem; l
 .tag { font-family: var(--mono); font-size: 0.7rem; border-radius: 999px; padding: 0.08rem 0.5rem; border: 1px solid var(--line); }
 .tag.event { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
 .tag.time { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+
+/* code 區 */
+pre.code, pre.topo, pre.tl {
+  font-family: var(--mono); font-size: 0.8rem; line-height: 1.55;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px;
+  padding: 0.7rem 0.9rem; overflow-x: auto; margin-top: 0.6rem;
+}
+.codegrid { display: grid; grid-template-columns: 1fr; gap: 0.8rem; margin-top: 0.6rem; }
+@media (min-width: 56rem) { .codegrid { grid-template-columns: 1fr 1fr; align-items: start; } }
+.codegrid h4 { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+.codegrid .cside h4 { color: var(--consumer); }
+.codegrid .pside h4 { color: var(--producer); }
+.codegrid .cside pre.code { border-color: var(--consumer); margin-top: 0; }
+.codegrid .pside pre.code { border-color: var(--producer); margin-top: 0; }
+.code .cmt { color: var(--muted); }
+.code .hot { color: var(--accent); font-weight: 700; }
+.code .bad { color: var(--danger); font-weight: 700; }
+pre.tl .miss { color: var(--danger); font-weight: 700; }
+pre.tl .late { color: var(--muted); }
+
+/* FAQ */
+details.faq { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 0.55rem 0.8rem; margin-top: 0.6rem; }
+details.faq summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; }
+details.faq summary::marker { color: var(--accent); }
+details.faq .body { margin-top: 0.5rem; font-size: 0.9rem; color: var(--ink-2); }
+details.faq .body p + p { margin-top: 0.4rem; }
 
 /* 握手 stepper */
 .toggles { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 0.7rem; font-size: 0.9rem; }
@@ -129,7 +158,6 @@ th { background: var(--surface); font-family: var(--mono); font-size: 0.72rem; l
 .verdict.good { color: var(--ok); }
 
 /* 扇入 */
-pre.topo { font-family: var(--mono); font-size: 0.82rem; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.7rem 0.9rem; overflow-x: auto; }
 .rings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.7rem; }
 .ringbox { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px; padding: 0.55rem 0.65rem; }
 .ringbox h4 { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-bottom: 0.3rem; }
@@ -143,13 +171,13 @@ pre.topo { font-family: var(--mono); font-size: 0.82rem; background: var(--surfa
 <div class="wrap">
 
 <header>
-  <p class="eyebrow">reference / signal_pipeline &nbsp;·&nbsp; SPSC × 等待策略 × 扇入</p>
+  <p class="eyebrow">reference / signal_pipeline &nbsp;·&nbsp; SPSC × 等待策略 × 扇入 &nbsp;·&nbsp; gruvbox-material</p>
   <h1>同一條 ring,五種睡法</h1>
   <p class="lede">
     SPSC ring 本身不帶通知——「沒貨時誰睡、誰叫醒」是一個獨立插槽。
     這頁做三件事:比較五種睡法(含「沒有 epoll 是不是只能 sleep」的答案)、
-    <strong>親手走一遍掛牌握手壞掉的交錯</strong>(拔掉 fence,consumer 帶著貨睡死
-    ——x86 上真的會發生),以及多源扇入為什麼是 per-source SPSC 不是 MPSC。
+    <strong>把掛牌握手拆到指令層</strong>(真 code、x86 對照表、靜態 timeline、
+    互動 stepper、三題 FAQ),以及多源扇入為什麼是 per-source SPSC 不是 MPSC。
   </p>
 </header>
 
@@ -182,14 +210,197 @@ pre.topo { font-family: var(--mono); font-size: 0.82rem; background: var(--surfa
 </section>
 
 <section>
-  <h2>② 掛牌握手:拔掉那道 fence,看它睡死</h2>
+  <h2>② 掛牌握手:從真 code 到指令層</h2>
   <p>
     spin 額度用完後,consumer 想睡。producer 每筆 unpark = 每筆一次 syscall,
     所以改成:consumer <strong>掛牌</strong>才睡、producer <strong>看到牌</strong>才 unpark。
-    但「掛牌 → 再查佇列」與「push → 查牌」是教科書 store-buffering:兩邊都<em>先寫後讀</em>,
-    寫還躺在各自的 store buffer 裡,讀就從旁邊繞過去了。
-    StoreLoad 重排是 <strong>x86-TSO 唯一允許的重排</strong>——這個 bug 在你筆電上就會發生。
+    問題出在:兩邊都是「<strong>先寫自己的變數,再讀對方的變數</strong>」——這個形狀
+    叫 store-buffering(SB),是教科書 litmus,x86 上真的會發生。
   </p>
+
+  <h3>②-1 真 code:兩個半邊,各四步</h3>
+  <div class="codegrid">
+    <div class="cside">
+      <h4>CONSUMER — idle_park()(reference/src/concurrency/signal_pipeline.rs;server_evented_spsc.rs 同款)</h4>
+<pre class="code">fn idle_park(jobs: &amp;mut Consumer&lt;Job&gt;,
+             parked: &amp;AtomicBool,
+             stop: &amp;AtomicBool) -&gt; Option&lt;Job&gt; {
+    parked.store(true, SeqCst);     <span class="cmt">// ❶ 掛牌:「我要睡了」</span>
+    <span class="hot">fence(SeqCst);</span>                  <span class="cmt">// ❷ 柵欄:牌先出門,才准讀</span>
+    if let Some(j) = jobs.pop() {   <span class="cmt">// ❸ re-check:最後看一眼佇列</span>
+        parked.store(false, Release);
+        return Some(j);             <span class="cmt">//    有貨 → 摘牌,不睡</span>
+    }
+    if !stop.load(Acquire) {
+        thread::park();             <span class="cmt">// ❹ 真的空 → 睡</span>
+    }
+    parked.store(false, Release);
+    None
+}</pre>
+    </div>
+    <div class="pside">
+      <h4>PRODUCER — push 之後</h4>
+<pre class="code">job_tx.push(job);          <span class="cmt">// ❶ 貨進 ring(內部 Release store)</span>
+<span class="hot">fence(SeqCst);</span>             <span class="cmt">// ❷ 柵欄:貨先出門,才准看牌</span>
+if parked.load(Relaxed) {  <span class="cmt">// ❸ 看牌(Relaxed 就夠,秩序柵欄扛)</span>
+    worker.unpark();       <span class="cmt">// ❹ 有牌才付 syscall</span>
+}
+<span class="cmt">// ❸ 同時就是合併通知:醒著就不叫,</span>
+<span class="cmt">//    一次 unpark 攤掉整段忙碌期的所有 push。</span></pre>
+    </div>
+  </div>
+  <p class="note">
+    兩邊的形狀一模一樣:<strong>寫自己 → 柵欄 → 讀對方</strong>。
+    consumer 寫牌讀佇列;producer 寫佇列讀牌。柵欄就插在「寫」與「讀」中間。
+  </p>
+
+  <h3>②-2 store buffer:為什麼「寫了」不等於「別人看得到」</h3>
+  <p>
+    每顆核寫出去的值,會先停在自己私有的 <strong>store buffer</strong> 排隊,
+    晚一點才進共享記憶體;但<strong>自己後面的 load 不用排隊</strong>,可以先跑。
+    於是「我先寫、再讀」在別人眼裡可能變成「先讀、後寫」——這就是
+    StoreLoad 重排,<strong>x86-TSO 唯一允許的重排</strong>。
+    Release/Acquire 管不到它:Release 只保證「我之前的寫跟著這筆寫一起可見」,
+    對「我後面的讀」一個字都沒說。
+  </p>
+  <div class="tbl-scroll"><table>
+    <tr><th>Rust 寫法</th><th>x86 編譯結果</th><th>會不會沖 store buffer</th></tr>
+    <tr><td><code>load(Relaxed)</code></td><td><code>mov</code></td><td>不會</td></tr>
+    <tr><td><code>load(SeqCst)</code></td><td><code>mov</code>(<strong>一模一樣</strong>)</td><td>不會——標籤不是魔法</td></tr>
+    <tr><td><code>store(Release)</code></td><td><code>mov</code></td><td>不會,進 buffer 排隊</td></tr>
+    <tr><td><code>store(SeqCst)</code></td><td><code>xchg</code></td><td><strong>會</strong>(寫+沖)</td></tr>
+    <tr><td><code>fence(SeqCst)</code></td><td><code>mfence</code></td><td><strong>會</strong>,且前後讀寫不許穿越</td></tr>
+  </table></div>
+  <p class="note">
+    這張表就是「為什麼把 <code>load</code> 換成 <code>SeqCst</code> 沒用」的硬體版答案:
+    它編譯出來還是同一條 <code>mov</code>,你 buffer 裡沒出門的 push 它一個都沖不動。
+  </p>
+
+  <h3>②-3 靜態 timeline:沒有柵欄的那次睡死(全景圖)</h3>
+<pre class="tl">      CONSUMER(core 0)                     PRODUCER(core 1)
+ t1   parked ← true ──進自己的 store buffer
+ t2                                          push(x) ──進自己的 store buffer
+ t3   ❸ pop():讀共享記憶體的 ring
+      <span class="miss">→ 讀到舊值「空」(x 還悶在對面 buffer)</span>
+ t4                                          ❸ load parked:讀共享記憶體
+                                             <span class="miss">→ 讀到舊值 false(牌還悶在對面 buffer)</span>
+ t5   ❹ park() ──睡
+ t6   <span class="late">(此刻兩邊 buffer 才 flush:x 和牌都到了共享記憶體——太遲,沒人會再看)</span>
+      <span class="miss">→ x 卡在 ring;consumer 睡死;producer 以為沒人在睡,走人。</span></pre>
+  <p>
+    注意 t3、t4:<strong>兩筆 load 都沒有錯,它們忠實讀了共享記憶體</strong>——
+    錯的是兩筆 store 都還沒到貨。柵欄修的就是這個:插在 ❶ 和 ❸ 之間,
+    強制「我的 store 先出門,才准做我的 load」。
+  </p>
+
+  <h3>②-4 為什麼「兩邊都插柵欄」就不可能互相錯過</h3>
+  <p>
+    單看一邊,柵欄只是對自己的規定,<strong>不保證對方讀到你的新值</strong>。
+    它消滅的是一種<strong>組合</strong>。把四種結局攤開:
+  </p>
+  <div class="tbl-scroll"><table>
+    <tr><th>consumer 看到貨?</th><th>producer 看到牌?</th><th>結局</th></tr>
+    <tr><td>看到</td><td>—</td><td>❸ 收貨摘牌,不睡 ✅</td></tr>
+    <tr><td>—</td><td>看到</td><td>unpark,睡了也被叫醒 ✅</td></tr>
+    <tr><td>看到</td><td>看到</td><td>多叫一聲,無害(park permit 收下)✅</td></tr>
+    <tr><td><strong>沒看到</strong></td><td><strong>沒看到</strong></td><td>睡死 💀 ——<strong>唯一致命,也是唯一被柵欄禁止的</strong></td></tr>
+  </table></div>
+  <p>
+    禁止的理由只有一條規則:<strong>所有 SeqCst 柵欄排在全機器同一條時間線上,必有先後。</strong>
+    若 consumer 的柵欄在前:掛牌發生在它的柵欄之前,producer 的看牌在自己的柵欄之後
+    → 也就在 consumer 的柵欄之後 → <strong>producer 保證看到牌</strong>。
+    反過來,若 producer 的柵欄在前 → <strong>consumer 保證看到貨</strong>。
+    誰先誰後不用知道——兩種排法裡都至少一邊看見,「雙盲」在邏輯上不存在,
+    不是機率上很少。
+  </p>
+
+  <h3>②-5 六題 FAQ(2026-07-22 實際問過的)</h3>
+  <details class="faq">
+    <summary>Q1:把 <code>parked.load(Relaxed)</code> 換成 <code>load(SeqCst)</code> 不就好了?</summary>
+    <div class="body">
+      <p><strong>不行,兩層理由。</strong>模型層:SeqCst 的全序只收「掛了 SeqCst 標籤的操作」。
+      <code>push</code> 內部的 store 是 Release,不在全序裡——全序只能說「這筆 load 排在其他
+      SeqCst 操作的哪」,對「我的 push 出門了沒」隻字未提。</p>
+      <p>硬體層:x86 上 <code>load(SeqCst)</code> 編譯成普通 <code>mov</code>(見 ②-2 的表),
+      它不沖 store buffer——故障劇本一步都不會變。</p>
+      <p>要用純標籤修,得把<strong>四筆操作全部</strong>掛 SeqCst,包括 ring 內部的
+      store/load:①那些 ordering 在 <code>Producer/Consumer</code> 實作裡,外面改不到;
+      ②就算改得到,從此每次 push/pop 都付錢,而你只有睡與叫這一瞬需要。
+      柵欄是外科手術:只在握手點插一刀。</p>
+    </div>
+  </details>
+  <details class="faq">
+    <summary>Q2:fence 是「強制把我的值推給對方」嗎?</summary>
+    <div class="body">
+      <p><strong>不是。</strong>柵欄管的是<strong>自己</strong>:「我的 store 先對全世界可見,
+      才准執行我後面的 load」。對方什麼時候讀到你的值,單邊看仍然沒有保證。</p>
+      <p>魔法在組合:兩邊都守這條規定 + 柵欄有全機器的先後(②-4),
+      「兩邊同時讀到舊值」就變成邏輯上不可能。它禁止的是一種<strong>結局</strong>,
+      不是加速一筆<strong>傳輸</strong>。</p>
+    </div>
+  </details>
+  <details class="faq">
+    <summary>Q3:condvar 版(thread pool)為什麼不用 fence?</summary>
+    <div class="body">
+      <p>因為 <strong>mutex 就是那道秩序</strong>。condvar 的規矩:改共享條件
+      (哪怕它是 atomic)要在 waiter 的同一把 mutex 底下做,
+      而 <code>wait</code> 放鎖與入睡是原子的一步。於是只有兩種排法:
+      通知方先拿到鎖 → waiter 之後檢查必看到新條件,不睡;
+      waiter 正拿著鎖檢查 → 通知方被擋在門外,等 waiter <em>真的睡著</em>才進得來
+      → notify 必然叫得醒人。「決定睡了但還沒睡著」的窗,通知方進不去。</p>
+      <p>park 版沒有 mutex,SeqCst 柵欄就是它的替代品。同一個病(lost wakeup),
+      兩帖藥:<strong>鎖序,或柵欄全序。</strong></p>
+    </div>
+  </details>
+
+  <details class="faq">
+    <summary>Q4:摘牌的 <code>parked.store(false, Release)</code> 為什麼不是 Relaxed?</summary>
+    <div class="body">
+      <p><strong>老實說:這裡換成 Relaxed 也不會睡死。</strong>危險是不對稱的:
+      「掛牌(true)沒被看見」= producer 不叫 = 睡死,<strong>安全攸關</strong>;
+      「摘牌(false)沒被看見/晚到」= producer 多叫一聲 unpark = permit 被吸收,
+      下一次 park 直接穿過再重走 re-check,<strong>只是效能攸關</strong>。
+      所以 SeqCst+柵欄只出現在 true 那一側。</p>
+      <p>那為什麼還寫 Release?買兩件事:①把「<em>收完貨才摘牌</em>」的順序寫進程式碼,
+      讀的人不用重推理;②x86 上 Release store 本來就編譯成普通 <code>mov</code>
+      (見 ②-2 的表)——既然免費,就把意圖寫清楚。</p>
+      <p>面試層級的一句:「<em>true 側攸關 liveness,所以 SeqCst;false 側最多多一次
+      spurious unpark,Release 是紀律不是必要。</em>」講得出方向的不對稱,比背標籤值錢。</p>
+    </div>
+  </details>
+  <details class="faq">
+    <summary>Q5:fence 針對的對象到底是誰?fence(Acquire/Release) 和 fence(SeqCst) 差在哪?</summary>
+    <div class="body">
+      <p><strong>對象:你自己這條執行緒、柵欄前後的「所有」記憶體操作</strong>——不綁定
+      任何變數;SeqCst 柵欄額外參加全機柵欄全序(②-4 靠的就是這個)。</p>
+      <p>三種柵欄各擋哪些重排(四種重排:Load→Load、Load→Store、Store→Store、Store→Load):</p>
+      <div class="tbl-scroll"><table>
+        <tr><th>重排方向</th><th>fence(Acquire)</th><th>fence(Release)</th><th>fence(SeqCst)</th></tr>
+        <tr><td>Load→Load / Load→Store(讀側)</td><td>擋</td><td>—</td><td>擋</td></tr>
+        <tr><td>Store→Store / Load→Store(寫側)</td><td>—</td><td>擋</td><td>擋</td></tr>
+        <tr><td><strong>Store→Load(SB 的元凶)</strong></td><td>—</td><td>—</td><td><strong>只有它擋</strong></td></tr>
+      </table></div>
+      <p>用法對照:<code>data=…; fence(Release); flag.store(1, Relaxed)</code> 是把後面的
+      Relaxed store 升級成發布;<code>flag.load(Relaxed)==1; fence(Acquire); 讀 data</code>
+      是把前面的 Relaxed load 升級成消費——它們是「替 Relaxed 操作補秩序」的工具。
+      但掛牌握手要殺的是 Store→Load,<strong>acq/rel 柵欄兩個都殺不動,只能 SeqCst</strong>。</p>
+    </div>
+  </details>
+  <details class="faq">
+    <summary>Q6:fence 跟 CAS 差在哪?</summary>
+    <div class="body">
+      <p>不同工種。<strong>CAS 是對「一個變數」的原子讀改寫:仲裁工具</strong>——
+      決定誰搶到票、誰的更新算數;它可以順便掛 ordering 標籤,但標籤只管它自己那筆。
+      <strong>fence 不碰任何資料:純排序工具</strong>——決定我前後的操作誰先被全世界看見。</p>
+      <p>口訣:<strong>CAS 決定「誰贏」;fence 決定「誰先被看見」。</strong>
+      掛牌握手沒有競爭要仲裁(parked 只有 consumer 寫),缺的是秩序,所以用 fence;
+      MPMC 取號有競爭要仲裁,所以用 CAS。</p>
+      <p>註腳:x86 上帶 lock 前綴的 RMW(CAS/swap/fetch_add)副作用上也會沖 store buffer,
+      所以有些實作用 <code>parked.swap(true, SeqCst)</code> 一筆兼掉「寫+柵欄」——認得就好。</p>
+    </div>
+  </details>
+
+  <h3>②-6 親手走:拔掉柵欄,看它睡死</h3>
   <div class="toggles">
     <label><input type="checkbox" id="t-fence" checked> <code>fence(SeqCst)</code>(兩邊)</label>
     <label><input type="checkbox" id="t-recheck" checked> 掛牌後 re-check 佇列</label>
@@ -261,7 +472,7 @@ var STRATS = [
   { key: "spin", label: "busy-spin",
     kind: '<span class="tag time">不睡</span>(tick = 0 的極端)',
     latency: "~ns(最低)", idle: "燒滿一顆核(pinned)", hot: "零 syscall",
-    who: "HFT:寧燒不睡,躲 futex µs 與 preemption ms tail",
+    who: "HFT / DPDK busy-poll:工作粒度 ≈ 喚醒成本,睡了醒不完,寧燒整顆核",
     repo: "cost-model 第二節 SPSC 那行「永無 syscall」" },
   { key: "stp", label: "spin-then-park",
     kind: '<span class="tag event">按事件醒</span>(混合)',
@@ -273,7 +484,7 @@ var STRATS = [
     kind: '<span class="tag event">按事件醒</span>',
     latency: "~µs(futex + context switch)", idle: "0",
     hot: "每筆一次 unpark syscall——SPSC 的零 syscall 白省",
-    who: "吞吐型、延遲不敏感",
+    who: "吞吐型、延遲不敏感(工作粒度 ≫ 喚醒成本時,µs 攤到趨近零)",
     repo: "bounded_queue(condvar 的 predicate-wait)" },
   { key: "sleep", label: "sleep(tick) 輪詢",
     kind: '<span class="tag time">按時間醒</span>——事件來了叫不動你',
@@ -319,40 +530,40 @@ renderStrat(1);
 function scenario(fence, recheck) {
   if (fence && recheck) {
     return [
-      { who: "C", text: "spin 額度用完,掛牌:parked ← true(SeqCst)", do: function (s) { s.cbuf.push("parked=true"); } },
-      { who: "C", text: "fence(SeqCst):強制把牌子刷進共享記憶體", do: function (s) { s.cbuf = []; s.parked = true; } },
-      { who: "P", text: "push(x):tail store", do: function (s) { s.pbuf.push("tail(x)"); } },
-      { who: "P", text: "fence(SeqCst):x 對所有人可見", do: function (s) { s.pbuf = []; s.ring.push("x"); } },
-      { who: "P", text: "load parked → 讀到 true → unpark!(permit 存下)", do: function (s) { s.permit = 1; } },
-      { who: "C", text: "re-check 佇列 → 看到 x,摘牌收貨(就算沒看到:park 會被 permit 直接穿過)", do: function (s) { s.ring = []; s.parked = false; }, cls: "good" },
+      { who: "C", text: "❶ spin 額度用完,掛牌:parked ← true(SeqCst)", do: function (s) { s.cbuf.push("parked=true"); } },
+      { who: "C", text: "❷ fence(SeqCst):強制把牌子刷進共享記憶體", do: function (s) { s.cbuf = []; s.parked = true; } },
+      { who: "P", text: "❶ push(x):tail store", do: function (s) { s.pbuf.push("tail(x)"); } },
+      { who: "P", text: "❷ fence(SeqCst):x 對所有人可見", do: function (s) { s.pbuf = []; s.ring.push("x"); } },
+      { who: "P", text: "❸ load parked → 讀到 true → ❹ unpark!(permit 存下)", do: function (s) { s.permit = 1; } },
+      { who: "C", text: "❸ re-check 佇列 → 看到 x,摘牌收貨(就算沒看到:park 會被 permit 直接穿過)", do: function (s) { s.ring = []; s.parked = false; }, cls: "good" },
       { who: "—", text: "✅ 兩道防線都在:SB 交錯被 fence 禁掉,時窗被 re-check 補掉。", do: function () {}, cls: "good", verdict: "ok" }
     ];
   }
   if (!fence && recheck) {
     return [
-      { who: "C", text: "掛牌:parked ← true——但只躺進自己的 store buffer", do: function (s) { s.cbuf.push("parked=true"); } },
-      { who: "P", text: "push(x):tail store——也只躺進自己的 store buffer", do: function (s) { s.pbuf.push("tail(x)"); } },
-      { who: "C", text: "re-check 佇列:load tail → 從共享記憶體讀到舊 tail → 「空」", do: function () {}, cls: "bad" },
-      { who: "P", text: "load parked → 從共享記憶體讀到 false → 不 unpark", do: function () {}, cls: "bad" },
-      { who: "C", text: "park()——睡", do: function () {} },
+      { who: "C", text: "❶ 掛牌:parked ← true——但只躺進自己的 store buffer", do: function (s) { s.cbuf.push("parked=true"); } },
+      { who: "P", text: "❶ push(x):tail store——也只躺進自己的 store buffer", do: function (s) { s.pbuf.push("tail(x)"); } },
+      { who: "C", text: "❸ re-check 佇列:load tail → 從共享記憶體讀到舊 tail → 「空」", do: function () {}, cls: "bad" },
+      { who: "P", text: "❸ load parked → 從共享記憶體讀到 false → 不 unpark", do: function () {}, cls: "bad" },
+      { who: "C", text: "❹ park()——睡", do: function () {} },
       { who: "—", text: "(store buffer 這才 flush:parked=true、ring=[x] 都到了共享記憶體——但沒人會再看)", do: function (s) { s.cbuf = []; s.pbuf = []; s.parked = true; s.ring.push("x"); } },
-      { who: "—", text: "💀 x 卡在 ring、consumer 睡死、producer 以為沒人在睡。這就是 store-buffering——acq/rel 允許、只有 SeqCst 禁止。", do: function () {}, cls: "bad", verdict: "dead" }
+      { who: "—", text: "💀 x 卡在 ring、consumer 睡死、producer 以為沒人在睡。這就是 store-buffering——對照 ②-3 的靜態圖。", do: function () {}, cls: "bad", verdict: "dead" }
     ];
   }
   if (fence && !recheck) {
     return [
-      { who: "P", text: "push(x);fence;load parked → false(C 還沒掛牌)→ 不 unpark(此刻完全正確)", do: function (s) { s.ring.push("x"); } },
+      { who: "P", text: "❶❷❸ push(x);fence;load parked → false(C 還沒掛牌)→ 不 unpark(此刻完全正確)", do: function (s) { s.ring.push("x"); } },
       { who: "C", text: "(spin 中最後一次 pop 發生在 push 之前,看到的是空)", do: function () {} },
-      { who: "C", text: "掛牌:parked ← true;fence——牌子可見了,但 producer 已經查完走人", do: function (s) { s.parked = true; }, cls: "bad" },
-      { who: "C", text: "沒有 re-check,直接 park()——x 明明已經在 ring 裡", do: function () {}, cls: "bad" },
+      { who: "C", text: "❶❷ 掛牌:parked ← true;fence——牌子可見了,但 producer 已經查完走人", do: function (s) { s.parked = true; }, cls: "bad" },
+      { who: "C", text: "沒有 re-check,直接 ❹ park()——x 明明已經在 ring 裡", do: function () {}, cls: "bad" },
       { who: "—", text: "💀 fence 沒救:這不是重排,是時窗——「push 與查牌」整段發生在「掛牌」之前。re-check 是第二道獨立防線。", do: function () {}, cls: "bad", verdict: "dead" }
     ];
   }
   return [
-    { who: "C", text: "掛牌(躺在 store buffer)", do: function (s) { s.cbuf.push("parked=true"); } },
-    { who: "P", text: "push(x)(躺在 store buffer)", do: function (s) { s.pbuf.push("tail(x)"); } },
-    { who: "C", text: "沒有 re-check,直接 park()", do: function () {}, cls: "bad" },
-    { who: "P", text: "load parked → false → 不 unpark", do: function () {}, cls: "bad" },
+    { who: "C", text: "❶ 掛牌(躺在 store buffer)", do: function (s) { s.cbuf.push("parked=true"); } },
+    { who: "P", text: "❶ push(x)(躺在 store buffer)", do: function (s) { s.pbuf.push("tail(x)"); } },
+    { who: "C", text: "沒有 re-check,直接 ❹ park()", do: function () {}, cls: "bad" },
+    { who: "P", text: "❸ load parked → false → 不 unpark", do: function () {}, cls: "bad" },
     { who: "—", text: "💀 兩道防線都沒有——SB 與時窗任一條路都通向睡死。", do: function (s) { s.cbuf = []; s.pbuf = []; s.parked = true; s.ring.push("x"); }, cls: "bad", verdict: "dead" }
   ];
 }

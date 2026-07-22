@@ -8,7 +8,7 @@ use rehearsals::fd_registry::{FdRegistry, Token};
 /// 核心 boundary:fd 回收重用——舊 token 必死、新 token 必活、
 /// stale 操作不影響現任住戶。這就是題幹描述的那個 bug。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn fd_reuse_stale_token_dies() {
     let mut r = FdRegistry::new();
     let t1 = r.register(5, "A");
@@ -24,7 +24,7 @@ fn fd_reuse_stale_token_dies() {
 
 /// token 經 u64 往返(這就是 epoll_event.data 的旅程)後仍解析。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn token_survives_u64_roundtrip() {
     let mut r = FdRegistry::new();
     let t = r.register(3, 30);
@@ -34,7 +34,7 @@ fn token_survives_u64_roundtrip() {
 
 /// boundary:空表 / 從未登記的 slot,偽造 token 一律安全回 None。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn forged_tokens_are_safe() {
     let mut r: FdRegistry<i32> = FdRegistry::new();
     assert_eq!(r.get(Token::from_raw(5)), None);
@@ -47,7 +47,7 @@ fn forged_tokens_are_safe() {
 
 /// dispatch 端用 get_mut 就地改狀態。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn get_mut_mutates_in_place() {
     let mut r = FdRegistry::new();
     let t = r.register(7, vec![1, 2]);
@@ -58,7 +58,7 @@ fn get_mut_mutates_in_place() {
 /// 規模 sanity:千 fd 高 churn——偶數位換代後舊 token 全滅、新的全活,
 /// 奇數位第一代不受影響。
 #[test]
-#[ignore = "參考測試:彩排完成後再開"]
+// #[ignore = "參考測試:彩排完成後再開"]
 fn thousand_fd_churn() {
     let mut r = FdRegistry::new();
     let gen0: Vec<Token> = (0..1000).map(|fd| r.register(fd, fd)).collect();

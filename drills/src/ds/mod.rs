@@ -7,5 +7,6 @@ pub mod dsu;
 pub mod graph;
 pub mod lru;
 pub mod ring_buffer;
+pub mod telemetry_aggregator;
 pub mod tree;
 pub mod trie;
