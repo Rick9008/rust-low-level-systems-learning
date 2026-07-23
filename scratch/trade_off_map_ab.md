@@ -1,4 +1,4 @@
-# a / b 題 trade-off 地圖(7/21 凌晨對話沉澱;7/25 口述錄音底稿)
+# a / b 題 trade-off 地圖(7/21 凌晨對話沉澱;7/25 口述錄音底稿;**已上板 2026-07-24:「Low level learning」`b7fa1ee5`**)
 
 公式(每軸三句,JD pillar 4):**I chose X → it costs Y → I'd switch at Z**。
 
