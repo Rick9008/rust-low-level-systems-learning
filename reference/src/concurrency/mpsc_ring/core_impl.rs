@@ -10,6 +10,11 @@
 //! 差異全在 consumer 側——這就是退化表(docs/concurrency/mpmc_ring.md)
 //! 「哪端是單,那端 index 保持單寫者」的實體。
 
+// NOTE:
+// Vyukov MPSC ring depends on Seq Slot, and it can make the pair ordering only use Acquire/Release,
+// and the head can only use Relaxed, because the Acquire / Release pair on Seq slot already provide
+// the snychronize-with property
+
 use crate::sync_shim as sync;
 use std::mem::MaybeUninit;
 use sync::atomic::{AtomicUsize, Ordering};
@@ -21,6 +26,15 @@ struct CachePadded<T>(T);
 
 /// 槽位 = 資料 + 發布訊號。三態同 mpmc_ring:
 /// seq==pos(輪空可搶)/ pos+1(已發布可讀)/ pos+cap(已釋放,等下一圈)。
+//
+// FIXME(Withers 回家寫):下面三行你自己加的 dif 表【符號反了】——就是 7/23 quiz
+// 「dif 定義與符號全反」那個洞的重演。用卡 1 的「絕對狀態表 + 誰的綠燈」重推,別用相對式硬記。
+// 提示(cap 具體數字驗):滿 = 格子壓著上一圈沒消費的值 → seq = 上圈 pos−cap+1
+//   → pos − seq = cap−1 > 0(不是 < 0);可讀 → seq = pos+1 → pos − seq = −1 < 0(不是 > 0)。
+// 官方 dif 定義是 seq − pos(不是 pos − seq),重寫時挑一個方向、標「誰的綠燈」,別再對調。
+//   /// pos - seq == 0 -> 可塞但不可拿      ← 這行對
+//   /// pos - seq < 0 -> 已滿              ← 錯:應是「可讀」
+//   /// pos - seq > 0 -> 可拿出東西但不可塞  ← 錯:應是「已滿」
 struct Slot<T> {
     seq: AtomicUsize,
     val: sync::UnsafeCell<MaybeUninit<T>>,

@@ -1,4 +1,4 @@
-# Pool 默寫 + Arc 解剖 + CAS 原語譜 + 複測結帳(2026-07-23 Q&A 沉澱,壓縮版 6 卡)
+# Pool 默寫 + Arc 解剖 + CAS 原語譜 + 複測結帳(2026-07-23 Q&A 沉澱,壓縮版 9 卡)
 
 > 默寫批改全文:`scratch/thread_pool.rs` 檔頭批改紀錄
 > 源碼證物:本機 1.91 `alloc/src/sync.rs`(Arc 結構 :261、clone Relaxed :2207、drop Release :2642、acquire! fence :2674、upgrade :3081)
@@ -81,6 +81,67 @@
 - 醒來 ≠ 完成:loop 重 poll、只認 Ready 出場(spurious wakeup 免疫)
 - API 三件(tier-2 洞):`Waker::from(Arc<impl Wake>)`(Wake trait 存在的意義)、`cx.waker().clone()` 拿 owned(`Arc<&Waker>` 是生命週期炸彈)、迴圈重 poll 要 `as_mut().poll`
 - clarify #5 口述題(30 秒):我的 spawn-per-poll = 「不存 waker,每次給最新 waker 一條新信差」——**冗餘換正確**,被 join/select 提前重 poll 就多生 thread;production = 存 `Arc<Mutex<Option<Waker>>>` 每 poll 更新、一條 thread 讀最新
+
+## 卡 8:Waker 的型別擦除——為什麼 Arc<W: Wake> 能變成 Waker(executor 卡點)
+
+**四層介面(由具體到擦除):**
+```
+trait Wake {                             // 你 impl 的:安全、符合人體工學的一層
+    fn wake(self: Arc<Self>);
+    fn wake_by_ref(self: &Arc<Self>) { self.clone().wake(); }  // 預設:clone 再 wake
+}
+struct Waker { /* 內含 RawWaker */ }     // 執行時真正流通的把手(型別已擦除)
+impl Waker { fn wake(self); fn wake_by_ref(&self); fn clone(&self) -> Waker; }
+struct Context<'a> { /* 借 &Waker */ }
+impl Context { fn from_waker(w: &Waker) -> Context; fn waker(&self) -> &Waker; }
+```
+**關鍵轉換(std 提供的 From impl):**
+```
+impl<W: Wake + Send + Sync + 'static> From<Arc<W>> for Waker
+```
+- 你的四步:`Arc::new(ThreadWaker{..})` → `Waker::from(arc)`(擦除)→ `Context::from_waker(&waker)`(借)→ `cx.waker().clone()`(給信差,refcount++)
+
+**為什麼能這樣轉(核心):**
+- `Waker` 底層 = `RawWaker { data: *const (), vtable: &'static RawWakerVTable }`——**手刻 vtable 的胖指標**;vtable 有 4 根函式指標:clone / wake / wake_by_ref / drop
+- `From<Arc<W>>` 幫你**自動生成這張 vtable**:`data` = Arc 的裸指標;每根 vtable 函式 = 「把 data 還原成 `Arc<W>` → 呼叫對應的 Wake trait 方法」。你只寫 trait,vtable 是編譯器產的
+- **同一個型別擦除動機,跟今天卡 3 的 `Box<dyn FnOnce>` 一模一樣**:executor 要能握著「某個 waker」而不知道它的具體型別 → 擦成 data+vtable。`Wake` trait 是安全糖衣;裸路是 `RawWaker`/`RawWakerVTable`(手寫 unsafe)
+- **bound 為什麼是 `Send + Sync + 'static`**:Waker 會被丟進別的執行緒(你的 timer thread)、活得比 poll 久 → 三個都要。你的 `ThreadWaker { thread: Thread }` 剛好滿足(Thread 是 Send+Sync+'static)
+- `clone()` 為什麼便宜:走 vtable 的 clone = `Arc::clone` = Relaxed fetch_add(接卡 4);多一個信差就多一個 strong count,drop 時減回去
+
+**一句話收束**:Waker 是「async 版的 `Box<dyn Fn>`」——手刻 vtable 的型別擦除把手;`Wake` trait + `From<Arc<W>>` 是讓你不用手寫那張 vtable 的安全捷徑。
+
+## 卡 9:Task / Waker / Context 三者關係——poll 迴圈的資料流
+
+**三者各是什麼(一句話定位):**
+- **Task** = executor 負責驅動的一個 future + 它的狀態;是 run-queue 裡排隊的單位(「誰該被 poll」)
+- **Waker** = 「把**這個 Task** 重新排回 run-queue」的回呼把手;真實 executor 裡它握著指向 Task 的 Arc,`wake()` = 把 Task 推回佇列
+- **Context** = 一次 poll 呼叫的「環境包」,目前唯一內容就是 `&Waker`;`poll(&mut cx)` 靠它把 waker 交給 future
+
+**資料流(通用 executor,一圈):**
+```
+executor 挑一個 Task
+  → 造一個「代表重排這個 Task」的 Waker → 包進 Context
+  → future.poll(&mut cx)
+      ├─ Ready  → Task 完成,丟出 run-queue
+      └─ Pending → future 必須先 clone 一份 waker 藏好(存 Delay/IO 事件源)
+                   然後外部事件發生時,有人呼叫 waker.wake()
+                   → 「Task ready」→ executor 重新 poll 這個 Task(給新的 Context)
+```
+**關鍵因果**:Pending 之前**一定要把 waker 交出去**,否則沒人叫得醒 → 永眠。這就是 poll 合約第 3 步(卡 7)。
+
+**把 block_on 對應到真 executor(退化表):**
+| 通用 executor | 你的 block_on |
+|---|---|
+| Task(future+狀態) | 單一 pin 住的 future + 當前執行緒 |
+| run-queue | 執行緒的 park/unpark(佇列長度 1) |
+| Waker = 重排這個 Task | ThreadWaker(current thread),`wake()`=`unpark` |
+| 「schedule task」 | unpark 執行緒 |
+| Context 包 &Waker | 一樣,`Context::from_waker(&waker)` |
+| 重新 poll | loop 回頭再 `poll` |
+
+- **為什麼 block_on 不需要顯式 Task 型別**:只有一個 future、run-queue 長度恆為 1,「哪個 task ready」不用問——醒來就是它。多 task(spawn/join/select)才需要 Task 當可排隊、可定位的實體
+- **Context 為什麼是獨立一層而不直接傳 &Waker**:預留擴充(未來塞 budget/LocalWaker 等);現在它幾乎是 `&Waker` 的薄包裝,但簽名穩定不破 API
+- 串起卡 7/8/9:**Context 送信封(poll 環境)→ 裡面裝 Waker(型別擦除的重排把手,卡 8)→ Waker 綁定 Task(誰要被重排)**;三者是「一次 poll」的完整語境
 
 ## 今日產出帳(白天)
 
