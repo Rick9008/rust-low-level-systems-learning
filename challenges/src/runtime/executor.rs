@@ -20,26 +20,65 @@
 //! 【要實作】下方簽名。【驗收】tests/executor.rs 轉綠。
 
 use std::future::Future;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
 use std::time::{Duration, Instant};
+
+struct ThreadWaker {
+    thread: Thread,
+}
+
+impl Wake for ThreadWaker {
+    fn wake(self: Arc<Self>) {
+        self.thread.unpark();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.thread.unpark();
+    }
+}
 
 /// 把 future 跑到完成,回傳其輸出。
 pub fn block_on<F: Future>(fut: F) -> F::Output {
-    todo!("challenge: 從空白開始")
+    // todo!("challenge: 從空白開始")
+
+    let mut pin_fut = std::pin::pin!(fut);
+    let waker = Waker::from(Arc::new(ThreadWaker {
+        thread: thread::current(),
+    }));
+    let mut cx = Context::from_waker(&waker);
+    loop {
+        let res = pin_fut.as_mut().poll(&mut cx);
+
+        match res {
+            Poll::Ready(output) => break output,
+            Poll::Pending => {
+                thread::park();
+                continue;
+            }
+        };
+    }
 }
 
 /// async 版 sleep。
 pub struct Delay {
     // ↓ 佔位:動手時整個換成你的設計。
-    _todo: (),
+    // _todo: (),
+    deadline: Instant,
 }
 
 impl Delay {
     pub fn until(deadline: Instant) -> Self {
-        todo!("challenge")
+        // todo!("challenge")
+        Self { deadline }
     }
 
     pub fn for_duration(d: Duration) -> Self {
-        todo!("challenge")
+        // todo!("challenge")
+        Self {
+            deadline: Instant::now() + d,
+        }
     }
 }
 
@@ -50,6 +89,16 @@ impl Future for Delay {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<()> {
-        todo!("challenge")
+        // todo!("challenge")
+        if Instant::now() < self.deadline {
+            let waker = cx.waker().clone();
+            let sleep_time = self.deadline - Instant::now();
+            thread::spawn(move || {
+                thread::sleep(sleep_time);
+                waker.wake();
+            });
+            return Poll::Pending;
+        }
+        Poll::Ready(())
     }
 }
