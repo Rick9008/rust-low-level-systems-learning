@@ -19,10 +19,10 @@ SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ri
 | 6 | executor | ☐ | ☑ 2026-07-18 | ☑ 2026-07-23 ★ | drill 填綠(commit 538c624);**challenge 7/23 晚在公司完成(閥門日守住),oracle 5/5 綠**。戰報:🔴主洞=「poll 不准等」合約(Delay 曾在 poll 裡同步等+每圈 spawn,合約級提示一次才通);tier-2 三洞:Waker::from(Arc)/waker().clone()/as_mut().poll;clarify points 沒自答就動筆(pillar 1 又是)。寫對:park token 防永眠、loop 重 poll 免疫 spurious、wake_by_ref 覆寫、Delay 單欄位。遺留口述題:spawn-per-poll=「不存 waker、冗餘換正確」vs production 存 Mutex<Option<Waker>>(clarify #5,30 秒) |
 | 7 | lru | ☐ | ☑ 2026-07-22 | ☐ ★ | 7/22 凌晨加時場:oracle 3/3 綠但 review 抓 2 洞(**連三場「零紅≠零洞」**):①put 淘汰路徑缺 map.insert(新 key)+promote——新 key 查不到/len 縮水/下次 put 反淘汰新 key ②unlink 頭/尾分支殘留鄰居髒指標(暫被 push_front 先 unlink 設計蓋住)。**7/22 白天修畢**(a77aa44):紅測先行×2 + 單獨 unlink 直測私有×2 + mutation 複驗(拔修行恰紅兩條) |
 | 8 | fd_registry | ☑ 2026-07-19 | ☑ 2026-07-20(凌晨) | — | 6 測試全綠(stale/forged token 含);讀+概念 Q&A 全打通(epoll 三結構/generation/雙 waker);彩排 e2:7/21、7/24 |
-| 9 | hw_bridge(protocol+framer) | ☐ | ☑ 2026-07-19 | ~~☐ ★~~ | 10 測試全開綠(含壓實 counterexample,red→green 驗過);standalone challenge 砍——彩排 c 即 challenge |
+| 9 | hw_bridge(protocol+framer) | ☐ | ☑ 2026-07-19 | ~~☐ ★~~ | 10 測試全開綠(含壓實 counterexample,red→green 驗過);standalone challenge 砍——彩排 c 即 challenge。**c#1 2026-07-23 晚:oracle 6/6 一次綠**(commit f8a5e26;dry run 自攔 2 錯;clarify 用 heartbeat 反推 len 不含 header)。🔴遺留 may_compact 雙洞(drain 不 rebase ptr→>4KB 後 underflow;..=4096 inclusive)——**洞長在唯一沒測的路徑**,7/24 紅測先行修;c#2 排 7/26(間隔 3 天 ✓) |
 | 10 | dsu | ☐ | ☐ | ☐ ★ | **本輪砍**(doc 零訊號) |
 | 11 | sharded_map | ☐ | ☐ | ☐ ★ | 降級:讀 + 口述(跨 shard 鎖序用講的) |
-| 12 | signal_pipeline | ☐ | ☐(2 洞) | ☐ ★ | 7/23 drill + litmus 口述(**fence 全套 7/22 已深學**:signal_pipeline.html 大改+loom_lost_wakeup 三變體,讀段可縮);扇入(fan_in)讀+口述排 7/25;challenge post-TPS |
+| 12 | signal_pipeline | ☑ 2026-07-23(深夜) | ◐ 2/3 綠 | ☐ ★ | **讀 = 深夜追問串打穿**(五睡法/throttling≠鬧鈴/futex-epoll 分界=等記憶體位址 vs 等 fd/喚醒鏈終點=IRQ/acq-rel 是條件句→「最後一眼」原則/SB 兩 idiom+fence 四向牆/x86 映射 xchg-mov-mfence/shutdown 三語意;卡在 `scratch/hepta_20260724_fence_sleep_wake.md`)。drill 2 洞已填,shutdown+wakes 綠;**殘 2026-07-24 開機**:Some 路徑摘牌(early return 跳過 store(false)=每筆 send 白付 unpark)+ conservation ignore 未拔。litmus 口述→7/24 晚;扇入讀+口述 7/25;challenge post-TPS |
 | 13 | endian_pack | — | ☐(排 7/25) | — | 7/23 凌晨新增:BE/LE 讀寫+手動 shift+i16 符號擴展+token pack/unpack(e2 mask 傷疤靶場)+混合 header,8 洞 6 測;c 題 framer 與 e2 token 的共用肌肉,drill-only。⚠ `gen` 是 edition 2024 保留字 |
 
 ### 次優先

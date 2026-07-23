@@ -59,7 +59,17 @@ impl SignalSender {
     /// 2. Err(滿)→ **drop-newest**:`dropped += 1`,回 false。
     ///    (SPSC 上 producer 動不了 head,drop-oldest 做不到。)
     pub fn send(&mut self, s: Signal) -> bool {
-        todo!("spec: push; Ok → fence(SeqCst) → 看牌 unpark; Err → dropped+=1")
+        // todo!("spec: push; Ok → fence(SeqCst) → 看牌 unpark; Err → dropped+=1")
+        let res = self.tx.push(s);
+        if res.is_err() {
+            self.dropped += 1;
+            return false;
+        }
+        fence(Ordering::SeqCst);
+        if self.parked.load(Ordering::Relaxed) {
+            self.consumer.unpark();
+        }
+        true
     }
 
     pub fn dropped(&self) -> u64 {
@@ -142,7 +152,18 @@ fn consumer_loop(mut rx: Consumer<Signal>, parked: &AtomicBool, stop: &AtomicBoo
 /// 4. 空且未 stop → `thread::park()`(unpark 先到不丟:token 語意)
 /// 5. 醒來(或 stop)→ 摘牌、回 `None`(caller 回外圈重試)
 fn idle_park(rx: &mut Consumer<Signal>, parked: &AtomicBool, stop: &AtomicBool) -> Option<Signal> {
-    todo!("spec: 掛牌 SeqCst; fence; re-pop; 空且未 stop 才 park; 摘牌")
+    // todo!("spec: 掛牌 SeqCst; fence; re-pop; 空且未 stop 才 park; 摘牌")
+    parked.store(true, Ordering::SeqCst);
+    fence(Ordering::SeqCst);
+    let signal = match rx.pop() {
+        Some(signal) => return Some(signal),
+        None => None,
+    };
+    if signal.is_none() && !stop.load(Ordering::Acquire) {
+        thread::park();
+    }
+    parked.store(false, Ordering::Relaxed);
+    signal
 }
 
 #[cfg(test)]
@@ -174,7 +195,6 @@ mod tests {
 
     /// park 後被喚醒——lost wakeup 會讓這個測試卡死(顯性失敗)。
     #[test]
-    #[ignore = "填完 send/idle_park 後移除"]
     fn wakes_parked_consumer() {
         let (mut tx, handle) = start(8);
         assert!(tx.send(Signal {
@@ -195,7 +215,6 @@ mod tests {
 
     /// shutdown drain:push 完立刻 shutdown——殘料處理完才退,一筆不少。
     #[test]
-    #[ignore = "填完 send/idle_park 後移除"]
     fn shutdown_drains_backlog() {
         let (mut tx, handle) = start(1024);
         let mut accepted = 0u64;

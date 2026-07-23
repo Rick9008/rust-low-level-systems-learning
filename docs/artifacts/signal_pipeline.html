@@ -166,6 +166,28 @@ details.faq .body p + p { margin-top: 0.4rem; }
 .slot.full { background: var(--producer-bg); border-color: var(--producer); }
 .ringbox .drops { font-family: var(--mono); font-size: 0.78rem; }
 .ringbox .drops.hot { color: var(--danger); font-weight: 700; }
+
+/* FAQ Q5:fence 單向牆示意 */
+.fwall-types { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.6rem 0; }
+.fwall-types .t { font-family: var(--mono); font-size: 0.76rem; border: 1px solid var(--line); border-radius: 999px; padding: 0.12rem 0.6rem; background: var(--raised); color: var(--ink-2); }
+.fwall-types .t.sb { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); font-weight: 700; }
+.fwall-grid { display: grid; grid-template-columns: 1fr; gap: 0.8rem; margin: 0.7rem 0; }
+@media (min-width: 44rem) { .fwall-grid { grid-template-columns: 1fr 1fr; } }
+.fwall { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 0.8rem; }
+.fwall h5 { font-family: var(--mono); font-size: 0.74rem; margin: 0 0 0.5rem; color: var(--ink-2); font-weight: 600; letter-spacing: 0.02em; }
+.fwall .fop { font-family: var(--mono); font-size: 0.82rem; border: 1px dashed var(--line); border-radius: 6px; padding: 0.22rem 0.55rem; margin: 0.3rem 0; display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; background: var(--surface); color: var(--ink-2); }
+.fwall .fop .why { font-family: var(--serif); font-size: 0.76rem; color: var(--muted); }
+.fwall .fop.deny { border-color: var(--danger); }
+.fwall .fop.deny, .fwall .fop.deny .why { color: var(--danger); }
+.fwall .fop.anchor-acq { border: 2px solid var(--consumer); background: var(--consumer-bg); color: var(--ink); font-weight: 700; }
+.fwall .fop.anchor-rel { border: 2px solid var(--producer); background: var(--producer-bg); color: var(--ink); font-weight: 700; }
+.fwall .fop.anchor-acq .why { color: var(--consumer); }
+.fwall .fop.anchor-rel .why { color: var(--producer); }
+.fwall .wallbar { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-align: center; border-radius: 4px; padding: 0.2rem 0; margin: 0.35rem 0; font-weight: 700; }
+.fwall .wallbar.acq { color: var(--consumer); background: var(--consumer-bg); border: 1px solid var(--consumer); }
+.fwall .wallbar.rel { color: var(--producer); background: var(--producer-bg); border: 1px solid var(--producer); }
+.fwall .fverdict { font-size: 0.8rem; color: var(--ink-2); margin-top: 0.45rem; }
+.fwall-seq { border: 1px solid var(--accent); background: var(--accent-bg); border-radius: 10px; padding: 0.5rem 0.8rem; font-size: 0.86rem; margin-top: 0.2rem; }
 </style>
 
 <div class="wrap">
@@ -380,6 +402,39 @@ if parked.load(Relaxed) {  <span class="cmt">// ❸ 看牌(Relaxed 就夠,秩序
         <tr><td>Store→Store / Load→Store(寫側)</td><td>—</td><td>擋</td><td>擋</td></tr>
         <tr><td><strong>Store→Load(SB 的元凶)</strong></td><td>—</td><td>—</td><td><strong>只有它擋</strong></td></tr>
       </table></div>
+      <p>把「重排」具象化:程式序 A 在前、B 在後,重排 = B 超車到 A 前面。A、B 各可能是
+      Load 或 Store,恰好四種:</p>
+      <div class="fwall-types">
+        <span class="t">① Load→Load</span>
+        <span class="t">② Load→Store</span>
+        <span class="t">③ Store→Store</span>
+        <span class="t sb">④ Store→Load(SB 元凶)</span>
+      </div>
+      <p>兩種 fence 是兩張<strong>單向牆</strong>,各自只認一種錨點(直欄=程式順序,由上而下):</p>
+      <div class="fwall-grid">
+        <div class="fwall">
+          <h5>fence(Acquire)|錨點=牆【上方】的 load(讀側)</h5>
+          <div class="fop anchor-acq"><span>load X</span><span class="why">← 被釘住的錨</span></div>
+          <div class="wallbar acq">══════ fence(Acquire) ══════</div>
+          <div class="fop deny"><span>load Y</span><span class="why">↑✗ 不許爬上去</span></div>
+          <div class="fop deny"><span>store Z</span><span class="why">↑✗ 不許爬上去</span></div>
+          <div class="fverdict">「我上方 load 之後的事,都留在後面」→ 擋 <strong>①②</strong>(凡【前者是 Load】的超車)</div>
+        </div>
+        <div class="fwall">
+          <h5>fence(Release)|錨點=牆【下方】的 store(寫側)</h5>
+          <div class="fop deny"><span>load Y</span><span class="why">↓✗ 不許沉下去</span></div>
+          <div class="fop deny"><span>store Z</span><span class="why">↓✗ 不許沉下去</span></div>
+          <div class="wallbar rel">══════ fence(Release) ══════</div>
+          <div class="fop anchor-rel"><span>store X</span><span class="why">← 被釘住的錨</span></div>
+          <div class="fverdict">「我下方 store 之前的事,都先做完」→ 擋 <strong>②③</strong>(凡【後者是 Store】的超車)</div>
+        </div>
+      </div>
+      <div class="fwall-seq"><strong>fence(SeqCst)=雙向全封牆</strong>:兩種錨都認、四向全擋——唯一罩得住 ④ Store→Load 的牆(mfence:排乾自家 store buffer 才准跑後面的 load)。</div>
+      <p>表格的形狀由此而來:<strong>② Load→Store 兩張牆都擋</strong>(前者是 load →
+      Acquire 管;後者是 store → Release 也管),所以它在表裡出現兩次、標「讀側/寫側」。
+      <strong>④ Store→Load 兩張牆都撲空</strong>——前者是 store(不在 Acquire 的錨點名單,
+      它只認 load)、後者是 load(不在 Release 的名單,它只認 store)。漏網之魚,
+      只有 SeqCst 這道雙向全封牆罩得住。</p>
       <p>用法對照:<code>data=…; fence(Release); flag.store(1, Relaxed)</code> 是把後面的
       Relaxed store 升級成發布;<code>flag.load(Relaxed)==1; fence(Acquire); 讀 data</code>
       是把前面的 Relaxed load 升級成消費——它們是「替 Relaxed 操作補秩序」的工具。

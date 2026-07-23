@@ -425,43 +425,38 @@ flakes a few times a day, from seconds to minutes; the application's
 logging call must never block. Design the agent's buffering and shipping.
 
 (Scale and Data Rate)
+
 1. How many processes do we want expected to handle? What's the request rate and a log average size?
    Processes be less than 1000 -> we can use thread-per-connections for the processes to handle 1MB \* 1000 for the threads, and for those need a log queue to line up
    Processes be grater than 1000 -> we need to use epoll to handle the processes connections
 
    Request rate, 200 Hz i guess?
    Log average size i assume less than 1 KB, log should not be too large
-(SLA)
+   (SLA)
+
 2. Are we targeting average throughput for the data transfer or tail latency for data actually send to remote collector?
-    If Average throughput, we can just send the data sequentially to remote.
-    If Tail latency, we might need to concurrently send the data.
+   If Average throughput, we can just send the data sequentially to remote.
+   If Tail latency, we might need to concurrently send the data.
 
-(Data Loss)
-3. Under pressure or remote dead, how do we decide data policy to not block the logging call? Or we must to write every data?
-    if we can drop the data:
-    1. we might drop the newest data
-    2. drop the oldest data
-    3. just return Err to not write this data
-    if we cannot drop the data:
-    Use unbounded queue for the logs to line up, but it might cost too many memory(the log might goes very very large when remote disconnect a day(TB level, 2MB *60*3600*24)), we might can swap to disk?
-    To clarify this to think of the back-pressure policy.
-    And I will use UDP in processes side so that it won't block the logging call
-    Or we can provide a async tcp connection task interface for logging call side.
+(Data Loss) 3. Under pressure or remote dead, how do we decide data policy to not block the logging call? Or we must to write every data?
+if we can drop the data: 1. we might drop the newest data 2. drop the oldest data 3. just return Err to not write this data
+if we cannot drop the data:
+Use unbounded queue for the logs to line up, but it might cost too many memory(the log might goes very very large when remote disconnect a day(TB level, 2MB *60*3600\*24)), we might can swap to disk?
+To clarify this to think of the back-pressure policy.
+And I will use UDP in processes side so that it won't block the logging call
+Or we can provide a async tcp connection task interface for logging call side.
 
-(Detection)
-4. How do we know a process is dead or the remote collector dead?
-    1. if process dead, tcp connection will break?
-    2. and if process dead but tcp silently dead, we might need a way to heartbeat the process pid?
+(Detection) 4. How do we know a process is dead or the remote collector dead? 1. if process dead, tcp connection will break? 2. and if process dead but tcp silently dead, we might need a way to heartbeat the process pid?
 
     remote collector is same way to check.
 
 Let looks into the assumption:
 we make process less than 1000.
-10^3 * 1MB(thread size) = 1GB
+10^3 _ 1MB(thread size) = 1GB
 the data rate is 200 Hz
 a log size is 1KB
-200 * 1KB = 200KB per seconds for a process
-200 KB * 1000 = 200 MB per seconds for all processes
+200 _ 1KB = 200KB per seconds for a process
+200 KB \* 1000 = 200 MB per seconds for all processes
 so the data throughput we need to second to remote is 200 MB per seconds, too large, take lower Hz
 
 the data rate is 2 Hz
@@ -475,17 +470,18 @@ And we use TCP connection to send data to remote collector, and we need to recre
 Ok, I'll start to code with the spsc ring side.
 
 ## Q5 for supplementary question
+
 The network flakes a few times a day, from seconds to minimum, how long should we assume, i guess it's 60s
-then 2 MB * 60 = 0.12 GB, then it can put all in the memory!
+then 2 MB \* 60 = 0.12 GB, then it can put all in the memory!
 The capacity is 0.12GB
 we can use bounded ring for the logs with in 0.12GB and drop-oldest and counter for the drops.
-
 
 > **詳批(7/21,逐問;取代先前簡批)** — 診斷總綱:五問**類別**你幾乎全開了
 > (4/5),漏的是每一問的**結帳條件**——問了 ≠ 結清。結帳表見
 > `docs/clarify-playbook.md` 新增段。
 >
 > **Q1 規模/速率**(你問:processes 幾個、rate、log size)
+>
 > - 拿分:參數化 if-else 形狀正確(<1000 → thread-per-conn / >1000 → epoll);
 >   rate 標了 "i guess" ✓(標假設就是正確行為,不是心虛)。
 > - 缺口 a(算術):1MB × 1000 = **1GB**,你寫 0.1GB——算完唸一遍單位。
@@ -495,6 +491,7 @@ we can use bounded ring for the logs with in 0.12GB and drop-oldest and counter 
 > - 結帳條件:數字要**活進算式、過荒謬檢查、餵回假設**,不是問到就好。
 >
 > **Q2 SLA**(你問:avg throughput vs tail latency)
+>
 > - 方向對、**軸錯**:那是 server 題的軸。log shipper 的 SLA 軸是
 >   **送達延遲(freshness)**——「log 幾秒內要出現在 collector?」
 >   它決定 batch 窗口(100ms vs 10s)與重試節奏。
@@ -502,6 +499,7 @@ we can use bounded ring for the logs with in 0.12GB and drop-oldest and counter 
 >   不是留下一個二選一。
 >
 > **Q3 掉不掉**(你列:drop-newest / oldest / Err / unbounded+disk)
+>
 > - 拿分:分支枚舉完整、"must not block" 當硬約束 ✓——類別分拿滿。
 > - 缺口:**列完沒裁決**。要的是選邊+理由鏈:「app 不能卡」×「網路斷分鐘級」
 >   兩約束相乘 ⇒ 極端下必掉 ⇒ bounded + drop-oldest + dropped 計數。
@@ -510,11 +508,13 @@ we can use bounded ring for the logs with in 0.12GB and drop-oldest and counter 
 >   因為 Q5 沒問(見下):兩個洞是同一個洞。
 >
 > **Q4 偵測**(你問:process dead / collector dead)
+>
 > - collector 側相關 ✓,但要接**用途**:偵測到斷線 → 切 buffer 模式 +
 >   重連 backoff。process 側是題外(來源死了沒 log 可收,不歸 shipper 管)
 >   ——半題 scope creep。
 >
 > **Q5 容量算式(漏——全卡最貴的一問)**
+>
 > - 這格永遠是乘法:`capacity = 寫入率 × 最大容忍斷線`。你問了因子一(速率),
 >   因子二(時長)題幹白給("flakes... seconds to minutes")沒消費。
 > - 修正後數字:2MB/s × 60s ≈ **120MB** → 可行,「不掉」買得起;
@@ -522,6 +522,7 @@ we can use bounded ring for the logs with in 0.12GB and drop-oldest and counter 
 >   這一問就是把 Q3 的 "too many" 變成數字的鑰匙。
 >
 > **UDP(本地段)**
+>
 > - 題目只考 "**agent's** buffering and shipping"——process→agent 的 IPC
 >   在考綱外,一句 stub 帶過(Abstract the Noise,同 Poller)。
 > - "never block" 的正解在 library 層:`log()` → in-process bounded queue
@@ -530,8 +531,6 @@ we can use bounded ring for the logs with in 0.12GB and drop-oldest and counter 
 > - 場上鐵律:不熟的不掏("need to google" = 當場換熟的)。
 > - 認出來:本卡核心結構 = **彩排 a(ring_drop_oldest)**,你 7/19 寫過、
 >   修過、全綠——你不缺知識,缺的是認出「這是我寫過的東西」。
-
-
 
 **Card 5 · sensor bridge** — A single hardware device pushes signals in via
 interrupts/DMA — millions per second in bursts. Your bridge hands them to
@@ -544,48 +543,50 @@ flagged within a predictable window; the prober must not hammer its targets
 or blow itself up. Design the scheduling and concurrency.
 
 (Scale, Data rate, Use case, SLA)
-1. How big is the ping / pong data size? Are we receiving the ping from machine, or we send the ping to machine to check? How many probe per seconds we produces? How long a window should be?
-machines below hundred, we just assume this is 10^2.
-The data size is ping and pong, so we can assume this only 1 byte
-And the data rate is decided by the prober strategy.
-I think we need to send the ping from our prober side.
-probes per second = machines / window size = 100 / window size.
-Let's guess the healthy window is 1 min
-probes per second = 100 / 60 = 1.6 probe
-1.6 probe * 1 byte = 1.6 byte per second
 
-(Data Loss, Detect)
-2. How long do we can decide a machine is dead while waiting the ping pong? And how to decide the machine is dead? If we can connect but cannot recv pong, is it dead? Should we retry to prevent network jitter?
-    To decide a machine is dead, TCP connection is down or ping / pong timeout.
-    And if continuous 5 times down or ping/pong timeout, machine turns down.
-    So 5 times retry and the window assume as 1 min
-    60 / 5 = 12s 
-    12s intervals retry 5 times
-    and guess time out 2 s
-    
-(Hammer)
-3.  I guess Not Hammer tell us not to connect too frequent and not blow it up means use fixed pool to handle
+1. How big is the ping / pong data size? Are we receiving the ping from machine, or we send the ping to machine to check? How many probe per seconds we produces? How long a window should be?
+   machines below hundred, we just assume this is 10^2.
+   The data size is ping and pong, so we can assume this only 1 byte
+   And the data rate is decided by the prober strategy.
+   I think we need to send the ping from our prober side.
+   probes per second = machines / window size = 100 / window size.
+   Let's guess the healthy window is 1 min
+   probes per second = 100 / 60 = 1.6 probe
+   1.6 probe \* 1 byte = 1.6 byte per second
+
+(Data Loss, Detect) 2. How long do we can decide a machine is dead while waiting the ping pong? And how to decide the machine is dead? If we can connect but cannot recv pong, is it dead? Should we retry to prevent network jitter?
+To decide a machine is dead, TCP connection is down or ping / pong timeout.
+And if continuous 5 times down or ping/pong timeout, machine turns down.
+So 5 times retry and the window assume as 1 min
+60 / 5 = 12s
+12s intervals retry 5 times
+and guess time out 2 s
+
+(Hammer) 3. I guess Not Hammer tell us not to connect too frequent and not blow it up means use fixed pool to handle
 
 Lets looks into assumption:
 
 100 machines probes, 12s send ping pong, fixed pool and bounded queue for Jobs and a Timer queue.
-window = 5(retry) * 12s + 2s timeout = 62s ~= 60s 
+window = 5(retry) \* 12s + 2s timeout = 62s ~= 60s
 
 > **詳批(7/21,逐問;取代先前簡批)**
 >
 > **Q1 規模/形態**(你問:size、push or pull、幾台)
+>
 > - 拿分:push/pull 當場變決策 ✓——而且這問是你把「自己的疑問」轉成
 >   clarify 問句的成功案例,記住這個動作。規模 10² ✓、1B ping 合理 ✓。
 > - 缺口:「**每秒幾個 probe**」沒算——負載 = 機器數 ÷ interval,
 >   它是 pool 大小的分子。
 >
 > **Q2 判死**(你問:等多久算死、connect 通但 pong 不回算不算)
+>
 > - 拿分:"connect but cannot recv pong, is it dead?" 已經摸到門——
 >   你在懷疑單一訊號的可靠性。
 > - 缺口:懷疑沒變機制:**連續 N 次失敗才標紅**(去抖)。
 >   單次 timeout 判死 = 網路抖一下就誤殺一台好機器。
 >
 > **Q3 SLA/window**(你問:window 多長 → 1s 併發 / 1hr 單執行緒)
+>
 > - 拿分:參數化方向 ✓(60s vs 100ms 的對比是對的形狀)。
 > - 缺口:沒立式。`window ≈ N × interval + timeout`——"predictable"
 >   就是在要這條式子。有式子,面試官給任何 W 都能反推:
@@ -594,6 +595,7 @@ window = 5(retry) * 12s + 2s timeout = 62s ~= 60s
 >   interval ≤ 9s;300 台 ÷ 8s ≈ 38 probes/s、在飛 ≤ 76 → pool ~80。
 >
 > **Q4 hammer(漏——題幹白給)**
+>
 > - "must not hammer its targets or blow itself up" 一句兩約束:
 >   對外限流(per-target rate = 1/interval、重試帶 backoff)+
 >   對內有界(fixed pool、bounded queue)。
@@ -603,6 +605,7 @@ window = 5(retry) * 12s + 2s timeout = 62s ~= 60s
 >   本卡 = **thread_pool + timer queue(彩排 h)**,兩個你都寫過。
 >
 > **設計段**
+>
 > - 100 threads 對 100 台可辯護(瓶頸在 RTT 不在結構);boolean table
 >   方向對,但 status 要帶「連續失敗計數」欄位才能去抖。
 > - 最大拿分點:**沒掏 lock-free/SPSC**——答案卷「常見錯誤」第一條

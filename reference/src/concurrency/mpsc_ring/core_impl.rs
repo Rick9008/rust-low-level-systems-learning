@@ -27,14 +27,15 @@ struct CachePadded<T>(T);
 /// 槽位 = 資料 + 發布訊號。三態同 mpmc_ring:
 /// seq==pos(輪空可搶)/ pos+1(已發布可讀)/ pos+cap(已釋放,等下一圈)。
 //
-// FIXME(Withers 回家寫):下面三行你自己加的 dif 表【符號反了】——就是 7/23 quiz
-// 「dif 定義與符號全反」那個洞的重演。用卡 1 的「絕對狀態表 + 誰的綠燈」重推,別用相對式硬記。
-// 提示(cap 具體數字驗):滿 = 格子壓著上一圈沒消費的值 → seq = 上圈 pos−cap+1
-//   → pos − seq = cap−1 > 0(不是 < 0);可讀 → seq = pos+1 → pos − seq = −1 < 0(不是 > 0)。
-// 官方 dif 定義是 seq − pos(不是 pos − seq),重寫時挑一個方向、標「誰的綠燈」,別再對調。
-//   /// pos - seq == 0 -> 可塞但不可拿      ← 這行對
-//   /// pos - seq < 0 -> 已滿              ← 錯:應是「可讀」
-//   /// pos - seq > 0 -> 可拿出東西但不可塞  ← 錯:應是「已滿」
+// 修正 by witherslin:
+// dif = seq − pos,seq 永遠單獨站等號左邊(名牌 − 票)
+// For push side:
+// seq - pos == 0 -> no value now, 可塞不可拿
+// seq - pos > 0 -> 重拿一次, 他有兩種可能 1. seq - pos == 1 2. seq - pos == cap, 對於 push
+// 端來說兩種狀況都要重拿 pos, 因為他是被人搶走了塞值的機會
+// seq - pos < 0 -> 滿的(-cap 還在塞值的縫隙, -cap + 1 滿的) -> Err(v) 還東西
+// For pop side:
+// seq - pos == 1 可拿, 其他都不行
 struct Slot<T> {
     seq: AtomicUsize,
     val: sync::UnsafeCell<MaybeUninit<T>>,
