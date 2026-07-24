@@ -52,7 +52,8 @@ impl FrameParser {
 
     fn may_compact(&mut self) {
         if self.ptr > 4096 {
-            self.buf.drain(..=4096);
+            self.buf.drain(..self.ptr);
+            self.ptr = 0;
         }
     }
 
@@ -108,4 +109,15 @@ fn dryrun() {
     let mut heartbeat = parser.feed(&[0]);
     assert_eq!(heartbeat.len(), 1);
     assert_eq!(heartbeat.pop().unwrap(), Frame::Heartbeat);
+}
+
+#[test]
+fn boundary_test() {
+    let mut parser = FrameParser::new();
+    parser.feed(&4096i32.to_be_bytes());
+    let frames = parser.feed(&[20; 4096]);
+    assert!(!frames.is_empty());
+    let mut heartbeat_vec = parser.feed(&[0, 0, 0, 0]);
+    assert!(!heartbeat_vec.is_empty());
+    assert_eq!(heartbeat_vec.pop().unwrap(), Frame::Heartbeat);
 }

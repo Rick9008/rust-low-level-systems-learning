@@ -59,6 +59,7 @@ they're done, late submits are rejected, and calling it twice is safe."_
 - _"Graceful means drain-the-queue, not just finish-in-flight jobs — right?"_
 - _"Is the queue bounded? What should `submit` do when it's full?"_
 - _"What if a job panics — take the worker down, or survive it?"_
+- _"On shutdown, are late submits rejected (job handed back), silently dropped, or a caller bug? — default: reject + return, nothing lost silently. (Graceful = already-queued jobs finish; late submits are a **separate** policy.)"_
 
 **Approaches**:_"`Mutex<VecDeque> + Condvar` for the queue; a `shutdown` flag folded
 into the same predicate. Channels would also work, but hand-rolling shows the

@@ -115,6 +115,21 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 **凌晨快考帳(01:50,SPSC/MPSC/MPMC 五題 10m)**:Q2 全對|Q3 缺「seq 歸零 → dif=−cap 永遠滿」半題|**Q1/Q4 同源洞:list-swap vs ring-CAS 原語混淆** + slot seq 誤記 SeqCst(正解 Acq/Rel)。7/23 待還:白天翻卡4 一分鐘 → 晚上 Claude 複測 2–3 題(先答再批)→ **Q5 英文 30 秒**(SPSC→MPMC 升級)併 c#1 場出聲,連 7/22 英文鐵律一起結。就寢裁決:02:30 熄燈 / 09:00 起(保 6.5h 紅線,梯度慢半階,7/24 歸隊)。
 
+## 進度校正(2026-07-24 白天+傍晚,實況)
+
+**白天打字場實績(全在「有打 code」格)**:
+- ✅ **c#1 may_compact 雙洞修畢**(紅測先行:餵「累積消費 >4096 後繼續 feed」看 underflow → `drain(..self.ptr); self.ptr=0` 兩洞一起死)。mutation 驗:主洞被咬、off-by-one 因**全 0 payload 漏網** → 改 `[20]` payload 才咬住(「測試只驗想到的事」家族)。
+- ✅ **signal_pipeline drill 收尾 3/3 綠、0 ignored**(Some 路徑摘牌:early return 別跳過 store(false) + 拔 conservation `#[ignore]`)。
+- ✅ **pool 骨架重默 → 升級完整版**(execute + submit 回傳 + JobHandle + oneshot + panic 隔離 + graceful Drop;編過+複核正確,scratch/thread_pool2.rs)。傷疤(worker 三分支 De Morgan)**癒合**;新洞 = **type erasure**(pool 對 job 型別是瞎的,泛型放方法非 struct)。沉澱 3 條通用規則(型別擦除 / condvar 鐵律 / 跨邊界側信箱)。**Claude 給錯碼表教訓**:把 drill 進階版當 rep#1 spec、壓 10m;rep#1 真 scope = 射後不理版(~40 行)。
+- ✅ **timer_queue(h)寫成——彩排覆蓋帳最後一格補上**(h 是唯一沒親手寫過的题型)。min-heap 版 `Reverse<(deadline,id,interval)>`;tie-break 傷疤(原次鍵誤放 interval → 排序錯,紅測先行修);**加碼 lazy-delete `del_id`**(HashSet 墓碑 = heap-cancel 標準做法)。
+- ✅ **timer_queue2 wheel 第一版**(scratch,單層 hashed wheel + rounds)——11 error + len 沒記 + next_deadline 比較鍵,**批改寫進檔頭,7/25 回家修**;方向全對(絕對 slot / extract_if 單趟 / drift-free 重排)。
+- ✅ clarify 材料補:submit-after-shutdown 三分法進 `recognition-scripts-en.md` b 段(7/27 掃描料)。
+- ✅ hepta 2 卡備:`hepta_20260724_threadpool_full.md`(7 卡 + catch_unwind 4b)、`hepta_20260724_timer_wheel_qa.md`(7 卡)。
+
+**Q&A 深潛(回家複讀,已入卡)**:type erasure|lost-wakeup ≠ 可見性(acq/rel 救不了,loom 親證)|oneshot promise|panic 隔離三件套|`catch_unwind(AssertUnwindSafe)` 語法|`thread::Result` vs `Result`|timing wheel(tick/SLOTS 選型、hierarchical)|Vec `retain`/`extract_if` 的 O(n) 壓實|heap 刪除(pop/rebuild/懶刪除/indexed/sift)|`sort_by_key` vs `impl Ord`。
+
+**未跑 / 待辦**:晚上出聲場(litmus 口述 + 🔴e2#2 + 30 秒口述)——騎車回家未跑|wheel 修綠(7/25)|`scratch/skeleton.rs` 出現刪除(`D`,非 Claude 動作)+ `.claude/` 未追蹤 → 本次 commit **未納入**,待用戶裁。
+
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
 對口是 firmware 面試官 → 網友(firmware 入職)判斷**考題同款**。五條增量,前四條全是「既有裁決的確認」:

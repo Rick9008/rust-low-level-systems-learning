@@ -155,10 +155,7 @@ fn idle_park(rx: &mut Consumer<Signal>, parked: &AtomicBool, stop: &AtomicBool) 
     // todo!("spec: 掛牌 SeqCst; fence; re-pop; 空且未 stop 才 park; 摘牌")
     parked.store(true, Ordering::SeqCst);
     fence(Ordering::SeqCst);
-    let signal = match rx.pop() {
-        Some(signal) => return Some(signal),
-        None => None,
-    };
+    let signal = rx.pop();
     if signal.is_none() && !stop.load(Ordering::Acquire) {
         thread::park();
     }
@@ -173,7 +170,6 @@ mod tests {
 
     /// 守恆:accepted + dropped == sent,聚合 count == accepted。
     #[test]
-    #[ignore = "填完 send/idle_park 後移除"]
     fn conservation_under_burst() {
         let (mut tx, handle) = start(8);
         const N: u64 = 100_000;
