@@ -4,7 +4,7 @@
 > loom 親證:`reference/tests/loom_lost_wakeup.rs`(`lost_wakeup_when_no_lock_at_all` 用 Acquire/Release 照樣死)
 > 相關舊卡:`hepta_20260723_pool_arc_ordering.md` 卡1(兩處方)、卡2(佇列選型)、卡3(Box/'static/Arc);`hepta_20260722_lockfree_day.md` 卡6(lost-wakeup)、卡5(fence)
 
-> **待上板(2026-07-24 晚結帳填 ID)**:卡1 ____、卡2 ____、卡3 ____、卡4 ____、卡5 ____、卡6 ____、卡7 ____
+> **已上板(2026-07-25 凌晨,壓縮 8→3 張,「Rust Low Level Notes」)**:卡1+3+4+4b →《Pool 完整版三軸》`49e33900`|卡2+5 →《Pool shutdown 兩題》`2885e430`|卡6+7 →《測試網與碼表(流程卡)》`41c51be3`。本檔保留全文為底稿;改卡要同步改這裡。
 
 ## 一句話骨架(今日主題)
 

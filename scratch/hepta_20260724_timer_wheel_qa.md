@@ -3,7 +3,7 @@
 > 源碼:`rehearsals/src/timer_queue.rs`(min-heap 版,含 lazy-delete `del_id`)| `scratch/timer_queue2.rs`(wheel 版,第一版 11 error,檔頭有批改)
 > 相關舊卡:`hepta_20260724_threadpool_full.md`(pool + 3 通用規則);park-don't-poll 見 signal_pipeline
 
-> **待上板(晚上結帳填 ID)**:卡1 ____、卡2 ____、卡3 ____、卡4 ____、卡5 ____、卡6 ____、卡7 ____
+> **已上板(2026-07-25 凌晨,壓縮 7→3 張,「Rust Low Level Notes」)**:卡2+3+4 →《Timer 選型:scale 定 heap vs wheel》`91641682`|卡1+6 →《min-heap timer 實作帳》`0a675b95`|卡5+7 →《Rust 機制小抄》`7fb73214`。本檔保留全文為底稿;改卡要同步改這裡。
 
 ## 一句話骨架
 

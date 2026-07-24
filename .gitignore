@@ -4,3 +4,6 @@
 /interview_prep.md
 *.pdf
 /pdf_references/
+
+# Claude Code 本地設定(機器本地,不進 repo)
+/.claude/
