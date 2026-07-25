@@ -82,9 +82,10 @@ pub async fn serve(listener: TcpListener, idle_timeout: Duration) -> io::Result<
 
 #[tokio::test]
 async fn dryrun_happy_path() {
-    let listener = TcpListener::bind("127.0.0.1:3500").await.unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let local_addr = listener.local_addr().unwrap();
     tokio::spawn(async move { serve(listener, Duration::from_secs(10000)).await });
-    let sender = TcpStream::connect("127.0.0.1:3500").await;
+    let sender = TcpStream::connect(local_addr).await;
     assert!(sender.is_ok());
     let mut stream = sender.unwrap();
     assert!(stream.write_all(&[0, 0, 0, 1, 3, 0, 0, 0]).await.is_ok());
@@ -99,11 +100,12 @@ async fn dryrun_happy_path() {
 
 #[tokio::test]
 async fn dryrun_boundary() {
-    let listener = TcpListener::bind("127.0.0.1:3501").await.unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let local_addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
         let res = serve(listener, Duration::from_millis(1)).await;
         assert!(res.is_err());
     });
-    let sender = TcpStream::connect("127.0.0.1:3501").await;
+    let sender = TcpStream::connect(local_addr).await;
     tokio::time::sleep(Duration::from_secs(1)).await;
 }
