@@ -159,7 +159,7 @@ Requirements:
 
 ## g · bounded_channel(Q6)
 
-> **用途**:Q6 預測題(認題:"producers block when full")。recognition 級(7/26)。
+> **用途**:Q6 預測題(認題:"producers block when full")。**🔴g#1 全場 45+20(7/26,v9.2 升級,取代 b#2)**——Sender/Receiver 雙端 + Clone 計數 + Drop 協定 + `SendError(T)` 是 drill 沒有的層;send/recv block+notify 順帶複驗 b 的 condvar 肌肉。
 > bounded_queue 的 MPSC 變體(`Sender: Clone`+兩邊 drop 語意)。第一個 clarify:**capacity?close 語意?**
 
 Build a bounded channel from scratch: producers block when it's full, the
