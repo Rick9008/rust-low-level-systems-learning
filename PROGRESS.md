@@ -23,7 +23,7 @@ SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ri
 | 10 | dsu | ☐ | ☐ | ☐ ★ | **本輪砍**(doc 零訊號) |
 | 11 | sharded_map | ☐ | ☐ | ☐ ★ | 降級:讀 + 口述(跨 shard 鎖序用講的) |
 | 12 | signal_pipeline | ☑ 2026-07-23(深夜) | ☑ 3/3 綠 2026-07-24 | ☐ ★ | **讀 = 深夜追問串打穿**(五睡法/throttling≠鬧鈴/futex-epoll 分界=等記憶體位址 vs 等 fd/喚醒鏈終點=IRQ/acq-rel 是條件句→「最後一眼」原則/SB 兩 idiom+fence 四向牆/x86 映射 xchg-mov-mfence/shutdown 三語意;卡在 `scratch/hepta_20260724_fence_sleep_wake.md`)。drill **2026-07-24 收尾 3/3 綠、0 ignored**(Some 路徑摘牌:early return 別跳過 store(false)=每筆 send 白付 unpark;+ 拔 conservation `#[ignore]`)。litmus+扇入讀口述 → 併 7/25 晚口述錄音塊(v9.2);challenge post-TPS |
-| 13 | endian_pack | — | ☐(排 7/25) | — | 7/23 凌晨新增:BE/LE 讀寫+手動 shift+i16 符號擴展+token pack/unpack(e2 mask 傷疤靶場)+混合 header,8 洞 6 測;c 題 framer 與 e2 token 的共用肌肉,drill-only。⚠ `gen` 是 edition 2024 保留字 |
+| 13 | endian_pack | — | ☐(排 **7/26 08:20**,自 7/25 滑,壓縮 25m,c#2 前鎖手感) | — | 7/23 凌晨新增:BE/LE 讀寫+手動 shift+i16 符號擴展+token pack/unpack(e2 mask 傷疤靶場)+混合 header,8 洞 6 測;c 題 framer 與 e2 token 的共用肌肉,drill-only。⚠ `gen` 是 edition 2024 保留字 |
 
 ### 次優先
 
@@ -70,10 +70,12 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 2026-07-19 | a ring_drop_oldest | ~5 | ~5 | ~25 | **0(自行跳過)** | ~5 | 未記錄 | oracle 4/5 紅,全數 pillar-5 miss:①pop 判空用 head==tail(滿=空二義,連鎖 len>cap+FIFO 毀)②drop_cnt 整條沒 ++ ③Part 2 擅改 contract 成阻塞 pop(clarify miss)。亮點:SPSC×drop-oldest 衝突當場談判降級。修洞 7/20 紅測先行 |
 | 2026-07-21(凌晨,7/20 場)| b pool_graceful_shutdown | ~5(只問 1 題:graceful 語意——好問但獨苗;漏 queue 上限/job panic)| —(題檔附簽名)| **~33(溢時 +13)** | **1(只點名 1 條 case,沒 trace)** | 0(末段改抓 join 漏)| 整場沒按 Run | oracle 2 綠 3 紅,紅全 pillar-5:①worker 見 flag 即退不清 queue(0/16)②空佇列 shutdown hang(wait predicate 漏查 shutdown)③repeated_shutdown 連鎖。**亮點:boundary 唯一點名的 case 正是 hang 那條**(死因=core 溢時吃掉 trace 時間);**時限內自抓 shutdown 忘 join**(JD:finding your own bug = stronger signal)。三個 thread_pool drill 老 bug 全回歸。當場自行診斷②的兩條件(退出=shutdown∧空;睡=空∧¬shutdown)。**7/21 凌晨修至全綠 5/5(已驗,oracle 帶 `--include-ignored`)**。補課帳:**英文 trade-off 錄音 ✓ 7/21 晚(a#1+b#1 合場,兩天欠帳還清)**;三紅卡入 Heptabase「Rust Low Level Notes」(`e2eb0dfb`,含 lost-wakeup 預測題);自寫紅測 ×3 + dry-run + 回放 → 7/22 與 e2#1 複核合段。**補課完結(7/22,d3b4a44)**:自寫紅測×3、mutation 逐洞驗咬人(①drain 紅 ②hang exit=124 ③冪等綠);**新抓三洞全修**:④空佇列喚醒 pop unwrap panic+毒鎖、全被 `let _=join()` 吞掉(--nocapture 揭發;修 match+continue、join().expect 常駐)⑤lost-wakeup:store+notify 不拿 jobs 鎖(dry-run 先手走:結果對、修法答錯→修正為 mutex 序;修 notify 進鎖,**loom_lost_wakeup 三變體裁決**:不拿鎖必死/store 進鎖/notify 進鎖皆綠)⑥鎖圈 job 全池串行(40×10ms/4w 實測 0.40s→放鎖跑 **0.10s**)|
 | | c frame_parser_heartbeat | | | | | | | |
-| | d tokio_frame_server | | | | | | | |
+| 2026-07-25(晚 23:15–00:00)| d tokio_frame_server(**首寫**)| ~5(4 問英文:JoinHandle 處理/parser 重用/accept 錯誤傳播/flow count scope)| —(題檔附簽名)| **15** | **0 自寫(review 點名後補 2 條)** | 未跑(00:00 壓線)| 修後 oracle **6/6 一次綠** | 三大洞全 review 抓(非 dry-run 自攔):①**idle_timeout 整條蒸發**——clarify 沒問到的需求恰是掉的需求 → 處方:動筆前 clarify 對讀需求清單 30 秒 ②echo 只回 payload **掉 wire format** ③自測零條(boundary 又跳,e2#1 死因重演);自測寫死 port `AddrInUse`(`:0` 肌肉當天教當天沒用)。亮點:`break 'parsing` 跨巢狀一次寫對;「喊綠沒驗」×1 |
 | 2026-07-21 | e2 fd_registry | ~2(僅自問 fd≤u32;無英文、無書面——pillar 1 仍最弱) | 未記錄 | 未記錄 | 部分(1 測試含手寫 trace,自認沒跑完) | 未報 Run 紀錄 | **oracle 5/5 首跑零紅**(a#1 四紅、b#1 三紅後三場首見),45 分內收工。review 抓 2 洞(oracle 漏網,皆已實跑證實):①`unregister` 的 `len -= 1` 逃出 `is_some` 守衛——偽「界內+gen 相符+空 slot」token 靜默腐化 len;len=0 時 usize underflow panic(oracle 的偽 token 恰好出界才沒炸)②`unpack` mask 寫 `(1<<31)-1` 少一 bit——fd ≥ 2³¹ alias 到低位(0x80000000 → 0x0)。**同晚修畢+repro 三案驗綠**(is_some 守衛圈住 gen+len、mask 改 32 bit、gen bump 自主採納 wrapping_add)。protocol 課:①提前收工沒把剩餘時間還給 boundary(兩洞恰在沒跑到的角落)②紅測未先行(直接修 code,規則 2 違例,補課補 assert)。**30 秒 trade-off 句已錄(7/21 晚,錄音尾段)**;兩洞卡入 Heptabase「Rust Low Level Notes」(`c84f43c4`)。e2#2(7/24)目標:clarify 出聲英文 ≥3 問、boundary 段跑滿、trade-off 收尾脫口「O(1) 世代 slot map 勝 O(n) 掃描+擋 stale」。**複核(7/22)**:mutation×2 全綠=**兩洞皆無網**(7/21 紅測未先行之債現形)→ 補紅測×2(forged 界內 gen token / 高位 fd roundtrip)先紅後綠;oracle `#[ignore]` 開燈常駐回歸 |
 
-(e / f / g / h 預設 recognition:讀題 → 30 秒定界宣言 → 口述 arc,不計全程。)
+| 2026-07-25(晚 22:40–23:13)| e2 fd_registry(**#2**)| **3 問英文出聲 ✓**(sparse/dense 帶結構後果/token↔epoll 用途/**fd 回收重用 = 錢問題**);定界宣言太薄(一句就開寫)| 未分段記 | ~30 | 繼承 e2#1 三測(未新寫)| 未跑 | 修後自測 3 + oracle 5/5 綠 | **部分重寫**(Token+測試繼承 e2#1,diff 35+/55−,收斂訊號打折)。初版:len 全程沒記帳、unregister **沒驗 generation**(`_generation` 自首)——過期 token 拔現任;修版 `len -= 1` 又逃出佔用確認 → **繼承的 forged 紅測抓到 e2#1 洞① 回鍋**(oracle 5/5 綠抓不到,自寫測試 4 天後自動放哨 = 規則 2 複利首例)。傷疤「狀態變更押在 take()==Some 之後」記**未癒合**;「喊綠沒驗」×1 |
+
+(e / f / g / h 預設 recognition:讀題 → 30 秒定界宣言 → 口述 arc,不計全程。**f 例外**:drill 7/25 咖啡廳親手填綠關覆蓋帳;f#1 計時 30+10 排 7/26〔間隔 1 天=形狀鞏固非收斂訊號〕。)
 
 ## clarify 情境卡(每張 5 分鐘)
 
@@ -83,7 +85,7 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 2 RPC gateway | 2026-07-19(重寫) | SLA(p99 vs p50)沒問——「SLA」標籤誤貼在 client timeout 上;另:英文把「關 client 連線的 EPOLLIN」講成「關 backend 的」 |
 | 3 market data feed | **拿掉不寫**(2026-07-19 裁) | 模式 = per-key conflation,當日已深學;7/25 快打認題 30 秒帶過:"only latest matters → conflation slot, capacity = 1" |
 | 4 log shipper | ☑ 2026-07-21(與 #6 連打) | 4/5:漏「斷線多久算常態」→ capacity=rate×outage 沒立式(題幹 seconds-to-minutes 沒消費);數字:1MB×1000 誤為 0.1GB;UDP 未辯護(隱形 drop) |
-| 5 sensor bridge | 排 **2026-07-25 晚間出聲場開場**(v9.2:卡#5 需口述,移在家段;其餘五卡同日咖啡廳用寫的過完整流程+漏問模式表;7/20、7/22 兩滑,deadline 7/25 前仍成立) | |
+| 5 sensor bridge | 排 ~~2026-07-25 晚間~~ → **2026-07-26 口述塊**(佔原「讀 code」槽;7/25 晚場 22:33 才開,手術滑帳。五卡寫的流程改口述化:卡1/卡2 口述重打 15m 併 7/26 錄音尾,卡4/卡6 重打放掉,漏問模式表 7/26 10m 從既有批改整理) | |
 | 6 health prober | ☑ 2026-07-21(與 #4 連打) | 3/5:漏併發上限(題幹 must not hammer 沒消費)+ 判死無去抖(連續 N 次);window=interval+N×timeout 沒立式。亮點:沒掏 lock-free ✓、push/pull 主動決策 ✓ |
 
 ## 下次複習
@@ -96,7 +98,7 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 2026-07-24 | `qa_lockfree_followups.html`(九題)+ 頁尾 stepper 對照表 | 7/24 lockfree 家族段的文字版前置;讀完照表逐台走 stepper |
 | 2026-07-24 | `scratch/thread_pool.rs` 批改紀錄 → 白紙全骨架重默 10m | 默寫 rep#1 主傷疤:退出條件否定式 ∧/∨ 三連翻;秒殺線=首編 ≤3 錯、兩條件一次對 |
 | 2026-07-25 | `html_p/runtime-lockfree-upgrade-map.html`(§1 三問 + §8 追問鏈)+ ~~SPSC→MPMC 30 秒稿~~(✅ 7/25 凌晨錄畢;同場 Q1/Q4 複測:Q2 過、**Q1 why 層半洞**〔unconditional vs conditional claim〕→ 晚間口述複測) | 錄音「被逼 lock-free」段現在有 repo 實體(mpmc_ring/mpsc_list/ws_deque),照地圖講;ws_deque 的 loom 抓洞實錄是「窮舉>直覺」的第一手證據 |
-| 2026-07-25 | `rehearsals/examples/tcp_skeleton_std.rs`(讀+默寫)+ `drills/src/io/endian_pack.rs` | 7/23 凌晨補位的兩個「上場怕要查」缺口:d 題 socket API 六行、c/e2 的 BE/LE+mask 肌肉 |
+| 2026-07-25 | ~~`rehearsals/examples/tcp_skeleton_std.rs`(讀+默寫)~~(✅ 7/25 咖啡廳 6 輪 7 洞→0,傷疤在 `scratch/tcp_skelton2.rs` 檔頭;7/26 d-std 前 5m 重默)+ `drills/src/io/endian_pack.rs`(→ **7/26 08:20**) | 7/23 凌晨補位的兩個「上場怕要查」缺口:d 題 socket API 六行、c/e2 的 BE/LE+mask 肌肉 |
 | 2026-07-27 | `rehearsals/recognition-scripts-en.md`(**先講出聲才准開**) | 九題型英文認題掃描的對分底稿——口述版 sol_*,含每題傷疤句 |
 | 2026-07-25 | Heptabase 新六卡複讀(✅ 7/25 凌晨已壓縮上板 15→6,「Rust Low Level Notes」;ID 在兩份 `scratch/hepta_20260724_*` 檔頭) | 7/24 兩場深潛沉澱;口袋時間手機讀卡即可,scratch 源文件留全文底稿 |
-| 2026-07-25 | `scratch/timer_queue2.rs` 檔頭批改 → 修 wheel 綠 | 回家繼續:第一版 11 error + len 沒記 + next_deadline 比較鍵;修完 `rustc --emit=metadata` 驗 |
+| ~~2026-07-25~~ **post-TPS** | `scratch/timer_queue2.rs` 檔頭批改 → 修 wheel 綠 | 7/25 咖啡廳擠照閥門陣亡;wheel 概念已由口述覆蓋(O(1) 攤還記帳法/退化條件,`hepta_20260725_cafe_qa.md` 卡4),修綠不再是 TPS 前置 |

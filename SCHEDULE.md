@@ -154,6 +154,19 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 - **7/27 = 說的模擬**(taper 鐵規不變):08:00 骨架默寫抽查(taper ② 釘進晨間格,鐵規豁免項)→ 08:45 口述模擬一題(PROMPTS_EN 冷讀 7/26 的 ⚠ 題)。**前一天跑計時模擬考被否**:考差沒時間修、只傷信心——同時刻練「開口」,不練「開 oracle」。
 - **7/27 已請假,整天在家**:九題型掃描全程出聲為主(「在公司筆寫」fallback 作廢);多出來的時間**預設是休息與睡眠存款,不是加練**——taper 總量 ~3.5h 不變。
 
+## 進度校正(2026-07-26 凌晨,7/25 收帳)
+
+**咖啡廳段(排 15:30–19:00,實 ~15:40–19:20)**:早上口袋件未做 → 開場補課:§8 冷診斷 **1✓/2✗/3半/4半**(Q2/Q4 = 軸認錯不是不會;題幹預讀砍——併五卡流程)+ 六卡複讀 ✓。**TCP 骨架默寫 rep#1:6 輪 7 洞 → 0**(五條傷疤 + 逐輪帳在 `scratch/tcp_skelton2.rs` 檔頭;7/26 d-std 前 5m 重默驗收)。**aggregator drill 6/6 綠**——自寫紅測抓「同餘撞桶」鬼資料(提供測試漏網;`Bucket::empty` min/max 哨兵修正)→ **f 覆蓋帳關帳,九題型全部親手寫過**。咖啡廳 Q&A 七卡沉澱 `scratch/hepta_20260725_cafe_qa.md`(a479539,脊椎=「這個寫入承不承載不變量」)。滑帳:endian → 7/26 08:20|wheel 修綠**陣亡**(post-TPS)|五卡 → 口述化,見 7/26 修訂。
+
+**晚場(排 20:00,實開 22:33)**:剩 2h,照閥門精神手術——卡#5 / 錄音段 / signal_pipeline 翻讀全滑 7/26;**e2#2 / d#1 保住**:
+
+- 🔴**e2#2**(22:40–23:13):**部分重寫**(Token impl 與測試繼承 e2#1,diff 35+/55−,收斂訊號打折記帳)。oracle 5/5 綠,但**繼承的自寫紅測抓到 e2#1 洞① 回鍋**——len/gen bump 未押在 `take()==Some` 之後(初版 unregister 連 generation 都沒驗,`_generation` 自首)。「修洞必寫 counterexample」規則 4 天後自動放哨抓洞 = 規則 2 的複利首例;傷疤「**狀態變更押在確認移除之後**」記**未癒合**。clarify 三問英文 ✓(fd 回收 = 錢問題有問到);定界宣言太薄(一句就開寫)。
+- 🔴**d#1**(23:15–00:00):core 15m,review 抓三大洞——**idle_timeout 整條蒸發**(clarify 沒問到的需求恰是掉的需求 → 處方:動筆前 clarify 清單對讀需求清單 30 秒)/ **echo 掉 wire format**(只回 payload 沒回 header)/ **自測零條**(boundary 又跳,e2#1 死因重演);另自測寫死 port `AddrInUse`(`:0` 肌肉當天教、當天沒用上)。修後自測 2 綠 + **oracle 6/6 一次綠**,d 題型首寫入帳。亮點:`break 'parsing` 帶標籤跨巢狀迴圈一次寫對;parser 重用裁決正確。
+- 🔴**流程頭號傷疤:「喊綠沒驗」×2**(e2#2、d#1 各一)→ 新鐵律:**說「綠」之前,終端機裡要有那行 `test result: ok`**。
+- 鐵律結帳:code ✓(aggregator/TCP/e2/d)、英文 ✓(兩場 clarify + narrate 全英)。Q1 why 層複測:00:00 起休息,結果 7/26 晨補記;executor clarify #5 → 7/26 口述塊。
+
+**7/26 修訂彙整**(v9.3 晨間動線不動,微調):08:00 spsc 空白 #3 → **08:20 endian_pack 壓縮 25m** → 08:45 🔴c#2 → 🔴g#1 → **a#2 降級 overflow**(改 5m 口述快掃;白天跑得快才撈回)→ TCP 重默 5m + signal_pipeline 翻 10m → d-std → **f#1 計時 30+10 新增**(`rehearsals/src/telemetry_aggregator.rs`;⚠ 間隔 1 天 = 形狀鞏固非收斂訊號,review 只對 reference 載重差異)→ recognition e/f/h(f 份額 = 10m drill vs reference diff-read)+ **ds_sync 補洞環**(讀 code+html 30m 硬上限插 c#2 後或午後;下午閉卷重烤 15m + transfer 變體〔Vyukov seq/pos、e2 generation〕+ CLOCK 最壞掃描題)→ e 快寫 30m → 經驗故事 → 英文句庫 → **卡#5 口述設計版(佔原「讀 code」槽)** + 卡1/卡2 口述重打 15m + 錄音殘項(litmus/扇入/五 server/光譜/unsafe 三段式/executor clarify #5)→ 漏問模式表 10m → 00:00 熄燈。超載砍序:**ds_sync 補洞環 → f#1 → 卡1/2 重打 → 錄音殘項壓縮**;c#2/g#1/d-std/e 快寫/卡#5 不動。
+
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
 對口是 firmware 面試官 → 網友(firmware 入職)判斷**考題同款**。五條增量,前四條全是「既有裁決的確認」:
