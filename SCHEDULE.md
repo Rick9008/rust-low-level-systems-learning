@@ -167,6 +167,8 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 
 **7/26 修訂彙整**(v9.3 晨間動線不動,微調):08:00 spsc 空白 #3 → **08:20 endian_pack 壓縮 25m** → 08:45 🔴c#2 → 🔴g#1 → **a#2 降級 overflow**(改 5m 口述快掃;白天跑得快才撈回)→ TCP 重默 5m + signal_pipeline 翻 10m → d-std → **f#1 計時 30+10 新增**(`rehearsals/src/telemetry_aggregator.rs`;⚠ 間隔 1 天 = 形狀鞏固非收斂訊號,review 只對 reference 載重差異)→ recognition e/f/h(f 份額 = 10m drill vs reference diff-read)+ **ds_sync 補洞環**(讀 code+html 30m 硬上限插 c#2 後或午後;下午閉卷重烤 15m + transfer 變體〔Vyukov seq/pos、e2 generation〕+ CLOCK 最壞掃描題)→ e 快寫 30m → 經驗故事 → 英文句庫 → **卡#5 口述設計版(佔原「讀 code」槽)** + 卡1/卡2 口述重打 15m + 錄音殘項(litmus/扇入/五 server/光譜/unsafe 三段式/executor clarify #5)→ 漏問模式表 10m → 00:00 熄燈。超載砍序:**ds_sync 補洞環 → f#1 → 卡1/2 重打 → 錄音殘項壓縮**;c#2/g#1/d-std/e 快寫/卡#5 不動。
 
+**00:52 起床時刻改判**:實際就寢 ~01:00(收帳+上板拖長),07:30 起僅 6h20m **破 6.5h 紅線** → 起床改 **09:00**(用戶要八小時,10:00 被否——週一 07:30 定錨日會變一步跳 2.5h,違反 30 分/天梯度;09:00→07:30 = 1.5h 勉強可守)。晨間動線整段平移、offset 不變(起+75m 開跑,同構 7/28 的 07:30→08:45):**09:00 起 → 09:30 暖手(spsc #3 + endian 25m)→ 10:15 🔴c#2 計時**。全天後移 ~1.5h,晚段擠壓照既定砍序;**7/27 07:30/23:00 不動**(上場前唯一定錨日)。
+
 **00:35 用戶點名複核**:e 從頭寫 = e 快寫 30m ✓ 已在表|f 從頭寫 = f#1 ✓ 已在表|g = g#1 全場 ✓ 已在表(PROMPTS_EN 舊注「recognition 級」已更正)。**signal_pipeline 動手版 → overflow 池第 2 位**(ds_sync 之後):20m fan-in 骨架快默(scratch、非計時,只默簽名+fence 擺位),白天超前才碰;口述層(litmus/扇入)照原排,challenge 仍 post-TPS。
 
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
