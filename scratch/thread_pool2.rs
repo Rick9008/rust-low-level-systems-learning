@@ -1,11 +1,10 @@
-
 // 3:26
 
+use std::collections::VecDeque;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use std::collections::VecDeque;
 use std::thread::{self, JoinHandle};
-use std::panic::{catch_unwind, AssertUnwindSafe};
 
 type Job = dyn FnOnce() + Send + 'static;
 
@@ -17,7 +16,7 @@ struct Shared {
 
 impl Shared {
     fn new() -> Self {
-        Self{
+        Self {
             jobs: Mutex::new(VecDeque::new()),
             shutdown: AtomicBool::new(false),
             wait_job: Condvar::new(),
@@ -33,14 +32,12 @@ struct JobHandle<T> {
 impl<T> JobHandle<T> {
     fn new() -> Self {
         Self {
-            slot: Arc::new((Mutex::new(None), Condvar::new()))
+            slot: Arc::new((Mutex::new(None), Condvar::new())),
         }
     }
     fn join(self) -> thread::Result<T> {
         let mut slot_gaurd = self.slot.0.lock().unwrap();
-        slot_gaurd = self.slot.1.wait_while(slot_gaurd, |s| {
-            s.is_none()
-        }).unwrap();
+        slot_gaurd = self.slot.1.wait_while(slot_gaurd, |s| s.is_none()).unwrap();
         slot_gaurd.take().expect("it should be some")
     }
 }
@@ -70,23 +67,28 @@ impl ThreadPool {
         assert!(num_threads > 0);
         let shared = Arc::new(Shared::new());
         Self {
-            joins: (0..num_threads).map(|_| {
-                let arc_sha = shared.clone();
-                thread::spawn(move || {
-                    let mut job_gaurd = arc_sha.jobs.lock().unwrap();
-                    while !job_gaurd.is_empty() || !arc_sha.shutdown.load(Ordering::Acquire) {
-                        job_gaurd = arc_sha.wait_job.wait_while(job_gaurd, |s| {
-                            s.is_empty() && !arc_sha.shutdown.load(Ordering::Acquire)
-                        }).unwrap();
-                        let job_op = job_gaurd.pop_front();
-                        drop(job_gaurd);
-                        if let Some(job) = job_op {
-                            let _ = catch_unwind(AssertUnwindSafe(|| job()));
+            joins: (0..num_threads)
+                .map(|_| {
+                    let arc_sha = shared.clone();
+                    thread::spawn(move || {
+                        let mut job_gaurd = arc_sha.jobs.lock().unwrap();
+                        while !job_gaurd.is_empty() || !arc_sha.shutdown.load(Ordering::Acquire) {
+                            job_gaurd = arc_sha
+                                .wait_job
+                                .wait_while(job_gaurd, |s| {
+                                    s.is_empty() && !arc_sha.shutdown.load(Ordering::Acquire)
+                                })
+                                .unwrap();
+                            let job_op = job_gaurd.pop_front();
+                            drop(job_gaurd);
+                            if let Some(job) = job_op {
+                                let _ = catch_unwind(AssertUnwindSafe(job));
+                            }
+                            job_gaurd = arc_sha.jobs.lock().unwrap();
                         }
-                        job_gaurd = arc_sha.jobs.lock().unwrap();
-                    }
+                    })
                 })
-            }).collect(),
+                .collect(),
             shared,
         }
     }
@@ -102,7 +104,10 @@ impl ThreadPool {
         Ok(())
     }
 
-    pub fn submit<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(&self, job: F) -> Result<JobHandle<T>, F> {
+    pub fn submit<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(
+        &self,
+        job: F,
+    ) -> Result<JobHandle<T>, F> {
         if self.shared.shutdown.load(Ordering::Acquire) {
             return Err(job);
         }
@@ -110,7 +115,7 @@ impl ThreadPool {
         let mut jobs = self.shared.jobs.lock().unwrap();
         let slot = job_handle.slot.clone();
         jobs.push_back(Box::new(move || {
-            let ret = catch_unwind(AssertUnwindSafe(|| job()));
+            let ret = catch_unwind(AssertUnwindSafe(job));
             *slot.0.lock().unwrap() = Some(ret);
             slot.1.notify_one();
         }));
@@ -124,7 +129,9 @@ impl ThreadPool {
             self.shared.shutdown.store(true, Ordering::Release);
         }
         self.shared.wait_job.notify_all();
-        self.joins.drain(..).for_each(|join_hand| join_hand.join().expect("Safe join."));
+        self.joins
+            .drain(..)
+            .for_each(|join_hand| join_hand.join().expect("Safe join."));
     }
 }
 
@@ -136,12 +143,15 @@ impl Drop for ThreadPool {
 
 // 3:56
 
-
 #[test]
-fn dryrun {
+fn dryrun() {
     let mut pool = ThreadPool::new(3);
-    let ans = pool.submit(|| {
-        4
-    });
+    let ans = pool.submit(|| 4);
     assert_eq!(ans.join(), 4);
+}
+
+fn main() {
+    let mut pool = ThreadPool::new(3);
+    let ans = pool.submit(|| 4);
+    assert_eq!(ans.ok().unwrap().join().unwrap(), 4);
 }

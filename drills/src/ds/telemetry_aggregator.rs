@@ -33,8 +33,8 @@ impl Bucket {
             epoch: u64::MAX,
             count: 0,
             sum: 0,
-            min: 0,
-            max: 0,
+            min: i64::MAX,
+            max: i64::MIN,
         }
     }
 }
@@ -75,8 +75,25 @@ impl Aggregator {
     /// 4. 其餘(在保留範圍內,含亂序補記)→ 累進該桶的 count/sum/min/max。
     ///    寫入前同樣要驗桶的 epoch:桶裡若躺著更舊 epoch 的殘料,先重置再記。
     pub fn record(&mut self, ts_ms: u64, value: i64) -> bool {
-        let _ = (ts_ms, value);
-        todo!("spec: 見上——先算 epoch,分四條路:首筆 / 未來推進 / 太舊拒收 / 範圍內累進")
+        let e = ts_ms / self.window_ms;
+        let bucked_index = self.bucket_index(e);
+        if e < self.latest_epoch && self.latest_epoch - e >= self.buckets.len() as u64 {
+            return false;
+        }
+        self.started = true;
+        if e > self.latest_epoch {
+            self.latest_epoch = e;
+        }
+        let bucket = &mut self.buckets[bucked_index];
+        if bucket.epoch != e {
+            *bucket = Bucket::empty();
+        }
+        bucket.epoch = e;
+        bucket.count += 1;
+        bucket.min = bucket.min.min(value);
+        bucket.max = bucket.max.max(value);
+        bucket.sum += value;
+        true
     }
 
     /// spec:回傳 ts 所屬 window 的目前統計。
@@ -84,8 +101,33 @@ impl Aggregator {
     /// 比 latest 新(尚未發生)、桶是空的(被跳過或沒人記過)。
     /// 提示:桶的 `epoch` 必須恰好等於查詢的 epoch 且 `count > 0` 才算有料。
     pub fn stats(&self, ts_ms: u64) -> Option<WindowStats> {
-        let _ = ts_ms;
-        todo!("spec: 算 epoch → 四種 None 擋掉 → Some(桶的四個數)")
+        let e = ts_ms / self.window_ms;
+        let bucked_index = self.bucket_index(e);
+        let bucket = &self.buckets[bucked_index];
+        if !self.started {
+            return None;
+        }
+        // e = 0 | 2 - 2 = 0
+        if self.latest_epoch >= self.buckets.len() as u64
+            && e <= self.latest_epoch - (self.buckets.len() as u64)
+        {
+            return None;
+        }
+        if bucket.epoch != e {
+            return None;
+        }
+        if e > self.latest_epoch {
+            return None;
+        }
+        if bucket.count == 0 {
+            return None;
+        }
+        Some(WindowStats {
+            count: bucket.count,
+            sum: bucket.sum,
+            min: bucket.min,
+            max: bucket.max,
+        })
     }
 }
 
@@ -96,7 +138,6 @@ mod tests {
     /// boundary:同 window 累進 + 半開區間邊界。
     /// trace:window=100 → epoch(99)=0、epoch(100)=1——99 和 100 不同桶。
     #[test]
-    #[ignore = "填完 record/stats 後移除"]
     fn same_window_accumulates_and_boundary_is_half_open() {
         let mut a = Aggregator::new(100, 4);
         assert!(a.record(10, 5));
@@ -125,7 +166,6 @@ mod tests {
     /// boundary:掉出保留範圍的舊 ts 拒收;被淘汰的 window 查詢得 None。
     /// trace:window=100、N=2,latest 推到 epoch 2 → 保留 {1,2},epoch 0 已死。
     #[test]
-    #[ignore = "填完 record/stats 後移除"]
     fn too_old_is_rejected_and_evicted_window_is_none() {
         let mut a = Aggregator::new(100, 2);
         assert!(a.record(0, 1)); // epoch 0
@@ -140,7 +180,6 @@ mod tests {
     /// trace:epoch 0 記一筆後跳到 epoch 9:中間全空、epoch 0 淘汰、
     /// 桶重用(9 % 4 = 1)不得殘留舊料。
     #[test]
-    #[ignore = "填完 record/stats 後移除"]
     fn future_ts_clears_skipped_windows() {
         let mut a = Aggregator::new(100, 4);
         assert!(a.record(0, 1));
@@ -154,7 +193,6 @@ mod tests {
     /// boundary:桶重用不串味 + 負值的 min/max。
     /// trace:N=2,epoch 0→1→2:epoch 2 落回 index 0,舊的 epoch 0 資料必須消失。
     #[test]
-    #[ignore = "填完 record/stats 後移除"]
     fn bucket_reuse_does_not_leak_and_negatives_work() {
         let mut a = Aggregator::new(100, 2);
         assert!(a.record(0, 1)); // epoch 0 → index 0
@@ -176,9 +214,16 @@ mod tests {
 
     /// boundary:全新 aggregator 什麼都查不到。
     #[test]
-    #[ignore = "填完 record/stats 後移除"]
     fn fresh_aggregator_returns_none() {
         let a = Aggregator::new(100, 4);
         assert_eq!(a.stats(0), None);
+    }
+
+    #[test]
+    fn skipped_window_congruent_bucket_is_none() {
+        let mut a = Aggregator::new(100, 4);
+        assert!(a.record(0, 1));
+        assert!(a.record(999, 5));
+        assert_eq!(a.stats(800), None);
     }
 }
