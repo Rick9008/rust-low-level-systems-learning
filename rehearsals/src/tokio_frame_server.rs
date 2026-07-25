@@ -25,13 +25,16 @@ Requirements:
 - TCP still has no message boundaries — reuse your problem-c homework.
 */
 
+#[cfg(test)]
 use crate::frame_parser_heartbeat::FrameParser;
 
 use super::frame_parser_heartbeat;
 use std::io;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
+#[cfg(test)]
+use tokio::net::TcpStream;
 
 /// 服務到 listener 出錯為止;每個連線並發服務、互相獨立。
 ///
