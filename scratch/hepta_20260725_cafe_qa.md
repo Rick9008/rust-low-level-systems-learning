@@ -3,6 +3,7 @@
 > 場景:口袋件補課(ds_sync §8 先答再翻)→ TCP 骨架默寫 6 輪 → aggregator 填綠。
 > 源碼證物:`drills/src/ds/telemetry_aggregator.rs`(含自寫鬼資料紅測)|`scratch/tcp_skelton2.rs`(默寫批改在檔頭)
 > 相關卡:`hepta_20260724_threadpool_full.md` 卡2(lost-wakeup)|`hepta_20260724_timer_wheel_qa.md` 卡2/3(wheel 選型)
+> **已上板(2026-07-26 凌晨,壓縮 7→5 張,「Rust Low Level Notes」)**:卡1 →《脊椎:寫入承不承載不變量(§8)》`003b1022`|卡2+4+5 →《CLOCK 與 wheel:近似/攤還/pow2》`da171122`|卡3 →《lost-wakeup 實地驗證》`95a5ab76`|卡6 →《epoch=generation:lazy 合法邊界》`edc9dbd2`|卡7 →《std accept 叫不醒+ext trait》`3cceee55`。本檔保留全文為底稿;改卡要同步改這裡。
 > 待辦:7/26 ds_sync 補洞環(讀 30m + 下午閉卷重烤 + transfer 變體)——**待用戶點頭才排**。
 
 ## 今晚出聲場(回家 20:00 開錶 → 00:30 熄燈/07:30 起)
