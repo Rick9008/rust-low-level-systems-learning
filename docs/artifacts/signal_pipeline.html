@@ -100,6 +100,23 @@ th { background: var(--surface); font-family: var(--mono); font-size: 0.72rem; l
 .tag.event { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
 .tag.time { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
 
+/* 喚醒接力鏈 */
+.relay { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.7rem; align-items: stretch; }
+.relay .zone { border: 1px dashed var(--line); border-radius: 10px; padding: 0.55rem 0.65rem 0.6rem; flex: 1 1 16rem; min-width: 15rem; }
+.relay .zone > .zlabel { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; margin-bottom: 0.45rem; }
+.relay .zone.hw { border-color: var(--danger); background: var(--danger-bg); }
+.relay .zone.hw > .zlabel { color: var(--danger); }
+.relay .zone.kern { border-color: var(--consumer); background: var(--consumer-bg); }
+.relay .zone.kern > .zlabel { color: var(--consumer); }
+.relay .zone.user { border-color: var(--producer); background: var(--producer-bg); }
+.relay .zone.user > .zlabel { color: var(--producer); }
+.relay .chain { display: flex; flex-direction: column; gap: 0.15rem; }
+.relay .station { background: var(--raised); border: 1px solid var(--line); border-radius: 7px; padding: 0.3rem 0.55rem; font-size: 0.82rem; }
+.relay .station .st-note { display: block; font-size: 0.72rem; color: var(--muted); }
+.relay .station.spark { border-color: var(--danger); font-weight: 700; }
+.relay .hop { text-align: center; color: var(--muted); font-size: 0.78rem; line-height: 1; }
+.relay-punch { margin-top: 0.7rem; }
+
 /* code 區 */
 pre.code, pre.topo, pre.tl {
   font-family: var(--mono); font-size: 0.8rem; line-height: 1.55;
@@ -228,6 +245,53 @@ details.faq .body p + p { margin-top: 0.4rem; }
     on a few threads. But a hardware signal stream isn't idle, it's continuous.
     There I want pinned threads and SPSC rings: no runtime scheduling on the hot path,
     predictable tail latency. Async is for the control plane; the data plane stays sync."</em>
+  </p>
+
+  <h3>①-2 喚醒鏈的終點站——五種睡法殊途同歸(2026-07-26 補)</h3>
+  <p>
+    你睡在 condvar 上,producer 的 <code>notify_one</code> 叫醒你——但 notify 只是<strong>中繼</strong>:
+    它自己是個 syscall,得有一個「已經醒著的人」來呼叫它。睡在 epoll 上也一樣,
+    <code>epoll_wait</code> 本身在睡,誰叫醒 epoll?把「誰叫醒我的叫醒者」一路追到底,
+    總得有一棒<strong>在沒有任何軟體醒著時,無中生有製造喚醒</strong>——那一棒是矽做的:
+  </p>
+  <div class="relay">
+    <div class="zone hw">
+      <div class="zlabel">硬體 —— 無中生有的第一棒</div>
+      <div class="chain">
+        <div class="station">封包到網卡 / sensor 出資料<span class="st-note">沒有任何 CPU 指令參與</span></div>
+        <div class="hop">↓</div>
+        <div class="station">DMA 把資料落進記憶體<span class="st-note">仍然不打擾 CPU</span></div>
+        <div class="hop">↓</div>
+        <div class="station spark">⚡ IRQ:拉中斷線,CPU 被硬體強制跳進 ISR<span class="st-note">喚醒在這裡誕生——不需要誰醒著</span></div>
+      </div>
+    </div>
+    <div class="zone kern">
+      <div class="zlabel">kernel —— 接力</div>
+      <div class="chain">
+        <div class="station">ISR → driver 收包,標記 fd ready</div>
+        <div class="hop">↓</div>
+        <div class="station">走 wait queue:把睡在 epoll / futex 上的執行緒搬回 run queue</div>
+        <div class="hop">↓</div>
+        <div class="station">scheduler 派 CPU 給它</div>
+      </div>
+    </div>
+    <div class="zone user">
+      <div class="zlabel">userspace —— 接力</div>
+      <div class="chain">
+        <div class="station"><code>epoll_wait</code> / <code>futex</code> 返回,event loop 醒來</div>
+        <div class="hop">↓</div>
+        <div class="station">它再 <code>notify_one</code> / <code>unpark</code> 傳下一棒</div>
+        <div class="hop">↓</div>
+        <div class="station">aggregator 醒來收貨</div>
+      </div>
+    </div>
+  </div>
+  <p class="quote relay-punch">
+    一句記走:<strong>軟體只能接力喚醒,無中生有的喚醒只有硬體中斷</strong>。
+    連「按時間醒」的 <code>sleep</code> 終點也是它——timer tick 就是一顆 IRQ。
+    五種睡法只是睡在不同的中繼站,終點站全部同一個。
+    唯一不在這條鏈上的是 busy-poll:<em>不睡的人不需要被叫醒</em>——HFT 燒一顆核,
+    買斷的正是整條接力鏈的延遲與變異。
   </p>
 </section>
 

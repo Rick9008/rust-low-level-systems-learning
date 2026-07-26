@@ -18,12 +18,6 @@ Write an incremental parser: `feed(&[u8])` consumes the newly arrived bytes
 and returns **all frames completed by this call**, in stream order.
 Heartbeats must be reported too. Assume the stream is well-formed (trusted
 peer — no malformed handling needed).
-
-clarify:
-1. is the len contains the len bytes?
-    -> no because len == 0 is a heartbeat
-2. what's the maximum len size?
-    -> let assume 4096
 */
 
 #[derive(Debug, PartialEq, Eq)]
@@ -37,56 +31,61 @@ pub enum Frame {
 pub struct FrameParser {
     // ↓ 佔位:動手時整個換成你的設計。
     // _todo: (),
-    ptr: usize,
     buf: Vec<u8>,
+    ptr: usize,
 }
 
 impl FrameParser {
     pub fn new() -> Self {
-        // todo!("rehearsal")
         Self {
-            ptr: 0,
             buf: Vec::new(),
+            ptr: 0,
         }
     }
 
+    /// 吃進這次新到的 bytes,回傳**這次新完成**的所有 frame(依 stream 順序)。
+    /// time: O(n)
+    pub fn feed(&mut self, bytes: &[u8]) -> Vec<Frame> {
+        let mut res = Vec::new();
+        self.buf.extend_from_slice(bytes);
+        while let Some(frame) = self.parse() {
+            res.push(frame);
+        }
+        self.may_compact();
+        res
+    }
+    // time: O(n) (amortized)
     fn may_compact(&mut self) {
+        // if self.ptr = 4200
         if self.ptr > 4096 {
+            // drain(..4200), kep 4200..
             self.buf.drain(..self.ptr);
+            // self.ptr = 0
             self.ptr = 0;
         }
     }
 
-    fn parse(&mut self) -> Vec<Frame> {
-        let mut ans = Vec::new();
-        // 0,0,0,2,32,24,0,0,0 | len is 9
-        //               6
-        while (self.buf.len() - self.ptr) >= 4 {
-            let (left, right) = self.buf[self.ptr..].split_at(4);
-            // left ensure split with 4 length
-            let length = u32::from_be_bytes(left.try_into().unwrap());
-            if length == 0 {
-                ans.push(Frame::Heartbeat);
-                self.ptr += 4;
-                continue;
-            }
-            if right.len() < length as usize {
-                break;
-            }
-            let data = right[..length as usize].to_vec();
-            ans.push(Frame::Data(data));
-            // take ex. [0,0,0,2,32,24,0,0,0,0,] ptr = 0, len = 2, 4 + 2 = 6, ptr = 0 + 6
-            self.ptr += (4 + length) as usize;
+    // O(n) amortized
+    fn parse(&mut self) -> Option<Frame> {
+        let remain = self.buf.len() - self.ptr;
+        if remain < 4 {
+            return None;
         }
-        self.may_compact();
-        ans
-    }
-
-    /// 吃進這次新到的 bytes,回傳**這次新完成**的所有 frame(依 stream 順序)。
-    pub fn feed(&mut self, bytes: &[u8]) -> Vec<Frame> {
-        // todo!("rehearsal")
-        self.buf.extend_from_slice(bytes);
-        self.parse()
+        let length = u32::from_be_bytes(
+            self.buf[self.ptr..self.ptr + 4]
+                .try_into()
+                .expect("expect 4 bytes"),
+        ) as usize;
+        let buf_remain = self.buf.len() - self.ptr - 4;
+        if length > buf_remain {
+            return None;
+        }
+        let frame = match length {
+            0 => Frame::Heartbeat,
+            _ => Frame::Data(self.buf[self.ptr + 4..self.ptr + 4 + length].to_vec()),
+        };
+        self.ptr += 4 + length;
+        Some(frame)
     }
 }
 
@@ -120,4 +119,8 @@ fn boundary_test() {
     let mut heartbeat_vec = parser.feed(&[0, 0, 0, 0]);
     assert!(!heartbeat_vec.is_empty());
     assert_eq!(heartbeat_vec.pop().unwrap(), Frame::Heartbeat);
+    let mut multiple_feed = parser.feed(&[0, 0, 0, 3, 56, 23, 50, 0, 0, 0, 1, 63]);
+    assert_eq!(multiple_feed.len(), 2);
+    assert_eq!(multiple_feed.pop().unwrap(), Frame::Data(vec![63]));
+    assert_eq!(multiple_feed.pop().unwrap(), Frame::Data(vec![56, 23, 50]));
 }

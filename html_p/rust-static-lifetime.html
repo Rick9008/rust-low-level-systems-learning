@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>&#39;static — Rust lifetime 深入拆解 · Stepper Handbook</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg0);color:var(--fg);font-family:var(--cjk);
+    line-height:1.65;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;
+    padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;
+    cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);
+    border-color:var(--bg4)}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow)}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.95rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55;-webkit-text-size-adjust:100%}
+  section pre{background:var(--bg0)}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .t{color:var(--blue)}
+  pre .s{color:var(--green)} pre .n{color:var(--purple)} pre .lt{color:var(--orange)}
+  pre.diag{color:var(--fg-dim);font-size:.74rem;border-color:var(--red);
+    border-left-width:3px}
+  pre.sig{border-color:var(--blue);border-left-width:3px}
+  .prelabel{font-family:var(--mono);font-size:.7rem;color:var(--gray);
+    margin:10px 0 -6px;letter-spacing:.03em}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .key{color:var(--orange);font-weight:600}
+  .dim{color:var(--gray)}
+  ul{padding-left:1.25em} li{margin:4px 0}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);
+    vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  .tbl-scroll{overflow-x:auto;-webkit-text-size-adjust:100%}
+
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);
+    color:var(--fg);font-family:var(--mono);font-size:.8rem;padding:5px 14px;
+    border-radius:7px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .stage{min-height:150px}
+  .stepper .stage pre{background:var(--bg0);border-color:var(--bg4);margin:8px 0}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+  .stepper h3{margin-top:2px}
+  .verdict{font-family:var(--mono);font-size:.8rem;padding:6px 10px;
+    border-radius:7px;display:inline-block;margin:6px 0}
+  .verdict.ok{background:#3a4028;color:var(--green)}
+  .verdict.no{background:#432b29;color:var(--red)}
+
+  figure{margin:14px 0}
+  figure svg{width:100%;height:auto;display:block;
+    background:var(--bg0);border:1px solid var(--bg3);border-radius:10px}
+  figcaption{color:var(--gray);font-size:.8rem;margin-top:6px;text-align:center}
+  svg text{font-family:var(--mono)}
+  svg .cjk{font-family:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif}
+
+  [data-jump]{color:var(--blue);text-decoration:underline dotted;cursor:pointer}
+</style>
+</head>
+<body>
+
+<nav class="tabbar" id="tabbar">
+  <button data-tab="overview" class="active">總覽</button>
+  <button data-tab="core">核心</button>
+  <button data-tab="src">&#39;static 的來源</button>
+  <button data-tab="spawn">spawn 為何要它</button>
+  <button data-tab="traps">陷阱</button>
+  <button data-tab="fix">修法 &amp; 成本</button>
+  <button data-tab="ext">延伸 / C++ 對照</button>
+</nav>
+
+<div class="wrap">
+
+<!-- ================= 總覽 ================= -->
+<div class="tab active" id="tab-overview">
+  <h1>&#39;static — Rust lifetime 深入拆解</h1>
+  <div class="sub">全部程式碼經 rustc 1.75.0 (edition 2021) 實際編譯／執行驗證 · 2026-07</div>
+
+  <section>
+    <h2>一句話</h2>
+    <p><code>T: &#39;static</code> 是對<span class="key">型別</span>的斷言:這個型別裡面沒有藏任何借來的東西。
+    它跟那個<span class="key">值實際活多久</span>完全無關。</p>
+    <p class="dim">另一個長得很像的東西 <code>&amp;&#39;static T</code> 是一個具體<span class="key">型別</span>:
+    指向的資料保證在整個程式期間都有效。兩者共用 <code>&#39;static</code> 這個名字,是絕大多數混淆的來源。</p>
+  </section>
+
+  <section>
+    <h2>路由表 — 看到什麼症狀跳哪頁</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>症狀 / 疑問</th><th>去哪</th></tr>
+      <tr><td>「<code>&#39;static</code> 不是活到程式結束嗎?為什麼 <code>String</code> 也算?」</td><td><span data-jump="core">核心</span></td></tr>
+      <tr><td>「哪裡生得出 <code>&amp;&#39;static T</code>?<code>Box::leak</code> 是不是作弊?」</td><td><span data-jump="src">&#39;static 的來源</span></td></tr>
+      <tr><td><code>argument requires that `&#39;a` must outlive `&#39;static`</code></td><td><span data-jump="spawn">spawn 為何要它</span></td></tr>
+      <tr><td><code>Box&lt;dyn Error&gt;</code> 存借來的東西爆掉</td><td><span data-jump="traps">陷阱</span></td></tr>
+      <tr><td>編譯器叫我加 <code>+ &#39;static</code>,加了更慘</td><td><span data-jump="traps">陷阱</span></td></tr>
+      <tr><td>「該 clone、該 <code>Arc</code>、還是該改結構?」</td><td><span data-jump="fix">修法 &amp; 成本</span></td></tr>
+      <tr><td>C++ 的 <code>static</code> 跟這個是同一回事嗎?</td><td><span data-jump="ext">延伸 / C++ 對照</span></td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>兩個 &#39;static 的分工(先記這張表)</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th><code>&amp;&#39;static T</code></th><th><code>T: &#39;static</code></th></tr>
+      <tr><td>語法角色</td><td>型別</td><td>bound(對型別的限制)</td></tr>
+      <tr><td>在講什麼</td><td>指向的記憶體整個程式期間有效</td><td>型別裡沒有壽命短於 <code>&#39;static</code> 的 reference</td></tr>
+      <tr><td>誰滿足</td><td>literal、static item、leak 出來的</td><td>所有 owned type,加上前一欄全部</td></tr>
+      <tr><td>常見出處</td><td><code>let s: &amp;&#39;static str = "x";</code></td><td><code>tokio::spawn</code>、<code>Box&lt;dyn Error&gt;</code>、<code>dyn Any</code></td></tr>
+      <tr><td>關係</td><td colspan="2"><code>&amp;&#39;static T</code> 是滿足 <code>T: &#39;static</code> 的<span class="key">其中一種</span>型別,反過來不成立</td></tr>
+    </table></div>
+  </section>
+</div>
+
+<!-- ================= 核心 ================= -->
+<div class="tab" id="tab-core">
+  <h1>核心:&#39;static 到底在斷言什麼</h1>
+
+  <section>
+    <h2>直覺一句話</h2>
+    <p><code>T: &#39;static</code> 問的是「<span class="key">你有沒有辦法把這個值一直抱著不放</span>」,
+    不是「你實際上抱了多久」。<code>String</code> 你想抱多久就抱多久 → 它是 <code>&#39;static</code>。
+    借來的 <code>&amp;&#39;a str</code> 到期就得還 → 不是。</p>
+  </section>
+
+  <section>
+    <h2>心智模型階梯:樸素 → 正確</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>模型</th><th>判準</th><th>錯在哪 / 何時失效</th></tr>
+      <tr>
+        <td>M0 樸素</td>
+        <td>「<code>&#39;static</code> = 活到程式結束」</td>
+        <td><span style="color:var(--red)">兩個方向都錯。</span><code>String</code> 滿足 bound 卻馬上 drop;
+            <code>&amp;&#39;a i32</code> 可以活到 main 結束卻不滿足</td>
+      </tr>
+      <tr>
+        <td>M1 修補</td>
+        <td>「owned 的就是 <code>&#39;static</code>」</td>
+        <td>方向對了但不完整。<code>struct Foo&lt;&#39;a&gt;</code> 是 owned 的 struct,
+            照樣不滿足 —— 因為欄位裡藏著 <code>&amp;&#39;a</code></td>
+      </tr>
+      <tr>
+        <td>M2 正確</td>
+        <td>看<span class="key">型別的 lifetime 參數</span>:全部都是 <code>&#39;static</code>(或根本沒有)才算</td>
+        <td>—— 這就是 Reference 的定義:<code>T: &#39;a</code> 表示 T 的所有 lifetime 參數都 outlive <code>&#39;a</code></td>
+      </tr>
+    </table></div>
+    <div class="callout">
+      Rust Reference 的原話等價於:<code>i32: &#39;static</code> ✓、<code>&amp;&#39;static str: &#39;a</code> ✓、
+      <code>Vec&lt;&amp;&#39;a ()&gt;: &#39;static</code> ✗。第三個是關鍵 —— <code>Vec</code> 本身是 owned 的,
+      但它的型別參數把一個 <code>&#39;a</code> 帶了進去。
+    </div>
+  </section>
+
+  <section>
+    <h2>核心概念卡</h2>
+    <div class="callout good">
+      <p style="margin:0 0 6px"><span class="key">承重的那一句:</span></p>
+      <p style="margin:0"><code>T: &#39;static</code> 是「<b>能活多久的上限</b>」,不是「實際活多久」。</p>
+      <p style="margin:8px 0 0" class="dim">
+      <code>T: &#39;a</code> 唸作 “T outlives &#39;a”。把 <code>&#39;a</code> 推到最大就是 <code>&#39;static</code>:
+      這個型別的值<span class="key">可以</span>被持有到任意久而不會 dangle。至於你要不要真的持有那麼久,
+      是另一回事。</p>
+    </div>
+  </section>
+
+  <h2 id="hero">主圖:兩條軸互相獨立</h2>
+  <figure>
+    <svg viewBox="0 0 720 400" role="img" aria-label="型別是否滿足 T: static 與值實際壽命的四象限">
+      <!-- axes -->
+      <line x1="150" y1="345" x2="690" y2="345" stroke="#928374" stroke-width="1.5"/>
+      <line x1="150" y1="345" x2="150" y2="45" stroke="#928374" stroke-width="1.5"/>
+      <polygon points="690,345 680,341 680,349" fill="#928374"/>
+      <polygon points="150,45 146,55 154,55" fill="#928374"/>
+      <text x="420" y="378" fill="#928374" font-size="14" text-anchor="middle" class="cjk">值實際活多久(執行期事實)→</text>
+      <text x="-195" y="24" fill="#928374" font-size="14" text-anchor="middle" transform="rotate(-90)" class="cjk">型別滿足 T: &#39;static?(編譯期事實)→</text>
+
+      <!-- quadrant labels on axes -->
+      <text x="285" y="366" fill="#928374" font-size="12" text-anchor="middle" class="cjk">短</text>
+      <text x="560" y="366" fill="#928374" font-size="12" text-anchor="middle" class="cjk">長</text>
+      <text x="140" y="290" fill="#928374" font-size="12" text-anchor="end" class="cjk">否</text>
+      <text x="140" y="120" fill="#928374" font-size="12" text-anchor="end" class="cjk">是</text>
+
+      <!-- top-left: 'static type, short life -->
+      <rect x="165" y="60" width="255" height="115" rx="9" fill="#3c3836" stroke="#a9b665" stroke-width="1.5"/>
+      <text x="180" y="84" fill="#a9b665" font-size="13">String::from("x")</text>
+      <text x="180" y="106" fill="#d4be98" font-size="12" class="cjk">滿足 bound,下一行就 drop</text>
+      <text x="180" y="128" fill="#928374" font-size="12" class="cjk">壽命 ≈ 幾奈秒</text>
+      <text x="180" y="152" fill="#e78a4e" font-size="12" class="cjk">← M0 在這格死掉</text>
+
+      <!-- top-right: 'static type, long life -->
+      <rect x="435" y="60" width="255" height="115" rx="9" fill="#3c3836" stroke="#a9b665" stroke-width="1.5"/>
+      <text x="450" y="84" fill="#a9b665" font-size="13">static CFG: Config</text>
+      <text x="450" y="106" fill="#d4be98" font-size="12" class="cjk">滿足 bound,也真的活到最後</text>
+      <text x="450" y="128" fill="#928374" font-size="12" class="cjk">壽命 = 整個程式</text>
+      <text x="450" y="152" fill="#928374" font-size="12" class="cjk">M0 只在這一格是對的</text>
+
+      <!-- bottom-left: non-'static, short -->
+      <rect x="165" y="205" width="255" height="115" rx="9" fill="#3c3836" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="180" y="229" fill="#ea6962" font-size="13">&amp;&#39;a str → 剛建的 local</text>
+      <text x="180" y="251" fill="#d4be98" font-size="12" class="cjk">不滿足,而且真的很短命</text>
+      <text x="180" y="273" fill="#928374" font-size="12" class="cjk">壽命 ≈ 一個 block</text>
+
+      <!-- bottom-right: non-'static, long -->
+      <rect x="435" y="205" width="255" height="115" rx="9" fill="#3c3836" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="450" y="229" fill="#ea6962" font-size="13">&amp;&#39;a Vec → main 的區域變數</text>
+      <text x="450" y="251" fill="#d4be98" font-size="12" class="cjk">不滿足,卻活到 main 結束</text>
+      <text x="450" y="273" fill="#928374" font-size="12" class="cjk">壽命 ≈ 整個程式</text>
+      <text x="450" y="297" fill="#e78a4e" font-size="12" class="cjk">← M0 在這格也死掉</text>
+
+      <text x="420" y="30" fill="#d8a657" font-size="14" text-anchor="middle" class="cjk">四格都住得滿 ⇒ 兩條軸沒有任何蘊含關係</text>
+    </svg>
+    <figcaption>唯一要背下來的圖。若「型別 &#39;static」蘊含「值長命」,右下角應該是空的;若反向蘊含,左上角應該是空的。兩格都有人。</figcaption>
+  </figure>
+
+  <div class="stepper" id="stepper-core">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <h2>Code Reference — 反例本身</h2>
+    <pre><span class="k">fn</span> takes_static&lt;T: <span class="lt">&#x27;static</span>&gt;(_t: T) {}
+
+<span class="k">fn</span> main() {
+    <span class="k">let</span> s = <span class="t">String</span>::from(<span class="s">&quot;hello&quot;</span>);
+    takes_static(s);          <span class="c">// 編譯通過:String: &#x27;static</span>
+    <span class="c">// s 已經 move 進去,函式一返回就 drop —— 活了不到一行</span>
+
+    <span class="k">let</span> n = <span class="n">5</span>;
+    <span class="k">let</span> r: &amp;<span class="t">i32</span> = &amp;n;         <span class="c">// 這個 reference 活到 main 結束</span>
+    <span class="c">// takes_static(r);       // 編譯失敗:&amp;&#x27;a i32 不是 &#x27;static</span>
+    println!(<span class="s">&quot;{r}&quot;</span>);
+}</pre>
+    <p class="dim">把 <code>takes_static(r);</code> 那行取消註解,得到:</p>
+    <pre class="diag">error[E0521]: borrowed data escapes outside of function
+ --&gt; fails/f1_vec_ref.rs:3:32
+  |
+3 | fn probe&lt;&#x27;a&gt;(v: Vec&lt;&amp;&#x27;a ()&gt;) { takes_static(v); }
+  |          --  -                 ^^^^^^^^^^^^^^^
+  |          |   |                 |
+  |          |   |                 `v` escapes the function body here
+  |          |   |                 argument requires that `&#x27;a` must outlive `&#x27;static`
+  |          |   `v` is a reference that is only valid in the function body
+  |          lifetime `&#x27;a` defined here</pre>
+    <p class="dim">(上面這則是同型錯誤的 <code>Vec&lt;&amp;&#39;a ()&gt;</code> 版本,錯誤訊息裡
+    <code>argument requires that &#39;a must outlive &#39;static</code> 就是 bound 沒滿足的標準句型。)</p>
+  </section>
+
+  <section>
+    <h2>正確判準怎麼用</h2>
+    <pre><span class="k">fn</span> takes_static&lt;T: <span class="lt">&#x27;static</span>&gt;(_t: T) {}
+
+<span class="k">struct</span> <span class="t">NoLifetime</span> { v: <span class="t">u64</span> }          <span class="c">// 沒有 lifetime 參數     -&gt; &#x27;static</span>
+<span class="k">struct</span> <span class="t">HasLifetime</span>&lt;<span class="lt">&#x27;a</span>&gt; { v: &amp;<span class="lt">&#x27;a</span> <span class="t">u64</span> } <span class="c">// 有一個 lifetime 參數   -&gt; 看 &#x27;a</span>
+
+<span class="k">fn</span> probe&lt;<span class="lt">&#x27;a</span>&gt;(borrowed: &amp;<span class="lt">&#x27;a</span> <span class="t">u64</span>) {
+    takes_static(<span class="t">NoLifetime</span> { v: <span class="n">1</span> });          <span class="c">// OK</span>
+    takes_static(<span class="t">HasLifetime</span> { v: &amp;<span class="n">7</span> });        <span class="c">// OK:&amp;7 被 promote 成 &#x27;static</span>
+    <span class="c">// takes_static(HasLifetime { v: borrowed });  // FAIL:&#x27;a 不是 &#x27;static</span>
+    <span class="c">// takes_static(vec![borrowed]);               // FAIL:Vec&lt;&amp;&#x27;a u64&gt;</span>
+    <span class="k">let</span> _ = borrowed;
+}
+
+<span class="k">fn</span> main() { <span class="k">let</span> x = <span class="n">3</span>; probe(&amp;x); }</pre>
+    <p><code>NoLifetime</code> 跟 <code>HasLifetime</code> 都是 owned struct,差別只在後者的定義帶了
+    <code>&lt;&#39;a&gt;</code>。判準完全落在<span class="key">型別的宣告</span>上,執行期發生什麼事不影響結論。</p>
+  </section>
+
+  <section>
+    <h2>順帶:為什麼 &#39;static 站在最上面</h2>
+    <figure>
+      <svg viewBox="0 0 720 175" role="img" aria-label="outlives 偏序,static 在最上">
+        <rect x="290" y="18" width="140" height="34" rx="8" fill="#3c3836" stroke="#d8a657" stroke-width="1.5"/>
+        <text x="360" y="40" fill="#d8a657" font-size="14" text-anchor="middle">&#39;static</text>
+        <line x1="330" y1="52" x2="180" y2="100" stroke="#928374"/>
+        <line x1="360" y1="52" x2="360" y2="100" stroke="#928374"/>
+        <line x1="390" y1="52" x2="540" y2="100" stroke="#928374"/>
+        <rect x="130" y="100" width="100" height="30" rx="7" fill="#32302f" stroke="#504945"/>
+        <text x="180" y="120" fill="#bdae93" font-size="13" text-anchor="middle">&#39;a</text>
+        <rect x="310" y="100" width="100" height="30" rx="7" fill="#32302f" stroke="#504945"/>
+        <text x="360" y="120" fill="#bdae93" font-size="13" text-anchor="middle">&#39;b</text>
+        <rect x="490" y="100" width="100" height="30" rx="7" fill="#32302f" stroke="#504945"/>
+        <text x="540" y="120" fill="#bdae93" font-size="13" text-anchor="middle">&#39;c …</text>
+        <text x="360" y="158" fill="#928374" font-size="13" text-anchor="middle" class="cjk">
+          對任意 &#39;a 都有 &#39;static: &#39;a(&#39;static outlives 一切)</text>
+      </svg>
+      <figcaption>因此 <code>&amp;&#39;static T</code> 可以往下 coerce 成 <code>&amp;&#39;a T</code>,反過來不行。<code>&#39;static</code> 是最嚴格的要求,也是最好用的供給。</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Follow-up</h2>
+    <ul>
+      <li><code>T: &#39;static</code> 跟 <code>T: &#39;a</code>(<code>&#39;a</code> 是泛型參數)在 borrow checker 內部是同一條規則,只是把 <code>&#39;a</code> 取到極大。寫 library 時通常應該先試 <code>&#39;a</code>,<code>&#39;static</code> 是退無可退才用。</li>
+      <li>為什麼 <code>&amp;&#39;a mut T</code> 對 <code>&#39;a</code> 是 invariant,而 <code>&amp;&#39;a T</code> 是 covariant?這決定了上圖的 coerce 箭頭哪些方向能走。</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ================= 來源 ================= -->
+<div class="tab" id="tab-src">
+  <h1>&amp;&#39;static 從哪裡生出來</h1>
+
+  <section>
+    <h2>直覺一句話</h2>
+    <p>要拿到 <code>&amp;&#39;static T</code>,那塊記憶體必須<span class="key">真的</span>不會被回收。
+    只有四種來路做得到,其中一種要你主動放棄回收。</p>
+  </section>
+
+  <figure>
+    <svg viewBox="0 0 720 330" role="img" aria-label="記憶體區段與能否產出 static reference">
+      <text x="360" y="26" fill="#d8a657" font-size="14" text-anchor="middle" class="cjk">哪些記憶體拿得出 &amp;&#39;static T?</text>
+
+      <rect x="60" y="46" width="600" height="46" rx="8" fill="#3c3836" stroke="#a9b665" stroke-width="1.5"/>
+      <text x="78" y="68" fill="#a9b665" font-size="13">.rodata</text>
+      <text x="78" y="86" fill="#928374" font-size="11" class="cjk">string literal、被 promote 的常數運算式</text>
+      <text x="640" y="76" fill="#a9b665" font-size="18" text-anchor="end">✓</text>
+
+      <rect x="60" y="100" width="600" height="46" rx="8" fill="#3c3836" stroke="#a9b665" stroke-width="1.5"/>
+      <text x="78" y="122" fill="#a9b665" font-size="13">.data / .bss</text>
+      <text x="78" y="140" fill="#928374" font-size="11" class="cjk">static item — 程式啟動就在,結束才消失</text>
+      <text x="640" y="130" fill="#a9b665" font-size="18" text-anchor="end">✓</text>
+
+      <rect x="60" y="154" width="600" height="60" rx="8" fill="#3c3836" stroke="#d8a657" stroke-width="1.5"/>
+      <text x="78" y="176" fill="#d8a657" font-size="13">heap(已 leak)</text>
+      <text x="78" y="194" fill="#928374" font-size="11" class="cjk">Box::leak — 交出 ownership,換 &amp;&#39;static mut T</text>
+      <text x="78" y="209" fill="#e78a4e" font-size="11" class="cjk">代價:這塊永遠不還。適合啟動期一次性的 config</text>
+      <text x="640" y="190" fill="#d8a657" font-size="18" text-anchor="end">✓</text>
+
+      <rect x="60" y="222" width="600" height="46" rx="8" fill="#32302f" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="78" y="244" fill="#ea6962" font-size="13">heap(Box / Vec / String 持有)</text>
+      <text x="78" y="262" fill="#928374" font-size="11" class="cjk">會被 drop → 借出去的 reference 不可能是 &#39;static</text>
+      <text x="640" y="252" fill="#ea6962" font-size="18" text-anchor="end">✗</text>
+
+      <rect x="60" y="276" width="600" height="42" rx="8" fill="#32302f" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="78" y="297" fill="#ea6962" font-size="13">stack</text>
+      <text x="78" y="313" fill="#928374" font-size="11" class="cjk">frame 一 pop 就沒了</text>
+      <text x="640" y="302" fill="#ea6962" font-size="18" text-anchor="end">✗</text>
+    </svg>
+    <figcaption>注意這張圖只回答「<code>&amp;&#39;static T</code> 從哪來」。<code>T: &#39;static</code> 是另一個問題 —— <code>String</code> 的 heap buffer 在這張圖是 ✗,但 <code>String</code> 這個<span class="key">型別</span>照樣滿足 <code>T: &#39;static</code>。</figcaption>
+  </figure>
+
+  <section>
+    <h2>Code Reference — 四種來源</h2>
+    <pre><span class="k">static</span> GLOBAL: <span class="t">i32</span> = <span class="n">42</span>;
+
+<span class="k">fn</span> main() {
+    <span class="c">// (1) string literal:編進 binary 的唯讀段</span>
+    <span class="k">let</span> a: &amp;<span class="lt">&#x27;static</span> <span class="t">str</span> = <span class="s">&quot;in .rodata&quot;</span>;
+
+    <span class="c">// (2) static item:程式啟動前就存在,結束才消失</span>
+    <span class="k">let</span> b: &amp;<span class="lt">&#x27;static</span> <span class="t">i32</span> = &amp;GLOBAL;
+
+    <span class="c">// (3) rvalue static promotion:常數運算式被提升到唯讀段</span>
+    <span class="k">let</span> c: &amp;<span class="lt">&#x27;static</span> <span class="t">i32</span> = &amp;<span class="n">42</span>;
+
+    <span class="c">// (4) Box::leak:主動放棄 heap 記憶體的所有權</span>
+    <span class="k">let</span> d: &amp;<span class="lt">&#x27;static</span> <span class="k">mut</span> <span class="t">Vec</span>&lt;<span class="t">u8</span>&gt; = <span class="t">Box</span>::leak(<span class="t">Box</span>::new(vec![<span class="n">9</span>, <span class="n">9</span>]));
+    d.push(<span class="n">1</span>);
+
+    println!(<span class="s">&quot;{a} {b} {c} {d:?}&quot;</span>);
+}</pre>
+    <p class="dim">實際輸出:<code>in .rodata 42 42 [9, 9, 1]</code></p>
+  </section>
+
+  <section>
+    <h2>Box::leak 不是作弊,是把「回收」換成「保證」</h2>
+    <p>Rust 沒有規定「不能洩漏記憶體」—— <code>mem::forget</code> 是 safe function。
+    <code>Box::leak</code> 做的事是把 heap 配置的 ownership 丟掉,換回一個
+    <code>&amp;&#39;static mut T</code>。因為沒有人再擁有它,沒有人會 drop 它,所以
+    <code>&#39;static</code> 這個保證成立。</p>
+    <div class="callout">
+      判斷標準是<span class="key">有界性</span>:啟動時 leak 一次 config,總量是常數 → 合理。
+      每個 request leak 一次 → 那是 bug。
+    </div>
+  </section>
+
+  <section>
+    <h2>&#39;static 不是一個可以「宣告」出來的東西</h2>
+    <pre class="diag">error[E0597]: `s` does not live long enough
+ --&gt; fails/g1_any_plus_a.rs:4:53
+  |
+4 | fn main(){ let s = String::from(&quot;x&quot;); let _ = erase(&amp;s); }
+  |                -                              ------^^-  - `s` dropped here while still borrowed
+  |                |                              |     |
+  |                |                              |     borrowed value does not live long enough
+  |                binding `s` declared here      argument requires that `s` is borrowed for `&#x27;static`</pre>
+    <p>把變數標注成 <code>&amp;&#39;static</code> 不會讓被借的資料活久一點。
+    標注只是<span class="key">提出要求</span>,borrow checker 會回頭去查供給端能不能滿足;
+    滿足不了就在供給端報錯。</p>
+  </section>
+
+  <section>
+    <h2>Follow-up</h2>
+    <ul>
+      <li>rvalue static promotion 只對「沒有 interior mutability、沒有 <code>Drop</code>」的常數運算式生效。
+          <code>&amp;42</code> 可以,<code>&amp;Cell::new(42)</code> 不行 —— 想想為什麼(提示:兩個地方寫同一塊 <code>.rodata</code>)。</li>
+      <li><code>OnceLock</code> / <code>LazyLock</code> 是 <code>Box::leak</code> 的替代路線:同樣給你
+          <code>&amp;&#39;static T</code>,但初始化延後且不需要放棄 ownership。什麼時候該選哪個?</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ================= spawn ================= -->
+<div class="tab" id="tab-spawn">
+  <h1>為什麼 spawn 一定要 &#39;static</h1>
+
+  <section>
+    <h2>直覺一句話</h2>
+    <p><code>spawn</code> 立刻回傳,task 之後才跑,而且可能跑在別的 thread。
+    <span class="key">沒有任何東西保證呼叫者的 frame 會等它</span>。所以 task 不能借呼叫者的任何東西。</p>
+  </section>
+
+  <figure>
+    <svg viewBox="0 0 720 350" role="img" aria-label="detached spawn 與 scoped spawn 的時間軸對照">
+      <text x="16" y="24" fill="#ea6962" font-size="13" class="cjk">A. detached spawn — 需要 &#39;static</text>
+
+      <line x1="60" y1="130" x2="700" y2="130" stroke="#504945"/>
+      <text x="700" y="148" fill="#928374" font-size="11" text-anchor="end">time →</text>
+
+      <rect x="70" y="46" width="230" height="30" rx="6" fill="#3c3836" stroke="#7daea3"/>
+      <text x="185" y="66" fill="#7daea3" font-size="12" text-anchor="middle" class="cjk">caller frame(data 存在)</text>
+      <line x1="300" y1="46" x2="300" y2="120" stroke="#ea6962" stroke-dasharray="4 3"/>
+      <text x="306" y="60" fill="#ea6962" font-size="11" class="cjk">frame pop,data drop</text>
+
+      <line x1="150" y1="76" x2="150" y2="88" stroke="#d8a657"/>
+      <text x="156" y="99" fill="#d8a657" font-size="11">spawn()</text>
+
+      <rect x="150" y="88" width="440" height="30" rx="6" fill="#3c3836" stroke="#a9b665"/>
+      <text x="200" y="108" fill="#a9b665" font-size="12" class="cjk">task 仍在被 poll</text>
+      <rect x="300" y="88" width="290" height="30" rx="6" fill="#432b29" stroke="#ea6962"/>
+      <text x="445" y="108" fill="#ea6962" font-size="12" text-anchor="middle" class="cjk">此區間任何借用都是 dangling</text>
+
+      <text x="70" y="168" fill="#d4be98" font-size="12" class="cjk">
+        紅區存在 ⇒ 型別系統唯一能給的保證是「task 根本沒借東西」⇒ F: &#39;static</text>
+
+      <line x1="16" y1="188" x2="704" y2="188" stroke="#45403d"/>
+
+      <text x="16" y="214" fill="#a9b665" font-size="13" class="cjk">B. scoped spawn — 只要 &#39;scope</text>
+
+      <line x1="60" y1="316" x2="700" y2="316" stroke="#504945"/>
+
+      <rect x="70" y="232" width="420" height="30" rx="6" fill="#3c3836" stroke="#7daea3"/>
+      <text x="280" y="252" fill="#7daea3" font-size="12" text-anchor="middle" class="cjk">caller frame(data 存在)</text>
+      <line x1="490" y1="232" x2="490" y2="306" stroke="#a9b665" stroke-dasharray="4 3"/>
+      <text x="496" y="246" fill="#a9b665" font-size="11" class="cjk">frame pop</text>
+
+      <rect x="150" y="274" width="230" height="30" rx="6" fill="#3c3836" stroke="#a9b665"/>
+      <text x="265" y="294" fill="#a9b665" font-size="12" text-anchor="middle" class="cjk">task</text>
+      <line x1="380" y1="274" x2="380" y2="306" stroke="#d8a657"/>
+      <text x="386" y="296" fill="#d8a657" font-size="11" class="cjk">scope 保證此處已 join</text>
+
+      <text x="70" y="340" fill="#d4be98" font-size="12" class="cjk">
+        沒有紅區 ⇒ bound 可以放寬成 &#39;scope ⇒ 借 stack 完全合法</text>
+    </svg>
+    <figcaption>差別只有一個:誰保證 task 在 frame pop 之前結束。detached 沒人保證,所以用型別擋;scoped 由 <code>scope()</code> 的返回條件保證,所以不用擋。</figcaption>
+  </figure>
+
+  <div class="stepper" id="stepper-spawn">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <h2>簽章對照</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>API</th><th>bound</th><th>它在買什麼</th></tr>
+      <tr><td><code>std::thread::spawn</code></td><td><code>F: FnOnce() -&gt; T + Send + &#39;static</code></td><td>跨 thread + 可能比呼叫者活久</td></tr>
+      <tr><td><code>tokio::spawn</code></td><td><code>F: Future + Send + &#39;static</code><br><code>F::Output: Send + &#39;static</code></td><td>同上,加上 output 要送回 <code>JoinHandle</code></td></tr>
+      <tr><td><code>tokio::task::spawn_local</code></td><td><code>F: Future + &#39;static</code><br><code>F::Output: &#39;static</code></td><td><span class="key">拿掉 Send、保留 &#39;static</span></td></tr>
+      <tr><td><code>Scope::spawn</code></td><td><code>F: FnOnce() -&gt; T + Send + &#39;scope</code></td><td><span class="key">保留 Send、放寬 &#39;static</span></td></tr>
+    </table></div>
+    <div class="callout good">
+      最後兩列是這整頁的重點:兩個 bound 可以獨立拿掉,證明它們回答不同問題。
+      <br><code>Send</code> 問「能不能<span class="key">搬到別的 thread</span>」;<code>&#39;static</code> 問「能不能<span class="key">活得比呼叫者久</span>」。
+    </div>
+  </section>
+
+  <section>
+    <h2>Send × &#39;static 的四個象限(全部實測)</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th><code>Send</code></th><th><code>!Send</code></th></tr>
+      <tr><td><code>&#39;static</code></td><td><code>String</code>、<code>i32</code>、<code>Vec&lt;u8&gt;</code></td><td><code>Rc&lt;i32&gt;</code></td></tr>
+      <tr><td><code>!&#39;static</code></td><td><code>&amp;&#39;a mut i32</code></td><td><code>&amp;&#39;a Cell&lt;i32&gt;</code></td></tr>
+    </table></div>
+    <p class="dim">四格都有住戶。<code>Rc&lt;i32&gt;</code> 那格的錯誤是 <code>E0277: cannot be sent between threads safely</code>;
+    <code>&amp;&#39;a mut i32</code> 那格是 <code>E0521: borrowed data escapes outside of function</code> —— 完全不同的錯誤路徑。</p>
+  </section>
+
+  <section>
+    <h2>Code Reference — spawn vs scope</h2>
+    <pre><span class="k">fn</span> main() {
+    <span class="k">let</span> data = vec![<span class="n">1</span>, <span class="n">2</span>, <span class="n">3</span>];
+
+    <span class="c">// thread::spawn 要求 F: FnOnce() -&gt; T + Send + &#x27;static</span>
+    <span class="c">// std::thread::spawn(|| println!(&quot;{data:?}&quot;));   // FAIL:借了 data</span>
+
+    <span class="c">// scope 保證所有 spawn 出去的 thread 在 scope 返回前 join 完,</span>
+    <span class="c">// 所以 bound 從 &#x27;static 放寬成 &#x27;scope</span>
+    <span class="k">let</span> sum = std::thread::scope(|s| {
+        <span class="k">let</span> h = s.spawn(|| data.iter().sum::&lt;<span class="t">i32</span>&gt;());
+        h.join().unwrap()
+    });
+
+    println!(<span class="s">&quot;{sum}&quot;</span>);
+}</pre>
+    <p class="dim">取消註解那行 <code>thread::spawn</code>,得到:</p>
+    <pre class="diag">error[E0373]: closure may outlive the current function, but it borrows `data`, which is owned by the current function
+ --&gt; fails/f2_spawn.rs:4:24
+  |
+4 |     std::thread::spawn(|| println!(&quot;{:?}&quot;, &amp;data));
+  |                        ^^                   ---- `data` is borrowed here
+  |                        |
+  |                        may outlive borrowed value `data`
+  |
+note: function requires argument type to outlive `&#x27;static`
+ --&gt; fails/f2_spawn.rs:4:5
+  |
+4 |     std::thread::spawn(|| println!(&quot;{:?}&quot;, &amp;data));
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: to force the closure to take ownership of `data` (and any other referenced variables), use the `move` keyword
+  |
+4 |     std::thread::spawn(move || println!(&quot;{:?}&quot;, &amp;data));</pre>
+    <p><code>std::thread::scope</code> 在 Rust 1.63(2022-08-11)進入標準庫;在那之前這件事要靠
+    <code>crossbeam</code>。它提供的保證是:<code>scope()</code> 返回前,所有 spawn 出去的 thread 都已經 join。</p>
+  </section>
+
+  <section>
+    <h2>Follow-up</h2>
+    <ul>
+      <li>async 世界沒有 <code>std::thread::scope</code> 的等價物在標準庫裡,原因是 async task 可以被
+          <code>mem::forget</code> 掉(leak 是 safe 的),所以 destructor 不能被當成保證。這就是
+          「async Drop / structured concurrency」那一整串討論的起點。</li>
+      <li><code>tokio::task::JoinSet</code> 和 <code>FuturesUnordered</code> 給的是<span class="key">執行期</span>的結構化,
+          bound 依然是 <code>&#39;static</code>。跟 <code>thread::scope</code> 的<span class="key">型別層</span>保證是兩回事。</li>
+      <li>把 <code>tokio::spawn</code> 的 <code>&#39;static</code> 拿掉需要 <code>unsafe</code>(tokio 內部有討論過 <code>spawn_unchecked</code>)。想清楚 caller 要負責證明什麼。</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ================= 陷阱 ================= -->
+<div class="tab" id="tab-traps">
+  <h1>陷阱</h1>
+
+  <section>
+    <h2>陷阱 1:<code>Box&lt;dyn Trait&gt;</code> 偷偷加了 <code>+ &#39;static</code></h2>
+    <p>Trait object 有一條 default lifetime bound 規則:在 reference 底下的 trait object 取最內層 reference 的 lifetime,
+    <span class="key">其他情況預設 <code>&#39;static</code></span>。所以:</p>
+    <div class="tbl-scroll"><table>
+      <tr><th>你寫的</th><th>編譯器看到的</th></tr>
+      <tr><td><code>Box&lt;dyn Error&gt;</code></td><td><code>Box&lt;dyn Error + &#39;static&gt;</code></td></tr>
+      <tr><td><code>&amp;&#39;a dyn Error</code></td><td><code>&amp;&#39;a (dyn Error + &#39;a)</code></td></tr>
+      <tr><td><code>Arc&lt;dyn Fn()&gt;</code></td><td><code>Arc&lt;dyn Fn() + &#39;static&gt;</code></td></tr>
+    </table></div>
+    <pre class="diag">error: lifetime may not live long enough
+ --&gt; fails/f3_box_dyn.rs:4:47
+  |
+4 | fn wrap&lt;&#x27;a&gt;(x: &amp;&#x27;a i32) -&gt; Owner { Owner { v: Box::new(x) } }
+  |         -- lifetime `&#x27;a` defined here         ^^^^^^^^^^^ cast requires that `&#x27;a` must outlive `&#x27;static`</pre>
+    <p>修法是顯式放寬:<code>Box&lt;dyn Error + &#39;a&gt;</code>。這就是為什麼很多 library 的 error type 定義裡會看到
+    那個看起來多餘的 <code>+ &#39;a</code>。</p>
+  </section>
+
+  <section>
+    <h2>陷阱 2:編譯器的建議有時候是錯的</h2>
+    <p><code>Box&lt;dyn Any&gt;</code> 借了東西,rustc 會建議加 <code>+ &#39;a</code>:</p>
+    <pre class="diag">error: lifetime may not live long enough
+ --&gt; fails/f5_any.rs:3:44
+  |
+3 | fn erase&lt;&#x27;a&gt;(x: &amp;&#x27;a str) -&gt; Box&lt;dyn Any&gt; { Box::new(x) }
+  |          -- lifetime `&#x27;a` defined here     ^^^^^^^^^^^ cast requires that `&#x27;a` must outlive `&#x27;static`
+  |
+help: to declare that the trait object captures data from argument `x`, you can add an explicit `&#x27;a` lifetime bound
+  |
+3 | fn erase&lt;&#x27;a&gt;(x: &amp;&#x27;a str) -&gt; Box&lt;dyn Any + &#x27;a&gt; { Box::new(x) }
+  |                                         ++++
+
+error: aborting due to previous error</pre>
+    <p>照做之後,錯誤搬家但沒消失:</p>
+    <pre class="diag">error[E0597]: `s` does not live long enough
+ --&gt; fails/g1_any_plus_a.rs:4:53
+  |
+4 | fn main(){ let s = String::from(&quot;x&quot;); let _ = erase(&amp;s); }
+  |                -                              ------^^-  - `s` dropped here while still borrowed
+  |                |                              |     |
+  |                |                              |     borrowed value does not live long enough
+  |                binding `s` declared here      argument requires that `s` is borrowed for `&#x27;static`</pre>
+    <div class="callout bad">
+      因為 <code>Any</code> 的 <code>&#39;static</code> 是<span class="key">supertrait bound</span>(<code>trait Any: &#39;static</code>),
+      不是 trait object 的 default bound。寫在 <code>dyn</code> 後面的 <code>+ &#39;a</code> 根本管不到它。
+    </div>
+    <p>而且這裡的 <code>&#39;static</code> 是<span class="key">承重的</span>:<code>TypeId</code> 會抹掉 lifetime,
+    <code>&amp;&#39;a str</code> 和 <code>&amp;&#39;b str</code> 的 <code>TypeId</code> 相同。若允許非 <code>&#39;static</code> 型別進 <code>dyn Any</code>,
+    <code>downcast</code> 就能把一個短命的 reference 當成長命的取回來 —— 直接 unsound。這條 bound 拿不掉。</p>
+  </section>
+
+  <section>
+    <h2>陷阱 3:被 <code>&#39;static</code> 傳染</h2>
+    <p>編譯器說「consider adding <code>&#39;static</code>」,加下去通常編過了,然後<span class="key">下一層</span>又要加,
+    一路傳染到 API 邊界。這代表原本的問題沒解決,只是往上推。</p>
+    <div class="callout">
+      判斷法:問「這個 <code>&#39;static</code> 是<span class="key">需求</span>還是<span class="key">妥協</span>?」
+      <br>需求 = 真的有 detached 執行(spawn、global registry、<code>dyn Any</code>)→ 加,而且在來源端用 owned type 滿足它。
+      <br>妥協 = 只是想讓錯誤消失 → 停手,回去看資料的 ownership 該歸誰。
+    </div>
+  </section>
+
+  <section>
+    <h2>陷阱 4:以為 <code>Arc</code> 會給你 <code>&#39;static</code></h2>
+    <p><code>Arc&lt;T&gt;: &#39;static</code> 的<span class="key">前提</span>是 <code>T: &#39;static</code>。
+    <code>Arc&lt;&amp;&#39;a str&gt;</code> 不是 <code>&#39;static</code>。<code>Arc</code> 解決的是「多方共享同一份 owned 資料」,
+    它不會把借來的東西變成自己的。</p>
+  </section>
+
+  <section>
+    <h2>陷阱 5:<code>&#39;static</code> ≠ 記憶體洩漏</h2>
+    <p><code>tokio::spawn(async move { ... })</code> 把資料 move 進 future,滿足 <code>&#39;static</code>,
+    task 跑完照樣 drop。<code>&#39;static</code> 只表示「型別上允許活很久」,不表示「實際上不會被回收」。
+    這是<span data-jump="hero">主圖</span>左上角那一格。</p>
+  </section>
+
+  <section>
+    <h2>Code Reference</h2>
+    <pre><span class="k">use</span> std::any::<span class="t">Any</span>;
+<span class="k">use</span> std::fmt::<span class="t">Debug</span>;
+
+<span class="k">struct</span> <span class="t">Owner</span>  { v: <span class="t">Box</span>&lt;<span class="k">dyn</span> <span class="t">Debug</span>&gt; }             <span class="c">// 隱含 Box&lt;dyn Debug + &#x27;static&gt;</span>
+<span class="k">struct</span> <span class="t">Loaner</span>&lt;<span class="lt">&#x27;a</span>&gt; { v: <span class="t">Box</span>&lt;<span class="k">dyn</span> <span class="t">Debug</span> + <span class="lt">&#x27;a</span>&gt; }    <span class="c">// 顯式放寬才借得到</span>
+
+<span class="k">fn</span> erase(x: &amp;<span class="lt">&#x27;static</span> <span class="t">str</span>) -&gt; <span class="t">Box</span>&lt;<span class="k">dyn</span> <span class="t">Any</span>&gt; { <span class="t">Box</span>::new(x) }
+
+<span class="k">fn</span> main() {
+    <span class="k">let</span> o = <span class="t">Owner</span> { v: <span class="t">Box</span>::new(<span class="t">String</span>::from(<span class="s">&quot;owned&quot;</span>)) };
+    <span class="k">let</span> local = <span class="n">5</span>;
+    <span class="k">let</span> l = <span class="t">Loaner</span> { v: <span class="t">Box</span>::new(&amp;local) };
+
+    <span class="c">// Any 的 &#x27;static 是 supertrait bound,寫 + &#x27;a 也救不回來:</span>
+    <span class="c">// TypeId 抹掉 lifetime,允許非 &#x27;static 會讓 downcast 復活 dangling reference</span>
+    <span class="k">let</span> erased = erase(<span class="s">&quot;literal&quot;</span>);
+    println!(<span class="s">&quot;{:?} {:?} {}&quot;</span>, o.v, l.v, erased.is::&lt;&amp;<span class="t">str</span>&gt;());
+}</pre>
+  </section>
+
+  <section>
+    <h2>Follow-up</h2>
+    <ul>
+      <li>Default trait object lifetime 在 type alias 底下的行為更複雜(alias 有沒有寫 <code>T: &#39;a</code> 會改變預設值)。
+          寫 public API 的 alias 時值得顯式標注。</li>
+      <li><code>dyn Any</code> 的 lifetime 限制有沒有可能鬆綁?思考:要讓 <code>TypeId</code> 帶 lifetime 資訊,型別系統要多付什麼。</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ================= 修法 ================= -->
+<div class="tab" id="tab-fix">
+  <h1>修法 &amp; 成本</h1>
+
+  <section>
+    <h2>直覺一句話</h2>
+    <p>看到 <code>must outlive &#39;static</code>,先問「<span class="key">這份資料的 owner 應該是誰</span>」,
+    再從下表挑工具。順序很重要 —— 直接跳到 <code>Arc</code> 是最常見的過度反應。</p>
+  </section>
+
+  <section>
+    <h2>成本階梯</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>#</th><th>修法</th><th>適用</th><th>時間</th><th>空間</th></tr>
+      <tr>
+        <td>1</td><td><code>move</code> 交出 ownership</td>
+        <td>呼叫者之後不需要這份資料</td>
+        <td>O(1) — 只搬 handle(指標 + len + cap)</td>
+        <td>O(1) 額外</td>
+      </tr>
+      <tr>
+        <td>2</td><td>改結構,讓 task 不需要那份資料</td>
+        <td>借用其實只是為了讀一兩個欄位</td>
+        <td>O(欄位大小)</td>
+        <td>O(欄位大小)</td>
+      </tr>
+      <tr>
+        <td>3</td><td><code>clone</code></td>
+        <td>資料小,兩邊都要獨立擁有</td>
+        <td>O(n) 深拷貝</td>
+        <td>O(n) 額外</td>
+      </tr>
+      <tr>
+        <td>4</td><td><code>Arc::clone</code></td>
+        <td>資料大、多方共享、read-mostly</td>
+        <td>O(1),但含一次 atomic RMW;refcount 落在同一條 cache line,高頻 clone/drop 會 ping-pong</td>
+        <td>O(1) 額外(控制區塊攤提)</td>
+      </tr>
+      <tr>
+        <td>5</td><td><code>thread::scope</code> / structured concurrency</td>
+        <td>task 保證在某個範圍內 join</td>
+        <td>0 — bound 從 <code>&#39;static</code> 變 <code>&#39;scope</code>,不需要任何複製</td>
+        <td>0 額外</td>
+      </tr>
+      <tr>
+        <td>6</td><td><code>Box::leak</code> / <code>OnceLock</code></td>
+        <td>啟動期讀進來、之後不變的東西(config、metric registry)</td>
+        <td>O(1) 一次</td>
+        <td>O(size),<span class="key">永不回收</span> — 必須是有界的</td>
+      </tr>
+    </table></div>
+    <div class="callout bad">
+      第 4 列是低延遲場景要盯的一格:<code>Arc</code> 的 refcount 是共享可寫狀態。
+      幾十個 thread 高頻 clone 同一個 <code>Arc</code>,瓶頸會是那條 cache line 的 coherence traffic,
+      跟你保護的資料本身無關。<span class="dim">(atomic ordering 的細節我沒在這裡實測,若要下結論請直接讀 <code>alloc::sync</code> 原始碼。)</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Code Reference — 四種修法,全部可執行</h2>
+    <pre><span class="k">use</span> std::sync::<span class="t">Arc</span>;
+<span class="k">use</span> std::cell::<span class="t">Cell</span>;
+
+<span class="k">fn</span> is_send&lt;T: <span class="t">Send</span>&gt;(_: T) {}
+<span class="k">fn</span> is_static&lt;T: <span class="lt">&#x27;static</span>&gt;(_: T) {}
+
+<span class="c">// 正交四象限的第四格:&amp;&#x27;a Cell&lt;i32&gt; 既非 &#x27;static 也非 Send</span>
+<span class="k">fn</span> quadrant4&lt;<span class="lt">&#x27;a</span>&gt;(_r: &amp;<span class="lt">&#x27;a</span> <span class="t">Cell</span>&lt;<span class="t">i32</span>&gt;) { /* is_send(_r); is_static(_r); 兩者都會 fail */ }
+
+#[derive(<span class="t">Debug</span>)]
+<span class="k">struct</span> <span class="t">Config</span> { workers: <span class="t">usize</span>, addr: <span class="t">String</span> }
+
+<span class="c">// bounded leak:啟動時洩漏一次,換掉整個程式的 Arc 傳遞</span>
+<span class="k">fn</span> load_config() -&gt; &amp;<span class="lt">&#x27;static</span> <span class="t">Config</span> {
+    <span class="t">Box</span>::leak(<span class="t">Box</span>::new(<span class="t">Config</span> { workers: <span class="n">8</span>, addr: <span class="s">&quot;0.0.0.0:9000&quot;</span>.into() }))
+}
+
+<span class="k">fn</span> main() {
+    <span class="c">// 修法 A:move 取得 ownership</span>
+    <span class="k">let</span> owned = vec![<span class="n">1</span>, <span class="n">2</span>, <span class="n">3</span>];
+    <span class="k">let</span> h = std::thread::spawn(<span class="k">move</span> || owned.iter().sum::&lt;<span class="t">i32</span>&gt;());
+    println!(<span class="s">&quot;A move        = {}&quot;</span>, h.join().unwrap());
+
+    <span class="c">// 修法 B:Arc 共享 ownership(注意 Arc&lt;T&gt;: &#x27;static 需要 T: &#x27;static)</span>
+    <span class="k">let</span> shared = <span class="t">Arc</span>::new(vec![<span class="n">4</span>, <span class="n">5</span>, <span class="n">6</span>]);
+    <span class="k">let</span> c = <span class="t">Arc</span>::clone(&amp;shared);
+    <span class="k">let</span> h = std::thread::spawn(<span class="k">move</span> || c.iter().sum::&lt;<span class="t">i32</span>&gt;());
+    println!(<span class="s">&quot;B Arc         = {} (原本的還能用: {:?})&quot;</span>, h.join().unwrap(), shared);
+
+    <span class="c">// 修法 C:scope,結構性地不需要 &#x27;static</span>
+    <span class="k">let</span> borrowed = vec![<span class="n">7</span>, <span class="n">8</span>, <span class="n">9</span>];
+    <span class="k">let</span> total = std::thread::scope(|s| {
+        s.spawn(|| borrowed.iter().sum::&lt;<span class="t">i32</span>&gt;()).join().unwrap()
+    });
+    println!(<span class="s">&quot;C scope       = {total} (沒有 clone、沒有 Arc)&quot;</span>);
+
+    <span class="c">// 修法 D:bounded leak</span>
+    <span class="k">let</span> cfg: &amp;<span class="lt">&#x27;static</span> <span class="t">Config</span> = load_config();
+    <span class="k">let</span> h = std::thread::spawn(<span class="k">move</span> || format!(<span class="s">&quot;{} workers @ {}&quot;</span>, cfg.workers, cfg.addr));
+    println!(<span class="s">&quot;D leak        = {}&quot;</span>, h.join().unwrap());
+
+    <span class="k">let</span> cell = <span class="t">Cell</span>::new(<span class="n">0</span>);
+    quadrant4(&amp;cell);
+    is_send(<span class="t">String</span>::new()); is_static(<span class="t">String</span>::new());
+}</pre>
+    <p class="dim">實際輸出:</p>
+    <pre class="diag">A move        = 6
+B Arc         = 15 (原本的還能用: [4, 5, 6])
+C scope       = 24 (沒有 clone、沒有 Arc)
+D leak        = 8 workers @ 0.0.0.0:9000</pre>
+  </section>
+
+  <section>
+    <h2>決策順序</h2>
+    <ul>
+      <li>1. 呼叫者之後還要用嗎?<span class="dim">不要 → <code>move</code>,結束。</span></li>
+      <li>2. task 保證在這個 frame 內結束嗎?<span class="dim">會 → <code>scope</code>,零成本。</span></li>
+      <li>3. 資料小嗎?<span class="dim">小 → <code>clone</code>,別為了省一次 memcpy 引入 atomic。</span></li>
+      <li>4. 程式生命週期內不變嗎?<span class="dim">是 → <code>OnceLock</code> / <code>Box::leak</code>。</span></li>
+      <li>5. 以上都不是 → <code>Arc</code>。<span class="dim">這是最後一步,不是第一步。</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Follow-up</h2>
+    <ul>
+      <li>第 3 列和第 4 列的交叉點在哪?對你的資料大小和 clone 頻率做一次量測,別用直覺猜。</li>
+      <li><code>Arc&lt;str&gt;</code> vs <code>Arc&lt;String&gt;</code>:少一層 indirection,但失去 <code>push_str</code>。共享唯讀字串幾乎都該用前者。</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ================= 延伸 ================= -->
+<div class="tab" id="tab-ext">
+  <h1>延伸 / C++ 對照</h1>
+
+  <section>
+    <h2>C++ 的 <code>static</code> 跟 Rust 的 <code>&#39;static</code> 是兩個不同的東西</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>C++ static storage duration</th><th>Rust <code>&#39;static</code></th></tr>
+      <tr><td>在講</td><td>物件<span class="key">存放在哪個儲存區</span>、何時初始化／解構</td><td>型別<span class="key">裡有沒有藏借用</span></td></tr>
+      <tr><td>檢查時機</td><td>無需檢查 —— 它是儲存期的事實</td><td>編譯期,borrow checker 驗證</td></tr>
+      <tr><td>對應物</td><td>Rust 的 <code>static ITEM: T</code> 宣告</td><td>C++ <span style="color:var(--red)">沒有對應物</span></td></tr>
+    </table></div>
+    <p>Rust 的 <code>static ITEM: T = ...;</code> 才是 C++ static storage duration 的對應物。
+    <code>&#39;static</code> <span class="key">lifetime</span> 在 C++ 型別系統裡沒有東西對得上。</p>
+  </section>
+
+  <section>
+    <h2>對寫 C++ executor 的實際意義</h2>
+    <p>這是兩邊差距最大的地方。Rust 用 <code>F: &#39;static</code> 讓「detached task 借了呼叫者的 stack」
+    在編譯期就過不去。C++ 的 coroutine 沒有這層檢查:</p>
+    <ul>
+      <li>lambda 用 <code>[&amp;]</code> 捕捉,包成 coroutine 再丟給 executor → 呼叫者 frame pop 之後就是 use-after-free。編譯器不會說任何話。</li>
+      <li>coroutine 的 <span style="color:var(--red)">dangling reference parameter</span> 問題更隱蔽:傳進 coroutine 的 reference 參數不會被存進 coroutine frame,
+          第一次 suspend 之後就懸空。這是 C++ coroutine 的著名坑,跟 <code>&#39;static</code> 要防的是同一類 bug。</li>
+      <li>因此 C++ 這邊唯一可行的路是<span class="key">結構化併發</span>:用 scope 型的設施保證 join,
+          等價於 Rust 的 <code>thread::scope</code> 那條路,而不是 <code>&#39;static</code> 那條 —— 因為 C++ 沒有那條。</li>
+    </ul>
+    <div class="callout">
+      <span class="dim">上面關於 C++ 的部分是從語言規則推論的,不是引用具體條文。要寫進設計文件前請對照
+      P2300 相關 paper 的 lifetime 章節確認措辭。</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>值得追下去的問題</h2>
+    <ul>
+      <li>如果 C++ 要引入類似 <code>&#39;static</code> 的 bound,最小需要什麼?(提示:需要 lifetime 進入型別系統,
+          而這幾乎等於引入 borrow checker。)</li>
+      <li>Rust 的 leak 是 safe 的,這件事讓 <code>Drop</code> 不能被當成安全保證 —— 這正是 async scope 難做的根因。
+          C++ 的 destructor 是保證會跑的(除非 UB),這反而讓 C++ 的結構化併發在<span class="key">這一點上</span>比 Rust 好做。
+          兩邊各換到了什麼?</li>
+      <li><code>Pin</code> 和 <code>&#39;static</code> 解決的是不同的問題(自我引用 vs 借外部)。寫 runtime 時兩個都會遇到,別混在一起想。</li>
+      <li>回到你的 async runtime:先決定 spawn 的合約是 detached 還是 scoped。這個決定會傳遍整個 API 表面,
+          事後改幾乎等於重寫。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>驗證紀錄</h2>
+    <ul>
+      <li>所有 Rust 程式碼:rustc 1.75.0 (edition 2021) 實際編譯 + 執行。</li>
+      <li>所有標示「會 fail」的行:逐一取消註解編譯,確認錯誤碼 —— E0521 / E0597 / E0373 / E0277。</li>
+      <li><code>tokio::spawn</code>、<code>spawn_local</code> 簽章:docs.rs。</li>
+      <li><code>std::thread::scope</code> 進入 1.63:Rust 官方 release blog(2022-08-11)。</li>
+      <li>Default trait object lifetime 規則:Rust RFC 0599。</li>
+      <li><code>T: &#39;a</code> 的定義與 <code>Vec&lt;&amp;&#39;a ()&gt;: &#39;static</code> 反例:The Rust Reference, trait-bounds。</li>
+      <li>Arc 的 atomic ordering 細節:<span style="color:var(--red)">未驗證</span>,文中已標示。</li>
+    </ul>
+  </section>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const id = j.dataset.jump;
+  const tabBtn = tabbar.querySelector('button[data-tab="' + id + '"]');
+  if (tabBtn) { tabBtn.click(); return; }
+  const el = document.getElementById(id);
+  if (!el) return;
+  const tab = el.closest('.tab');
+  if (tab && !tab.classList.contains('active')) {
+    const btn = tabbar.querySelector('button[data-tab="' + tab.id.replace('tab-','') + '"]');
+    if (btn) btn.click();
+  }
+  el.scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else this.go(0);
+    });
+    this.go(0);
+  }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.textContent = '[' + (this.idx+1) + '/' + this.steps.length + '] ' + s.narr;
+  }
+}
+
+const H = (st, html) => { st.innerHTML = html; };
+
+new Stepper('stepper-core', [
+  { narr: '先把要打倒的模型寫清楚。這是幾乎每個人第一次讀到 \'static 時腦中形成的東西。',
+    render(st){ H(st,
+      '<h3>M0:樸素模型</h3>' +
+      '<p>「<code>\'static</code> 表示這個東西活到程式結束。」</p>' +
+      '<p>這個模型有一個好處:它對 <code>&amp;\'static str</code> 是<b>對的</b>。' +
+      'string literal 確實活到程式結束。問題出在它被套用到 <code>T: \'static</code> 上面。</p>');
+    }},
+  { narr: '反例一:滿足 bound,但值馬上就死。M0 預測它不該編譯過,但它過了。',
+    render(st){ H(st,
+      '<h3>反例一 — 短命的 \'static</h3>' +
+      '<pre>' + '<span class="k">fn<\/span> takes_static&lt;T: <span class="lt">&#x27;static<\/span>&gt;(_t: T) {}\n\n<span class="k">fn<\/span> main() {\n    <span class="k">let<\/span> s = <span class="t">String<\/span>::from(<span class="s">&quot;hello&quot;<\/span>);\n    takes_static(s);   <span class="c">// 編譯通過<\/span>\n    <span class="c">// s 已 move 進去,takes_static 一返回就 drop<\/span>\n}' + '</pre>' +
+      '<div class="verdict ok">rustc: 編譯通過</div>' +
+      '<p>那個 <code>String</code> 的壽命是幾奈秒。M0 說 <code>\'static</code> 表示活到程式結束,' +
+      '那這裡就矛盾了。</p>');
+    }},
+  { narr: '反例二方向相反:值活到 main 結束,卻不滿足 bound。兩個方向都破了,M0 不是「不夠精確」,是判準本身就選錯東西。',
+    render(st){ H(st,
+      '<h3>反例二 — 長命的非 \'static</h3>' +
+      '<pre>' + '<span class="k">fn<\/span> takes_static&lt;T: <span class="lt">&#x27;static<\/span>&gt;(_t: T) {}\n\n<span class="k">fn<\/span> main() {\n    <span class="k">let<\/span> n = <span class="n">5<\/span>;\n    <span class="k">let<\/span> r: &amp;<span class="t">i32<\/span> = &amp;n;   <span class="c">// 活到 main 結束<\/span>\n    takes_static(r);    <span class="c">// ✗<\/span>\n}' + '</pre>' +
+      '<div class="verdict no">error[E0597]: `n` does not live long enough</div>' +
+      '<p>值的實際壽命 = 整個 main,幾乎就是整個程式。仍然不滿足 bound。</p>');
+    }},
+  { narr: '這一步是關鍵:把兩個反例並排,差別浮出來。判準必須落在型別上,不能落在執行期壽命上。',
+    render(st){ H(st,
+      '<h3>觀察 — 兩個反例的唯一差別</h3>' +
+      '<div class="tbl-scroll"><table>' +
+      '<tr><th></th><th>反例一</th><th>反例二</th></tr>' +
+      '<tr><td>型別</td><td><code>String</code></td><td><code>&amp;\'a i32</code></td></tr>' +
+      '<tr><td>值的實際壽命</td><td>極短</td><td>幾乎整個程式</td></tr>' +
+      '<tr><td>滿足 <code>T: \'static</code></td><td style="color:var(--green)">是</td><td style="color:var(--red)">否</td></tr>' +
+      '<tr><td>型別裡有 lifetime 參數?</td><td style="color:var(--green)">沒有</td><td style="color:var(--red)">有 <code>\'a</code></td></tr>' +
+      '</table></div>' +
+      '<p>「實際壽命」那一列跟結論<b>反相關</b>,「有沒有 lifetime 參數」那一列<b>完全對齊</b>。' +
+      '判準只能是後者。</p>');
+    }},
+  { narr: '規則被反例逼出來之後才寫下來。注意它完全是型別層的,執行期的事一個字都沒提。',
+    render(st){ H(st,
+      '<h3>M2:正式規則</h3>' +
+      '<div class="callout good"><code>T: \'a</code> ⟺ T 的<b>所有 lifetime 參數</b>都 outlive <code>\'a</code></div>' +
+      '<p>把 <code>\'a</code> 取成 <code>\'static</code>,得到檢查表:</p>' +
+      '<div class="tbl-scroll"><table>' +
+      '<tr><th>型別</th><th>lifetime 參數</th><th>滿足 <code>: \'static</code></th></tr>' +
+      '<tr><td><code>i32</code></td><td>無</td><td style="color:var(--green)">✓ 空集合,vacuously true</td></tr>' +
+      '<tr><td><code>String</code></td><td>無</td><td style="color:var(--green)">✓ 同上</td></tr>' +
+      '<tr><td><code>&amp;\'static str</code></td><td><code>\'static</code></td><td style="color:var(--green)">✓ 唯一的參數就是 \'static</td></tr>' +
+      '<tr><td><code>Vec&lt;&amp;\'a ()&gt;</code></td><td><code>\'a</code></td><td style="color:var(--red)">✗ owned 容器也擋不住</td></tr>' +
+      '<tr><td><code>struct Foo&lt;\'a&gt;</code></td><td><code>\'a</code></td><td style="color:var(--red)">✗ 同上</td></tr>' +
+      '</table></div>');
+    }},
+  { narr: '解釋名字。這一步把「為什麼叫 static」跟「它不表示活很久」調和起來。',
+    render(st){ H(st,
+      '<h3>那為什麼還叫 \'static?</h3>' +
+      '<p><code>T: \'a</code> 唸作 “T outlives <code>\'a</code>”,講的是<b>能力上限</b>:' +
+      '這個型別的值<b>可以</b>被持有到 <code>\'a</code> 那麼久而不會 dangle。</p>' +
+      '<p><code>\'static</code> 是這個上限取到最大 —— 可以被持有到程式結束。' +
+      '「可以」不等於「會」。<code>String</code> 你想抱到程式結束就抱得到,' +
+      '所以它滿足;你選擇下一行就 drop,那是你的自由。</p>' +
+      '<div class="callout"><span class="key">一句話:</span>' +
+      '<code>T: \'static</code> 是<b>權限</b>,不是<b>行程表</b>。</div>');
+    }},
+  { narr: '最後把兩個 \'static 的分工釘死。這是後面所有頁面的基礎。',
+    render(st){ H(st,
+      '<h3>兩個 \'static 歸位</h3>' +
+      '<pre>' + '<span class="k">fn<\/span> f&lt;T: <span class="lt">&#x27;static<\/span>&gt;(_t: T) {}         <span class="c">// bound:型別裡沒藏借用<\/span>\n\n<span class="k">fn<\/span> main() {\n    <span class="k">let<\/span> a: &amp;<span class="lt">&#x27;static<\/span> <span class="t">str<\/span> = <span class="s">&quot;x&quot;<\/span>;     <span class="c">// 型別:指向永久有效的記憶體<\/span>\n    f(a);                          <span class="c">// &amp;&#x27;static str 滿足 T: &#x27;static<\/span>\n    f(<span class="t">String<\/span>::from(<span class="s">&quot;owned&quot;<\/span>));      <span class="c">// String 也滿足,而且它不是 reference<\/span>\n}' + '</pre>' +
+      '<p>關係是單向的:<code>&amp;\'static str</code> 這個型別<b>滿足</b> <code>T: \'static</code>,' +
+      '但滿足 <code>T: \'static</code> 的型別絕大多數不是 reference(<code>String</code>、' +
+      '<code>Vec&lt;u8&gt;</code>、<code>i32</code> …)。</p>' +
+      '<div class="callout good">帶著這個結論去看 <span data-jump="spawn">spawn 為何要它</span>:' +
+      '那裡要的是 <b>bound</b>,不是 reference。所以 <code>async move</code> 就能滿足。</div>');
+    }},
+]);
+
+new Stepper('stepper-spawn', [
+  { narr: '先把 spawn 的合約寫清楚,危險才看得出來。',
+    render(st){ H(st,
+      '<h3>合約</h3>' +
+      '<ul><li><code>spawn</code> <b>立刻</b>回傳,不等 task。</li>' +
+      '<li>task 之後才被 poll / 執行,可能在<b>別的 thread</b>。</li>' +
+      '<li><code>JoinHandle</code> 可以直接丟掉 —— 沒有人被強迫 join。</li></ul>' +
+      '<p>第三點是關鍵:沒有任何機制保證呼叫者的 frame 會等 task 結束。</p>');
+    }},
+  { narr: '危險畫面。這是型別系統要擋掉的那個東西。',
+    render(st){ H(st,
+      '<h3>危險畫面</h3>' +
+      '<pre>' + '<span class="k">fn<\/span> handler() {\n    <span class="k">let<\/span> data = vec![<span class="n">1<\/span>, <span class="n">2<\/span>, <span class="n">3<\/span>];\n    std::thread::spawn(|| println!(<span class="s">&quot;{data:?}&quot;<\/span>));   <span class="c">// 借了 data<\/span>\n}   <span class="c">// ← frame pop,data drop。task 可能還沒開始跑。<\/span>\n\n<span class="k">fn<\/span> main() { handler(); }' + '</pre>' +
+      '<div class="verdict no">error[E0373]: closure may outlive the current function</div>' +
+      '<p>若編譯器放行,結果是 use-after-free。<code>tokio::spawn</code> + ' +
+      '<code>async { read(&amp;data).await }</code> 是完全相同的形狀,錯誤也相同。</p>');
+    }},
+  { narr: '不要急著跳到答案。先問「要什麼保證才安全」,兩條路自然浮出來。',
+    render(st){ H(st,
+      '<h3>要什麼保證才安全?</h3>' +
+      '<p>危險來自一個區間:<b>frame 已 pop,task 還在跑</b>。消掉它只有兩種方式:</p>' +
+      '<div class="tbl-scroll"><table>' +
+      '<tr><th>路線</th><th>做法</th><th>誰負責</th></tr>' +
+      '<tr><td>A</td><td>讓那個區間裡<b>沒有東西可以 dangle</b></td><td>型別系統</td></tr>' +
+      '<tr><td>B</td><td>讓那個區間<b>不存在</b>(強制 join)</td><td>API 的控制流</td></tr>' +
+      '</table></div>');
+    }},
+  { narr: '路線 A 直接把「型別裡沒藏借用」寫成 bound —— 這就是核心頁推導出來的那條規則。',
+    render(st){ H(st,
+      '<h3>路線 A → <code>F: \'static</code></h3>' +
+      '<p>「task 沒借任何會失效的東西」翻成型別語言,就是「future 的型別裡沒有非 <code>\'static</code> 的 lifetime 參數」。</p>' +
+      '<div class="prelabel">簽章引用(docs.rs),非可執行片段</div>' +
+      '<pre class="sig"><span class="k">pub</span> <span class="k">fn</span> spawn&lt;F&gt;(future: F) -&gt; <span class="t">JoinHandle</span>&lt;F::<span class="t">Output</span>&gt;\n' +
+      '<span class="k">where</span>\n' +
+      '    F: <span class="t">Future</span> + <span class="t">Send</span> + <span class="lt">\'static</span>,\n' +
+      '    F::<span class="t">Output</span>: <span class="t">Send</span> + <span class="lt">\'static</span>;</pre>' +
+      '<p>修法是 <code>async move</code>:把 <code>data</code> move 進 future,型別變成 owned,bound 自動滿足。</p>' +
+      '<div class="verdict ok">bound 滿足,而且 task 跑完 data 照樣 drop —— 沒有洩漏</div>');
+    }},
+  { narr: '路線 B 換掉的是控制流,不是型別。這是零成本的那條路。',
+    render(st){ H(st,
+      '<h3>路線 B → <code>F: \'scope</code></h3>' +
+      '<pre>' + '<span class="k">fn<\/span> main() {\n    <span class="k">let<\/span> data = vec![<span class="n">1<\/span>, <span class="n">2<\/span>, <span class="n">3<\/span>];\n    <span class="k">let<\/span> sum = std::thread::scope(|s| {\n        s.spawn(|| data.iter().sum::&lt;<span class="t">i32<\/span>&gt;()).join().unwrap()\n    });   <span class="c">// scope 返回前保證所有 thread 已 join<\/span>\n    println!(<span class="s">&quot;{sum}&quot;<\/span>);\n}' + '</pre>' +
+      '<div class="verdict ok">借 stack 完全合法,零複製</div>' +
+      '<p>因為紅色區間被 <code>scope()</code> 的返回條件消掉了,bound 就不需要是 <code>\'static</code>。</p>');
+    }},
+  { narr: '收尾:用 spawn_local 和 Scope::spawn 證明 Send 和 \'static 是兩個獨立的旋鈕。',
+    render(st){ H(st,
+      '<h3>兩個 bound 可以獨立拿掉</h3>' +
+      '<div class="tbl-scroll"><table>' +
+      '<tr><th>API</th><th>Send</th><th>\'static</th></tr>' +
+      '<tr><td><code>tokio::spawn</code></td><td>要</td><td>要</td></tr>' +
+      '<tr><td><code>tokio::task::spawn_local</code></td><td style="color:var(--red)">不要</td><td>要</td></tr>' +
+      '<tr><td><code>Scope::spawn</code></td><td>要</td><td style="color:var(--red)">放寬成 \'scope</td></tr>' +
+      '</table></div>' +
+      '<p>能各自拿掉,代表它們回答不同問題:</p>' +
+      '<ul><li><code>Send</code> — 能不能<b>搬到別的 thread</b>(空間)</li>' +
+      '<li><code>\'static</code> — 能不能<b>活得比呼叫者久</b>(時間)</li></ul>');
+    }},
+]);
+</script>
+</body>
+</html>

@@ -36,14 +36,20 @@ pub struct Header {
 ///
 /// 這三行就是 c 題 framer 的第一塊肌肉。
 pub fn read_u32_be(buf: &[u8], at: usize) -> Option<u32> {
-    let _ = (buf, at);
-    todo!("spec: checked_add → get(range) → from_be_bytes(try_into)")
+    // let _ = (buf, at);
+    // todo!("spec: checked_add → get(range) → from_be_bytes(try_into)")
+    let end = at.checked_add(4)?;
+    let slice = buf.get(at..end)?;
+    Some(u32::from_be_bytes(slice.try_into().expect("4 bytes")))
 }
 
 /// spec:同 `read_u32_be`,但 little-endian(`from_le_bytes`)。
 pub fn read_u32_le(buf: &[u8], at: usize) -> Option<u32> {
-    let _ = (buf, at);
-    todo!("spec: 只差一個字:from_le_bytes")
+    // let _ = (buf, at);
+    // todo!("spec: 只差一個字:from_le_bytes")
+    let end = at.checked_add(4)?;
+    let slice = buf.get(at..end)?;
+    Some(u32::from_le_bytes(slice.try_into().expect("4 bytes")))
 }
 
 /// spec:**不准用 `from_be_bytes`**,手動 shift 拼出 BE u32——證明你懂 API 在做什麼。
@@ -52,16 +58,18 @@ pub fn read_u32_le(buf: &[u8], at: usize) -> Option<u32> {
 /// `(b[0] as u32) << 24 | (b[1] as u32) << 16 | (b[2] as u32) << 8 | (b[3] as u32)`
 /// 陷阱:先 shift 再 cast(`(b[0] << 24) as u32`)是錯的——u8 shift 24 直接歸零/panic。
 pub fn u32_be_manual(b: [u8; 4]) -> u32 {
-    let _ = b;
-    todo!("spec: 每個 byte 先 as u32 再 shift,高位 byte shift 最多")
+    // let _ = b;
+    // todo!("spec: 每個 byte 先 as u32 再 shift,高位 byte shift 最多")
+    ((b[0] as u32) << 24) | ((b[1] as u32) << 16) | ((b[2] as u32) << 8) | (b[3] as u32)
 }
 
 /// spec:把 `v` 以 big-endian 附加到 `out` 尾端。
 /// `out.extend_from_slice(&v.to_be_bytes())`——encode 側的一行肌肉
 /// (hw_bridge `encode` 寫 len 欄位就是它)。
 pub fn write_u32_be(out: &mut Vec<u8>, v: u32) {
-    let _ = (out, v);
-    todo!("spec: extend_from_slice(&v.to_be_bytes())")
+    // let _ = (out, v);
+    // todo!("spec: extend_from_slice(&v.to_be_bytes())")
+    out.extend_from_slice(&v.to_be_bytes())
 }
 
 /// spec:從 `buf[at..at+2]` 讀 little-endian **i16**(有號!)。
@@ -71,8 +79,12 @@ pub fn write_u32_be(out: &mut Vec<u8>, v: u32) {
 /// 若 `b[0] as i16` 走過 `as i8` 會被符號擴展成 0xFF__ 污染高位;
 /// 直接 u8→i16 則安全(零擴展)。用 API 就沒這些心智稅。
 pub fn read_i16_le(buf: &[u8], at: usize) -> Option<i16> {
-    let _ = (buf, at);
-    todo!("spec: 同 read_u32_le 的三行,型別換 i16、寬度換 2")
+    // let _ = (buf, at);
+    // todo!("spec: 同 read_u32_le 的三行,型別換 i16、寬度換 2")
+    let end = at.checked_add(2)?;
+    Some(i16::from_le_bytes(
+        buf.get(at..end)?.try_into().expect("expect 2 bytes"),
+    ))
 }
 
 /// spec:把 `(generation, idx)` 打包進一個 u64:generation 佔高 32 bit、idx 佔低 32 bit。
@@ -82,8 +94,9 @@ pub fn read_i16_le(buf: &[u8], at: usize) -> Option<i16> {
 /// 順帶的 pad 坑:**`gen` 是 edition 2024 的保留字**(gen block),
 /// 參數名寫 `gen` 直接 syntax error——e2 場上請用 `generation` 或 `slot_gen`。
 pub fn pack_token(generation: u32, idx: u32) -> u64 {
-    let _ = (generation, idx);
-    todo!("spec: 高位 shift 32,低位 or 進來;兩邊都先 as u64")
+    // let _ = (generation, idx);
+    // todo!("spec: 高位 shift 32,低位 or 進來;兩邊都先 as u64")
+    ((generation as u64) << 32) | idx as u64
 }
 
 /// spec:`pack_token` 的逆:回 `(gen, idx)`。
@@ -94,8 +107,9 @@ pub fn pack_token(generation: u32, idx: u32) -> u64 {
 /// - `tok as u32`——截斷 cast 本身就是 mask,少一個出錯點(推薦寫這個,
 ///   但上面那行的教訓要講得出來)。
 pub fn unpack_token(tok: u64) -> (u32, u32) {
-    let _ = tok;
-    todo!("spec: >> 32 取高、as u32 截低;mask 寫法的一 bit 教訓見上")
+    // let _ = tok;
+    // todo!("spec: >> 32 取高、as u32 截低;mask 寫法的一 bit 教訓見上")
+    (((tok >> 32) as u32), tok as u32)
 }
 
 /// spec:解析 7-byte 混合 header(全 BE):
@@ -109,8 +123,14 @@ pub fn unpack_token(tok: u64) -> (u32, u32) {
 /// 不足 7 bytes → `None`。`u16::from_be_bytes` 同家族,寬度換 2。
 /// 這就是「多欄位 header 逐欄切」的完整形:c/d 題若 header 長胖,照這個模子。
 pub fn parse_header(buf: &[u8]) -> Option<Header> {
-    let _ = buf;
-    todo!("spec: get(..7)? 先擋短;再逐欄 from_be_bytes / 直取")
+    // let _ = buf;
+    // todo!("spec: get(..7)? 先擋短;再逐欄 from_be_bytes / 直取")
+    let buf = buf.get(..7)?;
+    Some(Header {
+        magic: u16::from_be_bytes(buf.get(0..2)?.try_into().expect("should be 2 bytes")),
+        flags: u8::from_be_bytes(buf.get(2..3)?.try_into().expect("should be 1 byte")),
+        len: u32::from_be_bytes(buf.get(3..7)?.try_into().expect("should be 4 bytes")),
+    })
 }
 
 #[cfg(test)]
@@ -121,7 +141,6 @@ mod tests {
     /// trace:bytes [0x12,0x34,0x56,0x78]:BE 高位在前 → 0x1234_5678;
     /// LE 低位在前 → 0x7856_3412。offset 1 起讀、長度不足 → None。
     #[test]
-    #[ignore = "填完 read_u32_be/le 後移除"]
     fn be_le_read_and_bounds() {
         let buf = [0x12u8, 0x34, 0x56, 0x78, 0x9A];
         assert_eq!(read_u32_be(&buf, 0), Some(0x1234_5678));
@@ -133,7 +152,6 @@ mod tests {
 
     /// 手動 shift 必須跟 API 逐值一致(含最高位 byte ≥ 0x80 的 case)。
     #[test]
-    #[ignore = "填完 u32_be_manual 後移除"]
     fn manual_matches_api() {
         for bytes in [
             [0x00, 0x00, 0x00, 0x01],
@@ -148,7 +166,6 @@ mod tests {
     /// encode → decode roundtrip;寫出的 bytes 高位在前。
     /// trace:0x0000_0105 → [0x00,0x00,0x01,0x05](hw_bridge len 欄位同款)。
     #[test]
-    #[ignore = "填完 write_u32_be 後移除"]
     fn write_be_roundtrip() {
         let mut out = Vec::new();
         write_u32_be(&mut out, 0x0000_0105);
@@ -160,7 +177,6 @@ mod tests {
     /// 符號擴展:0xFFFF → -1;0x8000 → i16::MIN。LE = 低位 byte 在前。
     /// trace:[0x00, 0x80] LE → 0x8000 → 補數解讀 = -32768。
     #[test]
-    #[ignore = "填完 read_i16_le 後移除"]
     fn i16_sign_extension() {
         assert_eq!(read_i16_le(&[0xFF, 0xFF], 0), Some(-1));
         assert_eq!(read_i16_le(&[0x00, 0x80], 0), Some(i16::MIN));
@@ -171,7 +187,6 @@ mod tests {
     /// e2 傷疤直測:idx 最高 bit 有值(0x8000_0000)必須 roundtrip 不 alias。
     /// `(1<<31)-1` 那種少一 bit 的 mask 在這條測試上必死。
     #[test]
-    #[ignore = "填完 pack/unpack_token 後移除"]
     fn token_roundtrip_high_bit() {
         for (g, i) in [
             (0u32, 0u32),
@@ -189,7 +204,6 @@ mod tests {
     /// 混合 header 逐欄切(len 落在 offset 3,不對齊照讀)。
     /// trace:magic 0xCAFE → [0xCA,0xFE];len 0x0000_0105 → [0x00,0x00,0x01,0x05]。
     #[test]
-    #[ignore = "填完 parse_header 後移除"]
     fn header_parse_and_short_input() {
         let wire = [0xCAu8, 0xFE, 0x01, 0x00, 0x00, 0x01, 0x05];
         assert_eq!(

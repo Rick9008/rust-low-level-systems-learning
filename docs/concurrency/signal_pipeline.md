@@ -117,6 +117,20 @@ per-key conflation slot(market data 的答案,capacity=1 覆蓋寫)。
 進聚合、要嘛被數到,沒有黑洞。lost-wakeup 的測試設計成**卡死顯性失敗**
 (join 不回來),而不是靜默漏資料——壞要壞得看得見。
 
+## 喚醒鏈的終點站:IRQ(2026-07-26 補)
+
+`notify_one` 只是中繼——它是 syscall,得有「已經醒著的人」呼叫;epoll 也在睡
+(`epoll_wait` 是 blocking syscall),誰叫醒 epoll?把「誰叫醒我的叫醒者」追到底:
+
+> 封包到網卡 / sensor 出資料 → DMA 落地(至此 CPU 毫不知情)→ **IRQ:硬體拉中斷線,
+> CPU 被矽強制跳 ISR——喚醒在這裡無中生有** → driver 標 fd ready → kernel 走
+> wait queue 把睡在 epoll/futex 上的執行緒搬回 run queue → scheduler 派 CPU →
+> `epoll_wait`/`futex` 返回 → userspace 再用 notify/unpark 接力 → aggregator 醒。
+
+一句記走:**軟體只能接力喚醒,無中生有的喚醒只有硬體中斷**;連 `sleep`
+的終點也是它(timer tick = IRQ)。五種睡法睡在不同中繼站,終點站同一個。
+唯一不在鏈上的是 busy-poll——不睡的人不需要被叫醒,HFT 燒核買斷的就是整條鏈。
+
 ## 誠實邊界
 
 - 掛牌握手的交錯靠手 trace + stress 把關;loom 版要把 fence 與 park
@@ -134,7 +148,8 @@ sequence barrier)、tokio 的 mpsc(async 世界的對應)。
 ## 互動教材
 
 [artifacts/signal_pipeline.html](artifacts/signal_pipeline.html) ——
-五種睡法一張表(含「沒有 epoll 是不是只能 sleep」的按事件醒/按時間醒分類);
+五種睡法一張表(含「沒有 epoll 是不是只能 sleep」的按事件醒/按時間醒分類)
++ 喚醒接力鏈三區圖(硬體無中生有 → kernel 接力 → userspace 接力,①-2 節);
 掛牌握手 stepper:fence 與 re-check 兩個開關、四種組合逐步走交錯,
 拔掉 fence 看 consumer 帶著貨睡死(store buffer 的內容畫給你看);
 扇入隔離:按下爆源,看 dropped 只長在它自己的 ring 上。

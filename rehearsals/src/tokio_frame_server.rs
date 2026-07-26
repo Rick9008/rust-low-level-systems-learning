@@ -93,7 +93,7 @@ async fn dryrun_happy_path() {
     let mut buf = [0; 4096];
     let res = stream.read(&mut buf).await;
     assert!(res.is_ok());
-    let mut len = res.unwrap();
+    let len = res.unwrap();
     let res = parser.feed(&buf[0..len]);
     assert!(res.len() == 1);
 }
