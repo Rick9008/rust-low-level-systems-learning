@@ -101,6 +101,8 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 
 (e / h 預設 recognition。**f/g 已升計時並完賽**(7/26,表列);e 快寫 ✓ 7/26(34m,非計時:真洞=handler_count 吃 id 回全域〔參數沒用=漏讀警報〕;retain_mut 進肌肉;type erasure 預期洞未現=7/24 pool 課有效);h 7/24 親手寫過。)
 
+**7/27 taper 收帳**:骨架默寫抽查 1✓/5⚠/1✗(✗=length-prefix `usize::from_be_bytes` 真洞;Sender Drop `==1` 方向默反;批改在 `scratch/recall_20260727.rs` 檔頭)|h 口述 ⚠(掉 drift-free+wait_timeout 兩招牌句)|三舊解 dry-run ✓(a wrap/d idle×半 frame/g recv drain)|卡#5+executor #5 雙結案|**情報 #4**(coffee chat)觸發 **toposort 快寫綠**(CoderPad 實機,3 案+validity checker;新洞=iter 借用鏈+String/&str 生疏)+ DS 升級階梯靶場二發(LRU vs registry 對照)|全日蒸餾 → **晨讀本 `scratch/recall_checklist.md`**(7/28 早唯一讀物)。
+
 ## clarify 情境卡(每張 5 分鐘)
 
 | 卡 | 做完日期 | 漏問了哪一類(掉不掉/速率/規模/SLA/偵測) |
@@ -109,7 +111,7 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 2 RPC gateway | 2026-07-19(重寫) | SLA(p99 vs p50)沒問——「SLA」標籤誤貼在 client timeout 上;另:英文把「關 client 連線的 EPOLLIN」講成「關 backend 的」 |
 | 3 market data feed | **拿掉不寫**(2026-07-19 裁) | 模式 = per-key conflation,當日已深學;7/25 快打認題 30 秒帶過:"only latest matters → conflation slot, capacity = 1" |
 | 4 log shipper | ☑ 2026-07-21(與 #6 連打) | 4/5:漏「斷線多久算常態」→ capacity=rate×outage 沒立式(題幹 seconds-to-minutes 沒消費);數字:1MB×1000 誤為 0.1GB;UDP 未辯護(隱形 drop) |
-| 5 sensor bridge | 排 ~~7/25~~ ~~7/26~~ → **2026-07-27 口述場(第五滑;綁 executor clarify #5 一場 45m,v9.5)**——原料全備:fan-in 拓撲(signal_pipeline)+channel 語意(g#1)+五問表 | |
+| 5 sensor bridge | ☑ **2026-07-27(口述,第五滑結案)** | 2/5:容量立式沒立(burst rate×duration——登記傷疤第 2 類再現)+ conflation 沒上桌("only the latest matters?" 值一個量級)。亮點:四問結構好、三定理自己回收(drop-oldest→SPMC/aggregate→window/heartbeat=liveness 要主動訊號);皇冠句=push 側在 IRQ context → wait-free 是正確性需求 |
 | 6 health prober | ☑ 2026-07-21(與 #4 連打) | 3/5:漏併發上限(題幹 must not hammer 沒消費)+ 判死無去抖(連續 N 次);window=interval+N×timeout 沒立式。亮點:沒掏 lock-free ✓、push/pull 主動決策 ✓ |
 
 ## 下次複習
@@ -124,5 +126,6 @@ SCHEDULE 裁決:全部 post-TPS。例外:event_loop / mini_runtime 略讀(7/20 �
 | 2026-07-25 | `html_p/runtime-lockfree-upgrade-map.html`(§1 三問 + §8 追問鏈)+ ~~SPSC→MPMC 30 秒稿~~(✅ 7/25 凌晨錄畢;同場 Q1/Q4 複測:Q2 過、**Q1 why 層半洞**〔unconditional vs conditional claim〕→ 晚間口述複測) | 錄音「被逼 lock-free」段現在有 repo 實體(mpmc_ring/mpsc_list/ws_deque),照地圖講;ws_deque 的 loom 抓洞實錄是「窮舉>直覺」的第一手證據 |
 | 2026-07-25 | ~~`rehearsals/examples/tcp_skeleton_std.rs`(讀+默寫)~~(✅ 7/25 咖啡廳 6 輪 7 洞→0,傷疤在 `scratch/tcp_skelton2.rs` 檔頭;7/26 d-std 前 5m 重默)+ `drills/src/io/endian_pack.rs`(→ **7/26 08:20**) | 7/23 凌晨補位的兩個「上場怕要查」缺口:d 題 socket API 六行、c/e2 的 BE/LE+mask 肌肉 |
 | 2026-07-27 | `rehearsals/recognition-scripts-en.md`(**先講出聲才准開**) | 九題型英文認題掃描的對分底稿——口述版 sol_*,含每題傷疤句 |
+| **2026-07-28 早** | **`scratch/recall_checklist.md` 晨讀本(8:00 起床唯一讀物)** | §0 分鐘動線 → §1 默寫暖手(寫完才翻 §2)→ §3 九題+情報 → §4 金句出聲;§8 漏洞卡全集 wrong→right、§9 低機率認題卡。7/27 全日+coffee chat 情報蒸餾 |
 | 2026-07-25 | Heptabase 新六卡複讀(✅ 7/25 凌晨已壓縮上板 15→6,「Rust Low Level Notes」;ID 在兩份 `scratch/hepta_20260724_*` 檔頭) | 7/24 兩場深潛沉澱;口袋時間手機讀卡即可,scratch 源文件留全文底稿 |
 | ~~2026-07-25~~ **post-TPS** | `scratch/timer_queue2.rs` 檔頭批改 → 修 wheel 綠 | 7/25 咖啡廳擠照閥門陣亡;wheel 概念已由口述覆蓋(O(1) 攤還記帳法/退化條件,`hepta_20260725_cafe_qa.md` 卡4),修綠不再是 TPS 前置 |

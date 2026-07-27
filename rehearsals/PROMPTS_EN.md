@@ -541,6 +541,21 @@ interrupts/DMA — millions per second in bursts. Your bridge hands them to
 an upstream consumer. The device has no pause mechanism whatsoever. Design
 the bridge.
 
+is DMA / interrupt can be block? No so we need to aggregate or drop data, we can use drop_oldest
+
+1. How many device do we have?
+   1. no matter how many, we should use one SPSC for every device, because burst is too large.
+2. so may we aggregate data, drop oldest or newest?
+   1. if we can aggregate, we can use time window
+   2. if we need to drop oldest, we need to use SPMC because push side may need to pop consumer side
+   3. if we can just drop the newest, we can use SPSC.
+      In drop we need to record how many record we drop.
+3. How fast should we consume the data?
+   1. if we can wait, use batch.
+   2. if we want as soon as possible, if there's data, we just wake up. But it will cause CPU busy if input's a lot it will not sleep.
+4. How do we learn hardware dead?
+   I think dead hardware cannot send any notification. We should use heartbeat
+
 **Card 6 · health prober** — Periodically health-check a few hundred
 machines (TCP connect + application-level ping). A dead node must be
 flagged within a predictable window; the prober must not hammer its targets

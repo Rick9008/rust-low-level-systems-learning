@@ -100,6 +100,7 @@
   <button data-tab="spawn">spawn 為何要它</button>
   <button data-tab="traps">陷阱</button>
   <button data-tab="fix">修法 &amp; 成本</button>
+  <button data-tab="e2024">Edition 2024</button>
   <button data-tab="ext">延伸 / C++ 對照</button>
 </nav>
 
@@ -108,7 +109,26 @@
 <!-- ================= 總覽 ================= -->
 <div class="tab active" id="tab-overview">
   <h1>&#39;static — Rust lifetime 深入拆解</h1>
-  <div class="sub">全部程式碼經 rustc 1.75.0 (edition 2021) 實際編譯／執行驗證 · 2026-07</div>
+  <div class="sub">v2 · 全部程式碼經 rustc 1.91.1 / <span class="key">edition 2024</span> 實際編譯執行驗證 · 2026-07</div>
+
+  <section>
+    <h2>Changelog</h2>
+    <div class="tbl-scroll"><table>
+      <tr><th>版本</th><th>變更</th></tr>
+      <tr>
+        <td>v2</td>
+        <td>
+          <ul style="margin:0">
+            <li>全部程式碼與診斷改用 <span class="key">rustc 1.91.1 + edition 2024</span> 重新驗證(v1 是 1.75 / edition 2021)。既有 6 段程式碼在 2024 下<b>全部原樣通過</b>,零改動。</li>
+            <li>新增 <span data-jump="e2024">Edition 2024</span> 分頁:兩項直接改變 <code>&#39;static</code> 行為的 edition 變更 —— RPIT 捕獲規則、<code>static mut</code> reference 由 warning 升為 hard error。</li>
+            <li>編譯器診斷全部重新產生(1.75 的措辭已過時)。</li>
+            <li><code>02_rule.rs</code> 改成會讀欄位,消掉 dead-code warning。</li>
+          </ul>
+        </td>
+      </tr>
+      <tr><td>v1</td><td>初版。rustc 1.75 / edition 2021。</td></tr>
+    </table></div>
+  </section>
 
   <section>
     <h2>一句話</h2>
@@ -128,6 +148,8 @@
       <tr><td><code>Box&lt;dyn Error&gt;</code> 存借來的東西爆掉</td><td><span data-jump="traps">陷阱</span></td></tr>
       <tr><td>編譯器叫我加 <code>+ &#39;static</code>,加了更慘</td><td><span data-jump="traps">陷阱</span></td></tr>
       <tr><td>「該 clone、該 <code>Arc</code>、還是該改結構?」</td><td><span data-jump="fix">修法 &amp; 成本</span></td></tr>
+      <tr><td>升到 edition 2024,原本過的 <code>impl Trait</code> 回傳值突然說 <code>must outlive &#39;static</code></td><td><span data-jump="e2024">Edition 2024</span></td></tr>
+      <tr><td><code>error: creating a mutable reference to mutable static</code></td><td><span data-jump="e2024">Edition 2024</span></td></tr>
       <tr><td>C++ 的 <code>static</code> 跟這個是同一回事嗎?</td><td><span data-jump="ext">延伸 / C++ 對照</span></td></tr>
     </table></div>
   </section>
@@ -272,7 +294,7 @@
 }</pre>
     <p class="dim">把 <code>takes_static(r);</code> 那行取消註解,得到:</p>
     <pre class="diag">error[E0521]: borrowed data escapes outside of function
- --&gt; fails/f1_vec_ref.rs:3:32
+ --&gt; f1_vec_ref.rs:3:32
   |
 3 | fn probe&lt;&#x27;a&gt;(v: Vec&lt;&amp;&#x27;a ()&gt;) { takes_static(v); }
   |          --  -                 ^^^^^^^^^^^^^^^
@@ -293,8 +315,12 @@
 <span class="k">struct</span> <span class="t">HasLifetime</span>&lt;<span class="lt">&#x27;a</span>&gt; { v: &amp;<span class="lt">&#x27;a</span> <span class="t">u64</span> } <span class="c">// 有一個 lifetime 參數   -&gt; 看 &#x27;a</span>
 
 <span class="k">fn</span> probe&lt;<span class="lt">&#x27;a</span>&gt;(borrowed: &amp;<span class="lt">&#x27;a</span> <span class="t">u64</span>) {
-    takes_static(<span class="t">NoLifetime</span> { v: <span class="n">1</span> });          <span class="c">// OK</span>
-    takes_static(<span class="t">HasLifetime</span> { v: &amp;<span class="n">7</span> });        <span class="c">// OK:&amp;7 被 promote 成 &#x27;static</span>
+    <span class="k">let</span> a = <span class="t">NoLifetime</span> { v: <span class="n">1</span> };
+    <span class="k">let</span> b = <span class="t">HasLifetime</span> { v: &amp;<span class="n">7</span> };              <span class="c">// &amp;7 被 promote 成 &#x27;static</span>
+    println!(<span class="s">&quot;{} {}&quot;</span>, a.v, b.v);
+
+    takes_static(a);                            <span class="c">// OK</span>
+    takes_static(b);                            <span class="c">// OK:&#x27;static 的 HasLifetime</span>
     <span class="c">// takes_static(HasLifetime { v: borrowed });  // FAIL:&#x27;a 不是 &#x27;static</span>
     <span class="c">// takes_static(vec![borrowed]);               // FAIL:Vec&lt;&amp;&#x27;a u64&gt;</span>
     <span class="k">let</span> _ = borrowed;
@@ -417,7 +443,7 @@
   <section>
     <h2>&#39;static 不是一個可以「宣告」出來的東西</h2>
     <pre class="diag">error[E0597]: `s` does not live long enough
- --&gt; fails/g1_any_plus_a.rs:4:53
+ --&gt; g1_any_plus_a.rs:4:53
   |
 4 | fn main(){ let s = String::from(&quot;x&quot;); let _ = erase(&amp;s); }
   |                -                              ------^^-  - `s` dropped here while still borrowed
@@ -427,6 +453,13 @@
     <p>把變數標注成 <code>&amp;&#39;static</code> 不會讓被借的資料活久一點。
     標注只是<span class="key">提出要求</span>,borrow checker 會回頭去查供給端能不能滿足;
     滿足不了就在供給端報錯。</p>
+  </section>
+
+  <section>
+    <h2>曾經有第五種來源:<code>static mut</code></h2>
+    <p>在 <code>unsafe</code> block 裡對 <code>static mut X</code> 取 <code>&amp;mut X</code>,
+    以前可以拿到 <code>&amp;&#39;static mut T</code>。edition 2024 起這是 hard error —— 因為沒有任何機制
+    阻止你同時拿到第二個獨佔借用。細節與遷移路線見 <span data-jump="e2024">Edition 2024</span>。</p>
   </section>
 
   <section>
@@ -550,7 +583,7 @@
 }</pre>
     <p class="dim">取消註解那行 <code>thread::spawn</code>,得到:</p>
     <pre class="diag">error[E0373]: closure may outlive the current function, but it borrows `data`, which is owned by the current function
- --&gt; fails/f2_spawn.rs:4:24
+ --&gt; f2_spawn.rs:4:24
   |
 4 |     std::thread::spawn(|| println!(&quot;{:?}&quot;, &amp;data));
   |                        ^^                   ---- `data` is borrowed here
@@ -558,7 +591,7 @@
   |                        may outlive borrowed value `data`
   |
 note: function requires argument type to outlive `&#x27;static`
- --&gt; fails/f2_spawn.rs:4:5
+ --&gt; f2_spawn.rs:4:5
   |
 4 |     std::thread::spawn(|| println!(&quot;{:?}&quot;, &amp;data));
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -597,10 +630,10 @@ help: to force the closure to take ownership of `data` (and any other referenced
       <tr><td><code>Arc&lt;dyn Fn()&gt;</code></td><td><code>Arc&lt;dyn Fn() + &#39;static&gt;</code></td></tr>
     </table></div>
     <pre class="diag">error: lifetime may not live long enough
- --&gt; fails/f3_box_dyn.rs:4:47
+ --&gt; f3_box_dyn.rs:4:47
   |
 4 | fn wrap&lt;&#x27;a&gt;(x: &amp;&#x27;a i32) -&gt; Owner { Owner { v: Box::new(x) } }
-  |         -- lifetime `&#x27;a` defined here         ^^^^^^^^^^^ cast requires that `&#x27;a` must outlive `&#x27;static`</pre>
+  |         -- lifetime `&#x27;a` defined here         ^^^^^^^^^^^ coercion requires that `&#x27;a` must outlive `&#x27;static`</pre>
     <p>修法是顯式放寬:<code>Box&lt;dyn Error + &#39;a&gt;</code>。這就是為什麼很多 library 的 error type 定義裡會看到
     那個看起來多餘的 <code>+ &#39;a</code>。</p>
   </section>
@@ -609,20 +642,20 @@ help: to force the closure to take ownership of `data` (and any other referenced
     <h2>陷阱 2:編譯器的建議有時候是錯的</h2>
     <p><code>Box&lt;dyn Any&gt;</code> 借了東西,rustc 會建議加 <code>+ &#39;a</code>:</p>
     <pre class="diag">error: lifetime may not live long enough
- --&gt; fails/f5_any.rs:3:44
+ --&gt; f5_any.rs:3:44
   |
 3 | fn erase&lt;&#x27;a&gt;(x: &amp;&#x27;a str) -&gt; Box&lt;dyn Any&gt; { Box::new(x) }
-  |          -- lifetime `&#x27;a` defined here     ^^^^^^^^^^^ cast requires that `&#x27;a` must outlive `&#x27;static`
+  |          -- lifetime `&#x27;a` defined here     ^^^^^^^^^^^ coercion requires that `&#x27;a` must outlive `&#x27;static`
   |
 help: to declare that the trait object captures data from argument `x`, you can add an explicit `&#x27;a` lifetime bound
   |
 3 | fn erase&lt;&#x27;a&gt;(x: &amp;&#x27;a str) -&gt; Box&lt;dyn Any + &#x27;a&gt; { Box::new(x) }
   |                                         ++++
 
-error: aborting due to previous error</pre>
+error: aborting due to 1 previous error</pre>
     <p>照做之後,錯誤搬家但沒消失:</p>
     <pre class="diag">error[E0597]: `s` does not live long enough
- --&gt; fails/g1_any_plus_a.rs:4:53
+ --&gt; g1_any_plus_a.rs:4:53
   |
 4 | fn main(){ let s = String::from(&quot;x&quot;); let _ = erase(&amp;s); }
   |                -                              ------^^-  - `s` dropped here while still borrowed
@@ -827,6 +860,195 @@ D leak        = 8 workers @ 0.0.0.0:9000</pre>
   </section>
 </div>
 
+<!-- ================= Edition 2024 ================= -->
+<div class="tab" id="tab-e2024">
+  <h1>Edition 2024 對 &#39;static 的影響</h1>
+
+  <section>
+    <h2>直覺一句話</h2>
+    <p>Edition 不改 borrow checker 的語義,但它可以改<span class="key">預設值</span>。
+    2024 改了兩個預設值,兩個都直接影響「什麼型別滿足 <code>T: &#39;static</code>」的判定結果。</p>
+    <div class="callout good">
+      好消息先講:本手冊前面六段程式碼從 edition 2021 換到 2024,<span class="key">一個字都不用改</span>,
+      全部原樣通過。核心規則沒有變動,變的是下面兩個角落。
+    </div>
+  </section>
+
+  <h2>變更 1 — <code>impl Trait</code> 的 lifetime 捕獲規則</h2>
+
+  <section>
+    <h3>規則差異</h3>
+    <div class="tbl-scroll"><table>
+      <tr><th></th><th>edition 2021</th><th>edition 2024</th></tr>
+      <tr><td>RPIT 捕獲哪些 lifetime</td>
+          <td>只捕獲<span class="key">出現在回傳型別 bound 裡</span>的</td>
+          <td>捕獲<span class="key">所有 in-scope 的</span> lifetime 參數</td></tr>
+      <tr><td>預設偏向</td><td>捕獲太少 → 想借卻借不到</td><td>捕獲太多 → 不想借卻被綁住</td></tr>
+      <tr><td>怎麼手動控制</td><td>加 <code>+ &#39;a</code> 或 <code>Captures</code> trick</td><td>寫 <code>use&lt;...&gt;</code> 精確捕獲</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h3>對 <code>&#39;static</code> 的具體後果</h3>
+    <pre><span class="k">fn</span> takes_static&lt;T: <span class="lt">&#x27;static</span>&gt;(_t: T) {}
+
+<span class="c">// 回傳型別一個字都沒提到 &#x27;a</span>
+<span class="k">fn</span> make&lt;<span class="lt">&#x27;a</span>&gt;(_x: &amp;<span class="lt">&#x27;a</span> <span class="t">str</span>) -&gt; <span class="k">impl</span> Fn() -&gt; <span class="t">i32</span> { || <span class="n">42</span> }
+
+<span class="k">fn</span> probe&lt;<span class="lt">&#x27;a</span>&gt;(x: &amp;<span class="lt">&#x27;a</span> <span class="t">str</span>) {
+    <span class="k">let</span> c = make(x);
+    takes_static(c);   <span class="c">// edition 2021:通過 / edition 2024:E0521</span>
+}
+
+<span class="k">fn</span> main() { <span class="k">let</span> s = <span class="t">String</span>::from(<span class="s">&quot;s&quot;</span>); probe(&amp;s); }</pre>
+    <p><code>make</code> 的回傳型別 <code>impl Fn() -&gt; i32</code> 一個字都沒提到 <code>&#39;a</code>。
+    2021 據此判定回傳值不含 <code>&#39;a</code> → 滿足 <code>T: &#39;static</code>。
+    2024 改成無條件捕獲 <code>&#39;a</code> → 不再滿足:</p>
+    <pre class="diag">error[E0521]: borrowed data escapes outside of function
+ --&gt; e1_rpit.rs:8:5
+  |
+6 | fn probe&lt;&#x27;a&gt;(x: &amp;&#x27;a str) {
+  |          --  - `x` is a reference that is only valid in the function body
+  |          |
+  |          lifetime `&#x27;a` defined here
+7 |     let c = make(x);
+8 |     takes_static(c);   // edition 2021:通過 / edition 2024:E0521
+  |     ^^^^^^^^^^^^^^^
+  |     |
+  |     `x` escapes the function body here
+  |     argument requires that `&#x27;a` must outlive `&#x27;static`
+
+error: aborting due to 1 previous error</pre>
+    <div class="callout bad">
+      這是升 edition 時最容易中的一槍,而且錯誤訊息指向<span class="key">呼叫端</span>,
+      真正的原因在<span class="key">定義端</span>的回傳型別。看到 <code>impl Trait</code> + <code>must outlive &#39;static</code>
+      就往函式定義去找。
+    </div>
+  </section>
+
+  <section>
+    <h3>修法:<code>use&lt;&gt;</code> 精確捕獲</h3>
+    <pre><span class="k">fn</span> takes_static&lt;T: <span class="lt">&#x27;static</span>&gt;(_t: T) {}
+
+<span class="c">// use&lt;&gt; = 精確捕獲,明確宣告「一個 lifetime 都不捕獲」</span>
+<span class="k">fn</span> make&lt;<span class="lt">&#x27;a</span>&gt;(_x: &amp;<span class="lt">&#x27;a</span> <span class="t">str</span>) -&gt; <span class="k">impl</span> Fn() -&gt; <span class="t">i32</span> + <span class="k">use</span>&lt;&gt; { || <span class="n">42</span> }
+
+<span class="c">// 需要捕獲時就寫進去:use&lt;&#x27;a&gt;</span>
+<span class="k">fn</span> borrow&lt;<span class="lt">&#x27;a</span>&gt;(v: &amp;<span class="lt">&#x27;a</span> [<span class="t">String</span>]) -&gt; <span class="k">impl</span> Iterator&lt;Item = &amp;<span class="lt">&#x27;a</span> <span class="t">str</span>&gt; + <span class="k">use</span>&lt;<span class="lt">&#x27;a</span>&gt; {
+    v.iter().map(|s| s.as_str())
+}
+
+<span class="k">fn</span> main() {
+    <span class="k">let</span> s = <span class="t">String</span>::from(<span class="s">&quot;s&quot;</span>);
+    probe(&amp;s);
+    <span class="k">let</span> v = vec![<span class="t">String</span>::from(<span class="s">&quot;a&quot;</span>), <span class="t">String</span>::from(<span class="s">&quot;b&quot;</span>)];
+    println!(<span class="s">&quot;{}&quot;</span>, borrow(&amp;v).count());
+}
+
+<span class="k">fn</span> probe&lt;<span class="lt">&#x27;a</span>&gt;(x: &amp;<span class="lt">&#x27;a</span> <span class="t">str</span>) {
+    takes_static(make(x));   <span class="c">// 兩個 edition 都通過</span>
+}</pre>
+    <ul>
+      <li><code>use&lt;&gt;</code> — 空捕獲清單,明確宣告「這個回傳值不借任何東西」。<code>T: &#39;static</code> 恢復成立。</li>
+      <li><code>use&lt;&#39;a&gt;</code> — 只捕獲 <code>&#39;a</code>。需要借東西時寫這個,語意比 2021 的 <code>+ &#39;a</code> 精確。</li>
+      <li>兩個 edition 都接受 <code>use&lt;&gt;</code>,所以它可以在升 edition <span class="key">之前</span>先加上去,把改動拆成兩步。</li>
+    </ul>
+    <div class="callout">
+      <span class="key">對 library 作者:</span><code>use&lt;&gt;</code> 是寫進 API 的<b>承諾</b>。
+      加上去等於對外保證回傳值不含借用,之後想反悔就是 breaking change。
+      2024 的預設(全捕獲)是保守的那一側,這個方向選得對 —— 放寬是 minor,收緊是 major。
+    </div>
+  </section>
+
+  <h2>變更 2 — <code>static mut</code> 的 reference 變成 hard error</h2>
+
+  <section>
+    <h3>為什麼跟 <code>&#39;static</code> 有關</h3>
+    <p><code>static mut</code> 曾經是唯一能寫出 <code>&amp;&#39;static mut T</code> 的<span class="key">語法捷徑</span>
+    (在 <code>unsafe</code> block 裡)。它在 <span data-jump="src">&#39;static 的來源</span> 那張圖上本來該有一格。
+    2024 起這條路封了。</p>
+    <pre><span class="k">static</span> <span class="k">mut</span> COUNTER: <span class="t">i32</span> = <span class="n">0</span>;
+
+<span class="k">fn</span> main() {
+    <span class="k">unsafe</span> {
+        <span class="k">let</span> r: &amp;<span class="lt">&#x27;static</span> <span class="k">mut</span> <span class="t">i32</span> = &amp;<span class="k">mut</span> COUNTER;  <span class="c">// 2021:warning / 2024:hard error</span>
+        *r += <span class="n">1</span>;
+        println!(<span class="s">&quot;{r}&quot;</span>);
+    }
+}</pre>
+    <pre class="diag">error: creating a mutable reference to mutable static
+ --&gt; e3_staticmut.rs:5:35
+  |
+5 |         let r: &amp;&#x27;static mut i32 = &amp;mut COUNTER;  // 2021:warning / 2024:hard error
+  |                                   ^^^^^^^^^^^^ mutable reference to mutable static
+  |
+  = note: for more information, see &lt;https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html&gt;
+  = note: mutable references to mutable statics are dangerous; it&#x27;s undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+  = note: `#[deny(static_mut_refs)]` (part of `#[deny(rust_2024_compatibility)]`) on by default
+help: use `&amp;raw mut` instead to create a raw pointer
+  |
+5 |         let r: &amp;&#x27;static mut i32 = &amp;raw mut COUNTER;  // 2021:warning / 2024:hard error</pre>
+    <p>2021 下這是 <code>static_mut_refs</code> warning,2024 下是 <code>deny</code>。
+    理由在錯誤訊息裡寫得很清楚:<code>&amp;mut</code> 是<span class="key">獨佔</span>借用,
+    而 <code>static mut</code> 沒有任何機制阻止你在同一時間再拿一個 —— 拿到就是 aliasing UB,
+    <code>unsafe</code> block 並不會幫你檢查。</p>
+  </section>
+
+  <section>
+    <h3>兩條遷移路線</h3>
+    <pre><span class="k">use</span> std::sync::atomic::{AtomicI32, Ordering};
+
+<span class="k">static</span> COUNTER: AtomicI32 = AtomicI32::new(<span class="n">0</span>);   <span class="c">// 首選:根本不用 static mut</span>
+<span class="k">static</span> <span class="k">mut</span> LEGACY: <span class="t">i32</span> = <span class="n">0</span>;
+
+<span class="k">fn</span> main() {
+    COUNTER.fetch_add(<span class="n">1</span>, Ordering::Relaxed);
+    println!(<span class="s">&quot;{}&quot;</span>, COUNTER.load(Ordering::Relaxed));
+
+    <span class="c">// 機械式遷移路線:&amp;raw mut 產生裸指標,不產生 reference</span>
+    <span class="k">unsafe</span> {
+        <span class="k">let</span> p: *<span class="k">mut</span> <span class="t">i32</span> = &amp;raw <span class="k">mut</span> LEGACY;
+        *p += <span class="n">1</span>;
+        println!(<span class="s">&quot;{}&quot;</span>, *p);
+    }
+}</pre>
+    <div class="tbl-scroll"><table>
+      <tr><th>路線</th><th>做法</th><th>什麼時候選</th></tr>
+      <tr><td>正解</td><td>換成 <code>AtomicI32</code> / <code>Mutex&lt;T&gt;</code> / <code>OnceLock&lt;T&gt;</code> 放在普通 <code>static</code></td>
+          <td>幾乎永遠。這些型別有 interior mutability,不需要 <code>static mut</code>,而且 safe</td></tr>
+      <tr><td>機械式</td><td><code>&amp;raw mut X</code> 取得裸指標(編譯器建議的那個)</td>
+          <td>FFI、或大量舊碼要先編過再重構。<span class="key">責任沒有消失</span>,只是從編譯器移到你身上</td></tr>
+    </table></div>
+    <div class="callout">
+      <code>&amp;raw mut</code> 和 <code>&amp;mut</code> 的差別:前者產生 <code>*mut T</code>,不建立 reference,
+      因此不觸發 aliasing 規則。這是 <code>addr_of_mut!</code> 巨集的語法版。
+    </div>
+  </section>
+
+  <section>
+    <h2>升 edition 時的檢查清單</h2>
+    <ul>
+      <li>grep 所有回傳 <code>impl Trait</code> 而參數帶 lifetime 的函式 —— 這些是 RPIT 捕獲改變的候選點。</li>
+      <li>grep <code>static mut</code>。</li>
+      <li>先在 2021 下開 <code>#![warn(rust_2024_compatibility)]</code> 跑一次,把兩類問題都撈出來,再切 edition。</li>
+      <li><code>cargo fix --edition</code> 會自動加 <code>use&lt;...&gt;</code>,但它加的是<span class="key">保守版</span>(照 2021 的捕獲集合)。
+          public API 值得手動看一遍決定要不要更緊。</li>
+    </ul>
+    <p class="dim">edition 2024 還有其他改動(tail expression 與 <code>if let</code> 的 temporary scope、
+    <code>gen</code> 保留字、unsafe attributes 等)。上面兩項是我在這份手冊涵蓋範圍內實測到會改變
+    <code>T: &#39;static</code> 判定結果的;其他的我沒有在這裡驗證,細節請看官方 edition guide。</p>
+  </section>
+
+  <section>
+    <h2>Follow-up</h2>
+    <ul>
+      <li>2021 的 <code>Captures&lt;&#39;a&gt;</code> trick 為什麼需要存在?想清楚之後,<code>use&lt;&gt;</code> 的設計動機就很明顯。</li>
+      <li>RPITIT(trait 裡的 <code>-&gt; impl Trait</code>)的捕獲規則跟自由函式不同 —— 它一直都是全捕獲。為什麼 trait 那邊不需要這次 edition 變更?</li>
+      <li>如果你的 async runtime 對外暴露 <code>fn spawn(...) -&gt; impl Future</code> 這種簽章,<code>use&lt;&gt;</code> 的選擇會直接決定呼叫端能不能滿足 <code>&#39;static</code>。這是 API 表面的一部分,不是實作細節。</li>
+    </ul>
+  </section>
+</div>
+
 <!-- ================= 延伸 ================= -->
 <div class="tab" id="tab-ext">
   <h1>延伸 / C++ 對照</h1>
@@ -875,15 +1097,21 @@ D leak        = 8 workers @ 0.0.0.0:9000</pre>
   </section>
 
   <section>
-    <h2>驗證紀錄</h2>
+    <h2>驗證紀錄(v2)</h2>
     <ul>
-      <li>所有 Rust 程式碼:rustc 1.75.0 (edition 2021) 實際編譯 + 執行。</li>
-      <li>所有標示「會 fail」的行:逐一取消註解編譯,確認錯誤碼 —— E0521 / E0597 / E0373 / E0277。</li>
+      <li>所有 Rust 程式碼:<span class="key">rustc 1.91.1 / edition 2024</span> 實際編譯 + 執行,零 warning。</li>
+      <li>所有標示「會 fail」的行:逐一取消註解編譯,確認錯誤碼 —— E0521 / E0597 / E0373 / E0277 / E0716。</li>
+      <li>Edition 差異(RPIT 捕獲、<code>static mut</code>):同一份原始檔在 <code>--edition 2021</code> 與
+          <code>--edition 2024</code> 各編一次對照,結果如文中所述。</li>
+      <li>嵌入 HTML 後把 <code>&lt;pre&gt;</code> 內容抽回、還原跳脫字元、與原始檔逐位元組比對,再重編一次。</li>
+      <li>Stepper 以 jsdom 走完每一步,把 render 出來的字串抓出來編譯 —— verdict 標籤上的結果都是真跑出來的。</li>
       <li><code>tokio::spawn</code>、<code>spawn_local</code> 簽章:docs.rs。</li>
       <li><code>std::thread::scope</code> 進入 1.63:Rust 官方 release blog(2022-08-11)。</li>
       <li>Default trait object lifetime 規則:Rust RFC 0599。</li>
       <li><code>T: &#39;a</code> 的定義與 <code>Vec&lt;&amp;&#39;a ()&gt;: &#39;static</code> 反例:The Rust Reference, trait-bounds。</li>
       <li>Arc 的 atomic ordering 細節:<span style="color:var(--red)">未驗證</span>,文中已標示。</li>
+      <li>edition 2024 的其他變更(temporary scope、<code>gen</code>、unsafe attributes):
+          <span style="color:var(--red)">未在此驗證</span>,文中已標示。</li>
     </ul>
   </section>
 </div>

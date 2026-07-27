@@ -5,7 +5,7 @@
 
 ## 卡1【Notes】bounded_channel 的三課(g#1 首跑)
 
-<!-- ID: -->
+<!-- ID: 3043f0f3-b4a3-40c0-8f4c-53146d348707 -->
 
 **錯什麼**:oracle 4 紅同根——`recv` 裡兩個 `sender_cnt==0 → return None` early return,蓋過「佇列還有貨」;最後一個 sender 掉了、buffer 有貨,recv 回 None 丟資料。合約(drain 完才 None)在骨架註解+clarify 答覆講過**兩次**仍掉。
 
@@ -18,7 +18,7 @@
 
 ## 卡2【Notes】沒 join 的斷言不是斷言(g#1 空測試)
 
-<!-- ID: -->
+<!-- ID: 84bc0aec-8219-44d6-a56c-cc7aa8acd9a0 -->
 
 **錯什麼**:`boundary_test` spawn 後 handle 直接丟。assert 活在孤兒執行緒:panic 被 harness 吞、test fn 秒退、process 結束時孤兒被殺——**它 10/10 綠是因為它什麼都沒驗**。更狠:它想驗的場景(sender 卡滿→receiver drop→Err)在當時的 code 是真死鎖,被沒 join 完美遮住。
 
@@ -26,7 +26,7 @@
 
 ## 卡3【Notes】驗牌經濟學:lazy validation(f#1 far-jump 鬼資料)
 
-<!-- ID: -->
+<!-- ID: 5850800d-17f5-432e-8d91-26efb5d16d97 -->
 
 **錯什麼**:大跳窗(未來 ts 前進多格)後,查被跳過的 window 回了 `Some`——slot 裡躺著同餘舊 epoch 的資料(6%2 == 2%2 撞 slot 0,鬼=epoch 2 的 sum)。同餘鬼資料家族第 3 現身。
 
@@ -38,7 +38,7 @@
 
 ## 卡4【Notes】漏讀家族三案與警報器
 
-<!-- ID: -->
+<!-- ID: 062b23dd-6ef6-4a0a-a63e-2a70c4308697 -->
 
 同一族三案,死法都是「需求在紙上,code 裡沒有」:
 
@@ -50,7 +50,7 @@
 
 ## 卡5【Memory/口述】Trade-off 收尾三拍公式(7/26 定版)
 
-<!-- ID: -->
+<!-- ID: 8e28b04a-9607-4ffc-8d37-57894e8dbb20 -->
 
 40 分鐘那格站起來,30–45 秒,三拍:
 
@@ -62,7 +62,7 @@
 
 ## 卡6【Notes】head/tail 座標系:list 家族 vs ring 家族
 
-<!-- ID: -->
+<!-- ID: f91823f9-0582-476e-bb7a-899efcbb7b9b -->
 
 **現象**:spsc 空白 #3 整檔把 head/tail 對調(head=寫游標)——內部自洽所以零 bug,但這是「交換位子」干擾第 5 現身。
 

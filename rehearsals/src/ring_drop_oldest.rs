@@ -39,6 +39,9 @@ impl SensorRing {
     // ex.
     //  3 is the tail, cap is 4
     //  wrap(3 + 4) = wrap(7) = return 7 - 4 = 3
+    //  cap: 4
+    //  idx: self.head + 1 = 3 + 1 = 4
+    //  4 - 4 = 0
     fn wrap(&self, idx: usize) -> usize {
         if idx >= self.cap { idx - self.cap } else { idx }
     }

@@ -35,7 +35,7 @@
 | **7/25 六(上午 PT+剪髮;15:30 咖啡廳;晚在家出聲場——**v9.2 實況版**)** | **早上口袋件(候診/等位,手機,零壓力,做多少算多少)**:Heptabase 新六卡複讀(7/25 凌晨上板「Rust Low Level Notes」)+ PROMPTS_EN 卡題幹預讀(GitHub)+ ds_sync §8 先答再翻(claude.ai 鏡像,**手機瀏覽器開、不是 app**;讀不到 → 咖啡廳筆電補)→ **咖啡廳 15:30–19:00(打字+安靜件)**:**TCP 骨架讀+默寫**(10m 暖手,`rehearsals/examples/tcp_skeleton_std.rs`:讀一遍→白紙默 std 六行→對答案;d#1 前置)→ **aggregator 填綠**(45m,`drills/src/ds/telemetry_aggregator.rs`——**f 覆蓋帳最後一格關帳**;必含「未來 ts 清 window」case)→ **endian_pack drill**(40m,`drills/src/io/endian_pack.rs`;c#2 前鎖手感)→ **五卡完整流程用寫的**(卡1–4、6,各 ~10m:英文寫五問×2答案×2後果+30 秒定界,寫完開 clarify-answers 記漏類;+ **漏問模式表** 10m → `scratch/clarify_miss_pattern.md`,7/27 掃描+7/28 早上讀)→ **wheel 修綠**(30m,`scratch/timer_queue2.rs` 照檔頭批改,`rustc --emit=metadata` 驗)→ 晚餐+回家 → **在家 20:00–00:30(出聲場)**:**卡#5 口述設計版**(40m:sensor bridge threads/tasks+協定+五問,JD 複核 #4,**首做**)→ 🔴**e2#2**(45+20;三目標:clarify 英文出聲 ≥3 問|boundary 段跑滿〔e2#1 兩洞恰在沒跑到的角落〕|trade-off 招牌句;⚠ 參數名 `generation` 非 `gen`)→ 🔴**d#1 tokio_frame_server**(45+20,只跑一遍;d 題型首寫)→ **口述錄音 ~55m**(ordering / Waker 鏈 / 選型 + executor×reactor + 五 server p99.9 + unsafe impl 三段式 + litmus + signal_pipeline 扇入 + **Q1 why 層 30 秒英文複測**〔unconditional vs conditional claim,先講再對〕;30 秒光譜已 7/25 凌晨錄畢 ✓)→ 收帳 commit。**00:30 熄燈/07:30 起(v9.3:晨間動線彩排,詳 7/26)**。閥門:咖啡廳擠 → 先砍 wheel;晚場崩 → 口述縮 30m → 卡#5 縮 20m;**e2#2/d#1 不動** | 口袋 ~50m + 咖啡廳 ~3h + 晚 ~3.5h |
 | **7/26 日(在家,彩排移白天;v9.3 晨間動線彩排 #1「寫」)** | **07:30 起 → 08:00 暖手:spsc 空白 #3**(20m 含 smoke,首編 ≤2 錯;自日中移入,暖手兼結帳)→ **08:45–09:30 🔴c#2 計時**(45m 釘上場時刻 + review 20m;c#1 7/23 → 間隔 3 天 ✓)→ 🔴**g#1 bounded_channel**(45+20,**取代 b#2**——Sender/Receiver 雙端+Clone 計數+Drop 協定+`SendError(T)` 是 bounded_queue drill 沒有的層;send/recv block+notify 順帶複驗 b 的 condvar/lost-wakeup 肌肉)→ 🔴**a#2**(45+20,自 7/25 移入,驗收斂)→ **d-std**(45m,寫或口述視狀態;動筆前 TCP 骨架重默 5m)→ recognition **e/f/h**(45m;g 免——剛全場)+ Q7 timer 口述 → **e 快寫 30m**(非計時,`rehearsals/src/event_registry.rs`:HashMap+`Box<dyn FnMut>`+retain_mut+After 寫到綠+自寫 smoke——**type erasure 新洞靶場**)→ 經驗故事 3 條(40m)→ 英文句庫唸出聲(30m)→ 讀自己的 challenge code(30m,縮)→ **00:00 熄燈/07:30 起**。閥門:累了砍序 = 讀 code → a#2(a 已 a#1+修洞兩驗) | ~7.3h |
 | **7/27 一(請假,整天在家;v9.3 晨間動線彩排 #2「說」)** | 〔**⚠ 日程已被 v9.5 取代,見「進度校正 2026-07-27」節;本欄僅晨間動線時刻+taper 鐵規仍有效**〕**07:30 起 → 08:00 骨架默寫抽查 15m**(原 taper ② 釘進晨間格,白紙:spsc use 塊+impl、pool 兩條件、framer 簽名、**TCP accept-loop 六行、length-prefix 解析 3 行(checked_add→get→from_be_bytes+try_into)、token pack/unpack(mask 足 32 bit)**;骨架默寫 = 鐵規豁免項)→ **08:45 口述模擬一題 15m**(PROMPTS_EN 冷讀,挑 7/26 掃出的 ⚠ 題:30 秒英文定界 → 解法 arc → trade-off 收尾;**不計時寫題、不開 oracle——同時刻練「開口」不練「開 oracle」**)→ 之後 **Taper 升級版:全線回憶掃描**(7/22 定:時間多 → 從「空」升級,但鐵規不變:**不碰新題、不開 oracle、不計時跑題、不寫新 code**〔骨架默寫除外〕;卡住 → 記下、翻答案讀懂就走,**不深挖**)。①**九題型掃描** a/b/c/d/e2/f/g/h(每題 12–15m:讀 PROMPTS_EN 題幹 → **全程英文出聲**:30 秒定界 → 解法 arc+選型 → trade-off 收尾 ≥2 沒選解法+Big-O → 對分:`rehearsals/recognition-scripts-en.md`(**先講才准開**,口述版 sol_*)+ sol_*/漏洞卡 → 記 ✓/⚠/✗;請假在家 → 全程出聲為主,「在公司筆寫兩句」fallback 作廢)③**Heptabase 漏洞卡全翻**(每張 1 分鐘:當時錯什麼、修了什麼)④原 taper 收尾:背時間預算(0-3/3-5/5-10/10-35/35-40/40-45)+ 五 pillar + 開場三句 + 檢查 CoderPad/Meet/耳機/水。**產出:「認題→開場」檢查表(題型\|定界句\|選型\|trade-off 兩句\|我的傷疤),7/28 早上暖手就讀它**。⚠/✗ 超過 3 題不是加班訊號,是「靠已會的 80% 打」的提醒;**請假多出的時間預設 = 休息與睡眠存款,不是加練——taper 總量 ~3.5h 不變**。**23:00 熄燈不動** | ~3.5h |
-| **7/28 二** | 7:30 起床 → 8:00 暖手(小 drill 10m + pillar-5 清單 + 時間預算)→ **8:45–9:30 TPS** | — |
+| **7/28 二** | 〔7/27 晚改版〕**8:00 起床 → 晨讀本 `scratch/recall_checklist.md` 45 分鐘動線**(§0 分鐘表:默寫暖手 12m → 九題+金句出聲 10m → 鐵律 3m → 裝備)→ **8:45–9:30 TPS**。7:45 起床才解鎖加碼默寫區 | — |
 
 彩排間隔(同題 ≥3 天,近了是背答案):a 7/19→7/26|b 7/20 一遍+補課完結(b#2 砍,condvar 肌肉由 g#1 側驗)|e2 7/21→7/25|c 7/23→7/26|d 7/25 一遍|g 7/26 首跑。
 SPSC 空白 20 分鐘一次編過 ×3:**7/19 / 7/22 / 7/26**。
@@ -198,6 +198,24 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 6. **漏洞卡全翻 + 漏問模式表合併 20m** → **認題檢查表 15m**(`scratch/recall_checklist.md`,7/28 早上暖手就讀它)
 7. **日讀:`html_p/rust-static-lifetime.html`**(~20m,7/27 凌晨新入庫的 'static/lifetime 深讀——user 點名排入;taper 合法閱讀件)
 8. 總量 ~3.5–4h(選配 d-std 才到 4h+);**23:00 熄燈不動**;taper 鐵規不變(不寫新題/不開 oracle/不計時跑題)
+
+## 進度校正(2026-07-27 晚,taper 收帳 + 情報 #4)
+
+**實況**:晨間動線 #2 沒跑(14:35 開工);taper 核心全數完成,部分改形:
+
+- **骨架默寫抽查 ✓**(1✓/5⚠/1✗:✗=length-prefix `usize::from_be_bytes` 真洞〔正解=u32 解再 `as`,wire 型別決定陣列長〕;Sender Drop `==1` 方向默反一次〔==1 的人要關燈〕;⚠ 餘為 compile 級——全數當場修對,批改在 `scratch/recall_20260727.rs` 檔頭)
+- **h 口述模擬 ⚠**(heap/Big-O/升級路全對;掉兩句招牌:drift-free reschedule + wait_timeout re-checked predicate → 晨讀本複誦)
+- **三舊解 dry-run ✓**(a#1 wrap+滿載傷疤路|d#1 idle_timeout×半 frame——磨出「idle 答 peer 活沒活、frame-age 答 frame 拖多久,不同問題不同 timer」|g#1 recv drain——「醒來後佇列自己就是答案」)
+- **卡#5 口述 ✓ 第五滑結案**(漏 2:容量立式〔登記傷疤第 2 類再現〕+ conflation 沒上桌;皇冠句=push 側在 IRQ context → wait-free 是正確性需求不是效能選擇)|**executor #5 ✓ 結案**(spawn-per-poll 冗餘無害 vs 存最新 waker,30 秒定版入 taper notes;lockfree 快考記憶體帳全清)
+- 九題快掃 / static-lifetime 日讀 / 漏洞卡 app 翻 → 砍或改形:**全數蒸餾進晨讀本 `scratch/recall_checklist.md`**(§0 8:00 分鐘級動線|§1-2 默寫暖手+對答案|§2.5 String/&str/HashMap 教學|§3 九題速查+情報加權|§4 金句|§8 漏洞卡全集 wrong→right 含 code|§9 低機率認題卡)——**7/28 早唯一讀物**,user 另丟 chat 做 HTML stepper
+- 加碼概念課(user 追問觸發):ordering 四層鏈(clone=Relaxed 所有權論證 → drop=Release 遺言 → 為何不全 AcqRel=拆帳 → winner fence(Acquire)=drop 是最大且不拿鎖的讀取)+「mutex 洗白 Relaxed」條件句分析 + CLOCK/second-chance
+- hepta 六卡上板 ✓ ID 回記|**7/28 改 8:00 起床**(45 分動線見晨讀本 §0;7:45 起才解鎖加碼默寫區)|23:00 熄燈
+
+## 內線情報 #4(2026-07-27 17:30 coffee chat,software head 本人)
+
+1. **Role 實況**:近期主力=支援工廠測試程式+平台(出貨壓力),之後「回歸 SW」——時間表列 deep-dive 追問點。user 聽完**更想去**(run-sheet 實況欄有帳)。
+2. **考題訊號 ①「很多 test 要決定執行順序」= toposort/依賴排程**——「graph 砍」舊裁決失效(當時 doc 零訊號,現在本人親口)。**當晚 40m 快寫補洞**(CoderPad 實機):Kahn 兩表一佇列、幽靈依賴 skip(user dry-run 自抓)、validity checker「**斷言合約不斷言實例**」(先驗長度再驗每條邊),3 案全綠;追問三層備妥(環內容=沿 stuck dep 走到撞鬼|同波歸零=可平行一批→接 thread pool|增量重跑=正向鄰接 BFS)。唯一新洞:iter 借用鏈(`&&str` 押表)+ String/&str 轉換生疏 → 晨讀本 §2.5 教學節。
+3. **考題訊號 ②「給一個 DS 改 multi-thread/concurrency-safe/lock-free」= 升級階梯主場**——當晚口述靶場二發:LRU(**get 會寫** → RwLock 陷阱 → shard 整台=近似 LRU / CLOCK 一 bit 把 get 變回 read)vs config registry(真 read → RwLock 正解 → 讀壓再升=snapshot publication/rcu_snapshot,stale-but-consistent 要先問)。判準句:**看 read path 動不動結構,不看讀寫比。**
 
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
