@@ -217,6 +217,28 @@ v8.1 規則 5 的操作版:動手到哪開到哪,這張表就是「當天該開�
 2. **考題訊號 ①「很多 test 要決定執行順序」= toposort/依賴排程**——「graph 砍」舊裁決失效(當時 doc 零訊號,現在本人親口)。**當晚 40m 快寫補洞**(CoderPad 實機):Kahn 兩表一佇列、幽靈依賴 skip(user dry-run 自抓)、validity checker「**斷言合約不斷言實例**」(先驗長度再驗每條邊),3 案全綠;追問三層備妥(環內容=沿 stuck dep 走到撞鬼|同波歸零=可平行一批→接 thread pool|增量重跑=正向鄰接 BFS)。唯一新洞:iter 借用鏈(`&&str` 押表)+ String/&str 轉換生疏 → 晨讀本 §2.5 教學節。
 3. **考題訊號 ②「給一個 DS 改 multi-thread/concurrency-safe/lock-free」= 升級階梯主場**——當晚口述靶場二發:LRU(**get 會寫** → RwLock 陷阱 → shard 整台=近似 LRU / CLOCK 一 bit 把 get 變回 read)vs config registry(真 read → RwLock 正解 → 讀壓再升=snapshot publication/rcu_snapshot,stale-but-consistent 要先問)。判準句:**看 read path 動不動結構,不看讀寫比。**
 
+## 考後實錄 #1(2026-07-28 TPS 本尊,當天口述回憶)
+
+**形式**:45m 英文、CoderPad、不可用 AI、只能與面試官對談。**考法 = 一大堆 spec + `todo!()` 函式骨架 + 題目敘述,指定要用哪些 todo 函式** ——與本 repo drills 格式同構(練習媒介押中);「丟英文 description 要認真讀」(情報 #2-2)獲本尊證實,且閱讀量比預期大——**文本分析本身是考點**。
+
+**題目**:DMA 訊號處理。接收 DMA request(一個 request 含多個 blocks),有 **0–5 台 DMA engine** 可處理 blocks;本體 = 寫 event loop 派工。**雙狀態機**:request 側(哪些 blocks 完成/剩多少)+ engine 側(忙/閒、正在跑哪個 block),engine 完成要**輪詢**——同時追兩邊 state 並設計兩介面怎麼交互,是題目的真difficulty(「不像一般 leetcode,要分析文本+雙狀態」)。模組對映:fd_registry(engine slot 表)× thread_pool 派工迴圈(佇列→空閒 worker)× aggregator(per-request 完成計數)× event_loop 輪詢——**練過的四塊的合體,但以組合題形式出現**。
+
+**實績**:只完成第一題;code + 想法說服考官(narrate-while-coding 有效,情報 #2-4 的押注兌現)。clarify/spec 對讀吃掉大量時間(此題型下屬**必要成本**,非流程洞)。**寫完即壓線 45m——boundary test / dry-run 零時間**:題目複雜度把整個時段填滿(規模明顯大於情報 #2-3 的「a/b/c/e2 量級」預期);此情境下 boundary 缺席是**題目尺寸問題,不是 pillar-5 流程洞**——10 場彩排練出的 dry-run 肌肉這場沒得展示,narrate 中帶出的不變量講解是唯一替代載體(有做到,考官被說服)。
+
+**暴露的洞**(餵下一輪):①英文對談雙向 repair——自己的構句對方有時聽不懂需重講;對方的話有時要請 repeat(處方:rephrase 句庫 + f#1 驗證過的「複誦式確認」升為預設動作)②長 spec 快速定位「哪些 todo 是骨幹、哪些是配菜」的閱讀策略沒有練過——本輪練習全是「短題幹+自己設計」,沒有「長 spec+指定介面」形態。
+
+**debrief 補記(同日)**:
+- **todo API 面**:等待各種 event 的阻塞原語(等 DMA request 到達 / engine 完成通知)|`send_dma_engine`(派 block 給 engine)|`get_dma_engine_done() -> Option<engine_id>`(輪詢哪台完成)|`notify_dma_request_complete`(回報 request 完成)。**要寫的主體 = `run_dma_loop`(名字類似)** ——標準 reactor 形狀:wait_event → drain(新 request 拆 blocks 入 waiting_block_queue / engine 完成回收)→ 派工到 engine 滿或佇列空 → per-request 計數歸零則 notify。
+- **本人設計**:request 進來逐 block 入 `waiting_block_queue`;完成判定 = 該 request 剩餘 block 數歸零 + 佇列/engine 回到全閒。per-request countdown 是正確不變量(多 request in-flight 下仍成立);「全閒」是 global quiescence 的輔助檢查。
+- Q2 題面**沒看到**(未翻頁即壓線)。考官反應段:考後疲勞記不得——正常,不追。
+- **主管關情報(coffee chat 時問到的)**:主管面**其實是 culture fit talk**,不是技術 deep-dive → 準備降級:經驗故事 3 條 + why-Etched + WLB 問答即可,情報 #2-5(履歷/WLB/最難問題)口徑吻合。
+
+**Post-TPS 排程草案(2026-07-28 定,等結果期間)**:
+1. **今天**:休息 + debrief 補細節 + 收帳 commit。鐵律已雙 ✓(考場本身 code+英文)。
+2. **等消息期(預估 3–7 天)低量維持**:(a)**主管面準備 = culture fit 級**(debrief 補記證實非技術 deep-dive):經驗故事 3 條(一直滑帳的那格,一場 40m 做完)+ why-Etched + WLB 問答,run-sheet 情報 #1/#4 現成——仍是第一優先但總量 ~1.5h 就夠;(b)英文 repair 句庫 + 複誦式確認(今天洞①);(c)每 2 天一次 20m 暖手默寫防手感涼(spsc/pool/TCP 任一)。
+3. **若下一輪仍是 coding**(overflow 池規則早有預告「四題的家在 7/29 後的 coding rounds」):加練「**長 spec + todo! 骨架**」模擬 1–2 場(雙狀態機 event loop 題,DMA 調度變體)+ 情報 #4 兩訊號(toposort/DS 改併發)保溫。
+4. **下一輪時間**:若可自選,通知後抓 **5–7 天**(至少含一個週末做 2–3 場針對練習);不拖超過兩週。8 月找 HR 主線不變。
+
 ## 內線情報 #2(2026-07-20,Etched 在職網友;#1 = 7/19 deep-dive 情報,已入 7/25)
 
 對口是 firmware 面試官 → 網友(firmware 入職)判斷**考題同款**。五條增量,前四條全是「既有裁決的確認」:
