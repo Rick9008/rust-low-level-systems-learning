@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2 稿件唸稿頁 — deep dive 三專案 × culture fit 題庫(雙語)</title>
+<style>
+:root{
+  --bg0:#282828; --bg0dim:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg0:#d4be98; --fg1:#ddc7a1;
+  --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665; --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; background:var(--bg0dim); color:var(--fg0);
+  font-family:'JetBrains Mono','Fira Code',ui-monospace,Consolas,monospace;
+  font-size:15px; line-height:1.65;
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+}
+.wrap{max-width:1020px; margin:0 auto; padding:0 16px 80px;}
+header.top{padding:26px 0 10px;}
+header.top h1{font-size:20px; margin:0 0 4px; color:var(--yellow);}
+header.top .sub{color:var(--grey2); font-size:13px;}
+.tabbar{
+  position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:6px;
+  background:var(--bg0dim); padding:10px 0 8px; border-bottom:1px solid var(--bg3); margin-bottom:20px;
+}
+.tabbtn{
+  font:inherit; cursor:pointer; border:1px solid var(--bg3); background:var(--bg1); color:var(--grey2);
+  padding:7px 12px; border-radius:8px; font-size:13px; transition:.12s;
+}
+.tabbtn:hover{border-color:var(--bg4); color:var(--fg0);}
+.tabbtn:focus-visible{outline:2px solid var(--yellow); outline-offset:2px;}
+.tabbtn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.panel{display:none;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.panel.active{animation:none;}}
+h2{font-size:17px; color:var(--aqua); border-left:3px solid var(--aqua); padding-left:10px; margin:30px 0 12px;}
+h3{font-size:15px; color:var(--orange); margin:22px 0 8px;}
+p{margin:10px 0;}
+code{background:var(--bg1); padding:1px 5px; border-radius:4px; font-size:.92em; color:var(--fg1);}
+ul{margin:8px 0; padding-left:22px;} li{margin:6px 0;}
+ol{margin:8px 0; padding-left:24px;} ol li{margin:6px 0;}
+.anchor{
+  background:linear-gradient(135deg,var(--bg2),var(--bg1)); border:1px solid var(--yellow);
+  border-radius:12px; padding:18px 20px; margin:18px 0;
+}
+.anchor .big{font-size:16px; color:var(--yellow); font-weight:700;}
+.anchor .small{color:var(--grey2); font-size:13px; margin-top:6px;}
+.card{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px; margin:14px 0;}
+.card.warn{border-color:var(--red);}
+.card.good{border-color:var(--green);}
+.card.info{border-color:var(--blue);}
+.card h4{margin:0 0 8px; font-size:14px; color:var(--fg1);}
+table.mini{border-collapse:collapse; width:100%; margin:12px 0; font-size:13px;}
+table.mini th,table.mini td{border:1px solid var(--bg3); padding:7px 9px; text-align:left; vertical-align:top;}
+table.mini th{background:var(--bg2); color:var(--fg1);}
+.note{color:var(--grey2); font-size:12.5px;}
+.say{
+  border-left:3px solid var(--yellow); background:var(--bg1); border-radius:0 10px 10px 0;
+  padding:10px 14px; margin:10px 0;
+}
+.say .en{color:var(--fg0);}
+.say .en b{color:var(--yellow);}
+.say .zh{color:var(--grey2); font-size:12.5px; margin-top:4px;}
+.say.key{border-left-color:var(--green); background:var(--bg2);}
+.say.key .en b{color:var(--green);}
+.qa{border:1px solid var(--bg3); border-radius:10px; margin:12px 0; overflow:hidden;}
+.qa .qhead{background:var(--bg2); padding:8px 14px; color:var(--fg1); font-size:14px;}
+.qa .qhead .star{color:var(--yellow); font-weight:700;}
+.qa .qbody{padding:4px 14px 12px;}
+.todo{border-left:3px solid var(--red); background:var(--bg1); padding:8px 12px; margin:8px 0; font-size:13px; border-radius:0 8px 8px 0;}
+.todo b{color:var(--red);}
+.hl-red{color:var(--red);} .hl-grn{color:var(--green);} .hl-yel{color:var(--yellow);} .hl-org{color:var(--orange);}
+footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; color:var(--grey2); font-size:12.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>R2 稿件唸稿頁 — deep dive × culture fit</h1>
+  <div class="sub">8/12 technical deep dive 主戰 + 每場開頭自介/行為題/debrief 15m ｜ 2026-07-29 起草;canonical = docs/interviews/*.md,稿子大改後重發本頁</div>
+</header>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tabbtn active" data-t="t0">0. 用法 + 確認清單</button>
+  <button class="tabbtn" data-t="t1">1. Deep dive 三專案</button>
+  <button class="tabbtn" data-t="t2">2. Culture fit 題庫</button>
+</nav>
+
+<!-- ═══ TAB 0 ═══ -->
+<section class="panel active" id="t0">
+
+<div class="anchor">
+  <div class="big">練法:白天寫稿(bullet 骨架,每題 5–8 句)→ 晚上出聲唸 → Claude 模擬追問。不背逐字稿——背骨架 + 關鍵句。</div>
+  <div class="small">黃色底線句 = 一般稿句;綠色 = 關鍵句,要能逐字講出來。中文行只是對照,唸的時候全英文。</div>
+</div>
+
+<h2>唸稿排程(README 晚間欄)</h2>
+<table class="mini">
+  <tr><th>晚</th><th>內容</th></tr>
+  <tr><td>7/29(今晚)</td><td>起草完成(本頁)+ 通讀一遍,把 ⚠ 確認項的答案補上</td></tr>
+  <tr><td>7/30</td><td>culture fit:自介 60–90s + why-Etched,出聲各 3 遍</td></tr>
+  <tr><td>7/31</td><td>deep dive 口述 #1:專案二(logging daemon)——Etched 命中率最高,先練它</td></tr>
+  <tr><td>8/1</td><td>culture fit 唸 #1 + Claude 模擬追問</td></tr>
+  <tr><td>8/2</td><td>deep dive 口述 #2:專案一(Active-Active HA)</td></tr>
+  <tr><td>8/7</td><td>deep dive 口述 #3:專案三(Rust/Tokio)</td></tr>
+  <tr><td>8/8 / 8/9</td><td>culture fit 全串 / deep dive 全串(15m/專案)</td></tr>
+</table>
+
+<h2>⚠ 唸稿前要你確認的五件事(帶著洞上場 = 被追問時現場掰)</h2>
+<ol>
+  <li><b>PostgreSQL 版本</b>:當時是幾?&lt;16 → 「雙向邏輯複製當時不可用」一句結案;≥16 → 重量壓在「無自動衝突解決、衝突會讓複製停住」。</li>
+  <li><b>「客戶端自運轉、不能人工介入」</b>的前提是否精確?有遠端維運管道就改措辭。</li>
+  <li><b>「6+ 個月零不一致」的觀測手段</b>是什麼(對帳 job?告警?日誌比對?)——誠實句已備好,把實際手段填進去。</li>
+  <li><b>CPU-spin 的 read loop 是誰寫的</b>?自己的 code → 可兼任 failure 故事;只是追查者 → 只放 debugging 故事。</li>
+  <li><b>logging daemon 慢 sink 策略</b>實際是什麼(block/drop/buffer)?有沒有吞吐數字?</li>
+</ol>
+
+<h2>面試官必問五題(每個專案講完自檢一輪)</h2>
+<ul>
+  <li>Why X over Y?(每個選型都要有一個被否決的對手)</li>
+  <li>What breaks at 10× scale?</li>
+  <li>What was YOUR contribution vs the team's?</li>
+  <li>Hardest bug — walk me through the debugging.</li>
+  <li>What would you change if you rebuilt it?</li>
+</ul>
+
+</section>
+
+<!-- ═══ TAB 1 Deep dive ═══ -->
+<section class="panel" id="t1">
+
+<p>開場順序建議 <b>二 → 一 → 三</b>:logging daemon 就是一條 telemetry pipeline(多 producer → event loop → 多 sink),對 Etched 的軸命中率最高。Holdwin 簡報的交易對照句全部拿掉。每專案結構 = 7 段模板:elevator → 問題與限制 → 設計 → trade-off ≥2 → 數字 → 最難的 bug → 如果重來。</p>
+
+<h2>專案二(先講):system-logging daemon(Modern C++ / Asio)</h2>
+
+<h3>90 秒 elevator</h3>
+<div class="say"><div class="en">"I built the system-logging daemon for the mail platform: every service on the box sends diagnostics to it; an <b>Asio event loop</b> receives, parses, routes and filters; a <b>multi-backend logging library</b> fans out to file, remote and system sinks. Standardizing the format cut roughly <b>30% of duplicated logging code</b>."</div><div class="zh">全平台服務把診斷送進來;Asio event loop 收/解析/路由/過濾;多後端 library 扇出到檔案/遠端/系統;統一格式砍掉約 30% 重複碼。</div></div>
+<div class="say key"><div class="en">"It's a <b>telemetry pipeline: many producers, one collector, multiple sinks</b> — the same shape as an event-loop-over-hardware-signals problem, just with logs instead of interrupts."</div><div class="zh">Etched 定位句:它就是 telemetry pipeline——跟「event loop 蓋在硬體訊號上」同形,只是把中斷換成日誌。</div></div>
+
+<h3>Trade-off(≥2)</h3>
+<ul>
+  <li>統一 library vs 各服務自由:代價 = 遷移工 + 一個共同依賴;沒走的路 = 放任,代價是跨服務查問題要先學每一種格式。</li>
+  <li>慢 sink:block vs drop vs buffer(⚠ 確認項 5,填實際選擇與理由)。</li>
+  <li>單 event loop vs thread-per-source:connection 數與 CPU 的帳。</li>
+</ul>
+
+<h3>兩個 war story(strace/perf 紀律——Etched 加分區)</h3>
+<div class="card">
+  <h4>① FD exhaustion・全服務中斷・10 分鐘內復原</h4>
+  <p>現象:程序活著但所有連線失敗。</p>
+  <div class="say key"><div class="en">"<b>First split 'the program is wrong' from 'a resource is exhausted'</b> — the two paths need completely different evidence."</div><div class="zh">先分「程式錯了」還是「資源用完了」——兩條路要看的證據完全不同。</div></div>
+  <p>→ 部署後負載尖峰疊 DDoS,file descriptor 耗盡。追問備案:止血與根因並行;rollback 前先保留現場。</p>
+</div>
+<div class="card">
+  <h4>② CPU 空轉・追到確切的 syscall</h4>
+  <p><code>perf</code> 熱點在 <code>read</code> → <code>strace</code> 看到同一個 fd 反覆回傳 0 → read loop 沒把 0-byte 當 EOF。</p>
+  <div class="say key"><div class="en">"<b>A 0-byte read is EOF, not 'no data this time'. Loop exit conditions have to match the syscall contract.</b>"</div><div class="zh">0-byte return 是 EOF,不是「這次沒資料」。迴圈終止條件永遠對照 syscall 契約。</div></div>
+</div>
+
+<h3>如果重來</h3>
+<p>(挑一個)end-to-end structured backpressure(per-source 計帳——跟 telemetry 題同構)/ 評估 completion-model IO(io_uring),並講清楚為什麼當時 readiness 就夠。</p>
+
+<h2>專案一:Two-node Active-Active HA(Go + Rust)</h2>
+
+<h3>90 秒 elevator</h3>
+<div class="say"><div class="en">"I built the <b>application-state replication layer</b> for a two-node Active-Active mail-security platform — the layer that keeps <b>human approval decisions</b> consistent across two nodes when the network can drop, stall, or duplicate messages. The platform already replicated <i>data</i> three ways; <b>nobody replicated what the application had decided</b>. In production 6+ months, zero reported inconsistency, survived one real failover."</div><div class="zh">兩節點 Active-Active 的「應用層決策」同步層;平台原有三條資料同步管道,沒有一條同步「做過什麼決定」;上線 6+ 個月、活過一次真實 failover。</div></div>
+
+<h3>限制(這幾條決定所有設計)</h3>
+<ul>
+  <li>只有兩個節點(產品形態)· 部署在客戶端,故障要自動收斂(⚠ 確認項 2)· 網路會斷/慢/重複 · 沒有可信全域時鐘 · 任一節點掛掉服務不能停。</li>
+</ul>
+
+<h3>為什麼現成方案都不行(必被問)</h3>
+<div class="say key"><div class="en">"<b>Replication is a transport-layer concern; conflict resolution is a policy-layer concern.</b> Off-the-shelf tools move the data, but they can't decide which write should win."</div><div class="zh">複製是運輸層,衝突解決是策略層——現成工具搬得動資料,決定不了誰該贏。</div></div>
+<ul>
+  <li>PG replication:streaming = 單寫者,拿不到 AA;雙向邏輯複製要 PG16 <code>origin=none</code>(⚠ 確認項 1);決定性:<b>無自動衝突解決,衝突讓複製停下來等人</b>。</li>
+  <li>Raft/Paxos:n=2 → quorum 2 → 任一節點掛掉全組停寫,<b>可用性比單機還差</b>;n=3 不允許。→ 換問題:both sides write, replay-safe, converge afterwards。</li>
+</ul>
+
+<h3>兩個核心機制(關鍵句都要逐字)</h3>
+<div class="say key"><div class="en">"<b>The check and the write have to be one atomic operation</b> — otherwise two concurrent retries both see 'not processed' and double-execute. Idempotency that isn't atomic only <b>looks</b> like idempotency."</div><div class="zh">冪等:查與寫必須同一個原子操作,否則兩個併發 retry 會雙做——不原子的冪等只是看起來冪等。</div></div>
+<div class="say key"><div class="en">"<b>An approval that already sent the mail beats a later reject — you can't recall a sent email by overwriting a row. The invariant lives in the real world, not in the database. Irreversible actions win.</b>"</div><div class="zh">split-brain:已寄出的核准贏過較晚的退回——不變量在現實世界,不在資料庫。不可逆的贏。</div></div>
+
+<h3>演進 + 數字 + 如果重來</h3>
+<ul>
+  <li>v1 NFS 共享(鎖不可靠 + SPOF)→ v2 指令佇列(consumer 重啟 = 遺失視窗)→ v3 派送前本地備份、對端確認才清除。"Each version was forced by a concrete failure, not by a whiteboard."</li>
+  <li>數字:2 nodes · 6+ months · 1 real failover · v3 代價 = 每操作多一次本地寫。</li>
+  <li>如果重來:witness/fencing token 破對稱;<b>day-one reconciliation job</b>。誠實句:<span class="hl-grn">"Strictly speaking, what I can guarantee is that no inconsistency was ever reported or caught by our checks; proactive reconciliation is the first thing I'd invest in if I rebuilt it."</span>(⚠ 確認項 3)</li>
+</ul>
+<p class="note">預期追問:Redis 是不是單點(誠實講 persistence + AOF fsync 視窗)| PEL/XAUTOCLAIM 卡單 | message-ID 表回收(時間窗 &gt; 最大重試視窗)| 兩邊都不可逆?→ 設計上不允許同時發生;否則退回 fencing——誠實說是設計邊界。</p>
+
+<h2>專案三:Content-inspection microservices(Rust / Tokio / gRPC)</h2>
+<div class="say"><div class="en">"I develop and operate <b>production Rust microservices</b> doing real-time email content inspection — regex, IP filtering, PII detection, exact-word matching — with <b>Tokio running matchers concurrently, ~3,500 messages/second on one 8-core node</b>. I also introduced Rust into the team's stack."</div><div class="zh">即時內容檢測微服務,Tokio 併行 matcher,單台 8 核 ~3,500 msg/s;把 Rust 帶進團隊。</div></div>
+<ul>
+  <li>隔壁團隊三個 merged MR:thread-per-request → Tokio async(<b>~300× max connections</b>)+ Rayon 平行掃描(<b>12.5× QPS</b>,perf + load bench 驗證)+ macro trait 介面;成為 go-to Rust reviewer。</li>
+</ul>
+<div class="say key"><div class="en">"<b>Two runtimes for two kinds of work: Tokio owns the waiting, Rayon owns the number-crunching</b> — mix them in one pool and you starve your IO."</div><div class="zh">兩個 runtime 管兩種工:Tokio 管等待、Rayon 管算力——混在同一個池裡就是餓死你的 IO。</div></div>
+<div class="todo"><b>⚠ 待補</b>:最難的 bug(async 化最痛的一課?)+ 如果重來的一個具體決定。</div>
+
+<p class="note">口袋:kv-storage-rs — "A Redis-command-compatible in-memory KV engine in Rust — 60 commands, TTL, RDB snapshots, nanosecond-level benchmarks." 被問 side project 再展開。</p>
+
+</section>
+
+<!-- ═══ TAB 2 Culture fit ═══ -->
+<section class="panel" id="t2">
+
+<p>onsite 沒有獨立 culture fit 場——這些稿的用途:<b>每場開頭 60–90 秒自介</b> + 散在各場的行為題 + <b>最後 15 分鐘 recruiter debrief</b>(反問三條在這裡用)。★ = 必寫稿,已全數起草;其餘 bullet 骨架。</p>
+
+<div class="qa"><div class="qhead"><span class="star">★ 1</span> Tell me about yourself(60–90s)</div><div class="qbody">
+  <ul>
+    <li>Systems / infrastructure engineer at Synology's mail platform since 2023 — Rust, Go, modern C++ on Linux.</li>
+    <li>三件日常:two-node Active-Active HA layer(分區下的衝突解決)· C++ telemetry/logging daemon(Asio event loop)· Rust microservices on Tokio(~3,500 msg/s)。</li>
+    <li>Outside work: build systems from scratch to understand them — a Redis-compatible KV engine, an async-runtime deep-dive.</li>
+  </ul>
+  <div class="say key"><div class="en">"<b>My job, in one sentence: keep systems predictable when the network is unreliable, the load spikes, and a node dies.</b>"</div><div class="zh">一句人設:網路不可靠、流量爆量、節點掛掉的時候,讓系統行為仍然可預期。</div></div>
+  <div class="say"><div class="en">收尾鉤:"That's why a company doing hardware-software co-design is exactly where I want to be — <b>the interesting failures live at that boundary</b>."</div><div class="zh">收在 why-Etched:有趣的故障都住在軟硬體交界。</div></div>
+</div></div>
+
+<div class="qa"><div class="qhead"><span class="star">★ 2</span> Why Etched? Why leave?(不講負面)</div><div class="qbody">
+  <ul>
+    <li><b>Toward, not away</b>:現職學到很多,但軟體只能貼到 kernel 為止。</li>
+    <li>"Etched is making the kind of bet where <b>systems software decides whether the silicon actually delivers</b> — schedulers, event loops, telemetry, the runtime between the model and the chip. That layer is what I already do every day; I want the other side of the API to be real hardware."</li>
+    <li>證據句:daily work = event loops、backpressure、binary protocols、latency budgets — "the vocabulary transfers one-to-one."</li>
+  </ul>
+  <div class="say key"><div class="en">"<b>I'm not leaving something broken — I'm running toward the layer I've been trying to get closer to for years.</b>"</div><div class="zh">不是逃離什麼壞掉的東西,是跑向多年來一直想貼近的那一層。</div></div>
+</div></div>
+
+<div class="qa"><div class="qhead"><span class="star">★ 3</span> Work-life balance(陷阱題:兩個極端都扣分)</div><div class="qbody">
+  <ul>
+    <li>誠實:"I have my own rhythm — I protect sleep, because tired engineers write outages."</li>
+    <li>證據(這個月就是實例):"This past month I ran a full-time job plus a structured interview-prep schedule every night — sustainable because of <b>scheduling and a hard sleep red-line, not willpower</b>."</li>
+    <li>邊界:"Sprints are fine when they matter — as long as they're sprints, not the steady state."</li>
+  </ul>
+  <div class="say key"><div class="en">"<b>I manage energy like I manage capacity in a system: leave headroom, or the tail latency gets you.</b>"</div><div class="zh">管理精力像管理系統容量:留餘裕,不然尾延遲遲早找上你。</div></div>
+</div></div>
+
+<div class="qa"><div class="qhead"><span class="star">★ 6</span> Conflict / disagreement(SAR)</div><div class="qbody">
+  <ul>
+    <li><b>S</b>:split-brain 衝突解法,團隊(含我)最初傾向 Last-Write-Wins with timestamps。</li>
+    <li><b>A</b>:I pushed back <b>with a concrete failure scenario, not an opinion</b> — a partition where node A approves and the mail is actually sent, node B later rejects:"you cannot recall a sent email by overwriting a row." 加上兩節點沒有可信時鐘。</li>
+    <li><b>R</b>:改成從操作語意推規則(irreversible actions win);上線 6+ 個月零不一致。</li>
+  </ul>
+  <div class="say key"><div class="en">"<b>We didn't converge because someone argued better — we converged because a failure scenario made the answer obvious.</b> That's how I like to disagree: bring the counterexample, not the volume."</div><div class="zh">不是誰口才好誰贏,是失敗場景讓答案自明——帶反例來吵架,不是帶音量。</div></div>
+  <div class="todo"><b>⚠ 確認</b>:當時實際的討論對象與場景,講之前把人物補真。</div>
+</div></div>
+
+<div class="qa"><div class="qhead"><span class="star">★ 7</span> Failure(具體損失 + 機制性改變)</div><div class="qbody">
+  <ul>
+    <li>預設 = v2 遺失視窗:"I shipped a dispatch design where an operation could be <b>silently lost</b> if the queue was drained or the consumer restarted before the peer persisted it. That's data loss in a mail-security product — the worst kind of quiet failure."(⚠ 確認:當時怎麼發現的)</li>
+    <li>機制性改變 ×2:design fix — <b>never discard a message before the peer confirms durability</b>(backup-before-dispatch);process fix — "design reviews now start from crash points: for every hand-off we ask <b>'what if the process dies right here?'</b>"</li>
+  </ul>
+  <div class="say key"><div class="en">"<b>The lesson wasn't 'be more careful' — it was 'make the failure impossible by construction'.</b>"</div><div class="zh">學到的不是「要更小心」,是「用結構讓這種失敗不可能發生」。</div></div>
+  <p class="note">備案 B(若 CPU-spin 是自己的 code):0-byte EOF 洞 + 「迴圈終止條件對照 syscall 契約」的 checklist 改變。</p>
+</div></div>
+
+<h3>其餘 bullet 骨架(4/5/8/9/10)</h3>
+<ul>
+  <li><b>4 · Timezones</b>:主動給方案——Taipei morning = US West afternoon → fixed overlap window;其餘 async 文件溝通。"Async-first forces better design docs."</li>
+  <li><b>5 · Startup vs process</b>:用實例——衝突規則沒有現成答案,自己定義/驗證/扛結果:"that's startup-shaped work inside a bigger company. I liked that part best."</li>
+  <li><b>8 · Proudest</b>:專案一 90 秒版 + 一句加值:"proud not of the final design, but that <b>each version was forced by a real failure</b>."</li>
+  <li><b>9 · Ambiguity</b>:R1 現成——"in round 1 I'd never touched DMA dispatch; I clarified the domain from zero and the interviewer called out the clarify as a strength. <b>Ambiguity is a questioning problem, not a knowledge problem.</b>"</li>
+  <li><b>10 · Learn fast</b>:mmBERT + 自建 ONNX/llama.cpp inference server(97% precision / 99% recall in production);或兩週從讀者變隔壁團隊 go-to Rust reviewer。</li>
+</ul>
+
+<h3>反問三條(debrief 15m;挑 2–3 問)</h3>
+<ul>
+  <li>Team:"What's the boundary of the Taiwan team today — who owns the spec, who sets priority, and where's the interface with HQ?"</li>
+  <li>技術:"Where does software hurt the most right now — the runtime, the driver layer, or tooling?"</li>
+  <li>成長:"Six months in, what does 'this hire worked out great' look like for this seat?"</li>
+</ul>
+
+</section>
+
+<footer class="foot">
+  <p>canonical 檔案:<code>docs/interviews/deep-dive-projects.md</code> · <code>docs/interviews/culture-fit-script.md</code>(稿子在 md 改,大改後重發本頁)。素材源:履歷 + Holdwin 簡報(交易對照句已拿掉)。追問模擬:晚上出聲場丟給 Claude 當面試官。</p>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var bar=document.getElementById('tabbar');
+  bar.addEventListener('click',function(e){
+    var b=e.target.closest('.tabbtn'); if(!b)return;
+    var t=b.getAttribute('data-t');
+    var btns=bar.querySelectorAll('.tabbtn');
+    for(var i=0;i<btns.length;i++){btns[i].classList.toggle('active',btns[i]===b);}
+    var panels=document.querySelectorAll('.panel');
+    for(var j=0;j<panels.length;j++){panels[j].classList.toggle('active',panels[j].id===t);}
+    window.scrollTo({top:0});
+  });
+})();
+</script>
+</body>
+</html>

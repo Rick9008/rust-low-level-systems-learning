@@ -164,6 +164,13 @@ table.reqs tr.submitted td{color:var(--green);}
 .clarify-seed{border-left:3px solid var(--blue); background:var(--bg1); padding:8px 12px; margin:10px 0; font-size:13px; border-radius:0 8px 8px 0;}
 .clarify-seed .en{color:var(--fg1);}
 .clarify-seed .zh{color:var(--grey2); font-size:12px;}
+.simcard h4{font-size:13.5px; color:var(--orange); margin:14px 0 4px;}
+.mini-stage{background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:12px 14px; overflow-x:auto; margin:8px 0 2px;}
+.chip.ok{border-color:var(--green); color:var(--green);}
+.chip.bad{border-color:var(--red); color:var(--red);}
+.eng-slot.hung{border-color:var(--red);}
+.eng-slot.hung .job{color:var(--red);}
+.dot.brk.active{background:var(--red); border-color:var(--red); color:#fff;}
 
 /* ── 對白 ── */
 .dlg{background:var(--bg1); border:1px solid var(--bg3); border-radius:12px; padding:6px 16px 12px; margin:14px 0;}
@@ -388,6 +395,9 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
       <div class="fnode wk"><div class="t">worker 執行緒</div><div class="s">醒來 → drain → log(慢)</div></div>
     </div>
     <p><b>ISR 三禁</b>:不能配置記憶體、不能阻塞、不能做慢事。所以 push 端必須是 <code>try_push</code>(wait-free)——在中斷 context 裡,「等一下」不是效能問題,是正確性問題(這正是卡#5 的皇冠句)。這題就是 <code>signal_pipeline</code> 的 spec-heavy 版,7/31 白天先複讀那一頁 30 分鐘再上。</p>
+    <h4>互動 stepper:一次 burst 的一生(政策這裡示範 drop-newest+計數;上場用哪個由 clarify 決定)</h4>
+    <div class="mini-stage" id="sj-stage"></div>
+    <div class="stepctrl" id="sj-ctrl"></div>
     <div class="clarify-seed">
       <div class="en">"What should happen when the ring is full — drop the newest sample, the oldest, or just count the loss?"</div>
       <div class="zh">ring 滿了掉誰?掉新的、掉舊的、還是只記數?——overflow policy 是這題 spec 的天然洞,答案決定你的 push 端長相。</div>
@@ -413,6 +423,9 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
       <div class="fnode isr"><div class="t">core N-1 producer</div><div class="s">SPSC #N-1</div></div>
     </div>
     <p>硬約束一句話:<b>producer 永不阻塞</b>。題目給的是 <code>spsc_new</code>(每核一條)而不是一條 MPMC——「N × SPSC vs 1 × MPSC」本身就是招牌 trade-off:per-core SPSC 免掉跨核競爭、代價是 aggregator 要掃 N 條 + 空轉判斷;這正是 7/25 錄音講過的扇入(fan-in)故事,現在用寫的。</p>
+    <h4>互動 stepper:三核扇入與「先標睡意、再看最後一眼」</h4>
+    <div class="mini-stage" id="sk-stage"></div>
+    <div class="stepctrl" id="sk-ctrl"></div>
     <div class="clarify-seed">
       <div class="en">"When every queue is empty, should the aggregator spin, sleep, or park until someone unparks it? Who calls unpark?"</div>
       <div class="zh">全空時 aggregator 睡不睡?誰負責叫醒?——lost-wakeup 的老朋友,store→拿鎖→notify 的傷疤在這裡站崗。</div>
@@ -439,6 +452,9 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
     </div>
     <p><b>鐵律:descriptor → barrier → doorbell,順序不可換。</b>device 一看到 doorbell 就會去讀 descriptor;沒有 barrier,它可能讀到寫到一半的貨。這是 signal_pipeline「最後一眼」原則的硬體版——通知(按鈴)必須發生在資料(上架)之後,而且中間要一道對 device 也有效的牆。</p>
     <p>另一半的地形:submission ring 和 completion ring 的 <b>head/tail 所有權</b>(你推進哪一端、device 推進哪一端,滿/空怎麼判)+ <b>completion 可能亂序回來</b>——用 tag 路由回原 command,跟 sim i 的 owner 表同構。</p>
+    <h4>互動 stepper:上架 → 牆 → 按鈴(以及順序寫反會怎樣)</h4>
+    <div class="mini-stage" id="sl-stage"></div>
+    <div class="stepctrl" id="sl-ctrl"></div>
     <div class="clarify-seed">
       <div class="en">"Do completions come back in submission order, or can they be out of order? What exactly is in a completion entry — a tag, an index, or the whole descriptor?"</div>
       <div class="zh">completion 保序嗎?entry 裡帶什麼(tag / index / 整個 descriptor)?——決定你要不要一張 in-flight 表。</div>
@@ -456,6 +472,9 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   <div class="body">
     <p>場景不變(DMA dispatcher),多一個殘酷事實:<b>engine 會 hang,而且永遠不回報</b>。API 差異只有兩個——<code>now_ms()</code> 和 <code>wait_event_timeout(ms)</code> 取代 <code>wait_event()</code>。</p>
     <p>概念上這是<b>事件迴圈的第三種事件:時間</b>。前兩種(新請求、完成通知)是別人推給你的;超時是你自己排程的——每派一塊工就記一筆 deadline,醒來時除了收乾兩個事件源,還要掃「誰過期了」。這正是 h(timer_queue)那套肌肉:deadline 記帳、<code>wait_timeout</code> 醒來重查 predicate、drift-free 的差額怎麼算。</p>
+    <h4>互動 stepper:一台 engine hang 掉之後(deadline 表 + 殭屍遲到的防重)</h4>
+    <div class="mini-stage" id="sm-stage"></div>
+    <div class="stepctrl" id="sm-ctrl"></div>
     <div class="clarify-seed">
       <div class="en">"Is re-dispatching a block safe — is the operation idempotent? Could the 'hung' engine actually finish later, and what happens if both copies complete?"</div>
       <div class="zh">重派安全嗎(冪等)?被判死的 engine 事後又回報怎麼辦?——idempotency 決定你敢不敢 retry,雙重完成決定你的計數要不要防重。</div>
@@ -481,6 +500,9 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
       <div class="fnode hw"><div class="t">4 worker slots</div><div class="s">done → 解鎖下游</div></div>
     </div>
     <p>兩道閘串聯:<b>先過依賴(indegree 歸零才 runnable),再比優先權</b>。heap 的排序鍵用 <code>(priority, Reverse(seq))</code>——seq 破平手,同優先權維持 FIFO,不然測試會抓你順序不穩。Phase 1 的 <code>deps</code> 永遠是空的,但它印在 struct 上——<span class="hl-org">印在題面上的欄位就是 Phase 2 的預告</span>,clarify 時值得點名問一句。這題吃的是 7/27 coffee chat 後當晚快寫的 toposort 肌肉(Kahn 兩表一佇列)。</p>
+    <h4>互動 stepper:兩道閘串聯(依賴解鎖 → heap 排序 → seq 破平手)</h4>
+    <div class="mini-stage" id="sn-stage"></div>
+    <div class="stepctrl" id="sn-ctrl"></div>
     <div class="clarify-seed">
       <div class="en">"I notice deps is always empty for now — should I design so dependencies can be added later, or ignore the field entirely?"</div>
       <div class="zh">deps 現在恆空——要為之後鋪路還是完全忽略?(讓面試官知道你看到了伏筆)</div>
@@ -633,6 +655,50 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   <div class="why-line"><b>為什麼有效:</b>R1 的教訓——時間不夠時,主動把洞講出來比被抓到強;而且「我知道洞在哪」本身就是訊號(JD 原話:finding your own bug = stronger signal)。收尾三拍公式(7/26 定版):<b>價格 → 沒走的路 ≥2 條(用軸開頭)→ 有效範圍</b>。</div>
 </div>
 
+<h2>場景六:Phase 2 加需求的接法</h2>
+<p>R1 的節奏是「Phase 1 驗收後口頭加需求」。第一動作<b>不是寫 code</b>,是把新需求丟回「什麼不變/什麼變」的篩子——面試官驗收的是你改設計的過程,不是打字速度。(例子用 sim i 題本明列的 cancel 軸)</p>
+<div class="dlg">
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Nice. Now let's extend it: a request can be cancelled while it's in flight."</div>
+    <div class="zh">不錯。現在加需求:request 在飛行途中可以被取消。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>Let me check what that changes in my current design before I type.</b> What survives: the three tables and the loop shape. What changes: a request needs a cancelled flag, and dispatch must skip cancelled requests. One question first: the blocks already on engines — <b>can I abort them, or does hardware finish what it started?</b>"</div>
+    <div class="zh">動手前先過一遍「什麼不變/什麼變」。不變:三張表和迴圈形狀。變:request 要加 cancelled 旗標、派工要跳過已取消的單。先問一題:已經在 engine 上的塊——可以中止嗎,還是硬體開工就一定做完?</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"No abort. Hardware finishes what it started."</div>
+    <div class="zh">不能中止,硬體開工就做完。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"Then cancellation is <b>lazy</b>: stop dispatching new blocks, let in-flight blocks drain without counting them, and reclaim engines as they report. I'll add the flag and the two checks — about six lines."</div>
+    <div class="zh">那 cancel 就是惰性的:不再派新塊、在飛的塊讓它自然回來但不計數、engine 邊回報邊回收。加一個旗標、兩個檢查,大約六行。</div>
+  </div></div>
+  <div class="why-line"><b>為什麼有效:</b>「What survives / what changes」這對句把 Phase 2 變成增量設計題而不是重寫題;先問 abort 語意再動手,是因為<b>答案直接決定 cancel 的形狀</b>(能中止 = 主動收回;不能中止 = 惰性收尾)。這正是 sol_sim_i 檔頭 cancel trade-off 的口語版。</div>
+</div>
+
+<h2>六題 30 秒英文定界(遮住英文欄,自己先講,再對)</h2>
+<p>定界宣言 = 讀完 Phase 1 之後、clarify 之前的第一段話:用自己的話把「資源、事件、我的工作、完成條件、形狀」講回去。骨架:"<b>We have [resources]. [Events] arrive through [APIs]. My job is to [goal], and report when [invariant]. The shape is an event loop: wait, drain, dispatch, report. Before I code, I need to pin down [top clarify].</b>"</p>
+<div class="clarify-seed"><div class="en"><b>i · DMA dispatcher</b> — "We have six DMA engines; requests arrive carrying a run of consecutive blocks, and an engine takes one block at a time. My job is to keep the engines busy across multiple in-flight requests, and report each request when its own counter says all blocks are done. Shape: a reactor loop over three tables — free engines, owner routing, per-request progress."</div><div class="zh">六台 engine;request 帶連續塊、engine 一次一塊;多單同飛下把 engine 餵滿,per-request 計數歸零才回報。形狀 = 三張表上的 reactor 迴圈。</div></div>
+<div class="clarify-seed"><div class="en"><b>j · ISR pipeline</b> — "An ISR fires in interrupt context when the sensor FIFO crosses a watermark. Samples must reach a logging thread without ever stalling the interrupt path — so the ISR only try-pushes into an SPSC ring and rings a doorbell; the worker drains and does the slow logging. The clarify that shapes everything: the overflow policy."</div><div class="zh">ISR 在中斷 context 只做 try_push + 按鈴;慢事全在 worker。定生死的 clarify = overflow policy。</div></div>
+<div class="clarify-seed"><div class="en"><b>k · per-core fan-in</b> — "N cores each produce telemetry and must never block. One SPSC ring per core; a single aggregator drains them round-robin and parks when everything is empty. Clarify first: fairness across cores, and who calls unpark."</div><div class="zh">每核一條 SPSC、producer 永不阻塞;aggregator 輪詢 + 全空才 park。先問公平性與誰負責 unpark。</div></div>
+<div class="clarify-seed"><div class="en"><b>l · MMIO queue</b> — "I drive an accelerator through a submission ring and a completion ring. The iron rule: write the descriptor, barrier, then ring the doorbell — in that order, so the device never reads a half-written descriptor. Clarify first: are completions in order, and what exactly does a completion entry carry."</div><div class="zh">鐵律 = 上架 → 牆 → 按鈴。先問 completion 保不保序、entry 裡帶什麼。</div></div>
+<div class="clarify-seed"><div class="en"><b>m · watchdog</b> — "Same dispatcher, but engines can hang and never report. Time becomes the third event source: every dispatch records a deadline, the wait gets a timeout, and expiry means re-dispatch — but only if re-execution is safe. Clarify first: is the operation idempotent, and can a declared-dead engine still report later."</div><div class="zh">時間成為第三種事件:派工記 deadline、等待帶 timeout、過期重派。先問冪等與殭屍回報。</div></div>
+<div class="clarify-seed"><div class="en"><b>n · priority + DAG</b> — "Four worker slots; jobs carry a priority and, later, dependencies. Two gates in series: the dependency gate decides who is runnable, the priority heap decides who goes first — with a sequence number breaking ties FIFO. Clarify first: is preemption expected when a hot job arrives."</div><div class="zh">兩道閘:依賴閘決定 runnable、heap 決定先後、seq 破平手。先問要不要搶佔。</div></div>
+
+<h2>夜間唸稿菜單(對齊 README 逐日表的出聲場)</h2>
+<table class="mini">
+  <tr><th>晚</th><th>對白場景(挑一景唸 3 遍)</th><th>30 秒定界</th></tr>
+  <tr><td>7/30</td><td>場景一(開場定界 + 複誦)</td><td>i</td></tr>
+  <tr><td>7/31</td><td>場景二(inbound repair)</td><td>j(隔天上場)</td></tr>
+  <tr><td>8/1</td><td>場景三(outbound repair)</td><td>k(當天複盤)</td></tr>
+  <tr><td>8/2</td><td>場景四(narrate)</td><td>l(當天複盤)</td></tr>
+  <tr><td>8/3</td><td>場景五(時間不夠收尾)</td><td>—</td></tr>
+  <tr><td>8/4</td><td>場景六(Phase 2 接法)</td><td>m + n(sol 檔頭預讀日)</td></tr>
+  <tr><td>8/5(taper)</td><td>—</td><td>六題全輪一遍(原排)</td></tr>
+</table>
+<p class="note">deep dive / culture fit 的唸稿排程照 README 晚間欄(口述 #1–#3、全串);稿件本體在 <code>docs/interviews/deep-dive-projects.md</code> 與 <code>culture-fit-script.md</code>,鏡像頁見 index 的 R2 備戰區。</p>
+
 </section>
 
 <!-- ═══════════════ TAB 5 自測 ═══════════════ -->
@@ -767,6 +833,174 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   document.getElementById('prevBtn').addEventListener('click',function(){if(cur>0){cur--;render();}});
   document.getElementById('nextBtn').addEventListener('click',function(){if(cur<steps.length-1){cur++;render();}});
   render();
+
+  /* ── j–n 概念 stepper(共用迷你渲染器)── */
+  function T(cap,inner,wide){return '<div class="tbl"'+(wide?' style="min-width:100%"':'')+'><div class="cap">'+cap+'</div>'+inner+'</div>';}
+  function C(items){
+    if(!items.length) return '<div class="chips"><span class="chip ghost">(空)</span></div>';
+    var h='';
+    for(var i=0;i<items.length;i++){var it=items[i]; if(typeof it==='string') it=[it,''];
+      h+='<span class="chip '+it[1]+'">'+it[0]+'</span>';}
+    return '<div class="chips">'+h+'</div>';
+  }
+  function R(){return '<div class="trow">'+Array.prototype.slice.call(arguments).join('')+'</div>';}
+  function SL(arr){var h='';for(var i=0;i<arr.length;i++){var s=arr[i];
+    h+='<div class="eng-slot '+(s.c||'')+'"><div class="eid">'+s.i+'</div><div class="job">'+(s.j||'—')+'</div></div>';}
+    return '<div class="engrow">'+h+'</div>';}
+  function initMini(id,steps){
+    var stage=document.getElementById(id+'-stage'), ctrl=document.getElementById(id+'-ctrl');
+    if(!stage||!ctrl) return;
+    var cur=0;
+    var prev=document.createElement('button'); prev.type='button'; prev.textContent='◀ 上一步';
+    var next=document.createElement('button'); next.type='button'; next.textContent='下一步 ▶';
+    var dots=document.createElement('div'); dots.className='dots';
+    ctrl.appendChild(prev); ctrl.appendChild(next); ctrl.appendChild(dots);
+    var dotEls=[];
+    steps.forEach(function(s,i){
+      var d=document.createElement('button'); d.type='button';
+      d.className='dot'+(s.bad?' brk':'')+(s.mark?' mark':''); d.textContent=i;
+      d.addEventListener('click',function(){cur=i;draw();});
+      dots.appendChild(d); dotEls.push(d);
+    });
+    function draw(){
+      var s=steps[cur];
+      stage.innerHTML=s.v+'<div class="steplog">'
+        +(s.mark?'<div class="flag">★ 分水嶺</div>':'')
+        +(s.bad?'<div class="flag" style="color:var(--red)">✗ 反例</div>':'')
+        +'<div class="en">'+s.en+'</div><div class="zh">'+s.zh+'</div></div>';
+      dotEls.forEach(function(d,i){d.classList.toggle('active',i===cur);});
+    }
+    prev.addEventListener('click',function(){if(cur>0){cur--;draw();}});
+    next.addEventListener('click',function(){if(cur<steps.length-1){cur++;draw();}});
+    draw();
+  }
+
+  /* sim j:ISR → SPSC → worker */
+  var SJ=[
+   {v:R(T('SPSC RING(cap 4)',C([]))+T('WORKER',C([['😴 sleeping','']]))+T('DROPPED',C(['0']))),
+    en:"Idle. The worker sleeps; the ISR is armed; the ring is empty.",
+    zh:"待機。worker 睡著、ISR 待命、ring 空。"},
+   {v:R(T('SPSC RING(cap 4)',C([['S1','ok']]))+T('WORKER',C([['⏰ woken','ok']]))+T('DROPPED',C(['0']))),
+    en:"IRQ fires. The ISR does exactly three cheap things — read_fifo, try_push, wake_worker — and returns. Nanoseconds, no allocation, no waiting.",
+    zh:"⚡IRQ。ISR 只做三件便宜事:讀 FIFO、try_push、按門鈴,立刻返回。不配置、不等待。"},
+   {v:R(T('SPSC RING(cap 4)',C([]))+T('WORKER',C([['🔧 log(S1)…慢','']]))+T('DROPPED',C(['0']))),
+    en:"The worker wakes, pops S1 and starts the slow log() call. Blocking is legal here — this is thread context, not interrupt context.",
+    zh:"worker 醒來,取出 S1 開始慢速 log()。在執行緒 context 裡阻塞是合法的。"},
+   {v:R(T('SPSC RING(cap 4)',C([['S2',''],['S3',''],['S4',''],['S5','']]))+T('WORKER',C([['🔧 log(S1)…慢','']]))+T('DROPPED',C(['0']))),
+    en:"A burst lands while the worker is still logging. The ring absorbs it — that is exactly what the buffer is for.",
+    zh:"worker 還在 log 的時候一波 burst 進來。ring 吸收它——緩衝就是幹這個的。"},
+   {v:R(T('SPSC RING(cap 4)',C([['S2',''],['S3',''],['S4',''],['S5','']]))+T('WORKER',C([['🔧 log(S1)…慢','']]))+T('DROPPED',C([['1','bad']]))),
+    en:"One more IRQ and the ring is full: try_push fails, the policy runs (here: count and drop the newest), the ISR returns immediately. The ISR must NEVER wait for space.",
+    zh:"又一個 IRQ 但 ring 滿了:try_push 失敗 → 執行 overflow policy(此處示範:計數並丟最新),ISR 立刻返回。ISR 絕不等空位。",mark:true},
+   {v:R(T('SPSC RING(cap 4)',C([]))+T('WORKER',C([['📝 report: dropped=1','ok']]))+T('DROPPED',C([['1','bad']]))),
+    en:"The worker drains everything and reports the loss counter. Losing data silently is the bug; losing data with an audit trail is a policy.",
+    zh:"worker 抽乾全部並上報 dropped 計數。靜默掉資料是 bug;有帳的掉資料是 policy。"},
+   {v:R(T('SPSC RING(cap 4)',C([['S2',''],['S3',''],['S4',''],['S5','']]))+T('ISR',C([['⛔ 等空位中…','bad']]))+T('CPU',C([['中斷路徑卡死','bad']]))),
+    en:"Counterexample: make the ISR wait for space and you have parked the CPU's entire interrupt path on a log consumer. In interrupt context, waiting is a correctness bug, not a performance cost.",
+    zh:"反例:ISR 改成等空位 = 把整顆 CPU 的中斷路徑掛在一個 log 消費者身上。中斷 context 裡「等」是正確性 bug。",bad:true}
+  ];
+
+  /* sim k:三核扇入 */
+  var SK=[
+   {v:R(T('q0(core0)',C([]))+T('q1(core1)',C([]))+T('q2(core2)',C([]))+T('AGGREGATOR',C([['😴 parked','']]))),
+    en:"N cores, one SPSC ring each; the aggregator is parked. Producers never share a queue — that is the whole point.",
+    zh:"每核一條 SPSC,aggregator 停車睡著。producer 之間不共享佇列——這就是設計重點。"},
+   {v:R(T('q0(core0)',C([['R1','ok']]))+T('q1(core1)',C([]))+T('q2(core2)',C([]))+T('AGGREGATOR',C([['⏰ unparked','ok']]))),
+    en:"core0 pushes R1 into its own ring — wait-free, no contention — and calls unpark_aggregator.",
+    zh:"core0 把 R1 推進自己的 ring(wait-free、零競爭),然後叫醒 aggregator。"},
+   {v:R(T('q0(core0)',C([]))+T('q1(core1)',C([]))+T('q2(core2)',C([]))+T('AGGREGATOR',C([['✍ write_out(R1)','']]))),
+    en:"The aggregator drains q0 and does the slow write_out. Slow work lives on the consumer side only.",
+    zh:"aggregator 抽乾 q0、做慢速 write_out。慢事只住在消費端。"},
+   {v:R(T('q0(core0)',C([]))+T('q1(core1)',C([['R2','ok']]))+T('q2(core2)',C([['R3','ok']]))+T('AGGREGATOR',C([['✍ write_out(R1)','']]))),
+    en:"core1 and core2 produce at the same time — into different rings, so there is nothing to contend on. N×SPSC buys you this; the price comes next.",
+    zh:"core1、core2 同時生產——寫的是不同的 ring,無可競爭。N×SPSC 買到的就是這個;代價在下一步。"},
+   {v:R(T('q0(core0)',C([]))+T('q1(core1)',C([]))+T('q2(core2)',C([]))+T('AGGREGATOR',C([['🔁 掃 N 條(round-robin)','']]))),
+    en:"The price: the aggregator must SCAN all N rings, round-robin for fairness. One MPSC would centralize contention but make draining O(1) queues instead of O(N).",
+    zh:"代價:aggregator 要輪詢 N 條(round-robin 求公平)。換成一條 MPSC 是把競爭集中、換掃描變 O(1)——招牌 trade-off。"},
+   {v:R(T('q0',C([]))+T('q1',C([]))+T('q2',C([]))+T('AGGREGATOR',C([['🥱 標睡意 → 最後一眼 → park','ok']]))),
+    en:"All empty: mark sleepy first, take one LAST look at every ring, then park. The final re-check is what makes the sleep safe.",
+    zh:"全空:先標睡意、再對每條 ring 看最後一眼、才 park。最後一眼就是睡得安全的原因。",mark:true},
+   {v:R(T('q0',C([['R4','bad']]))+T('q1',C([]))+T('q2',C([]))+T('AGGREGATOR',C([['💀 睡死(貨還在)','bad']]))),
+    en:"Counterexample: check-then-park without the final look. R4 lands in the gap, the unpark fires before the park, and the aggregator sleeps forever with data waiting — the classic lost wakeup.",
+    zh:"反例:查完就睡、不看最後一眼。R4 落在縫裡、unpark 比 park 先到,aggregator 帶著貨睡死——經典 lost wakeup。",bad:true}
+  ];
+
+  /* sim l:MMIO doorbell */
+  var SL_=[
+   {v:R(T('SUBMISSION RING',SL([{i:'s0'},{i:'s1'},{i:'s2'},{i:'s3'}]),1))+R(T('REGS',C([['tail=0',''],['doorbell=0','']]))+T('COMPLETIONS',C([]))),
+    en:"Empty rings. The driver owns the submission tail; the device owns its head. Nobody has rung anything.",
+    zh:"空 ring。driver 持有 submission tail、device 持有 head。還沒人按鈴。"},
+   {v:R(T('SUBMISSION RING',SL([{i:'s0',j:'D0'},{i:'s1'},{i:'s2'},{i:'s3'}]),1))+R(T('REGS',C([['tail=0',''],['doorbell=0','']]))+T('COMPLETIONS',C([]))),
+    en:"slot_write(0, D0): the goods go on the shelf. The doorbell is untouched — the device has no reason to look yet.",
+    zh:"slot_write(0, D0):貨先上架。鈴還沒按——device 還沒有理由來看。"},
+   {v:R(T('SUBMISSION RING',SL([{i:'s0',j:'D0',c:'busy'},{i:'s1'},{i:'s2'},{i:'s3'}]),1))+R(T('REGS',C([['barrier() ✓','ok']]))+T('COMPLETIONS',C([]))),
+    en:"barrier(): the wall. Everything written before it is guaranteed visible to the device before anything written after it.",
+    zh:"barrier():那道牆。牆之前的寫入,保證比牆之後的任何寫入先被 device 看見。"},
+   {v:R(T('SUBMISSION RING',SL([{i:'s0',j:'D0',c:'busy'},{i:'s1'},{i:'s2'},{i:'s3'}]),1))+R(T('REGS',C([['tail=1','ok'],['doorbell←1','ok']]))+T('COMPLETIONS',C([]))),
+    en:"Ring the doorbell: write the new tail. Only NOW does the device go read the descriptor — which the barrier already made whole.",
+    zh:"按鈴:寫入新 tail。device 這時才去讀 descriptor——而牆已保證它是完整的。",mark:true},
+   {v:R(T('SUBMISSION RING',SL([{i:'s0'},{i:'s1'},{i:'s2'},{i:'s3'}]),1))+R(T('REGS',C([['tail=1','']]))+T('COMPLETIONS',C([['tag0','ok']]))),
+    en:"The device consumes D0 and posts a completion carrying tag 0; the driver polls the completion tail and reclaims the slot.",
+    zh:"device 消化 D0,回貼帶 tag0 的 completion;driver 輪詢 completion tail、回收格子。"},
+   {v:R(T('SUBMISSION RING',SL([{i:'s0'},{i:'s1',j:'D1',c:'busy'},{i:'s2',j:'D2',c:'busy'},{i:'s3'}]),1))+R(T('REGS',C([['barrier() ×1',''],['doorbell←3','ok']]))+T('COMPLETIONS',C([]))),
+    en:"Batching: write D1 and D2, ONE barrier, one doorbell with tail=3. MMIO writes are expensive — amortize the bell.",
+    zh:"批次:連寫 D1、D2,一道牆、一次按鈴 tail=3。MMIO 寫很貴——鈴要攤提。"},
+   {v:R(T('SUBMISSION RING',SL([{i:'s0'},{i:'s1',j:'D1',c:'busy'},{i:'s2',j:'D2',c:'busy'},{i:'s3'}]),1))+R(T('COMPLETIONS(亂序!)',C([['tag2','ok'],['…tag1 未到','']]))),
+    en:"tag2 arrives before tag1: completions can be out of order. Route each one back through your in-flight table — the same owner-table move as the DMA dispatcher.",
+    zh:"tag2 比 tag1 先到:completion 可以亂序。靠 in-flight 表路由回原 command——跟 DMA 的 owner 表同一招。"},
+   {v:R(T('SUBMISSION RING',SL([{i:'s0',j:'D0 半寫','c':'hung'},{i:'s1'},{i:'s2'},{i:'s3'}]),1))+R(T('REGS',C([['doorbell←1(先按了!)','bad']]))+T('DEVICE 讀到',C([['撕裂 descriptor','bad']]))),
+    en:"Counterexample: doorbell before barrier. The device races to the slot and can read a half-written descriptor. Data before notification, with a wall in between — same law as the wake-after-store rule, but now the other side is silicon.",
+    zh:"反例:先按鈴再立牆。device 搶著去讀,可能拿到寫一半的 descriptor。「資料先於通知、中間一道牆」——跟 store→notify 同一條法律,只是對面換成了矽。",bad:true}
+  ];
+
+  /* sim m:watchdog */
+  var SM=[
+   {v:R(T('t',C(['0']))+T('ENGINES',SL([{i:'E0',j:'A·b0',c:'busy'},{i:'E1',j:'A·b1',c:'busy'}])))+R(T('DEADLINES',C([['E0 → dl 100',''],['E1 → dl 100','']]))+T('REQ A',C([['0/3 done','']]))),
+    en:"Dispatch A0→E0 and A1→E1; each dispatch writes a deadline. Sleep with wait_event_timeout(next-deadline − now), not forever.",
+    zh:"派 A0→E0、A1→E1;每次派工都記一筆 deadline。睡覺改用 wait_event_timeout(最近的 deadline 差額),不再無限等。"},
+   {v:R(T('t',C(['60']))+T('ENGINES',SL([{i:'E0',j:'A·b0',c:'busy'},{i:'E1',j:'A·b2',c:'busy'}])))+R(T('DEADLINES',C([['E0 → dl 100',''],['E1 → dl 160','']]))+T('REQ A',C([['1/3 done','ok']]))),
+    en:"t=60: E1 reports done — A goes 1/3, dispatch A2→E1 with a fresh deadline 160. E0 is still silent.",
+    zh:"t=60:E1 回報完成——A 進度 1/3,派 A2→E1、新 deadline 160。E0 仍然沒消息。"},
+   {v:R(T('t',C([['100','bad']]))+T('ENGINES',SL([{i:'E0',j:'A·b0 ⏰逾時',c:'hung'},{i:'E1',j:'A·b2',c:'busy'}])))+R(T('DEADLINES',C([['E0 過期!','bad'],['E1 → dl 160','']]))+T('REQ A',C([['1/3','']]))),
+    en:"t=100: the timeout wakes us with NO completion event. Scan the deadline table: E0 is overdue → declare it hung. Time is the third event source.",
+    zh:"t=100:是超時把我們叫醒的,不是完成事件。掃 deadline 表:E0 過期 → 判 hang。時間就是第三種事件源。",mark:true},
+   {v:R(T('t',C(['100']))+T('ENGINES',SL([{i:'E0',j:'☠ 除名',c:'hung'},{i:'E1',j:'A·b2',c:'busy'}])))+R(T('待重派',C([['A·b0(clarify:冪等才敢)','']]))+T('REQ A',C([['1/3','']]))),
+    en:"Recovery is a clarify fork: re-dispatch A·b0 ONLY if re-execution is idempotent; and decide whether E0 is dead forever or rejoins after cool-down. Both answers came from questions, not code.",
+    zh:"善後是 clarify 分岔:冪等才敢重派 A·b0;E0 永久除名或冷卻歸隊也要問。兩個答案都來自提問,不是 code。"},
+   {v:R(T('t',C(['120']))+T('ENGINES',SL([{i:'E0',j:'☠',c:'hung'},{i:'E1',j:'A·b0',c:'busy'}])))+R(T('DEADLINES',C([['E1 → dl 220','']]))+T('REQ A',C([['2/3 done','ok']]))),
+    en:"t=120: E1 finishes A2 (2/3) and picks up the re-dispatched A·b0 with deadline 220.",
+    zh:"t=120:E1 做完 A2(2/3),接手重派的 A·b0,deadline 220。"},
+   {v:R(T('t',C(['130']))+T('ENGINES',SL([{i:'E0',j:'🧟 遲到的 done!',c:'hung'},{i:'E1',j:'A·b0',c:'busy'}])))+R(T('OWNER[E0]',C([['(已清空)→ 忽略','ok']]))+T('REQ A',C([['2/3(沒被雙算)','ok']]))),
+    en:"t=130: the zombie E0 reports done AFTER being declared dead. owner[E0] was already cleared — the completion routes nowhere and the count is NOT bumped twice. The owner check is your dedupe.",
+    zh:"t=130:被判死的 E0 殭屍回報。owner[E0] 已清空——這筆路由不到任何單,計數不會被加兩次。owner 檢查就是防重。",mark:true},
+   {v:R(T('t',C(['180']))+T('ENGINES',SL([{i:'E0',j:'☠',c:'hung'},{i:'E1',j:'—'}])))+R(T('REQ A',C([['3/3 → submit ✓','ok']]))),
+    en:"t=180: E1 completes the re-dispatched block. A hits 3/3 → submit. A hung engine cost latency, never correctness.",
+    zh:"t=180:重派的塊完成,A 計數 3/3 → 回報。一台 hang 掉的 engine 只付了延遲,沒有付正確性。"}
+  ];
+
+  /* sim n:priority + DAG */
+  var SN=[
+   {v:R(T('BLOCKED(等依賴)',C([['J2 p9 ← 缺 J1','bad']]))+T('READY HEAP',C([['(5, J1)','ok'],['(1, J3)','']]))+T('WORKERS',SL([{i:'W0'},{i:'W1'}]))),
+    en:"J1(p5) and J3(p1) have no deps — straight into the heap. J2 has priority 9 but a missing dependency: the dependency gate comes BEFORE the priority contest.",
+    zh:"J1、J3 無依賴直接進 heap。J2 優先權最高(9)卻卡在依賴閘——依賴閘先於優先權比賽。"},
+   {v:R(T('BLOCKED',C([['J2 p9 ← 缺 J1','bad']]))+T('READY HEAP',C([]))+T('WORKERS',SL([{i:'W0',j:'J1',c:'busy'},{i:'W1',j:'J3',c:'busy'}]))),
+    en:"Two free workers, two runnable jobs: J1 (highest priority) to W0, J3 to W1. Dispatch until workers or heap run out — same reactor shape as ever.",
+    zh:"兩個空 worker、兩個 runnable:J1(較高)給 W0、J3 給 W1。派到沒 worker 或沒工——還是那個 reactor 形狀。"},
+   {v:R(T('BLOCKED',C([]))+T('READY HEAP',C([['(9, J2)','ok']]))+T('WORKERS',SL([{i:'W0',j:'—'},{i:'W1',j:'J3',c:'busy'}]))),
+    en:"J1 completes → submit_job_done(J1) → J2's indegree drops to zero and it finally enters the heap, instantly the most urgent thing in it.",
+    zh:"J1 完成 → 回報 → J2 的 indegree 歸零、終於進 heap,而且立刻是全 heap 最急的。",mark:true},
+   {v:R(T('BLOCKED',C([]))+T('READY HEAP',C([]))+T('WORKERS',SL([{i:'W0',j:'J2',c:'busy'},{i:'W1',j:'J3',c:'busy'}]))),
+    en:"J2 dispatches to W0. Note what just happened: a p9 job waited behind a p5 job — dependencies can invert priority, and you should be able to SAY that.",
+    zh:"J2 上 W0。注意剛剛發生的事:p9 排在 p5 後面——依賴會倒轉優先權,這件事要講得出來。"},
+   {v:R(T('READY HEAP',C([['(3, seq4, J4)','ok'],['(3, seq5, J5)','']]))+T('WORKERS',SL([{i:'W0',j:'J2',c:'busy'},{i:'W1',j:'J3',c:'busy'}]))),
+    en:"J4 and J5 arrive with the SAME priority 3. The heap key is (priority, Reverse(seq)) — the sequence number breaks the tie, so equal-priority jobs stay FIFO instead of flapping.",
+    zh:"J4、J5 同優先權 3。排序鍵 (priority, Reverse(seq))——seq 破平手,同權 FIFO,順序不再不穩。",mark:true},
+   {v:R(T('READY HEAP',C([['(9, J6)⚠ 等不到搶佔','bad'],['(3, seq5, J5)','']]))+T('WORKERS',SL([{i:'W0',j:'J2',c:'busy'},{i:'W1',j:'J4',c:'busy'}]))),
+    en:"J6(p9) arrives while every worker is busy. No preemption: it waits for the next free slot. That's a legitimate design — as long as you can name the cost out loud: priority inversion, bounded by the longest job.",
+    zh:"J6(p9)到達但 worker 全忙。不搶佔:等下一個空位。這是合法設計——但代價要能親口講出:priority inversion,上界是最長的那個 job。"}
+  ];
+
+  initMini('sj',SJ); initMini('sk',SK); initMini('sl',SL_); initMini('sm',SM); initMini('sn',SN);
 })();
 </script>
 </body>
