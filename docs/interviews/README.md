@@ -28,11 +28,12 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 
 | # | 題 | 練什麼 |
 |---|---|---|
-| i | DMA dispatcher v2(R1 重做 + pipeline 多 request) | per-request state、done 路由、亂序 |
+| i(→lite 30m) | DMA dispatcher v2(R1 修洞重做,**降級不全場**——DMA 域考過了,但 pipeline 路由的洞要親手關) | per-request state、done 路由、cancel |
 | j | ISR → bottom-half pipeline | ISR 限制(不能 alloc/block)、SPSC 交棒、overflow policy |
 | k | 多核 ISR / per-CPU queue fan-in | 多核多緒 race 避免、MPSC、聚合 |
 | l | MMIO command queue(doorbell + completion ring) | descriptor→barrier→doorbell 鐵律、head/tail 對硬體、亂序 completion tag |
 | m | engine watchdog / timeout(R1 延伸) | event loop 的第三種 state:時間;idempotency 決定敢不敢 retry |
+| n(8/9 定皮) | 新域全場,照 coding #2 實況挑:priority scheduler / 連線態 framing server / buddy allocator,或 a–h 重打 | 對「沒看過的皮」跑完整題型流程 |
 
 **廣度用認題卡補(15–20m/張,不寫完整 code)**:[spec-cards.md](spec-cards.md) 七張,每張=讀埋洞英文 spec → 寫 ≥3 clarify 問題 → 30 秒英文定界出聲 → state 表 → 開[答案鍵](spec-cards-answers.md)(含英文稿)。SP/FP/FR/TA/TQ 五張是複習卡(衝刺期已有 a–h 肌肉:signal_pipeline/c/e2/f/h);HW-L/HW-M 兩張當 l/m 全場的 10 分鐘前導。
 
@@ -42,9 +43,9 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 
 | 日期 | 白天(公司,~90m 上限) | 晚上(出聲) |
 |---|---|---|
-| 7/30 四 | 🔴 i:DMA v2(clarify 20 + 寫 45 + review 20) | culture fit 自介稿 60–90s + why-us(打字,可移白天) |
+| 7/30 四 | i-lite:R1 修洞重做 30m(DMA 域考過,不值全場;直接寫 pipeline+cancel 版關掉 R1 的洞,不跑 clarify 全套)+ 卡 SP | culture fit 自介稿 60–90s + why-us(打字,可移白天) |
 | 7/31 五 | 🔴 j:ISR → bottom-half(= signal_pipeline 的 spec-heavy 版)+ signal_pipeline 頁複讀 30m | deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
-| 8/1 六 | 🔴 k:多核 per-CPU fan-in + 認題卡 SP/FP(週末塊) | culture fit 唸 #1 + 模擬追問 |
+| 8/1 六 | 🔴 k:多核 per-CPU fan-in + 卡 FP(週末塊) | culture fit 唸 #1 + 模擬追問 |
 | 8/2 日 | 🔴 l:MMIO command queue(HW-L 卡當 10m 前導)+ culture fit 三條故事(7/26)改英文稿 | deep dive 口述 #2 |
 | 8/3 一 | 認題卡 FR/TA/TQ + 骨架默寫抽查 15m | (選)clarify 句庫一類唸 3 遍 |
 | 8/4 二 | 輕:i–k 洞複掃 | **08:30 起(梯度開始;9:15 場只需 07:45 起,比 R1 的 8:45 場輕)** |
@@ -52,7 +53,7 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 | **8/6 四** | **coding #2(09:15)**,07:45 起 | 當天紀錄入庫 + 洞清單 |
 | 8/7 五 | 修 #2 暴露的洞(targeted) | deep dive 口述 #3 |
 | 8/8 六 | 🔴 m:engine watchdog(HW-M 卡前導;吃 #2 暴露的方向) | culture fit 全串 |
-| 8/9 日 | 重打 weakest | deep dive 全串(15m/專案) |
+| 8/9 日 | 🔴 n:新皮全場——域照 8/6 實況挑(provided-API 模擬 → 沒碰過的域:priority scheduler / 連線態 framing server / buddy allocator;手搓 primitive → a–h 抽一題重打) | deep dive 全串(15m/專案) |
 | 8/10 一 | taper | 早睡(8/6 後不回彈,整段維持 ≤08:30 起) |
 | **8/11 二** | **coding #3(09:15)**,07:45 起 | 輕:deep dive 全串最後一遍(15m/專案,材料 8/9 前已備齊)|
 | **8/12 三** | **deep dive + culture fit(09:15)**,07:45 起 | 收帳:全程紀錄入庫 |
