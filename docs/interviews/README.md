@@ -7,9 +7,10 @@
 | 輪次 | 日期 | 結果 |
 |---|---|---|
 | R1 coding(DMA dispatcher) | 2026-07-28 | ✅ 過,feedback 正向 → [紀錄](2026-07-28-tps-round1-dma.md) |
-| coding ×2 | 待定 | — |
-| technical deep dive | 待定 | — |
-| culture fit talk | 待定 | — |
+| coding #2 | **建議 8/11(一)早上**(日期自選,待敲) | — |
+| coding #3 | **建議 8/12(二)早上**(連兩天=一次早起梯度打兩場) | — |
+| technical deep dive(履歷/過去專案) | 排 coding 之後 | — |
+| culture fit talk | 排 coding 之後 | — |
 
 R1 前的衝刺計畫在 `../../SCHEDULE.md`(7/16→7/28,已結案)。
 
@@ -30,4 +31,27 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 | l | MMIO command queue(doorbell + completion ring) | head/tail 座標系實戰、polling vs IRQ |
 | m | engine watchdog / timeout | event loop 的第三種 state:時間(deadline、retry/reroute) |
 
-deep dive / culture fit 的準備計畫等日期確定後排(culture fit 底稿:7/26 已寫的三條經驗故事)。
+## 逐日計畫(7/30 → 8/12,總量 ~14h,照 v9 時間模型)
+
+原則:白天打字場 = 模擬題(clarify 打字來回不用出聲);晚上出聲場 = deep dive 口述 + culture fit 唸稿,每晚只排一件出聲事。
+
+| 日期 | 白天(公司,~90m) | 晚上(23:30–02:00,出聲) |
+|---|---|---|
+| 7/30 三 | 🔴 i:DMA v2(clarify 20 + 寫 45 + review 20) | culture fit 稿:寫自我介紹 60–90s + why-us(打字也可移白天) |
+| 7/31 四 | 🔴 j:ISR → bottom-half | deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
+| 8/1 五 | 🔴 k:多核 per-CPU fan-in | culture fit 稿出聲唸 #1 + Claude 模擬追問 |
+| 8/2 六 | 🔴 l:MMIO command queue + deep dive 專案二寫底稿(週末 8h) | deep dive 口述 #2 |
+| 8/3 日 | 🔴 m:engine watchdog + culture fit 三條故事(7/26)改英文稿 | 休或補滑帳 |
+| 8/4 一 | i–m review 掃洞,挑最弱兩題 | deep dive 口述 #3(最弱的那個專案重講) |
+| 8/5 二 | 🔴 重打 weakest #1 | culture fit 出聲唸 #2(conflict/failure 兩題) |
+| 8/6 三 | 修洞 + 輕量 | (起床梯度開始:每天提早 30m) |
+| 8/7 四 | 輕量:骨架默寫抽查 | deep dive 全串口述一遍(15m/專案) |
+| 8/8 五 | 🔴 重打 weakest #2 | culture fit 全串一遍 |
+| 8/9 六 | 回憶掃描(不碰新題) | 08:15 起 |
+| 8/10 日 | taper:檢查表 + 時間預算背誦 + 早上動線彩排 | 07:30 起,00:00 熄燈 |
+| **8/11 一** | **coding #2(早上)** | 當天紀錄寫進本資料夾 |
+| **8/12 二** | **coding #3(早上)** | 同上 |
+
+culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict、failure、proudest project、想問他們的 3 個問題;底稿 = 7/26 的三條經驗故事。稿子檔案:`culture-fit-script.md`(寫完放本資料夾)。
+
+閥門:白天被正職吃掉 → 砍當天晚上 culture fit(deep dive 不砍);模擬題超時 = 挖到洞,記洞不記違規。
