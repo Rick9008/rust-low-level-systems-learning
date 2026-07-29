@@ -52,7 +52,7 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 | 7/31 五 | 🔴 j:ISR → bottom-half(= signal_pipeline 的 spec-heavy 版)+ signal_pipeline 頁複讀 30m | deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
 | 8/1 六 | 🔴 k:多核 per-CPU fan-in + 卡 FP(週末塊) | culture fit 唸 #1 + 模擬追問 |
 | 8/2 日 | 🔴 l:MMIO command queue(HW-L 卡當 10m 前導)+ culture fit 三條故事(7/26)改英文稿 | deep dive 口述 #2 |
-| 8/3 一 | 認題卡 FR/TA/TQ + 骨架默寫抽查 15m | (選)clarify 句庫一類唸 3 遍 |
+| 8/3 一 | **sim m+n 認題輪**(7/29 加,用戶點名「上場前不能完全沒看過」:各 ~20m,Phase 1 冷讀 → ≥3 clarify 問 → 30 秒英文定界出聲 → state 表手寫;**m 加 15m 非計時骨架快寫**——R1 直系延伸、#2 命中率最高;全程不開 oracle/sol/參考測試,8/8–8/9 計時場保留改當執行練)+ 骨架默寫抽查 15m;認題卡 FR/TA/TQ 降選配讓位 | (選)clarify 句庫一類唸 3 遍 |
 | 8/4 二 | 輕:i–l 洞複掃 + **sol_m / sol_n 檔頭預讀**(還沒跑的兩題先拿「怎麼說」,計時寫 8/8、8/9 照跑) | **08:30 起(梯度開始;9:15 場只需 07:45 起,比 R1 的 8:45 場輕)** |
 | 8/5 三 | taper:不碰新題、檢查表 + 時間預算 + **六題 30 秒英文定界唸一輪**(sol 檔頭 + spec-cards-answers) | 08:00 起、00:30 熄燈 |
 | **8/6 四** | **coding #2(09:15)**,07:45 起 | 當天紀錄入庫 + 洞清單 |
