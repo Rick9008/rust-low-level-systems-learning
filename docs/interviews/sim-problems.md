@@ -1,6 +1,8 @@
 # 全場模擬題本 i–m(spec-heavy,45m 計時)
 
-**運作方式**:開跑時只讀本檔該題的 Phase 1;Claude 當面試官(拿著 [sim-interviewer-guide.md](sim-interviewer-guide.md),⚠ 你在跑題時不准開)。clarify 用打字來回,拿到的答案就是 spec;**Phase 1 被面試官驗收後才會給 Phase 2**。harness(fake API 可編譯單檔)由 Claude 開場時生到 `scratch/`,不入庫。
+**運作方式**:開跑時只讀本檔該題的 Phase 1;Claude 當面試官(拿著 [sim-interviewer-guide.md](sim-interviewer-guide.md),⚠ 你在跑題時不准開)。clarify 用打字來回,拿到的答案就是 spec;**Phase 1 被面試官驗收後才會給 Phase 2**。
+
+**Harness 已入庫**:`rehearsals/src/sim_{i,j,k,l,m}_*.rs`。上半「題目給的介面」= 你在 pad 上會看到的東西,可讀;**下半 mock/SimBus 實作區藏著 clarify 答案,跑題前不准細讀**。作答直接寫在該檔的作答區 + 檔尾自寫測試,`cargo test -p rehearsals sim_<x>` 跑你的測試;參考測試(`tests/sim_*_test.rs`)與 sol 跑完才開。
 
 時間預算:clarify ≤10m → Phase 1 ~20m → Phase 2 ~15m → 收尾宣言。
 

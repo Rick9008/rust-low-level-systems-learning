@@ -20,7 +20,9 @@ R1 前的衝刺計畫在 `../../SCHEDULE.md`(7/16→7/28,已結案)。
 R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 fn,面試官是唯一 oracle**。
 與 a–h 彩排的差別:重心從「手搓結構」移到「clarify 出隱藏 spec」+「多重 state 的 event loop 骨架」。R1 證明 clarify 已過線(面試官點名稱讚);真正的洞是**時間不夠 → code 有漏洞**,要練的是「40 分鐘內把 spec 轉成 state 表 + 骨架」的節奏。
 
-練法:題本 [sim-problems.md](sim-problems.md)——每題 **Phase 1 開場給、Phase 2 面試官驗收後才放**(照 R1 的漸進節奏);面試官手冊 `sim-interviewer-guide.md` **跑題中不准開**。clarify 用英文打字來回(句庫:[clarify-phrasebook-en.md](clarify-phrasebook-en.md),含聽力修復句;每晚出聲場挑一類唸 3 遍)→ 計時 45m → review 20m;fake-API harness 開跑時由 Claude 生到 `scratch/`,不入庫。
+練法:題本 [sim-problems.md](sim-problems.md)——每題 **Phase 1 開場給、Phase 2 面試官驗收後才放**(照 R1 的漸進節奏);面試官手冊 `sim-interviewer-guide.md` **跑題中不准開**。clarify 用英文打字來回(句庫:[clarify-phrasebook-en.md](clarify-phrasebook-en.md),含聽力修復句;每晚出聲場挑一類唸 3 遍)→ 計時 45m → review 20m。
+
+**Harness 已全部入庫(跨機器直接執行)**:`rehearsals/src/sim_{i,j,k,l,m}_*.rs`——上半「題目給的介面」可讀,**mock/SimBus 實作區與 `rehearsals/tests/sim_*_test.rs` 跑題前不准讀**(oracle 會在你違反協定時當場 panic 開燈)。執行:作答區填實作+檔尾寫自己的測試 → `cargo test -p rehearsals sim_<x>` → 跑完拔參考測試的 `#[ignore]` 對邊界 → 開 sol 對照。i 的對照解答(兼 7/29 閱讀材料):`rehearsals/examples/sol_dma_dispatcher.rs`,驗證 `cargo run -p rehearsals --example sol_dma_dispatcher`;j–m 的 sol 各場跑完由 Claude 補。
 
 候選模擬題(JD 軸:telemetry / 硬體訊號 / event loop / lockless):
 

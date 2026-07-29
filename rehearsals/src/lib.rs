@@ -16,3 +16,11 @@ pub mod ring_drop_oldest;
 pub mod telemetry_aggregator;
 pub mod timer_queue;
 pub mod tokio_frame_server;
+
+// sim 系列:onsite spec-heavy 模擬題(題幹 docs/interviews/sim-problems.md;
+// mock/oracle 直接在各檔內,Phase 2 由面試官手冊控制)。
+pub mod sim_i_dma;
+pub mod sim_j_isr;
+pub mod sim_k_fanin;
+pub mod sim_l_mmio;
+pub mod sim_m_watchdog;
