@@ -1,4 +1,6 @@
-//! sim j —— sensor interrupt pipeline(題幹:`docs/interviews/sim-problems.md`)。
+//! sim j【virtual onsite 準備題】—— sensor interrupt pipeline(題幹:`docs/interviews/sim-problems.md`)。
+//!
+//! 「題目給的介面」區一律英文(中文對照:`docs/interviews/sim-problems-zh.md`)。
 //!
 //! 彩排規則同 sim_i:實作+自寫測試在本檔;`tests/sim_j_isr_test.rs` 跑完才開。
 //! ⚠ mock 的 Ring 用 Mutex 換單檔簡潔——**協定跟 spsc_ring 相同**(try 語意、固定容量),
@@ -13,7 +15,7 @@ pub type Sample = u32;
 
 // ===================== 題目給的介面(可讀)=====================
 
-/// 硬體 FIFO(ISR context 才准碰)。測試會灌資料進來。
+/// The hardware FIFO (ISR context only). Tests feed data into it.
 #[derive(Default)]
 pub struct HwFifo {
     q: VecDeque<Sample>,
@@ -24,18 +26,19 @@ impl HwFifo {
         Self::default()
     }
 
-    /// 測試腳本用:模擬硬體收進一批樣本。
+    /// Test harness only: the hardware receives a burst of samples.
     pub fn push_burst(&mut self, samples: impl IntoIterator<Item = Sample>) {
         self.q.extend(samples);
     }
 
-    /// ISR 端讀一筆;`None` = FIFO 空。
+    /// Read one sample (ISR side); `None` = FIFO empty.
     pub fn read_fifo(&mut self) -> Option<Sample> {
         self.q.pop_front()
     }
 }
 
-/// ISR → worker 的交棒 ring。固定容量、只有 try 語意——ISR 不准等。
+/// Hand-off ring from the ISR to the worker. Fixed capacity, try-only —
+/// the ISR must never wait.
 pub struct Ring {
     cap: usize,
     q: Mutex<VecDeque<Sample>>,
@@ -49,7 +52,7 @@ impl Ring {
         }
     }
 
-    /// 滿了把樣本原樣還你——drop 政策由呼叫端決定,ring 不替你做主。
+    /// On full, the sample is handed back — the drop policy is the caller's call.
     pub fn try_push(&self, s: Sample) -> Result<(), Sample> {
         let mut q = self.q.lock().unwrap();
         if q.len() == self.cap {
@@ -64,7 +67,8 @@ impl Ring {
     }
 }
 
-/// 喚醒原語。`wake()` 可以合併(連按多次只醒一次)——這正是考點之一。
+/// Wake-up primitive. `wake()` calls may coalesce (N calls, one wake-up) —
+/// that behavior is part of the exam.
 #[derive(Default)]
 pub struct Waker {
     flag: Mutex<bool>,
@@ -81,8 +85,9 @@ impl Waker {
         self.cv.notify_one();
     }
 
-    /// 睡到被叫醒。可能 spurious 提前醒——醒了不代表有事。
-    /// (mock 帶 1s 安全網,防 lost-wakeup 的 bug 把測試吊死;真上場沒有這條保險。)
+    /// Sleep until woken. May wake spuriously — waking up does not mean there is work.
+    /// (The mock has a 1s safety timeout so a lost-wakeup bug can't hang your
+    /// test run; the real thing has no such net.)
     pub fn sleep(&self) {
         let mut flag = self.flag.lock().unwrap();
         if !*flag {
@@ -95,14 +100,16 @@ impl Waker {
 
 // ===================== 作答區 =====================
 
-/// ISR:把硬體 FIFO 搬進 ring、叫醒 worker。**不准 alloc/block/log。**
-/// ring 滿了怎麼辦——先想好你的 drop 政策(dropped 計數器給你用)。
+/// ISR: move samples from the hardware FIFO into the ring and wake the worker.
+/// **No allocation, no blocking, no logging in here.** Decide your drop policy
+/// first — the `dropped` counter is yours to maintain.
 pub fn isr(fifo: &mut HwFifo, ring: &Ring, waker: &Waker, dropped: &AtomicU64) {
     todo!("彩排時實作")
 }
 
-/// worker:睡 → 醒 → drain ring → 逐筆 log(這裡 = push 進 out)→ 再睡。
-/// `stop` 立起後要把 ring 裡剩的 **drain 乾淨再退**(Phase 2 的 clean shutdown)。
+/// Worker: sleep → wake → drain the ring → log each sample (here: push into
+/// `out`) → sleep again. Once `stop` is set, **drain what's left before
+/// exiting** (Phase 2: clean shutdown).
 pub fn worker_loop(ring: &Ring, waker: &Waker, stop: &AtomicBool, out: &Mutex<Vec<Sample>>) {
     todo!("彩排時實作")
 }

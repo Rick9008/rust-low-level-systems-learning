@@ -12,7 +12,7 @@ R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07
 
 | 項 | 狀態 | 備註 |
 |---|---|---|
-| 讀 sol_dma_dispatcher(三張表) | ☐ 排 7/29 | R1 洞的正解;Dry-Run 段紙上走一遍 |
+| 讀 sol_sim_i_dma(三張表) | ☐ 排 7/29 | R1 洞的正解;Dry-Run 段紙上走一遍 |
 | sim i-lite(30m 修洞重做) | ☐ 排 7/30 | `rehearsals/src/sim_i_dma.rs` 填 `run()`,不看 sol |
 | sim j(ISR pipeline)全場 | ☐ 排 7/31 | + signal_pipeline 頁複讀 30m |
 | sim k(per-core fan-in)全場 | ☐ 排 8/1 | + 卡 FP |

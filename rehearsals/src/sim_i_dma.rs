@@ -1,10 +1,13 @@
-//! sim i —— DMA dispatcher v2(題幹:`docs/interviews/sim-problems.md`;Phase 2 由面試官放)。
+//! sim i【virtual onsite 準備題】—— DMA dispatcher v2(題幹:`docs/interviews/sim-problems.md`;Phase 2 由面試官放)。
+//!
+//! 「題目給的介面」區一律英文——面試是英文的,看英文 spec 本身就是練習;
+//! 中文對照:`docs/interviews/sim-problems-zh.md`。
 //!
 //! 彩排規則:
 //! - 只准讀「題目給的介面」區——那就是 R1 現場看到的東西。
 //! - **SimBus 實作區跑題前不准細讀**(裡面藏著 clarify 才拿得到的 spec 答案)。
 //! - 實作與你自己的測試都寫在本檔;`tests/sim_i_dma_test.rs` 跑完才開。
-//! - 對照解答:`examples/sol_dma_dispatcher.rs`(寫完才開)。
+//! - 對照解答:`examples/sol_sim_i_dma.rs`(寫完才開)。
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -19,24 +22,28 @@ pub struct DmaRequest {
 
 pub const ENGINE_COUNT: u32 = 6;
 
-/// R1 的六個 API + Phase 2 的 cancel。真面試裡這些是 free function;
-/// 這裡收進 trait 才能餵 mock,語意不變。
+/// The six R1 APIs plus Phase 2's `cancel`. In the real interview these are
+/// free functions; they live in a trait here only so the mock can be swapped in.
 pub trait DmaBus {
+    /// Pull the next incoming request, if any.
     fn get_dma_request(&mut self) -> Option<DmaRequest>;
-    /// Phase 2 才會出現 cancel;Phase 1 期間永遠回 `None`,可以先不理它。
+    /// Phase 2 only; always `None` during Phase 1 — safe to ignore at first.
     fn get_cancel_request(&mut self) -> Option<u64>;
-    /// 把 request 的第 `block_num` 塊(位置 `block_start_pos`)派給 `engine_id`。
+    /// Dispatch one block of a request (index `block_num`, at `block_start_pos`) to `engine_id`.
     fn send_dma_request_to_engine(&mut self, engine_id: u32, block_num: u32, block_start_pos: u64);
-    /// 哪台 engine 剛做完。注意:**只給 engine id**。
+    /// Which engine just finished. Note: **you only get the engine id.**
     fn get_dma_result_done(&mut self) -> Option<u32>;
-    /// 回傳 `false` = 模擬結束(真面試 = 永遠 `true`、迴圈不退)。
+    /// Block until something happens. Returns `false` when the simulation is
+    /// exhausted (in the real interview this is always `true`; the loop never exits).
     fn wait_event(&mut self) -> bool;
+    /// Report a request once ALL of its blocks are done.
     fn submit_dma_request_result_done(&mut self, request_id: u64);
 }
 
 // ===================== 作答區 =====================
 
-/// 接收 request、把 blocks 派給 6 台 engine,每個 request 全部完成後 submit。
+/// Receive requests, feed their blocks to the 6 engines, and report each
+/// request as soon as all of its blocks are done.
 pub fn run(bus: &mut impl DmaBus) {
     todo!("彩排時實作;state 設計是考點,故意不給骨架")
 }

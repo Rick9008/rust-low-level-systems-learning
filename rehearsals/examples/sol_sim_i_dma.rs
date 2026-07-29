@@ -22,7 +22,7 @@
 //! → B 計數 1/1 → **B 先 submit** → 之後 A4..A0 陸續 done → A submit。
 //! sequential 版在同劇本下 B 永遠排在 A 後面——這就是兩版的分水嶺。
 //!
-//! 驗證:`cargo run -p rehearsals --example sol_dma_dispatcher`(全綠會印 all green)。
+//! 驗證:`cargo run -p rehearsals --example sol_sim_i_dma`(全綠會印 all green)。
 
 use rehearsals::sim_i_dma::{DmaBus, DmaRequest, ENGINE_COUNT, SimBus};
 use std::collections::{HashMap, VecDeque};
@@ -183,5 +183,5 @@ fn main() {
     run(&mut bus);
     assert_eq!(bus.submitted, vec![7]);
 
-    println!("sol_dma_dispatcher: all green");
+    println!("sol_sim_i_dma: all green");
 }

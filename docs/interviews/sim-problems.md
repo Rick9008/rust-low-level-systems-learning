@@ -1,4 +1,6 @@
-# 全場模擬題本 i–m(spec-heavy,45m 計時)
+# 全場模擬題本 i–n(spec-heavy,45m 計時)——virtual onsite 準備
+
+**題幹與 harness 介面一律英文**——面試全英文,讀英文 spec 本身就是練習。中文對照(review/複盤用):[sim-problems-zh.md](sim-problems-zh.md)。
 
 **運作方式**:開跑時只讀本檔該題的 Phase 1;Claude 當面試官(拿著 [sim-interviewer-guide.md](sim-interviewer-guide.md),⚠ 你在跑題時不准開)。clarify 用打字來回,拿到的答案就是 spec;**Phase 1 被面試官驗收後才會給 Phase 2**。
 

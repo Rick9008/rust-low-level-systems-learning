@@ -1,4 +1,6 @@
-//! sim m —— engine watchdog(R1 延伸;題幹:`docs/interviews/sim-problems.md`)。
+//! sim m【virtual onsite 準備題】—— engine watchdog(R1 延伸;題幹:`docs/interviews/sim-problems.md`)。
+//!
+//! 「題目給的介面」區一律英文(中文對照:`docs/interviews/sim-problems-zh.md`)。
 //!
 //! 彩排規則同 sim_i:實作+自寫測試在本檔;`tests/sim_m_watchdog_test.rs` 跑完才開。
 //! 本檔自帶一份 SimBus(時間版):engine 可能 hang、可能吐 zombie done。
@@ -17,28 +19,34 @@ pub struct DmaRequest {
 
 pub const ENGINE_COUNT: u32 = 6;
 
-/// 一塊正常的處理時間(毫秒)。
+/// Normal per-block processing time (ms).
 pub const BLOCK_MS: u64 = 10;
 
-/// R1 的 API,`wait_event` 換成帶 timeout 的版本,外加時鐘與錯誤回報。
+/// The R1 APIs with `wait_event` upgraded to a timeout variant, plus a clock
+/// and an error path.
 pub trait DmaBus {
     fn now_ms(&self) -> u64;
     fn get_dma_request(&mut self) -> Option<DmaRequest>;
     fn send_dma_request_to_engine(&mut self, engine_id: u32, block_num: u32, block_start_pos: u64);
     fn get_dma_result_done(&mut self) -> Option<u32>;
-    /// 睡到「有事件」或「過了 ms 毫秒」,先到先醒。醒了不保證有 done——去 poll。
+    /// Sleep until an event arrives or `ms` elapse, whichever comes first.
+    /// Waking guarantees nothing — poll for dones yourself.
     fn wait_event_timeout(&mut self, ms: u64);
     fn submit_dma_request_result_done(&mut self, request_id: u64);
-    /// 放棄一整張 request 時往上報(Phase 2:同一塊 3 次 timeout 後)。
+    /// Give up on a whole request and report it upstream
+    /// (Phase 2: after 3 timeouts on the same block).
     fn submit_dma_request_error(&mut self, request_id: u64);
-    /// 模擬專用:上游不會再有新 request(真面試沒有這函式,loop 不退)。
+    /// Simulation only: no more requests will ever arrive
+    /// (doesn't exist in the real interview; the loop never exits there).
     fn drained(&self) -> bool;
 }
 
 // ===================== 作答區 =====================
 
-/// R1 dispatcher 加 watchdog:hung engine 不准卡死 request。
-/// 你需要第三種 state:每塊在飛的 deadline。zombie done(隔離後遲到的完成)不准弄髒帳。
+/// The R1 dispatcher plus a watchdog: a hung engine must not stall a request
+/// forever. You need a third kind of state — a deadline per in-flight block.
+/// A zombie done (late completion from a quarantined engine) must not corrupt
+/// your bookkeeping.
 pub fn run(bus: &mut impl DmaBus) {
     todo!("彩排時實作")
 }

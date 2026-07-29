@@ -4,12 +4,13 @@
 環境約束照 [`docs/coderpad-constraints.md`](../docs/coderpad-constraints.md)。
 題 d 用 tokio(pad 實測清單有);其餘只准 std。
 
-> **R2 onsite 加賽:sim 系列(i–m)**——R1(2026-07-28)實測題型的 spec-heavy 模擬
+> **virtual onsite(R2)準備題:sim 系列(i–n)**——R1(2026-07-28)實測題型的 spec-heavy 模擬
 > (長英文 spec 埋洞 + provided API + 實作一個 fn,Claude 當面試官、Phase 2 驗收後才放)。
-> 題幹:[`docs/interviews/sim-problems.md`](../docs/interviews/sim-problems.md)|
-> harness:`src/sim_{i,j,k,l,m}_*.rs`(上半可讀,**SimBus 區跑題前不准細讀**)|
-> 參考測試 `tests/sim_*_test.rs` 與 `examples/sol_sim_*` / `sol_dma_dispatcher`(寫完才開;
-> 15/15 參考測試已用解答驗過)。日程:[`docs/interviews/README.md`](../docs/interviews/README.md)。
+> 題幹(英文):[`docs/interviews/sim-problems.md`](../docs/interviews/sim-problems.md),
+> 中文對照 `sim-problems-zh.md`|harness:`src/sim_{i,j,k,l,m,n}_*.rs`
+> (上半「題目給的介面」是英文、可讀;**SimBus 區跑題前不准細讀**)|
+> 參考測試 `tests/sim_*_test.rs` 與解答 `examples/sol_sim_*.rs` 六份全備(寫完才開;
+> 19/19 參考測試已用解答驗過)。日程:[`docs/interviews/README.md`](../docs/interviews/README.md)。
 
 定位:**題 a–d 是主菜**,全程 45 分鐘照 protocol 跑。**題 e–h 對應題型預測的
 Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → 口述 arc 與 trade-off

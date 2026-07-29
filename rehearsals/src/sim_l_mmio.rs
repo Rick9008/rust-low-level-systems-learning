@@ -1,4 +1,6 @@
-//! sim l —— MMIO command queue:doorbell + completion ring(題幹:`docs/interviews/sim-problems.md`)。
+//! sim l【virtual onsite 準備題】—— MMIO command queue:doorbell + completion ring(題幹:`docs/interviews/sim-problems.md`)。
+//!
+//! 「題目給的介面」區一律英文(中文對照:`docs/interviews/sim-problems-zh.md`)。
 //!
 //! 彩排規則同 sim_i:實作+自寫測試在本檔;`tests/sim_l_mmio_test.rs` 跑完才開。
 //! Device 內建協定 oracle:**descriptor 寫入後、敲 doorbell 前沒放 `barrier()` 會當場 panic**
@@ -16,19 +18,20 @@ pub struct Descriptor {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Reg {
-    /// device 已消費到的 submission index(唯讀)。
+    /// Submission index the device has consumed up to (read-only).
     SubmitHead,
-    /// 你寫入新的 submission tail 通知 device(唯寫)。
+    /// Write the new submission tail here to notify the device (write-only).
     Doorbell,
-    /// device 已寫到的 completion index(唯讀)。
+    /// Completion index the device has written up to (read-only).
     CompTail,
 }
 
-/// 「回傳給呼叫端處理」的滿載錯誤。
+/// Returned when the submission ring is full — backpressure is the caller's problem.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Full;
 
-/// 模擬的加速器。`step()` = device 動一拍(消費 submission、產生一個 completion)。
+/// The simulated accelerator. `step()` = one device tick (consume
+/// submissions, post one completion).
 pub struct Device {
     cap: usize,
     submit_slots: Vec<Option<Descriptor>>,
@@ -58,7 +61,7 @@ impl Device {
         }
     }
 
-    /// Phase 2:completion 亂序(後進先完)。
+    /// Phase 2: out-of-order completions (last submitted finishes first).
     pub fn lifo(mut self) -> Self {
         self.lifo = true;
         self
@@ -94,14 +97,14 @@ impl Device {
         }
     }
 
-    /// 把 descriptor 寫進 submission ring 第 `idx` 槽(idx = 序號 % cap 由你算)。
+    /// Write a descriptor into submission slot `idx` (you compute idx = seq % cap).
     pub fn slot_write(&mut self, idx: usize, d: Descriptor) {
         assert!(idx < self.cap, "slot index 越界");
         self.submit_slots[idx] = Some(d);
         self.unbarriered.insert(idx);
     }
 
-    /// 讀走 completion ring 第 `idx` 槽(破壞性讀 = 你收走了)。
+    /// Take the descriptor out of completion slot `idx` (destructive read = consumed).
     pub fn comp_slot_read(&mut self, idx: usize) -> Descriptor {
         assert!(idx < self.cap, "slot index 越界");
         self.comp_consumed += 1;
@@ -110,12 +113,13 @@ impl Device {
             .expect("completion slot 是空的:讀過頭了")
     }
 
-    /// 對 CPU 的寫入立柵欄——之後 device 才保證看得見前面的 slot_write。
+    /// Memory barrier toward the device — only after this are your earlier
+    /// `slot_write`s guaranteed visible to it.
     pub fn barrier(&mut self) {
         self.unbarriered.clear();
     }
 
-    /// device 動一拍;回傳這拍有沒有做事(測試迴圈用)。
+    /// One device tick; returns whether it did anything (for test loops).
     pub fn step(&mut self) -> bool {
         let mut worked = false;
         // 一口氣消費 doorbell 以前的所有 submission(真硬體就是這樣slurp的)。
@@ -151,9 +155,9 @@ impl Device {
 
 // ===================== 作答區 =====================
 
-/// driver 端 state 由你設計(欄位彩排時自己加)。
+/// Driver-side state — you design it (add fields during the rehearsal).
 pub struct Driver {
-    // 你的欄位
+    // your fields
 }
 
 impl Driver {
@@ -162,12 +166,13 @@ impl Driver {
     }
 }
 
-/// 提交一個命令。ring 滿 → `Err(Full)` 立刻回,不等。
+/// Submit one command. On a full ring return `Err(Full)` immediately — never wait.
 pub fn submit(dev: &mut Device, drv: &mut Driver, tag: u32, payload: u64) -> Result<(), Full> {
     todo!("彩排時實作")
 }
 
-/// 收 completion,逐筆回呼 `on_done(tag, payload)`。Phase 2 completion 會亂序。
+/// Collect completions, invoking `on_done(tag, payload)` per entry.
+/// Phase 2: they come back out of order.
 pub fn poll_completions(dev: &mut Device, drv: &mut Driver, on_done: &mut dyn FnMut(u32, u64)) {
     todo!("彩排時實作")
 }

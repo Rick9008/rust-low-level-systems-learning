@@ -1,4 +1,6 @@
-//! sim n —— priority job scheduler(題幹:`docs/interviews/sim-problems.md`;Phase 2 由面試官放)。
+//! sim n【virtual onsite 準備題】—— priority job scheduler(題幹:`docs/interviews/sim-problems.md`;Phase 2 由面試官放)。
+//!
+//! 「題目給的介面」區一律英文(中文對照:`docs/interviews/sim-problems-zh.md`)。
 //!
 //! 彩排規則同 sim_i:實作+自寫測試在本檔;`tests/sim_n_scheduler_test.rs` 跑完才開。
 
@@ -9,27 +11,29 @@ use std::collections::{HashMap, HashSet, VecDeque};
 #[derive(Clone, Debug)]
 pub struct Job {
     pub job_id: u64,
-    pub priority: u8, // 越大越急
-    /// Phase 2 才會出現非空 deps;Phase 1 期間永遠是空的,可以先不理它。
+    pub priority: u8, // higher = more urgent
+    /// Non-empty only in Phase 2; always empty during Phase 1 — safe to ignore at first.
     pub deps: Vec<u64>,
 }
 
 pub const WORKER_COUNT: u32 = 4;
 
-/// 與 R1 同款的 bus 形狀:done 一樣**只給 worker id**。
+/// Same bus shape as R1: done events carry **only the worker id**.
 pub trait JobBus {
+    /// Pull the next incoming job, if any.
     fn get_job(&mut self) -> Option<Job>;
     fn assign_job_to_worker(&mut self, worker_id: u32, job_id: u64);
-    /// 哪台 worker 剛做完。
+    /// Which worker just finished.
     fn get_worker_done(&mut self) -> Option<u32>;
-    /// 回傳 `false` = 模擬結束(真面試 = 永遠 `true`)。
+    /// Returns `false` when the simulation is exhausted (real interview: always `true`).
     fn wait_event(&mut self) -> bool;
     fn submit_job_done(&mut self, job_id: u64);
 }
 
 // ===================== 作答區 =====================
 
-/// 接 job、按優先權派給 4 台 worker,做完回報。Phase 2 會加相依。
+/// Receive jobs, assign them to the 4 workers most-urgent-first, and report
+/// completions. Phase 2 adds dependencies.
 pub fn run(bus: &mut impl JobBus) {
     todo!("彩排時實作;ready 的資料結構選擇是考點之一")
 }

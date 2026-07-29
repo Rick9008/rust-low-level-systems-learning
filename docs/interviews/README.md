@@ -22,7 +22,7 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 
 練法:題本 [sim-problems.md](sim-problems.md)——每題 **Phase 1 開場給、Phase 2 面試官驗收後才放**(照 R1 的漸進節奏);面試官手冊 `sim-interviewer-guide.md` **跑題中不准開**。clarify 用英文打字來回(句庫:[clarify-phrasebook-en.md](clarify-phrasebook-en.md),含聽力修復句;每晚出聲場挑一類唸 3 遍)→ 計時 45m → review 20m。
 
-**Harness 已全部入庫(跨機器直接執行)**:`rehearsals/src/sim_{i,j,k,l,m}_*.rs`——上半「題目給的介面」可讀,**mock/SimBus 實作區與 `rehearsals/tests/sim_*_test.rs` 跑題前不准讀**(oracle 會在你違反協定時當場 panic 開燈)。執行:作答區填實作+檔尾寫自己的測試 → `cargo test -p rehearsals sim_<x>` → 跑完拔參考測試的 `#[ignore]` 對邊界 → 開 sol 對照。i 的對照解答(兼 7/29 閱讀材料):`rehearsals/examples/sol_dma_dispatcher.rs`,驗證 `cargo run -p rehearsals --example sol_dma_dispatcher`;j–m 的 sol 各場跑完由 Claude 補。
+**Harness 已全部入庫(跨機器直接執行)**:`rehearsals/src/sim_{i,j,k,l,m,n}_*.rs`——**介面與 requirement 一律英文**(面試全英文,讀英文就是練習;中文對照:[sim-problems-zh.md](sim-problems-zh.md))。上半「題目給的介面」可讀,**mock/SimBus 實作區與 `rehearsals/tests/sim_*_test.rs` 跑題前不准讀**(oracle 會在你違反協定時當場 panic 開燈)。執行:作答區填實作+檔尾寫自己的測試 → `cargo test -p rehearsals sim_<x>` → 跑完拔參考測試的 `#[ignore]` 對邊界 → 開 sol 對照。**六份 sol 全備**(`rehearsals/examples/sol_sim_*.rs`,寫完才開;19/19 參考測試已用解答驗過):i 的兼 7/29 閱讀材料(`cargo run -p rehearsals --example sol_sim_i_dma`),m/n 檔頭 8/4 預讀。
 
 候選模擬題(JD 軸:telemetry / 硬體訊號 / event loop / lockless):
 
@@ -45,7 +45,7 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 
 | 日期 | 白天(公司,~90m 上限) | 晚上(出聲) |
 |---|---|---|
-| 7/29 三 | **休息日(輕活)**:讀 `sol_dma_dispatcher.rs`(三張表 + Dry-Run 紙上走) | deep dive / culture fit 英文稿起草(打字,輕;材料先貼給 Claude) |
+| 7/29 三 | **休息日(輕活)**:讀 `sol_sim_i_dma.rs`(三張表 + Dry-Run 紙上走) | deep dive / culture fit 英文稿起草(打字,輕;材料先貼給 Claude) |
 | 7/30 四 | i-lite:R1 修洞重做 30m(DMA 域考過,不值全場;直接寫 pipeline+cancel 版關掉 R1 的洞,不跑 clarify 全套)+ 卡 SP | culture fit 自介稿 60–90s + why-us(接 7/29 草稿) |
 | 7/31 五 | 🔴 j:ISR → bottom-half(= signal_pipeline 的 spec-heavy 版)+ signal_pipeline 頁複讀 30m | deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
 | 8/1 六 | 🔴 k:多核 per-CPU fan-in + 卡 FP(週末塊) | culture fit 唸 #1 + 模擬追問 |

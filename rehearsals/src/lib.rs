@@ -17,7 +17,8 @@ pub mod telemetry_aggregator;
 pub mod timer_queue;
 pub mod tokio_frame_server;
 
-// sim 系列:onsite spec-heavy 模擬題(題幹 docs/interviews/sim-problems.md;
+// sim 系列(i–n):virtual onsite(R2)準備題——spec-heavy 模擬
+// (題幹 docs/interviews/sim-problems.md,英文;中文對照 sim-problems-zh.md;
 // mock/oracle 直接在各檔內,Phase 2 由面試官手冊控制)。
 pub mod sim_i_dma;
 pub mod sim_j_isr;
