@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R2 onsite 圖解作戰本 — spec-heavy 題型 × sim i–n × 英文對白</title>
+<style>
+:root{
+  --bg0:#282828; --bg0dim:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg0:#d4be98; --fg1:#ddc7a1;
+  --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665; --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; background:var(--bg0dim); color:var(--fg0);
+  font-family:'JetBrains Mono','Fira Code',ui-monospace,Consolas,monospace;
+  font-size:15px; line-height:1.65;
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:0 16px 80px;}
+header.top{padding:26px 0 10px;}
+header.top h1{font-size:20px; margin:0 0 4px; color:var(--yellow);}
+header.top .sub{color:var(--grey2); font-size:13px;}
+.tabbar{
+  position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:6px;
+  background:var(--bg0dim); padding:10px 0 8px; border-bottom:1px solid var(--bg3); margin-bottom:20px;
+}
+.tabbtn{
+  font:inherit; cursor:pointer; border:1px solid var(--bg3); background:var(--bg1); color:var(--grey2);
+  padding:7px 12px; border-radius:8px; font-size:13px; transition:.12s;
+}
+.tabbtn:hover{border-color:var(--bg4); color:var(--fg0);}
+.tabbtn:focus-visible{outline:2px solid var(--yellow); outline-offset:2px;}
+.tabbtn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.panel{display:none;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.panel.active{animation:none;}}
+h2{font-size:17px; color:var(--aqua); border-left:3px solid var(--aqua); padding-left:10px; margin:30px 0 12px;}
+h3{font-size:15px; color:var(--orange); margin:22px 0 8px;}
+p{margin:10px 0;}
+code{background:var(--bg1); padding:1px 5px; border-radius:4px; font-size:.92em; color:var(--fg1);}
+pre.code{
+  background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px;
+  overflow-x:auto; font-size:13px; line-height:1.6; color:var(--fg0);
+}
+pre.code i{color:var(--grey); font-style:normal;}
+pre.code b{color:var(--yellow); font-weight:700;}
+pre.code u{color:var(--aqua); text-decoration:none;}
+pre.code b.bad{color:var(--red);}
+.anchor{
+  background:linear-gradient(135deg,var(--bg2),var(--bg1)); border:1px solid var(--yellow);
+  border-radius:12px; padding:18px 20px; margin:18px 0;
+}
+.anchor .big{font-size:17px; color:var(--yellow); font-weight:700;}
+.anchor .small{color:var(--grey2); font-size:13px; margin-top:6px;}
+.card{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px; margin:14px 0;}
+.card.warn{border-color:var(--red);}
+.card.good{border-color:var(--green);}
+.card.info{border-color:var(--blue);}
+.card h4{margin:0 0 8px; font-size:14px; color:var(--fg1);}
+ul{margin:8px 0; padding-left:22px;} li{margin:5px 0;}
+ol{margin:8px 0; padding-left:24px;} ol li{margin:6px 0;}
+table.mini{border-collapse:collapse; width:100%; margin:12px 0; font-size:13px;}
+table.mini th,table.mini td{border:1px solid var(--bg3); padding:7px 9px; text-align:left; vertical-align:top;}
+table.mini th{background:var(--bg2); color:var(--fg1);}
+.hl-red{color:var(--red);} .hl-grn{color:var(--green);} .hl-yel{color:var(--yellow);} .hl-aqua{color:var(--aqua);} .hl-blue{color:var(--blue);} .hl-pur{color:var(--purple);} .hl-org{color:var(--orange);}
+.note{color:var(--grey2); font-size:12.5px;}
+details{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:2px 14px; margin:12px 0;}
+details[open]{padding-bottom:12px;}
+summary{cursor:pointer; padding:12px 0; color:var(--fg1); font-weight:500;}
+summary:hover{color:var(--yellow);}
+summary:focus-visible{outline:2px solid var(--yellow); outline-offset:2px;}
+
+/* ── 時間軸 ── */
+.tl{display:flex; gap:8px; overflow-x:auto; padding:6px 2px 12px;}
+.tl .day{width:150px; flex:0 0 auto; background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:10px 12px;}
+.tl .day .d{font-size:12px; color:var(--grey2);}
+.tl .day .t{font-size:13px; margin-top:4px; line-height:1.5;}
+.tl .day.sim{border-color:var(--aqua);}
+.tl .day.sim .d{color:var(--aqua);}
+.tl .day.hot{border-color:var(--red); background:var(--bg2);}
+.tl .day.hot .d{color:var(--red); font-weight:700;}
+.tl .day.taper{border-color:var(--purple);}
+.tl .day.taper .d{color:var(--purple);}
+.tl .day.talk{border-color:var(--orange);}
+.tl .day.talk .d{color:var(--orange);}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--grey2); margin:8px 2px;}
+.legend .sw{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle; border:1px solid var(--bg4);}
+
+/* ── API 三堆分類 ── */
+.apiflow{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin:14px 0;}
+@media(max-width:760px){.apiflow{grid-template-columns:1fr;}}
+.apibox{border-radius:10px; padding:12px 14px; border:1px solid var(--bg3); background:var(--bg1);}
+.apibox h4{margin:0 0 6px; font-size:13px;}
+.apibox.src h4{color:var(--aqua);} .apibox.src{border-color:var(--aqua);}
+.apibox.act h4{color:var(--yellow);} .apibox.act{border-color:var(--yellow);}
+.apibox.rep h4{color:var(--green);} .apibox.rep{border-color:var(--green);}
+.apibox code{display:block; background:none; padding:1px 0; font-size:12.5px;}
+.apibox .why{color:var(--grey2); font-size:12px; margin-top:6px;}
+
+/* ── 時間預算 bar ── */
+.budget{display:flex; border-radius:8px; overflow:hidden; margin:12px 0; border:1px solid var(--bg3); min-height:44px;}
+.budget div{padding:6px 8px; font-size:12px; color:var(--bg0dim); display:flex; flex-direction:column; justify-content:center;}
+.budget .b1{flex:10; background:var(--aqua);}
+.budget .b2{flex:20; background:var(--yellow);}
+.budget .b3{flex:15; background:var(--orange);}
+.budget .b4{flex:3; background:var(--purple); color:#fff;}
+.budget b{font-size:12px;}
+
+/* ── sim i stepper ── */
+.stepctrl{display:flex; align-items:center; gap:10px; margin:14px 0; flex-wrap:wrap;}
+.stepctrl button{font:inherit; cursor:pointer; background:var(--bg2); border:1px solid var(--bg4); color:var(--fg0); padding:7px 14px; border-radius:8px;}
+.stepctrl button:hover{border-color:var(--yellow); color:var(--yellow);}
+.stepctrl button:focus-visible{outline:2px solid var(--yellow); outline-offset:2px;}
+.dots{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap;}
+.dot{width:26px; height:26px; border-radius:50%; border:1px solid var(--bg4); background:var(--bg1); color:var(--grey2); font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+.dot.active{background:var(--yellow); color:var(--bg0); border-color:var(--yellow); font-weight:700;}
+.dot.mark.active{background:var(--green); border-color:var(--green); color:var(--bg0);}
+.simstage{background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px; overflow-x:auto;}
+.trow{display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap; margin:10px 0;}
+.tbl{border:1px solid var(--bg3); border-radius:8px; padding:8px 10px; background:var(--bg1); min-width:150px;}
+.tbl .cap{font-size:11px; color:var(--grey2); letter-spacing:.06em; margin-bottom:6px;}
+.chips{display:flex; gap:5px; flex-wrap:wrap; min-height:24px;}
+.chip{border:1px solid var(--bg4); background:var(--bg2); border-radius:6px; padding:0 7px; font-size:12px; color:var(--fg1);}
+.chip.eng{border-color:var(--aqua); color:var(--aqua);}
+.chip.req{border-color:var(--purple); color:var(--purple);}
+.chip.ghost{opacity:.35;}
+.engrow{display:flex; gap:6px; flex-wrap:wrap;}
+.eng-slot{width:74px; border:1px solid var(--bg4); border-radius:8px; padding:5px 6px; text-align:center; background:var(--bg2);}
+.eng-slot .eid{font-size:11px; color:var(--grey2);}
+.eng-slot .job{font-size:12.5px; color:var(--fg1); min-height:20px;}
+.eng-slot.busy{border-color:var(--yellow);}
+.eng-slot.busy .job{color:var(--yellow);}
+.eng-slot.done-flash{border-color:var(--green);}
+.eng-slot.done-flash .job{color:var(--green);}
+table.reqs{border-collapse:collapse; font-size:12.5px;}
+table.reqs th,table.reqs td{border:1px solid var(--bg3); padding:4px 8px; text-align:center;}
+table.reqs th{background:var(--bg2); color:var(--grey2); font-weight:500; font-size:11.5px;}
+table.reqs td.done-cell{color:var(--green); font-weight:700;}
+table.reqs tr.submitted td{color:var(--green);}
+.steplog{margin-top:10px; border-top:1px dashed var(--bg3); padding-top:10px; font-size:13px;}
+.steplog .en{color:var(--fg1);}
+.steplog .zh{color:var(--grey2); font-size:12.5px; margin-top:3px;}
+.steplog .flag{color:var(--green); font-weight:700;}
+
+/* ── 概念前導卡 ── */
+.simcard{border:1px solid var(--bg3); border-radius:12px; margin:18px 0; overflow:hidden;}
+.simcard .head{background:var(--bg2); padding:10px 16px; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;}
+.simcard .head .sid{color:var(--yellow); font-weight:700;}
+.simcard .head .nm{color:var(--fg1);}
+.simcard .head .date{margin-left:auto; color:var(--grey2); font-size:12px;}
+.simcard .body{padding:4px 16px 14px;}
+.flow{display:flex; align-items:stretch; gap:0; overflow-x:auto; padding:10px 2px; flex-wrap:nowrap;}
+.fnode{border:1px solid var(--bg4); background:var(--bg2); border-radius:8px; padding:8px 12px; font-size:12.5px; min-width:110px; flex:0 0 auto;}
+.fnode .t{color:var(--fg1);}
+.fnode .s{color:var(--grey2); font-size:11px; margin-top:3px;}
+.fnode.hw{border-color:var(--red);} .fnode.hw .t{color:var(--red);}
+.fnode.isr{border-color:var(--orange);} .fnode.isr .t{color:var(--orange);}
+.fnode.buf{border-color:var(--purple);} .fnode.buf .t{color:var(--purple);}
+.fnode.wk{border-color:var(--aqua);} .fnode.wk .t{color:var(--aqua);}
+.farrow{align-self:center; color:var(--grey); padding:0 8px; flex:0 0 auto; font-size:15px;}
+.clarify-seed{border-left:3px solid var(--blue); background:var(--bg1); padding:8px 12px; margin:10px 0; font-size:13px; border-radius:0 8px 8px 0;}
+.clarify-seed .en{color:var(--fg1);}
+.clarify-seed .zh{color:var(--grey2); font-size:12px;}
+
+/* ── 對白 ── */
+.dlg{background:var(--bg1); border:1px solid var(--bg3); border-radius:12px; padding:6px 16px 12px; margin:14px 0;}
+.line{display:flex; gap:10px; margin:12px 0; align-items:flex-start;}
+.who{flex:0 0 auto; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; margin-top:2px;}
+.who.i{background:var(--bg3); color:var(--orange); border:1px solid var(--orange);}
+.who.c{background:var(--bg3); color:var(--aqua); border:1px solid var(--aqua);}
+.line .txt{flex:1;}
+.line .en{color:var(--fg0);}
+.line .en b{color:var(--yellow); font-weight:700;}
+.line .zh{color:var(--grey2); font-size:12.5px; margin-top:3px;}
+.why-line{border-left:3px solid var(--green); padding:6px 12px; margin:10px 0 4px 40px; color:var(--grey2); font-size:12.5px; background:var(--bg0); border-radius:0 8px 8px 0;}
+.why-line b{color:var(--green);}
+
+footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; color:var(--grey2); font-size:12.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>R2 onsite 圖解作戰本</h1>
+  <div class="sub">spec-heavy 題型解剖 × sim i–n 圖解 × 英文對白道場 ｜ 2026-07-29 起用,涵蓋 8/6・8/11・8/12 三場</div>
+</header>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tabbtn active" data-t="t0">0. 作戰地圖</button>
+  <button class="tabbtn" data-t="t1">1. 題型解剖</button>
+  <button class="tabbtn" data-t="t2">2. sim i:DMA 三張表</button>
+  <button class="tabbtn" data-t="t3">3. 五個模擬前導</button>
+  <button class="tabbtn" data-t="t4">4. 英文對白道場</button>
+  <button class="tabbtn" data-t="t5">5. 自測</button>
+</nav>
+
+<!-- ═══════════════ TAB 0 作戰地圖 ═══════════════ -->
+<section class="panel active" id="t0">
+
+<div class="anchor">
+  <div class="big">R1 已過。下一階段只練一件事:把「長 spec」在 40 分鐘內變成「state 表 + 骨架 + 會動的 code」。</div>
+  <div class="small">R1 的回饋說得很清楚:clarify 已經過線(面試官點名稱讚),真正的洞是時間不夠導致 code 有漏洞。所以 R2 的每一場模擬,練的都是節奏,不是知識。</div>
+</div>
+
+<h2>三場 onsite(皆 09:15 開場,45 分鐘)</h2>
+<table class="mini">
+  <tr><th>日期</th><th>場次</th><th>形式</th><th>備戰重點</th></tr>
+  <tr><td><span class="hl-red">8/6(四)</span></td><td>coding #2</td><td>長英文 spec + provided API + <code>todo!()</code>,面試官是唯一 oracle</td><td>sim j/k/l 三場計時模擬先打完</td></tr>
+  <tr><td><span class="hl-red">8/11(二)</span></td><td>coding #3</td><td>同上;方向可能由 #2 透露</td><td>8/8–8/9 用 sim m/n 收尾,必要時換皮</td></tr>
+  <tr><td><span class="hl-red">8/12(三)</span></td><td>technical deep dive</td><td>挖履歷專案,追問到底;culture fit 散在各場 + 最後 15m debrief</td><td>2–3 個專案英文稿 + 模擬追問三輪</td></tr>
+</table>
+<p class="note">culture fit 沒有獨立場——它藏在每一場的開頭自介、行為題、還有最後 15 分鐘的 recruiter debrief 裡。稿子的用途是「每場開頭 60–90 秒 + debrief 反問三條」。</p>
+
+<h2>逐日時間軸(7/29 → 8/12)</h2>
+<div class="legend">
+  <span><span class="sw" style="background:var(--aqua)"></span>計時模擬(白天打字場)</span>
+  <span><span class="sw" style="background:var(--orange)"></span>口述/唸稿(晚上出聲場)</span>
+  <span><span class="sw" style="background:var(--purple)"></span>taper / 梯度</span>
+  <span><span class="sw" style="background:var(--red)"></span>正式場</span>
+</div>
+<div class="tl">
+  <div class="day talk"><div class="d">7/29 三・今天</div><div class="t">休息日:讀 sol_sim_i_dma;晚上起草 deep dive / culture fit 英文稿</div></div>
+  <div class="day sim"><div class="d">7/30 四</div><div class="t">i-lite 30m(R1 修洞重做)+ 卡 SP;晚:自介稿 + why-us</div></div>
+  <div class="day sim"><div class="d">7/31 五</div><div class="t">🔴 sim j(ISR pipeline)+ signal_pipeline 複讀;晚:deep dive 口述 #1</div></div>
+  <div class="day sim"><div class="d">8/1 六</div><div class="t">🔴 sim k(per-core fan-in)+ 卡 FP;晚:culture fit 唸 #1</div></div>
+  <div class="day sim"><div class="d">8/2 日</div><div class="t">🔴 sim l(MMIO doorbell,HW-L 卡前導);晚:deep dive 口述 #2</div></div>
+  <div class="day"><div class="d">8/3 一</div><div class="t">認題卡 FR/TA/TQ + 骨架默寫抽查;(選)句庫唸 3 遍</div></div>
+  <div class="day taper"><div class="d">8/4 二</div><div class="t">輕:i–l 洞複掃 + sol_m/sol_n 檔頭預讀;08:30 起床梯度開始</div></div>
+  <div class="day taper"><div class="d">8/5 三</div><div class="t">taper:檢查表 + 六題 30 秒英文定界一輪;08:00 起</div></div>
+  <div class="day hot"><div class="d">8/6 四</div><div class="t">coding #2(09:15);當晚紀錄 + 洞清單入庫</div></div>
+  <div class="day sim"><div class="d">8/7 五</div><div class="t">修 #2 的洞(targeted);晚:deep dive 口述 #3</div></div>
+  <div class="day sim"><div class="d">8/8 六</div><div class="t">🔴 sim m(watchdog,吃 #2 方向);晚:culture fit 全串</div></div>
+  <div class="day sim"><div class="d">8/9 日</div><div class="t">🔴 sim n(priority + DAG);晚:deep dive 全串</div></div>
+  <div class="day taper"><div class="d">8/10 一</div><div class="t">taper + 早睡(維持 ≤08:30 起)</div></div>
+  <div class="day hot"><div class="d">8/11 二</div><div class="t">coding #3(09:15);晚:deep dive 最後一遍</div></div>
+  <div class="day hot"><div class="d">8/12 三</div><div class="t">deep dive + debrief(09:15);收帳入庫</div></div>
+</div>
+<p class="note">閥門(時間不夠的砍序):認題卡 →(8/9)重打 → k。<b>i、j、l、m、兩段 taper、早起梯度不砍。</b>模擬題超時 = 挖到洞,記洞不記違規。</p>
+
+<h2>今晚(7/29)還剩什麼</h2>
+<div class="card info">
+  <h4>兩份稿子的「起草」= 把骨架填上你的材料,不是背逐字稿</h4>
+  <ul>
+    <li><b>deep dive</b>(<code>docs/interviews/deep-dive-projects.md</code>):從履歷挑 2–3 個專案,每個照 7 段模板(90 秒 elevator → 問題與限制 → 設計 → trade-off ≥2 → 數字 → 最難的 bug → 如果重來)寫英文 bullet 骨架。<span class="hl-yel">材料貼給 Claude 就能一起打磨成句。</span></li>
+    <li><b>culture fit</b>(<code>docs/interviews/culture-fit-script.md</code>):先寫五題 ★(自介 / why-Etched / WLB / conflict / failure),每題 5–8 句。R1 的「不熟 DMA 也能 clarify 出 spec」是現成的 ambiguity 答案,直接引用面試官的稱讚。</li>
+  </ul>
+</div>
+
+</section>
+
+<!-- ═══════════════ TAB 1 題型解剖 ═══════════════ -->
+<section class="panel" id="t1">
+
+<h2>這個題型長什麼樣(R1 實測)</h2>
+<p>R1 的形式和 repo 裡 a–h 彩排最大的差別:<b>不是從零手搓一個資料結構,而是拿到一大段英文 spec、一排已經寫好的 API、和一個 <code>todo!()</code> 的函式</b>。spec 是有洞的,面試官是唯一 oracle——你問到的答案就是 spec 的一部分。閱讀量比想像大,<span class="hl-org">文本分析本身是考點</span>。</p>
+
+<div class="card warn">
+  <h4>R1 暴露的兩個洞(這一輪的練習主軸)</h4>
+  <ol>
+    <li><b>英文對談雙向 repair</b>:自己的構句對方有時聽不懂,要重講;對方的話有時要請他重講。處方 = rephrase 句庫 + 「複誦式確認」升為預設動作(→ Tab 4 對白道場)。</li>
+    <li><b>長 spec 的閱讀策略</b>:快速定位「哪些 todo 是骨幹、哪些是配菜」沒練過。處方 = 下面的「API 三堆分類法」,拿到題先做這一步。</li>
+  </ol>
+</div>
+
+<h2>第一動:把 provided API 分成三堆</h2>
+<p>拿到一排 API 別逐行精讀。先按「它在事件迴圈裡扮演什麼」分堆,分完 reactor 骨架自動浮現——這一步大約 90 秒,換來的是整場的方向感:</p>
+
+<div class="apiflow">
+  <div class="apibox src">
+    <h4>事件源(等待/拉取)</h4>
+    <code>get_dma_request()</code>
+    <code>get_dma_result_done()</code>
+    <code>wait_event()</code>
+    <div class="why">迴圈的「醒來的理由」。每一個 get_* 都要問:回 None 是「現在沒有」還是「永遠沒了」?</div>
+  </div>
+  <div class="apibox act">
+    <h4>動作(改變世界)</h4>
+    <code>send_dma_request_to_engine(...)</code>
+    <div class="why">派工。呼叫它之前,你的 state 表要先答得出「派給誰、派什麼」。</div>
+  </div>
+  <div class="apibox rep">
+    <h4>回報(對外承諾)</h4>
+    <code>submit_dma_request_result_done(id)</code>
+    <div class="why">合約的終點。什麼條件下才能呼叫它,就是這題的正確性不變量。</div>
+  </div>
+</div>
+
+<p>然後給<b>每個名詞一張表</b>:題目裡有 request、有 engine,就有 request 表和 engine 表;<b>每個事件一條路由</b>:「engine 5 做完了」這個事件要能沿著表走回「那是 request A 的第 5 塊」。state 放哪、誰持有——這才是題目的 difficulty,不是演算法。</p>
+
+<h2>通用骨架:reactor 五步</h2>
+<p>R1 的 <code>run_dma_loop</code>、sim i–n 的 <code>run()</code>,全都是同一個形狀。默到能閉眼寫:</p>
+
+<pre class="code"><b>loop</b> {
+    wait_event();                       <i>// 1. 睡到有事(醒來只是提示,不是保證)</i>
+    <b>while let Some</b>(r) = get_request()   <i>// 2a. 收乾新請求:登記進 request 表</i>
+        { register(r); }
+    <b>while let Some</b>(e) = get_done()      <i>// 2b. 收乾完成事件:沿 owner 表路由回 request</i>
+        { route_done(e); }
+    dispatch();                         <i>// 3. 派工派到「沒空引擎」或「沒待派工作」為止</i>
+    <u>submit_finished();                  // 4. 檢查誰的計數歸零 → 對外回報</u>
+}</pre>
+
+<p class="note">「收乾」(drain)是關鍵字:每次醒來把兩個事件源都 while-let 抽到 None,才回去睡。只抽一個就睡,另一邊的事件可能永遠等不到下一次喚醒。</p>
+
+<h2>45 分鐘的時間預算</h2>
+<div class="budget">
+  <div class="b1"><b>clarify ≤10m</b>問到能複誦</div>
+  <div class="b2"><b>Phase 1 ~20m</b>state 表 + 骨架 + 填肉</div>
+  <div class="b3"><b>Phase 2 ~15m</b>面試官驗收後的加碼需求</div>
+  <div class="b4"><b>收尾</b></div>
+</div>
+<ul>
+  <li><b>clarify 的出口條件</b>不是「沒問題了」,是「我能把合約複誦回去而對方點頭」(→ Tab 4 場景一)。</li>
+  <li><b>寫之前先把 state 表念出來</b>:「I'll keep three tables: …」——這句話本身就是設計驗收,面試官會在這裡糾正你,比寫完才被糾正便宜 20 分鐘。</li>
+  <li><b>時間不夠是預期內</b>:R1 就是寫完即壓線。最後 3 分鐘的正確動作是主動把洞講出來(→ Tab 4 場景五),不是沉默地趕 code。</li>
+</ul>
+
+</section>
+
+<!-- ═══════════════ TAB 2 sim i DMA ═══════════════ -->
+<section class="panel" id="t2">
+
+<h2>R1 的洞,和它的正解</h2>
+<p>R1 當場的解法是 sequential:一次處理一單,用「剩餘塊數歸零 <b>且</b> 空閒 queue 長度回到 6」當完成判定。這個判定<b>只在單 request 模式下成立</b>——一旦兩單同時在飛,「engine 空不空」和「哪一單完成了」就再也沒有關係。</p>
+
+<div class="anchor">
+  <div class="big">完成判定只有一個正解:per-request 計數歸零(done == blocks_total)。</div>
+  <div class="small">任何借「engine 空閒度」推斷完成的判定,在 pipeline 下都是巧合正確。這是 sim i 要親手關掉的洞。</div>
+</div>
+
+<h2>三張表(sol_sim_i_dma 的骨架)</h2>
+<table class="mini">
+  <tr><th>表</th><th>型別</th><th>回答的問題</th><th>誰動它</th></tr>
+  <tr><td><code class="hl-aqua">free</code></td><td><code>VecDeque&lt;engine_id&gt;</code></td><td>誰有空?</td><td>派工時 pop,收到 done 時 push</td></tr>
+  <tr><td><code class="hl-yel">owner</code></td><td><code>[Option&lt;(req_id, block)&gt;; 6]</code></td><td>這台 engine 在做誰的哪一塊?</td><td>派工時寫入,done 事件靠它路由,路由完清空</td></tr>
+  <tr><td><code class="hl-pur">reqs</code></td><td><code>HashMap&lt;req_id, ReqState&gt;</code></td><td>每一單派到哪、完成幾塊、在飛幾塊?</td><td>register 建、route_done 更新、歸零時 submit + 移除</td></tr>
+</table>
+<p class="note">外加一條 <code>queue: VecDeque&lt;req_id&gt;</code>(還有塊沒派完的單,FIFO)。done 事件只給你 engine id——<b>沒有 owner 表,事件就路由不回正確的 request</b>,這是三張表裡最不能省的一張。</p>
+
+<h2>互動 stepper:pipeline 分水嶺劇本</h2>
+<p>劇本(即 sol 的 Dry-Run scenario 2):<b>A = 6 塊、B = 1 塊</b>幾乎同時到達;engine 完成順序是 LIFO(最後派的先回來)。看 pipeline 版怎麼讓 B 先完成——sequential 版在同一個劇本下,B 永遠排在 A 後面。</p>
+
+<div class="simstage" id="simstage"></div>
+<div class="stepctrl">
+  <button id="prevBtn" type="button">◀ 上一步</button>
+  <button id="nextBtn" type="button">下一步 ▶</button>
+  <div class="dots" id="dots"></div>
+</div>
+
+<div class="card good">
+  <h4>看完 stepper 要能講出來的三句話(英文版在 Tab 4 場景四)</h4>
+  <ul>
+    <li>done 事件只帶 engine id,所以路由靠 owner 表;<b>先 <code>take()</code> 確認這台 engine 真的在做這一單,才動計數</b>。</li>
+    <li>B 能插進來,是因為派工看的是「free 有沒有人 + queue 有沒有單」,跟 A 完成與否無關——這就是 pipeline。</li>
+    <li>B 先 submit 不是 bug:完成判定是 per-request 的 <code>done == blocks_total</code>,單與單互不相干。</li>
+  </ul>
+</div>
+
+<h2>sol 檔頭的三個 trade-off(讀完要能複誦)</h2>
+<ul>
+  <li><b>派工順序 FIFO 填滿</b>:先來的單先吃滿 engine——實作最短、單內延遲最低;代價是大單會餓小單。要公平就換 round-robin(queue 輪轉),多約 5 行。</li>
+  <li><b>cancel 採惰性收尾</b>:停止再派 + 在飛的塊等它自然 done 但不計數。不能「立刻拔 engine」——硬體上沒有搶佔這回事。</li>
+  <li><b>0 塊的單</b>:沒有工可派,收單即完成(boundary,register 時就 submit)。</li>
+</ul>
+
+</section>
+
+<!-- ═══════════════ TAB 3 五個模擬前導 ═══════════════ -->
+<section class="panel" id="t3">
+
+<p>這一頁只給<b>概念地形</b>:每題的場景、硬約束、和上場前值得問的 clarify 種子。<span class="hl-org">刻意不給解法</span>——解法要在計時場上自己長出來,寫完再開 <code>sol_sim_*.rs</code> 對答案。五題共用同一個 reactor 骨架(Tab 1),差別全在「事件源是誰、硬約束是什麼」。</p>
+
+<!-- sim j -->
+<div class="simcard">
+  <div class="head"><span class="sid">sim j</span><span class="nm">Sensor interrupt pipeline(ISR → bottom-half)</span><span class="date">7/31 五・計時 45m</span></div>
+  <div class="body">
+    <div class="flow">
+      <div class="fnode hw"><div class="t">HW FIFO</div><div class="s">水位線過了就舉手</div></div>
+      <div class="farrow">⚡IRQ</div>
+      <div class="fnode isr"><div class="t">ISR(中斷context)</div><div class="s">read_fifo → try_push → wake</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode buf"><div class="t">SPSC ring</div><div class="s">兩個世界的交棒點</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode wk"><div class="t">worker 執行緒</div><div class="s">醒來 → drain → log(慢)</div></div>
+    </div>
+    <p><b>ISR 三禁</b>:不能配置記憶體、不能阻塞、不能做慢事。所以 push 端必須是 <code>try_push</code>(wait-free)——在中斷 context 裡,「等一下」不是效能問題,是正確性問題(這正是卡#5 的皇冠句)。這題就是 <code>signal_pipeline</code> 的 spec-heavy 版,7/31 白天先複讀那一頁 30 分鐘再上。</p>
+    <div class="clarify-seed">
+      <div class="en">"What should happen when the ring is full — drop the newest sample, the oldest, or just count the loss?"</div>
+      <div class="zh">ring 滿了掉誰?掉新的、掉舊的、還是只記數?——overflow policy 是這題 spec 的天然洞,答案決定你的 push 端長相。</div>
+    </div>
+    <div class="clarify-seed">
+      <div class="en">"Can the ISR fire again while a previous ISR is still running, or are interrupts serialized?"</div>
+      <div class="zh">ISR 會重入嗎?——決定 producer 端是不是真的 single。</div>
+    </div>
+  </div>
+</div>
+
+<!-- sim k -->
+<div class="simcard">
+  <div class="head"><span class="sid">sim k</span><span class="nm">Per-core telemetry fan-in</span><span class="date">8/1 六・計時 45m</span></div>
+  <div class="body">
+    <div class="flow">
+      <div class="fnode isr"><div class="t">core 0 producer</div><div class="s">SPSC #0</div></div>
+      <div class="farrow">↘</div>
+      <div class="fnode isr"><div class="t">core 1 producer</div><div class="s">SPSC #1</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode wk"><div class="t">aggregator</div><div class="s">輪詢 N 條 SPSC → write_out</div></div>
+      <div class="farrow">↗</div>
+      <div class="fnode isr"><div class="t">core N-1 producer</div><div class="s">SPSC #N-1</div></div>
+    </div>
+    <p>硬約束一句話:<b>producer 永不阻塞</b>。題目給的是 <code>spsc_new</code>(每核一條)而不是一條 MPMC——「N × SPSC vs 1 × MPSC」本身就是招牌 trade-off:per-core SPSC 免掉跨核競爭、代價是 aggregator 要掃 N 條 + 空轉判斷;這正是 7/25 錄音講過的扇入(fan-in)故事,現在用寫的。</p>
+    <div class="clarify-seed">
+      <div class="en">"When every queue is empty, should the aggregator spin, sleep, or park until someone unparks it? Who calls unpark?"</div>
+      <div class="zh">全空時 aggregator 睡不睡?誰負責叫醒?——lost-wakeup 的老朋友,store→拿鎖→notify 的傷疤在這裡站崗。</div>
+    </div>
+    <div class="clarify-seed">
+      <div class="en">"Is fairness across cores required — can I fully drain core 0 before touching core 1, or should I round-robin?"</div>
+      <div class="zh">跨核公平性要求嗎?先抽乾 core 0 再看 core 1 行不行?</div>
+    </div>
+  </div>
+</div>
+
+<!-- sim l -->
+<div class="simcard">
+  <div class="head"><span class="sid">sim l</span><span class="nm">MMIO command queue(doorbell + completion ring)</span><span class="date">8/2 日・計時 45m,HW-L 卡當 10 分鐘前導</span></div>
+  <div class="body">
+    <div class="flow">
+      <div class="fnode wk"><div class="t">① slot_write</div><div class="s">把 descriptor 寫進下一格</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode buf"><div class="t">② barrier()</div><div class="s">先讓貨上架</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode hw"><div class="t">③ doorbell 寫 tail</div><div class="s">再按鈴叫店員</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode isr"><div class="t">device 消化</div><div class="s">completion ring 回報</div></div>
+    </div>
+    <p><b>鐵律:descriptor → barrier → doorbell,順序不可換。</b>device 一看到 doorbell 就會去讀 descriptor;沒有 barrier,它可能讀到寫到一半的貨。這是 signal_pipeline「最後一眼」原則的硬體版——通知(按鈴)必須發生在資料(上架)之後,而且中間要一道對 device 也有效的牆。</p>
+    <p>另一半的地形:submission ring 和 completion ring 的 <b>head/tail 所有權</b>(你推進哪一端、device 推進哪一端,滿/空怎麼判)+ <b>completion 可能亂序回來</b>——用 tag 路由回原 command,跟 sim i 的 owner 表同構。</p>
+    <div class="clarify-seed">
+      <div class="en">"Do completions come back in submission order, or can they be out of order? What exactly is in a completion entry — a tag, an index, or the whole descriptor?"</div>
+      <div class="zh">completion 保序嗎?entry 裡帶什麼(tag / index / 整個 descriptor)?——決定你要不要一張 in-flight 表。</div>
+    </div>
+    <div class="clarify-seed">
+      <div class="en">"How do I detect 'ring full' — compare my tail against a head the device advances, or is there a count register?"</div>
+      <div class="zh">滿怎麼判?——head/tail 比對還是計數暫存器;順便問 index 會不會 wrap。</div>
+    </div>
+  </div>
+</div>
+
+<!-- sim m -->
+<div class="simcard">
+  <div class="head"><span class="sid">sim m</span><span class="nm">Engine watchdog / timeout(R1 延伸)</span><span class="date">8/8 六・計時 45m,吃 coding #2 暴露的方向</span></div>
+  <div class="body">
+    <p>場景不變(DMA dispatcher),多一個殘酷事實:<b>engine 會 hang,而且永遠不回報</b>。API 差異只有兩個——<code>now_ms()</code> 和 <code>wait_event_timeout(ms)</code> 取代 <code>wait_event()</code>。</p>
+    <p>概念上這是<b>事件迴圈的第三種事件:時間</b>。前兩種(新請求、完成通知)是別人推給你的;超時是你自己排程的——每派一塊工就記一筆 deadline,醒來時除了收乾兩個事件源,還要掃「誰過期了」。這正是 h(timer_queue)那套肌肉:deadline 記帳、<code>wait_timeout</code> 醒來重查 predicate、drift-free 的差額怎麼算。</p>
+    <div class="clarify-seed">
+      <div class="en">"Is re-dispatching a block safe — is the operation idempotent? Could the 'hung' engine actually finish later, and what happens if both copies complete?"</div>
+      <div class="zh">重派安全嗎(冪等)?被判死的 engine 事後又回報怎麼辦?——idempotency 決定你敢不敢 retry,雙重完成決定你的計數要不要防重。</div>
+    </div>
+    <div class="clarify-seed">
+      <div class="en">"Is a hung engine dead forever, or should I put it back in rotation after some cool-down?"</div>
+      <div class="zh">判死的 engine 永久除名還是冷卻後歸隊?——決定 free 表的生命週期。</div>
+    </div>
+  </div>
+</div>
+
+<!-- sim n -->
+<div class="simcard">
+  <div class="head"><span class="sid">sim n</span><span class="nm">Priority job scheduler + dependency DAG</span><span class="date">8/9 日・計時 45m;8/6 若情報指向他型可換皮</span></div>
+  <div class="body">
+    <div class="flow">
+      <div class="fnode isr"><div class="t">jobs 到達</div><div class="s">帶 priority + deps</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode buf"><div class="t">入場閘:indegree</div><div class="s">deps 沒清完不准進場</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode wk"><div class="t">ready pool</div><div class="s">BinaryHeap(priority, seq)</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode hw"><div class="t">4 worker slots</div><div class="s">done → 解鎖下游</div></div>
+    </div>
+    <p>兩道閘串聯:<b>先過依賴(indegree 歸零才 runnable),再比優先權</b>。heap 的排序鍵用 <code>(priority, Reverse(seq))</code>——seq 破平手,同優先權維持 FIFO,不然測試會抓你順序不穩。Phase 1 的 <code>deps</code> 永遠是空的,但它印在 struct 上——<span class="hl-org">印在題面上的欄位就是 Phase 2 的預告</span>,clarify 時值得點名問一句。這題吃的是 7/27 coffee chat 後當晚快寫的 toposort 肌肉(Kahn 兩表一佇列)。</p>
+    <div class="clarify-seed">
+      <div class="en">"I notice deps is always empty for now — should I design so dependencies can be added later, or ignore the field entirely?"</div>
+      <div class="zh">deps 現在恆空——要為之後鋪路還是完全忽略?(讓面試官知道你看到了伏筆)</div>
+    </div>
+    <div class="clarify-seed">
+      <div class="en">"If a high-priority job arrives while all four workers are busy with low-priority work, do we just wait — or is preemption expected?"</div>
+      <div class="zh">高優先權來了但 worker 全忙,等就好還是要搶佔?——priority inversion 的門口,答「不搶佔」也要講得出代價。</div>
+    </div>
+  </div>
+</div>
+
+<div class="card info">
+  <h4>五題一句話總綱</h4>
+  <p style="margin:4px 0">全部都是 Tab 1 那個 reactor 骨架,變的只有:<b>j</b> 把事件源搬進中斷 context(push 端 wait-free)、<b>k</b> 把事件源複製 N 份(掃描 + 叫醒)、<b>l</b> 把「通知」變成對硬體的 doorbell(barrier 鐵律)、<b>m</b> 加入第三種事件「時間」(deadline 記帳)、<b>n</b> 把「誰先跑」變成兩道閘(依賴 → 優先權)。</p>
+</div>
+
+</section>
+
+<!-- ═══════════════ TAB 4 英文對白道場 ═══════════════ -->
+<section class="panel" id="t4">
+
+<p>R1 洞①的處方在這裡。五個場景,每句英文下面附中文對照;<b>粗體是句骨</b>——背骨架不背整句,每晚出聲場挑一景唸 3 遍。句庫總表在 <code>docs/interviews/clarify-phrasebook-en.md</code>。</p>
+
+<h2>場景一:開場定界 + 挖 spec 洞(clarify 的標準開局)</h2>
+<div class="dlg">
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Here's the problem. Take a moment to read it, and feel free to ask questions."</div>
+    <div class="zh">(丟出長 spec)讀一下,有問題儘管問。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>Before I write any code, let me make sure I understand the setup</b>: we have six engines, requests arrive through <code>get_dma_request</code>, and my job is to feed blocks to engines and report each request once <b>all</b> of its blocks are done. Is that right?"</div>
+    <div class="zh">寫 code 前先確認設定:六台 engine、request 從這支 API 進來、我的工作是餵塊給 engine,整單全部完成才回報。對嗎?</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"That's right."</div>
+    <div class="zh">對。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"A few questions then. First, the big one: <b>do requests need to make progress concurrently?</b> Concretely — if a second request arrives while the first is still in flight, may it simply wait, or should it start using idle engines right away?"</div>
+    <div class="zh">先問最大的:多單要同時推進嗎?具體說——第二單到達時第一單還在飛,它可以排隊等,還是應該馬上用空著的 engine?</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Assume multiple requests can be in flight at once. Don't serialize them."</div>
+    <div class="zh">假設多單同時在飛,不要串行化。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"Got it — <b>so I'll track per-request progress</b> instead of assuming one at a time. Next: when <code>get_dma_result_done</code> hands me an engine id, does it also tell me <b>which block or which request</b> that was? Or do I keep that mapping myself?"</div>
+    <div class="zh">了解——那我就要記每一單各自的進度,而不是假設一次一單。下一個:done 事件給我 engine id 的時候,會告訴我那是哪一塊、哪一單嗎?還是要我自己記?</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"It only gives you the engine id."</div>
+    <div class="zh">只給 engine id。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"Then I'll keep an owner table on my side. Last one for now: <b>does <code>wait_event</code> guarantee something is ready when it returns, or can it wake spuriously?</b>"</div>
+    <div class="zh">那我自己這邊維護一張 owner 表。最後一題:wait_event 回來保證有事嗎,還是可能空醒?</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Treat wakeups as hints. Always re-check."</div>
+    <div class="zh">把喚醒當提示,每次都要重查。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>Let me restate the contract before I code</b>: multiple requests in flight; done events carry only the engine id, so routing is on me; wakeups are hints, so every wait is followed by a drain-and-recheck loop. <b>Did I miss anything?</b>"</div>
+    <div class="zh">動筆前複誦合約:多單同飛;done 只帶 engine id,路由我自己負責;喚醒只是提示,所以每次醒來都收乾再重查。有漏嗎?</div>
+  </div></div>
+  <div class="why-line"><b>為什麼有效:</b>最後那句複誦不是禮貌,是驗收——你把「問到的答案」組裝回一個合約,面試官點頭的那一刻,spec 的洞才算補上。R1 面試官點名稱讚的就是這個動作;g#1 的教訓(「drain 語意答了還掉」)的處方也是它:<b>答案要複誦回去才算收到</b>。</div>
+</div>
+
+<h2>場景二:聽不懂面試官(inbound repair)</h2>
+<div class="dlg">
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">(語速快,收音悶)"…and you should coalesce the doorbell writes when the ring is under pressure."</div>
+    <div class="zh">(你只聽到 doorbell 和 pressure 兩個詞)</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"Sorry, <b>could you say that again?</b> The audio cut out a bit."</div>
+    <div class="zh">不好意思,可以再說一次嗎?剛剛聲音斷了一下。</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Sure — when the ring is under pressure, don't ring the doorbell once per descriptor. Batch them."</div>
+    <div class="zh">ring 有壓力時,別每個 descriptor 都按一次鈴,要批次。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>Just to confirm, you said</b> I should submit several descriptors and then ring the doorbell once for the whole batch — right?"</div>
+    <div class="zh">跟你確認:你的意思是先寫好幾個 descriptor,整批按一次鈴——對嗎?</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Exactly."</div>
+    <div class="zh">正是。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"One more check — <b>when you say 'under pressure', do you mean</b> the ring is nearly full, <b>or</b> the device is falling behind?"</div>
+    <div class="zh">再確認一個——你說的「壓力」是指 ring 快滿,還是 device 消化不過來?</div>
+  </div></div>
+  <div class="why-line"><b>為什麼有效:</b>三段梯度——①請對方重講(歸因給音訊,不傷面子)②用自己的話複誦求證 ③把模糊詞逼成二選一("do you mean A or B?" 是句庫裡最好用的一句)。絕不裝懂:裝懂省下的 10 秒,會在 20 分鐘後變成寫錯方向的 code。</div>
+</div>
+
+<h2>場景三:面試官聽不懂你(outbound repair)</h2>
+<div class="dlg">
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"So the thing is, when the engine that, uh, the completion comes back, I need to know which one it was for, because otherwise the counting of the, the request that owns it…"</div>
+    <div class="zh">(句子纏在一起了——engine、completion、計數、request 全擠在同一句)</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Hmm, I'm not sure I follow."</div>
+    <div class="zh">我沒跟上。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>Let me say that more simply.</b> Two tables. Table one answers: <b>which engines are free.</b> Table two answers: <b>which request does this engine's result belong to.</b> When an engine finishes, I look it up in table two, and bump that request's counter."</div>
+    <div class="zh">我講簡單一點。兩張表。第一張回答:哪些 engine 有空。第二張回答:這台 engine 的結果屬於哪一單。engine 做完,我查第二張表,幫那一單的計數 +1。</div>
+  </div></div>
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"Ah, got it. So the second table is your routing."</div>
+    <div class="zh">懂了,第二張表就是你的路由。</div>
+  </div></div>
+  <div class="why-line"><b>為什麼有效:</b>重講的公式 = <b>短句 + 一句一事 + 幫東西取名字</b>("table one / table two" 之後整場都能引用)。卡住時先說 "Let me say that more simply" 爭取兩秒重組——這句話讓重講看起來像溝通技巧,而不是英文破。</div>
+</div>
+
+<h2>場景四:邊寫邊講(narrate-while-coding)</h2>
+<div class="dlg">
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>I'll start with the simple version and tighten it after it works</b> — first the loop skeleton, then the routing."</div>
+    <div class="zh">先寫能動的簡單版,會動了再收緊——先迴圈骨架,再路由。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>I know this line is subtle, so let me explain why the order matters:</b> I bump <code>done</code> only after the <code>take()</code> confirms this engine really was working for this request. If I bump first and check later, a stale completion corrupts the count."</div>
+    <div class="zh">這行很細,講一下順序為什麼重要:我先用 take() 確認這台 engine 真的在替這一單做事,才把 done 加一。先加再查的話,一個過期的 completion 就把計數弄髒了。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"Quick sanity check before I move on: zero-block request — no work to dispatch, so I report it complete right at registration. <b>Let me trace one boundary out loud</b>: request B has one block, engine five frees up, B's block goes out, comes back, counter hits one-of-one, submit."</div>
+    <div class="zh">往下寫之前快速自檢:0 塊的單沒有工可派,登記當下就回報完成。口頭走一條邊界:B 一塊,engine 5 空出來,B 的塊派出去、回來,計數 1/1,submit。</div>
+  </div></div>
+  <div class="why-line"><b>為什麼有效:</b>R1 證實了 narrate 就是考試本體——寫完即壓線、boundary test 零時間的那一場,「口頭 trace 不變量」是唯一的正確性展示載體,而且面試官被說服了。三句骨架:宣告策略(simple first)→ 解釋微妙行(why the order matters)→ 口頭走邊界(trace out loud)。</div>
+</div>
+
+<h2>場景五:時間不夠的收尾 + trade-off 三拍</h2>
+<div class="dlg">
+  <div class="line"><span class="who i">官</span><div class="txt">
+    <div class="en">"We have about three minutes left."</div>
+    <div class="zh">剩三分鐘。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"<b>I'm running short on time, so let me describe what's left and where the holes are.</b> The dispatch path and completion routing work. What I haven't handled: engine failure — right now a hung engine silently strands its request; and I'd want a real test for the out-of-order completion case I only traced verbally."</div>
+    <div class="zh">時間不夠了,讓我把剩下的和洞在哪講清楚。派工路徑和完成路由是好的。還沒處理的:engine 故障——現在一台 hang 住的 engine 會讓那一單卡死;另外亂序 completion 那條我只口頭走過,想補一個真的測試。</div>
+  </div></div>
+  <div class="line"><span class="who c">你</span><div class="txt">
+    <div class="en">"On the design itself, three trade-offs. <b>The price I paid</b>: FIFO fill is simplest and gives the lowest per-request latency, <b>but a large request can starve a small one</b>. <b>The road not taken</b>: round-robin across requests — fairer, about five more lines, slightly worse locality. <b>Where this design holds</b>: as long as completions are the only feedback channel and engines don't fail; add failures, and I'd need deadlines per in-flight block."</div>
+    <div class="zh">設計本身講三拍。付的代價:FIFO 填滿最簡單、單內延遲最低,但大單會餓小單。沒走的路:跨單 round-robin——更公平,多五行,locality 略差。有效範圍:只要 completion 是唯一回饋通道、engine 不故障,這設計就成立;要容錯,就得幫每塊在飛的工作記 deadline。</div>
+  </div></div>
+  <div class="why-line"><b>為什麼有效:</b>R1 的教訓——時間不夠時,主動把洞講出來比被抓到強;而且「我知道洞在哪」本身就是訊號(JD 原話:finding your own bug = stronger signal)。收尾三拍公式(7/26 定版):<b>價格 → 沒走的路 ≥2 條(用軸開頭)→ 有效範圍</b>。</div>
+</div>
+
+</section>
+
+<!-- ═══════════════ TAB 5 自測 ═══════════════ -->
+<section class="panel" id="t5">
+
+<p>先答再翻。答不出來的那條,回對應的 tab 重讀。</p>
+
+<details><summary>1. 為什麼「空閒 queue 長度回到 6」在 pipeline 下是錯的完成判定?正解是什麼?</summary>
+<p>「engine 全空」是<b>全域</b>性質,「某一單完成」是 <b>per-request</b> 性質——多單同飛時兩者無關:A 還剩塊在飛時 B 已經可以完成,而「全空」可能因為 B 的塊在飛而永遠等不到。正解:每單記 <code>done == blocks_total</code>,計數歸零即 submit,單與單互不相干。任何借 engine 空閒度推斷的判定都是巧合正確(只在單 request 模式下碰巧成立)。</p></details>
+
+<details><summary>2. done 事件只給 engine id,路由靠哪張表?那張表的 entry 什麼時候寫、什麼時候清?</summary>
+<p>靠 <code>owner: [Option&lt;(req_id, block)&gt;; 6]</code>。派工時寫入(engine i 開始替 req r 做 block b);done 事件到達時 <code>take()</code> 讀出並清空,沿著它把計數記到正確的 request 上。先 take 確認、再動計數——順序反了,過期/意外的 completion 會弄髒帳。</p></details>
+
+<details><summary>3. MMIO 提交的鐵律三步是什麼?為什麼順序不可換?</summary>
+<p>① <code>slot_write(descriptor)</code>(貨上架)→ ② <code>barrier()</code>(對 device 也有效的牆)→ ③ 寫 doorbell(按鈴)。device 一看到 doorbell 就會去讀 descriptor;沒有牆,CPU/互連可能讓 doorbell 先到、descriptor 後到,device 讀到半成品。這是「資料先於通知 + 中間一道牆」原則的硬體版。</p></details>
+
+<details><summary>4. ISR 三禁是哪三件事?為什麼 push 端必須 wait-free?</summary>
+<p>不配置記憶體、不阻塞、不做慢事(log/IO)。中斷 context 裡沒有「等一下」——你擋住的可能是整顆 CPU 的中斷處理;所以交棒只能 <code>try_push</code>(失敗就走 overflow policy),wait-free 在這裡是<b>正確性需求</b>,不是效能偏好。</p></details>
+
+<details><summary>5. watchdog 要 retry 一塊工之前,最關鍵的 clarify 是什麼?為什麼?</summary>
+<p>「重做這塊安全嗎(idempotent)?被判死的 engine 事後又完成了怎麼辦?」冪等性決定敢不敢 retry:重做會毀資料的操作,超時後只能報錯不能重派;而「雙重完成」決定計數要不要防重(同一塊完成兩次只能算一次)。</p></details>
+
+<details><summary>6. 面試官講太快沒聽清,你的前三句依序是什麼(英文)?</summary>
+<p>① "Sorry, could you say that again? The audio cut out a bit."(請重講,歸因音訊)② "Just to confirm, you said [my paraphrase] — right?"(複誦求證)③ "When you say [X], do you mean [A] or [B]?"(模糊詞逼成二選一)。鐵律:絕不裝懂。</p></details>
+
+<details><summary>7. 收尾 trade-off 三拍的公式?</summary>
+<p><b>價格</b>(我的設計付了什麼代價)→ <b>沒走的路 ≥2 條</b>(每條用軸開頭:公平性軸、延遲軸、容錯軸……)→ <b>有效範圍</b>(這設計在什麼假設下成立、假設破了要改什麼)。時間不夠時先講「剩什麼 + 洞在哪」再進三拍。</p></details>
+
+</section>
+
+<footer class="foot">
+  <p>本頁材料源:<code>docs/interviews/sim-problems.md</code>(題本)・<code>docs/interviews/2026-07-28-tps-round1-dma.md</code>(R1 實錄)・<code>rehearsals/examples/sol_sim_i_dma.rs</code>(7/29 指定閱讀)・<code>docs/interviews/clarify-phrasebook-en.md</code>(句庫全表)・<code>docs/interviews/README.md</code>(逐日計畫)。跑題協定:題幹只讀 Phase 1,mock/SimBus 區與參考測試跑題前不准開。</p>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var bar=document.getElementById('tabbar');
+  bar.addEventListener('click',function(e){
+    var b=e.target.closest('.tabbtn'); if(!b)return;
+    var t=b.getAttribute('data-t');
+    var btns=bar.querySelectorAll('.tabbtn');
+    for(var i=0;i<btns.length;i++){btns[i].classList.toggle('active',btns[i]===b);}
+    var panels=document.querySelectorAll('.panel');
+    for(var j=0;j<panels.length;j++){panels[j].classList.toggle('active',panels[j].id===t);}
+    window.scrollTo({top:0});
+  });
+
+  /* ── sim i stepper ── */
+  /* owner: 長度 6 的陣列,元素 null 或 [req, blockIdx];reqs: {id:{total,next,done,inf,st}} st: ''|'sub' */
+  var steps=[
+    {free:[0,1,2,3,4,5], owner:[null,null,null,null,null,null], reqs:{}, queue:[], doneFlash:[],
+     en:"Boot: three tables in place. free = all six engines; owner = empty; reqs = empty.",
+     zh:"開機:三張表就位。free = 六台全空;owner 全空;reqs 空。", flag:false},
+    {free:[0,1,2,3,4,5], owner:[null,null,null,null,null,null], reqs:{A:{total:6,next:0,done:0,inf:0,st:''}}, queue:['A'], doneFlash:[],
+     en:"get_dma_request → A (6 blocks). Register: reqs[A] = 0/6 done, queue = [A].",
+     zh:"收到 A(6 塊)。登記:reqs[A] 進度 0/6,A 進待派佇列。", flag:false},
+    {free:[], owner:[['A',0],['A',1],['A',2],['A',3],['A',4],['A',5]], reqs:{A:{total:6,next:6,done:0,inf:6,st:''}}, queue:[], doneFlash:[],
+     en:"Dispatch: A0→E0 … A5→E5. free is drained; owner records who works for whom; A has 6 in flight, nothing left to hand out — A leaves the queue (but is NOT done).",
+     zh:"派工:A0→E0 … A5→E5。free 抽乾;owner 記下每台在替誰做事;A 六塊在飛、沒東西可派了——A 離開佇列(但還沒完成)。", flag:false},
+    {free:[], owner:[['A',0],['A',1],['A',2],['A',3],['A',4],['A',5]], reqs:{A:{total:6,next:6,done:0,inf:6,st:''},B:{total:1,next:0,done:0,inf:0,st:''}}, queue:['B'], doneFlash:[],
+     en:"get_dma_request → B (1 block). No free engine, so B can only wait in the queue.",
+     zh:"收到 B(1 塊)。沒有空 engine,B 只能排隊。", flag:false},
+    {free:[5], owner:[['A',0],['A',1],['A',2],['A',3],['A',4],null], reqs:{A:{total:6,next:6,done:1,inf:5,st:''},B:{total:1,next:0,done:0,inf:0,st:''}}, queue:['B'], doneFlash:[5],
+     en:"wait_event → done = E5 (LIFO). owner[5] said (A, block 5) → route: A becomes 1/6, engine 5 returns to free.",
+     zh:"wait_event 醒來 → E5 做完(LIFO)。owner[5] 記著 (A, 第5塊) → 路由:A 進度 1/6,E5 回到 free。", flag:false},
+    {free:[], owner:[['A',0],['A',1],['A',2],['A',3],['A',4],['B',0]], reqs:{A:{total:6,next:6,done:1,inf:5,st:''},B:{total:1,next:1,done:0,inf:1,st:''}}, queue:[], doneFlash:[],
+     en:"Dispatch again: B0 → E5. Dispatch only asks 'is anyone free & is anything queued' — it does not care that A is unfinished. This IS the pipeline.",
+     zh:"再派工:B0 → E5。派工只問「有沒有人有空、有沒有單排隊」——完全不管 A 完成了沒。這就是 pipeline。", flag:false},
+    {free:[5], owner:[['A',0],['A',1],['A',2],['A',3],['A',4],null], reqs:{A:{total:6,next:6,done:1,inf:5,st:''},B:{total:1,next:1,done:1,inf:0,st:'sub'}}, queue:[], doneFlash:[5],
+     en:"done = E5 again → routes to B → B hits 1/1 → submit B. B finishes BEFORE A — per-request counting makes requests independent.",
+     zh:"E5 又做完 → 路由到 B → B 計數 1/1 → 回報 B 完成。B 比 A 先完成——per-request 計數讓單與單互不相干。", flag:true},
+    {free:[5,4,3,2], owner:[['A',0],['A',1],null,null,null,null], reqs:{A:{total:6,next:6,done:3,inf:3,st:''},B:{total:1,next:1,done:1,inf:0,st:'sub'}}, queue:[], doneFlash:[4,3],
+     en:"E4, E3 come back → A climbs to 3/6. Each done event walks owner → reqs; no guessing from idle counts.",
+     zh:"E4、E3 陸續回來 → A 進度 3/6。每個 done 都沿 owner → reqs 走帳;完全不靠「幾台有空」猜。", flag:false},
+    {free:[5,4,3,2,1,0], owner:[null,null,null,null,null,null], reqs:{A:{total:6,next:6,done:6,inf:0,st:'sub'},B:{total:1,next:1,done:1,inf:0,st:'sub'}}, queue:[], doneFlash:[1,0],
+     en:"E2, E1, E0 return → A hits 6/6 → submit A. End state: all engines free, both requests reported. (The sequential version, on this same script, would have made B wait behind all of A.)",
+     zh:"E2、E1、E0 回來 → A 計數 6/6 → 回報 A。終局:六台全空、兩單皆回報。(sequential 版在同一劇本下,B 只能排在 A 整單後面。)", flag:true}
+  ];
+
+  var cur=0;
+  var stage=document.getElementById('simstage');
+  var dotsEl=document.getElementById('dots');
+
+  function chipList(arr,cls){
+    if(!arr.length) return '<span class="chip ghost">(空)</span>';
+    var h='';
+    for(var i=0;i<arr.length;i++){h+='<span class="chip '+cls+'">'+arr[i]+'</span>';}
+    return h;
+  }
+  function render(){
+    var s=steps[cur];
+    var h='';
+    h+='<div class="trow">';
+    h+='<div class="tbl"><div class="cap">FREE(誰有空)</div><div class="chips">'+chipList(s.free.map(function(e){return 'E'+e;}),'eng')+'</div></div>';
+    h+='<div class="tbl"><div class="cap">QUEUE(待派的單)</div><div class="chips">'+chipList(s.queue,'req')+'</div></div>';
+    h+='</div>';
+    h+='<div class="tbl" style="min-width:100%"><div class="cap">OWNER(engine → 誰的哪一塊)</div><div class="engrow">';
+    for(var i=0;i<6;i++){
+      var o=s.owner[i];
+      var busy=o?' busy':'';
+      var flash=s.doneFlash.indexOf(i)>=0?' done-flash':'';
+      h+='<div class="eng-slot'+busy+flash+'"><div class="eid">E'+i+'</div><div class="job">'+(o?(o[0]+'·b'+o[1]):'—')+'</div></div>';
+    }
+    h+='</div></div>';
+    h+='<div class="trow"><div class="tbl" style="flex:1"><div class="cap">REQS(每單進度)</div>';
+    var keys=Object.keys(s.reqs);
+    if(!keys.length){ h+='<span class="chip ghost">(空)</span>'; }
+    else{
+      h+='<table class="reqs"><tr><th>req</th><th>total</th><th>next</th><th>done</th><th>in-flight</th><th>狀態</th></tr>';
+      for(var k=0;k<keys.length;k++){
+        var id=keys[k], r=s.reqs[id];
+        var rowCls=r.st==='sub'?' class="submitted"':'';
+        var doneCls=(r.done===r.total&&r.total>0)?' class="done-cell"':'';
+        h+='<tr'+rowCls+'><td>'+id+'</td><td>'+r.total+'</td><td>'+r.next+'</td><td'+doneCls+'>'+r.done+'</td><td>'+r.inf+'</td><td>'+(r.st==='sub'?'✅ submitted':'…')+'</td></tr>';
+      }
+      h+='</table>';
+    }
+    h+='</div></div>';
+    h+='<div class="steplog">'+(s.flag?'<div class="flag">★ 分水嶺</div>':'')+'<div class="en">'+s.en+'</div><div class="zh">'+s.zh+'</div></div>';
+    stage.innerHTML=h;
+    var dots=dotsEl.querySelectorAll('.dot');
+    for(var d=0;d<dots.length;d++){dots[d].classList.toggle('active',d===cur);}
+  }
+  for(var i=0;i<steps.length;i++){
+    var b=document.createElement('button');
+    b.type='button'; b.className='dot'+(steps[i].flag?' mark':''); b.textContent=i;
+    (function(idx){b.addEventListener('click',function(){cur=idx;render();});})(i);
+    dotsEl.appendChild(b);
+  }
+  document.getElementById('prevBtn').addEventListener('click',function(){if(cur>0){cur--;render();}});
+  document.getElementById('nextBtn').addEventListener('click',function(){if(cur<steps.length-1){cur++;render();}});
+  render();
+})();
+</script>
+</body>
+</html>

@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    20 個互動模組、1 間 clarify 決策室、13 份深讀教材(html_p:追問鏈 + self-quiz)、11 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    20 個互動模組、1 間 clarify 決策室、14 份深讀教材(html_p:追問鏈 + self-quiz)、12 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -756,6 +756,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">RMW &amp; CAS · fetch_add / compare_exchange</span>
       <span class="hook">read-modify-write 深讀:為何 CAS 吃兩個 ordering(結局數,不是半邊數)、weak vs strong、ABA 三解、Arc refcount 同構;含 CAS-race 互動 stepper(A 贏 / B 重試,反例演 lost update)+ P/C 家族(寫者數=難度)。</span>
       <span class="hits">atomic ordering 的延伸 · CAS loop 白板題 · Treiber stack</span>
+    </a>
+    <a class="card" href="../../html_p/r2-onsite-visual-guide.html">
+      <span class="name">R2 onsite 圖解作戰本(8/6・8/11・8/12)</span>
+      <span class="hook">spec-heavy 題型解剖(API 三堆分類法 + reactor 五步骨架)、sim i 三張表互動 stepper(pipeline 分水嶺:B 先 submit)、sim j–n 概念前導與 clarify 種子、英文對白道場五場景(雙語)。</span>
+      <span class="hits">7/29–8/12 逐日時間軸 · repair 三段梯度 · trade-off 三拍收尾</span>
     </a>
   </div>
 </section>
