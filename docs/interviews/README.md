@@ -7,9 +7,9 @@
 | 輪次 | 日期 | 結果 |
 |---|---|---|
 | R1 coding(DMA dispatcher) | 2026-07-28 | ✅ 過,feedback 正向 → [紀錄](2026-07-28-tps-round1-dma.md) |
-| coding #2 | **8/6(四)早上**(待敲) | — |
-| coding #3 | **8/11(二)早上**(待敲) | — |
-| technical deep dive(履歷/過去專案)+ culture fit | **8/12(三)**(待確認是否同日) | — |
+| coding #2 | **8/6(四)09:15** | — |
+| coding #3 | **8/11(二)09:15** | — |
+| technical deep dive(履歷/過去專案)+ culture fit | **8/12(三)09:15** | — |
 
 R1 前的衝刺計畫在 `../../SCHEDULE.md`(7/16→7/28,已結案)。
 
@@ -39,17 +39,17 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 | 7/30 四 | 🔴 i:DMA v2(clarify 20 + 寫 45 + review 20) | culture fit 自介稿 60–90s + why-us(打字,可移白天) |
 | 7/31 五 | 🔴 j:ISR → bottom-half(= signal_pipeline 的 spec-heavy 版)+ signal_pipeline 頁複讀 30m | deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
 | 8/1 六 | 🔴 k:多核 per-CPU fan-in + 重打 weakest(週末塊) | culture fit 唸 #1 + 模擬追問 |
-| 8/2 日 | culture fit 三條故事(7/26)改英文稿 + i–j 修洞 | deep dive 口述 #2;**08:45 起(梯度開始,每天提早 30m)** |
-| 8/3 一 | 輕:骨架默寫抽查 15m | (選)litmus/ordering 口述;08:15 起 |
-| 8/4 二 | 輕:i–k 洞複掃 | 07:45 起 |
-| 8/5 三 | taper:不碰新題、檢查表 + 時間預算 | 07:30 起、00:00 熄燈 |
-| **8/6 四** | **coding #2(早上)** | 當天紀錄入庫 + 洞清單 |
+| 8/2 日 | culture fit 三條故事(7/26)改英文稿 + i–j 修洞 | deep dive 口述 #2 |
+| 8/3 一 | 輕:骨架默寫抽查 15m | (選)litmus/ordering 口述 |
+| 8/4 二 | 輕:i–k 洞複掃 | **08:30 起(梯度開始;9:15 場只需 07:45 起,比 R1 的 8:45 場輕)** |
+| 8/5 三 | taper:不碰新題、檢查表 + 時間預算 | 08:00 起、00:30 熄燈 |
+| **8/6 四** | **coding #2(09:15)**,07:45 起 | 當天紀錄入庫 + 洞清單 |
 | 8/7 五 | 修 #2 暴露的洞(targeted) | deep dive 口述 #3 |
 | 8/8 六 | (選)l 或 m,照 #2 暴露的方向挑一 | culture fit 全串 |
 | 8/9 日 | 重打 weakest | deep dive 全串(15m/專案) |
-| 8/10 一 | taper | 早睡(8/6 後不回彈,整段維持 ≤08:15 起) |
-| **8/11 二** | **coding #3(早上)** | 紀錄入庫 |
-| **8/12 三** | **deep dive + culture fit** | 收帳 |
+| 8/10 一 | taper | 早睡(8/6 後不回彈,整段維持 ≤08:30 起) |
+| **8/11 二** | **coding #3(09:15)**,07:45 起 | 輕:deep dive 全串最後一遍(15m/專案,材料 8/9 前已備齊)|
+| **8/12 三** | **deep dive + culture fit(09:15)**,07:45 起 | 收帳:全程紀錄入庫 |
 
 culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict、failure、proudest project、想問他們的 3 個問題;底稿 = 7/26 的三條經驗故事。稿子檔案:`culture-fit-script.md`(寫完放本資料夾)。
 
