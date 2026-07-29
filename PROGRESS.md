@@ -18,7 +18,7 @@ R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07
 | sim k(per-core fan-in)全場 | ☐ 排 8/1 | + 卡 FP |
 | sim l(MMIO doorbell)全場 | ☐ 排 8/2 | HW-L 卡當前導;oracle 抓漏 barrier |
 | sim m(watchdog)全場 | ☐ 排 8/8 | 吃 coding #2 暴露的方向 |
-| sim n(新皮)全場 | ☐ 排 8/9 | 域照 8/6 實況挑 |
+| sim n(priority scheduler + DAG)全場 | ☐ 排 8/9 | 材料已備;8/6 後視情報換皮 |
 | 認題卡 ×7 | ☐ | SP 7/30|FP 8/1|FR/TA/TQ 8/3|HW×2 = l/m 前導 |
 | deep dive 英文稿(2–3 專案) | ☐ 起草 7/29 | 口述 7/31、8/2、8/7;全串 8/9;`docs/interviews/deep-dive-projects.md` |
 | culture fit 稿(題庫 11 題) | ☐ 起草 7/29 | 唸 8/1、8/5;全串 8/8;`docs/interviews/culture-fit-script.md` |

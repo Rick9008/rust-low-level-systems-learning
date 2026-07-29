@@ -24,3 +24,4 @@ pub mod sim_j_isr;
 pub mod sim_k_fanin;
 pub mod sim_l_mmio;
 pub mod sim_m_watchdog;
+pub mod sim_n_scheduler;

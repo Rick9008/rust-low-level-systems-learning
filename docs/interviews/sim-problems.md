@@ -76,6 +76,23 @@
 >
 > Implement `fn submit(cmd: Command) -> Result<(), Full>` and `fn poll_completions(on_done: impl FnMut(Command))`. Ask any questions you need.
 
+## Sim n — Priority job scheduler
+
+**Phase 1:**
+
+> A compute node has **4 worker slots**. Jobs arrive from upstream, each with a priority (higher = more urgent). Assign jobs to free workers — most urgent runnable job first — and report each job when it completes.
+>
+> ```rust
+> struct Job { job_id: u64, priority: u8, deps: Vec<u64> }   // deps: always empty for now
+> fn get_job() -> Option<Job>;
+> fn assign_job_to_worker(worker_id: u32, job_id: u64);
+> fn get_worker_done() -> Option<u32>;    // worker id that just finished
+> fn wait_event();
+> fn submit_job_done(job_id: u64);
+> ```
+>
+> Implement `fn run()`. Ask any questions you need.
+
 ## Sim m — Engine watchdog(R1 延伸)
 
 **Phase 1:**

@@ -36,6 +36,14 @@ Claude(或任何 session)當面試官時照此運作:只回答被問到的 clari
 
 **看點**:submit 序 fill→barrier→doorbell 一次寫對;讀 completion 先讀 CompTail 再讀 slot(方向反過來的 acquire);tag→command 在途表;full 判定的 off-by-one。
 
+## Sim n — Priority job scheduler
+
+**隱藏 spec(被問才答)**:同優先權 = **到達順序 FIFO**(沒問 = 平手語意沒抓到);done 只給 worker id;job 不可搶佔(派下去就跑到完);priority 0–255 越大越急;deps Phase 1 全空;job 量級 ~10⁴(heap 合理)。
+
+**Phase 2(驗收後唸給他)**:"Jobs may now arrive with non-empty `deps`: a job may only be assigned after **all** its dependencies have completed. A dependency always refers to a job that has already arrived, there are no cycles, and note a dependency may already be complete by the time a job arrives."
+
+**看點**:ready 結構選型(BinaryHeap O(log n) vs 每次線性掃,要講);**同權 FIFO 需要 seq 破平手**(BinaryHeap 不穩定,seq 在到達時發);`completed` 集合防「等一個永遠不會再來的完成事件」(dep 已完成的後到者);**priority 不能穿越 DAG**(p9 等 p5 的相依);加分:主動點出這就是 priority inversion、真系統用 priority inheritance。
+
 ## Sim m — Engine watchdog
 
 **隱藏 spec**:block 操作**不 idempotent**(重做可能壞資料——他必須問!)→ 重派前要能證明舊 engine 真死或做 completion 去重;timeout 值 spec 不給,要他自己提「p99 塊延遲的數倍」並講理由;hung engine 之後可能吐出遲到的 done(**zombie done**)。
