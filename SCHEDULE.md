@@ -1,5 +1,10 @@
 # SCHEDULE.md — Etched TPS 衝刺(7/16 → 7/28)
 
+> **2026-07-29 結案**:R1(7/28 TPS coding)✅ 過,feedback 正向(clarify 被點名稱讚;洞 = 時間不夠 code 有漏洞)。
+> **R2 onsite**:coding 8/6(四)+ 8/11(二)、deep dive + culture fit 8/12(三),皆 09:15 開場。
+> 新階段的逐日計畫、題本(sim i–m)、認題卡、句庫、稿件全在 **[docs/interviews/README.md](docs/interviews/README.md)**——本檔保留衝刺歷史,逐日表不再更新。
+> 7/29 = 休息日(輕活):讀 `rehearsals/examples/sol_dma_dispatcher.rs` + deep dive / culture fit 英文稿起草。
+
 容量(7/22 v9 修正):平日 = 白天公司「打字場」淨 4h+(實排 3h 留正職突發)+ 晚上在家「出聲場」23:30–02:00(實排 2h);週末在家 8h。總量與舊「平日 5h」近似,但**場地決定內容**:出聲類(彩排 narrate/口述/錄音/卡片口述版)只能晚上或週末;打字類(drill/challenge/空白/修洞/dry-run/日讀/卡片筆寫)白天優先。
 
 **每日鐵律**:收工前兩問——今天有打 code 嗎?有張嘴講英文嗎?兩個 yes 才算數。

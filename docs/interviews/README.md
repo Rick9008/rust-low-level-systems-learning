@@ -45,7 +45,8 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 
 | 日期 | 白天(公司,~90m 上限) | 晚上(出聲) |
 |---|---|---|
-| 7/30 四 | i-lite:R1 修洞重做 30m(DMA 域考過,不值全場;直接寫 pipeline+cancel 版關掉 R1 的洞,不跑 clarify 全套)+ 卡 SP | culture fit 自介稿 60–90s + why-us(打字,可移白天) |
+| 7/29 三 | **休息日(輕活)**:讀 `sol_dma_dispatcher.rs`(三張表 + Dry-Run 紙上走) | deep dive / culture fit 英文稿起草(打字,輕;材料先貼給 Claude) |
+| 7/30 四 | i-lite:R1 修洞重做 30m(DMA 域考過,不值全場;直接寫 pipeline+cancel 版關掉 R1 的洞,不跑 clarify 全套)+ 卡 SP | culture fit 自介稿 60–90s + why-us(接 7/29 草稿) |
 | 7/31 五 | 🔴 j:ISR → bottom-half(= signal_pipeline 的 spec-heavy 版)+ signal_pipeline 頁複讀 30m | deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
 | 8/1 六 | 🔴 k:多核 per-CPU fan-in + 卡 FP(週末塊) | culture fit 唸 #1 + 模擬追問 |
 | 8/2 日 | 🔴 l:MMIO command queue(HW-L 卡當 10m 前導)+ culture fit 三條故事(7/26)改英文稿 | deep dive 口述 #2 |

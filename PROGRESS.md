@@ -1,9 +1,30 @@
 # 學習進度(手動勾選,git 追蹤)
 
-面試日:**2026-07-28**。逐日排程與砍序:[SCHEDULE.md](SCHEDULE.md)(2026-07-16 定)。
+~~面試日:**2026-07-28**~~ → **R1 ✅ 過(7/28)**;R2 onsite:**8/6、8/11 coding + 8/12 deep dive/culture fit,皆 09:15**。
+R2 逐日計畫與材料:[docs/interviews/README.md](docs/interviews/README.md);R1 衝刺排程(已結案):[SCHEDULE.md](SCHEDULE.md)。
 三欄語意:讀 = reference 讀懂能講;drill = 填完轉綠;
 challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ring→a、pool→b、framer→c)。
+
+## R2 onsite(7/29 → 8/12)
+
+R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07-28-tps-round1-dma.md)。
+
+| 項 | 狀態 | 備註 |
+|---|---|---|
+| 讀 sol_dma_dispatcher(三張表) | ☐ 排 7/29 | R1 洞的正解;Dry-Run 段紙上走一遍 |
+| sim i-lite(30m 修洞重做) | ☐ 排 7/30 | `rehearsals/src/sim_i_dma.rs` 填 `run()`,不看 sol |
+| sim j(ISR pipeline)全場 | ☐ 排 7/31 | + signal_pipeline 頁複讀 30m |
+| sim k(per-core fan-in)全場 | ☐ 排 8/1 | + 卡 FP |
+| sim l(MMIO doorbell)全場 | ☐ 排 8/2 | HW-L 卡當前導;oracle 抓漏 barrier |
+| sim m(watchdog)全場 | ☐ 排 8/8 | 吃 coding #2 暴露的方向 |
+| sim n(新皮)全場 | ☐ 排 8/9 | 域照 8/6 實況挑 |
+| 認題卡 ×7 | ☐ | SP 7/30|FP 8/1|FR/TA/TQ 8/3|HW×2 = l/m 前導 |
+| deep dive 英文稿(2–3 專案) | ☐ 起草 7/29 | 口述 7/31、8/2、8/7;全串 8/9;`docs/interviews/deep-dive-projects.md` |
+| culture fit 稿(題庫 11 題) | ☐ 起草 7/29 | 唸 8/1、8/5;全串 8/8;`docs/interviews/culture-fit-script.md` |
+| **coding #2** | ☐ 8/6(四)09:15 | 當晚:紀錄+洞清單入 docs/interviews/ |
+| **coding #3** | ☐ 8/11(二)09:15 | |
+| **deep dive + culture fit 場** | ☐ 8/12(三)09:15 | |
 
 ## 模組 × 三層
 
