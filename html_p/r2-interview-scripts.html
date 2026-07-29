@@ -111,14 +111,15 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   <tr><td>8/8 / 8/9</td><td>culture fit 全串 / deep dive 全串(15m/專案)</td></tr>
 </table>
 
-<h2>⚠ 唸稿前要你確認的五件事(帶著洞上場 = 被追問時現場掰)</h2>
+<h2>✅ 確認清單(7/29 晚已回填,稿已按此修正)</h2>
 <ol>
-  <li><b>PostgreSQL 版本</b>:當時是幾?&lt;16 → 「雙向邏輯複製當時不可用」一句結案;≥16 → 重量壓在「無自動衝突解決、衝突會讓複製停住」。</li>
-  <li><b>「客戶端自運轉、不能人工介入」</b>的前提是否精確?有遠端維運管道就改措辭。</li>
-  <li><b>「6+ 個月零不一致」的觀測手段</b>是什麼(對帳 job?告警?日誌比對?)——誠實句已備好,把實際手段填進去。</li>
-  <li><b>CPU-spin 的 read loop 是誰寫的</b>?自己的 code → 可兼任 failure 故事;只是追查者 → 只放 debugging 故事。</li>
-  <li><b>logging daemon 慢 sink 策略</b>實際是什麼(block/drop/buffer)?有沒有吞吐數字?</li>
+  <li><b>PostgreSQL = 14</b> → 雙向邏輯複製當時不可用,一句結案;根本理由 = 複製決定不了先後順序、也不知道誰的操作不可挽回(刪除/寄出)。</li>
+  <li><b>「客戶端自運轉」真義 = 收信必須自動、不能暫停</b>——凌晨 AA 斷線也不能停收信,不能等人。</li>
+  <li><b>觀測手段 = 內建不一致偵測</b>:偵測到就自動重新同步 + 記次數;半年以上全客戶機器計數 0,且零 support 回報——這是武器,不是 hedge。</li>
+  <li><b>CPU-spin 是前人程式碼的陳年 bug</b> → 只當 debugging 故事;個人 failure 改用 <b>authz/authn 缺失</b>(CVSS 10.0 起源,★7 已改)。</li>
+  <li><b>logging daemon 真實架構 = dovecot → syslog → syslog-ng → 自寫 C++ daemon 解析後寫 DB</b>;吞吐數字不確定 → 不講數字、不掰。</li>
 </ol>
+<p class="note">仍待補:conflict 故事的實際人物與場景(★6)|專案三最難的 bug 與如果重來。</p>
 
 <h2>面試官必問五題(每個專案講完自檢一輪)</h2>
 <ul>
@@ -136,17 +137,18 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 
 <p>開場順序建議 <b>二 → 一 → 三</b>:logging daemon 就是一條 telemetry pipeline(多 producer → event loop → 多 sink),對 Etched 的軸命中率最高。Holdwin 簡報的交易對照句全部拿掉。每專案結構 = 7 段模板:elevator → 問題與限制 → 設計 → trade-off ≥2 → 數字 → 最難的 bug → 如果重來。</p>
 
-<h2>專案二(先講):system-logging daemon(Modern C++ / Asio)</h2>
+<h2>專案二(先講):log-ingestion pipeline + C++ daemon(Modern C++ / Asio)</h2>
+<p class="note">✅ 誠實版架構:<b>dovecot → syslog → syslog-ng(路由/過濾)→ 自寫 C++ daemon(解析/正規化)→ DB</b>。sink 就是 DB;多後端 logging library 是另一件事(發送端統一介面,−30% 重複碼),分開講。</p>
 
 <h3>90 秒 elevator</h3>
-<div class="say"><div class="en">"I built the system-logging daemon for the mail platform: every service on the box sends diagnostics to it; an <b>Asio event loop</b> receives, parses, routes and filters; a <b>multi-backend logging library</b> fans out to file, remote and system sinks. Standardizing the format cut roughly <b>30% of duplicated logging code</b>."</div><div class="zh">全平台服務把診斷送進來;Asio event loop 收/解析/路由/過濾;多後端 library 扇出到檔案/遠端/系統;統一格式砍掉約 30% 重複碼。</div></div>
-<div class="say key"><div class="en">"It's a <b>telemetry pipeline: many producers, one collector, multiple sinks</b> — the same shape as an event-loop-over-hardware-signals problem, just with logs instead of interrupts."</div><div class="zh">Etched 定位句:它就是 telemetry pipeline——跟「event loop 蓋在硬體訊號上」同形,只是把中斷換成日誌。</div></div>
+<div class="say"><div class="en">"I own the <b>tail of the mail platform's log pipeline</b>: services log through syslog, <b>syslog-ng</b> does the routing and filtering, and a <b>C++ daemon I wrote consumes that stream, parses and normalizes it, and lands it in a database</b> — so diagnostics are queryable instead of grep-able. Alongside it, a shared logging library standardized how services emit diagnostics — roughly <b>30% less duplicated logging code</b>."</div><div class="zh">我擁有平台 log 管線的尾端:服務走 syslog、syslog-ng 做路由過濾、我寫的 C++ daemon 消費串流、解析正規化後落 DB——診斷從「用 grep 撈」變成「可查詢」。另有共用 library 統一發送端格式,砍約 30% 重複碼。</div></div>
+<div class="say key"><div class="en">"It's a <b>telemetry pipeline: many producers, a routing layer, one structured sink</b> — the same shape as an event-loop-over-hardware-signals problem, just with logs instead of interrupts."</div><div class="zh">Etched 定位句:它就是 telemetry pipeline——多 producer、一層路由、一個結構化 sink,跟「event loop 蓋在硬體訊號上」同形。</div></div>
 
-<h3>Trade-off(≥2)</h3>
+<h3>Trade-off(≥2,每個都答得出 why)</h3>
 <ul>
-  <li>統一 library vs 各服務自由:代價 = 遷移工 + 一個共同依賴;沒走的路 = 放任,代價是跨服務查問題要先學每一種格式。</li>
-  <li>慢 sink:block vs drop vs buffer(⚠ 確認項 5,填實際選擇與理由)。</li>
-  <li>單 event loop vs thread-per-source:connection 數與 CPU 的帳。</li>
+  <li><b>重用 syslog/syslog-ng vs 自建 collector</b>:現成傳輸久經沙場;代價 = 綁定 syslog 格式與投遞語意。"I didn't build a transport — the interesting problem was parsing and schema, so that's where my code lives."</li>
+  <li><b>獨立 daemon vs syslog-ng 直寫 DB</b>:解析規則與 schema 是會演化、要測試的程式,不塞進 config 層;daemon 掛了 syslog-ng 還能緩衝,兩層解耦。</li>
+  <li><b>結構化落 DB vs 留純文字</b>:查詢能力 vs 寫入成本。吞吐數字不掰——被問就誠實:"I don't have the number from memory; the bottleneck by construction is the DB write path, not the parse."</li>
 </ul>
 
 <h3>兩個 war story(strace/perf 紀律——Etched 加分區)</h3>
@@ -157,13 +159,13 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   <p>→ 部署後負載尖峰疊 DDoS,file descriptor 耗盡。追問備案:止血與根因並行;rollback 前先保留現場。</p>
 </div>
 <div class="card">
-  <h4>② CPU 空轉・追到確切的 syscall</h4>
+  <h4>② CPU 空轉・追到確切的 syscall(✅ 前人程式碼的陳年 bug——當 debugging 故事講,說 "a long-standing bug in inherited code",不認領不指責)</h4>
   <p><code>perf</code> 熱點在 <code>read</code> → <code>strace</code> 看到同一個 fd 反覆回傳 0 → read loop 沒把 0-byte 當 EOF。</p>
   <div class="say key"><div class="en">"<b>A 0-byte read is EOF, not 'no data this time'. Loop exit conditions have to match the syscall contract.</b>"</div><div class="zh">0-byte return 是 EOF,不是「這次沒資料」。迴圈終止條件永遠對照 syscall 契約。</div></div>
 </div>
 
 <h3>如果重來</h3>
-<p>(挑一個)end-to-end structured backpressure(per-source 計帳——跟 telemetry 題同構)/ 評估 completion-model IO(io_uring),並講清楚為什麼當時 readiness 就夠。</p>
+<p>daemon 端補<b>顯式的 backpressure / 丟棄帳</b>——現在依賴 syslog-ng 的緩衝行為,策略不在我手上;把「掉了多少」變成自己記的數字(跟 telemetry 題的 dropped counter 同構)。</p>
 
 <h2>專案一:Two-node Active-Active HA(Go + Rust)</h2>
 
@@ -172,13 +174,13 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 
 <h3>限制(這幾條決定所有設計)</h3>
 <ul>
-  <li>只有兩個節點(產品形態)· 部署在客戶端,故障要自動收斂(⚠ 確認項 2)· 網路會斷/慢/重複 · 沒有可信全域時鐘 · 任一節點掛掉服務不能停。</li>
+  <li>只有兩個節點(產品形態)· <b>收信必須自動、不能暫停</b>——凌晨 AA 斷線也要兩邊各自繼續收信、事後收斂,不能等人 · 網路會斷/慢/重複 · 沒有可信全域時鐘 · 任一節點掛掉服務不能停。</li>
 </ul>
 
 <h3>為什麼現成方案都不行(必被問)</h3>
 <div class="say key"><div class="en">"<b>Replication is a transport-layer concern; conflict resolution is a policy-layer concern.</b> Off-the-shelf tools move the data, but they can't decide which write should win."</div><div class="zh">複製是運輸層,衝突解決是策略層——現成工具搬得動資料,決定不了誰該贏。</div></div>
 <ul>
-  <li>PG replication:streaming = 單寫者,拿不到 AA;雙向邏輯複製要 PG16 <code>origin=none</code>(⚠ 確認項 1);決定性:<b>無自動衝突解決,衝突讓複製停下來等人</b>。</li>
+  <li>PG replication:<b>當時是 PG 14</b>——streaming = 單寫者拿不到 AA;雙向邏輯複製當時不可用(要 PG16 <code>origin=none</code>),一句結案。更根本:<b>複製排不出兩個分區寫入的先後,更不知道哪個操作(刪除、寄出)已不可挽回</b>。</li>
   <li>Raft/Paxos:n=2 → quorum 2 → 任一節點掛掉全組停寫,<b>可用性比單機還差</b>;n=3 不允許。→ 換問題:both sides write, replay-safe, converge afterwards。</li>
 </ul>
 
@@ -190,7 +192,8 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 <ul>
   <li>v1 NFS 共享(鎖不可靠 + SPOF)→ v2 指令佇列(consumer 重啟 = 遺失視窗)→ v3 派送前本地備份、對端確認才清除。"Each version was forced by a concrete failure, not by a whiteboard."</li>
   <li>數字:2 nodes · 6+ months · 1 real failover · v3 代價 = 每操作多一次本地寫。</li>
-  <li>如果重來:witness/fencing token 破對稱;<b>day-one reconciliation job</b>。誠實句:<span class="hl-grn">"Strictly speaking, what I can guarantee is that no inconsistency was ever reported or caught by our checks; proactive reconciliation is the first thing I'd invest in if I rebuilt it."</span>(⚠ 確認項 3)</li>
+  <li>「你怎麼知道零不一致?」——武器句逐字:<span class="hl-grn">"We don't just hope it's consistent — the system detects divergence, re-syncs automatically, and counts every occurrence. Across every customer machine, for six-plus months, that counter stayed at zero — and support never received a single inconsistency report."</span></li>
+  <li>如果重來:witness / fencing token 破兩節點對稱(future work #1;當時部署形態不允許額外元件——誠實講是設計邊界)。</li>
 </ul>
 <p class="note">預期追問:Redis 是不是單點(誠實講 persistence + AOF fsync 視窗)| PEL/XAUTOCLAIM 卡單 | message-ID 表回收(時間窗 &gt; 最大重試視窗)| 兩邊都不可逆?→ 設計上不允許同時發生;否則退回 fencing——誠實說是設計邊界。</p>
 
@@ -249,13 +252,15 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   <div class="todo"><b>⚠ 確認</b>:當時實際的討論對象與場景,講之前把人物補真。</div>
 </div></div>
 
-<div class="qa"><div class="qhead"><span class="star">★ 7</span> Failure(具體損失 + 機制性改變)</div><div class="qbody">
+<div class="qa"><div class="qhead"><span class="star">★ 7</span> Failure(✅ 7/29 改用 authz 故事——真正自己寫出的 bug)</div><div class="qbody">
   <ul>
-    <li>預設 = v2 遺失視窗:"I shipped a dispatch design where an operation could be <b>silently lost</b> if the queue was drained or the consumer restarted before the peer persisted it. That's data loss in a mail-security product — the worst kind of quiet failure."(⚠ 確認:當時怎麼發現的)</li>
-    <li>機制性改變 ×2:design fix — <b>never discard a message before the peer confirms durability</b>(backup-before-dispatch);process fix — "design reviews now start from crash points: for every hand-off we ask <b>'what if the process dies right here?'</b>"</li>
+    <li><b>S</b>:"The failure that's genuinely mine: I shipped a cross-cluster operations interface <b>without proper authentication and authorization</b>. It was internal-only, so I treated the network boundary as the security boundary."</li>
+    <li><b>損失</b>:"It later surfaced as a <b>critical vulnerability — CVSS 10.0</b>."(CVE embargo:場上不講技術細節,講設計與教訓;被追細節就說 embargo——這本身是專業訊號)</li>
+    <li><b>A(修的人也是我)</b>:"I designed the mitigation myself: <b>defense-in-depth</b> — mTLS at the transport layer, application-level authn/authz, and localhost-scoped access control for cross-cluster operations."</li>
+    <li><b>機制性改變</b>:"Security review moved into the design phase instead of being a bolt-on; and my default flipped — <b>every interface gets authn/authz, and 'internal-only' never counts as a boundary again</b>."</li>
   </ul>
-  <div class="say key"><div class="en">"<b>The lesson wasn't 'be more careful' — it was 'make the failure impossible by construction'.</b>"</div><div class="zh">學到的不是「要更小心」,是「用結構讓這種失敗不可能發生」。</div></div>
-  <p class="note">備案 B(若 CPU-spin 是自己的 code):0-byte EOF 洞 + 「迴圈終止條件對照 syscall 契約」的 checklist 改變。</p>
+  <div class="say key"><div class="en">"<b>The lesson wasn't 'be more careful' — it was that 'internal-only' is an assumption, not a boundary. Assumptions rot; boundaries hold.</b>"</div><div class="zh">學到的不是「更小心」——是「internal-only 是假設,不是邊界。假設會爛掉,邊界才守得住」。</div></div>
+  <p class="note">備案 B:v2 遺失視窗(設計層 failure,主戰放 deep dive 專案一演進段)。CPU-spin 不用——前人程式碼,只當 debugging 故事。</p>
 </div></div>
 
 <h3>其餘 bullet 骨架(4/5/8/9/10)</h3>

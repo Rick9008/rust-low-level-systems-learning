@@ -67,12 +67,14 @@
 - **R**:改成從**操作語意**推規則(irreversible actions win);上線 6+ 個月零不一致事故。
 - 方法論收尾逐字:"**We didn't converge because someone argued better — we converged because a failure scenario made the answer obvious. That's how I like to disagree: bring the counterexample, not the volume.**"(⚠ 確認:當時實際的討論對象/場景,講之前把人物補真)
 
-### 7. ★ Failure(要有具體損失 + 機制性改變)
+### 7. ★ Failure(要有具體損失 + 機制性改變;✅ 7/29 確認改用 authz 故事——真正自己寫出的 bug)
 
-- **候選 A(預設)——v2 遺失視窗**:"I shipped a dispatch design where an operation could be **silently lost** if the queue was drained or the consumer restarted before the peer persisted it. That's data loss in a mail-security product — the worst kind of quiet failure."(⚠ 確認:當時怎麼發現的——測試?線上?)
-- 機制性改變:"Two changes came out of it: the design fix — **never discard a message before the peer confirms durability**(backup-before-dispatch)——and the process fix: **design reviews now start from crash points**: for every hand-off we ask 'what if the process dies right here?'"
-- 收尾逐字:"**The lesson wasn't 'be more careful' — it was 'make the failure impossible by construction'.**"
-- 候選 B(如果確認項 4 成立,CPU-spin 是自己的 code):0-byte read 沒當 EOF → 迴圈終止條件對照 syscall 契約 + 之後的 code review checklist。
+- **S**:"The failure that's genuinely mine: I shipped a cross-cluster operations interface **without proper authentication and authorization**. It was internal-only, so I treated the network boundary as the security boundary."
+- **損失具體化**:"It later surfaced as a **critical vulnerability — CVSS 10.0**."(CVE 還在 embargo:場上不講技術細節,講設計與教訓;被追細節就說 embargo——這本身是專業訊號)
+- **A(修的人也是我)**:"I designed the mitigation myself: **defense-in-depth** — mTLS at the transport layer, application-level authentication and authorization, and localhost-scoped access control for cross-cluster operations."
+- **機制性改變**:"Security review moved into the design phase instead of being a bolt-on; and my default flipped — **every interface gets authn/authz, and 'internal-only' never counts as a boundary again**."
+- 收尾逐字:"**The lesson wasn't 'be more careful' — it was that 'internal-only' is an assumption, not a boundary. Assumptions rot; boundaries hold.**"
+- 備案 B:v2 遺失視窗(設計層 failure,主戰放 deep dive 專案一的演進段)。CPU-spin 不用——前人程式碼,只當 debugging 故事。
 
 ### 8. Proudest project(bullet 骨架)
 

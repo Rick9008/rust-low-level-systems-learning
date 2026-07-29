@@ -65,6 +65,6 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 
 culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict、failure、proudest project、想問他們的 3 個問題;底稿 = 7/26 的三條經驗故事。稿子檔案:`culture-fit-script.md`(寫完放本資料夾)。
 
-**稿件狀態(7/29 晚)**:deep dive 三專案 + culture fit 五題 ★ 已起草(素材 = 履歷 + Holdwin 簡報轉軸,交易對照句已拿掉;唸稿鏡像頁 `html_p/r2-interview-scripts.html`,claude.ai index R2 備戰區有卡)。**唸之前先補五個 ⚠ 確認項**(PG 版本/部署前提措辭/零不一致的觀測手段/CPU-spin 歸屬/慢 sink 策略)——清單在兩份稿檔頭與鏡像頁第 0 頁。
+**稿件狀態(7/29 晚,二輪定稿)**:deep dive 三專案 + culture fit 五題 ★ 已起草並按 Withers 回填的五個確認項修正(PG 14/收信不能停/內建不一致偵測計數 0/CPU-spin=前人 bug 只當 debugging 故事/logging daemon 誠實架構 = syslog-ng 尾端寫 DB);個人 failure 改用 **authz/authn 缺失 → CVSS 10.0** 故事。素材 = 履歷 + Holdwin 簡報轉軸,交易對照句已拿掉;唸稿鏡像頁 `html_p/r2-interview-scripts.html`(claude.ai index R2 備戰區有卡)。**仍待補**:conflict 故事的實際人物場景、專案三最難的 bug。
 
 閥門(時間不夠的砍序):認題卡 →(8/9)重打 → k;**i、j、l、m、兩段 taper、早起梯度不砍**。模擬題超時 = 挖到洞,記洞不記違規。

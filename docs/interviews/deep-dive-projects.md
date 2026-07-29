@@ -28,12 +28,14 @@
 > 多 producer → event loop → 多 sink),開場順序建議 二 → 一 → 三。Holdwin 簡報裡的
 > 交易對照句(fill/cancel、開盤時間)全部拿掉,不要帶進 Etched 場。
 >
-> **⚠ 唸稿前要你確認的事實(簡報 notes 裡你自己標的,別帶著洞上場)**:
-> 1. 當時 PostgreSQL 版本是幾?(<16 → 「雙向邏輯複製當時不可用」一句結案;≥16 → 重量壓在「無自動衝突解決」)
-> 2. 「客戶端自運轉、不能人工介入」的措辭是否精確?有遠端維運管道就改掉這條前提。
-> 3. 「6+ 個月零不一致」的觀測手段是什麼(對帳 job / 告警 / 日誌比對)?觀測不到的部分準備誠實句。
-> 4. CPU-spin 那個 read loop 是誰寫的?是自己的 code 才能當 failure 故事;只是追查者就只放 debugging 故事。
-> 5. logging daemon 的慢 sink 策略實際是什麼(backpressure / drop / buffer)?有沒有任何吞吐數字?
+> **✅ 確認項(7/29 晚 Withers 回填,稿已按此修正)**:
+> 1. PostgreSQL = **14** → 「雙向邏輯複製當時不可用」一句結案;根本理由 = 複製決定不了先後順序、也不知道誰的操作不可挽回(刪除/寄出)。
+> 2. 「客戶端自運轉」真義 = **收信必須自動、不能暫停**——凌晨 AA 斷線也不能停收信,不能等人。
+> 3. 觀測手段 = **內建不一致偵測:偵測到就自動重新同步 + 記次數**;半年以上全客戶機器計數 0,且零 support 回報。這比 hedge 句強,直接當證據講。
+> 4. CPU-spin 是**前人程式碼的陳年 bug** → 只當 debugging 故事,不當 failure 認領;個人 failure 改用 **authz/authn 缺失**(CVSS 10.0 的起源,culture fit ★7)。
+> 5. logging daemon 實際架構 = **dovecot → syslog → syslog-ng → 自寫 C++ daemon 解析後寫 DB**;慢 sink 策略/吞吐數字不確定 → **不講數字、不掰**,被問吞吐就誠實說沒有量測記憶、講架構瓶頸在 DB 寫入端。
+>
+> **仍待補**:conflict 故事的實際人物與場景(★6)|專案三最難的 bug 與如果重來。
 
 ### 專案一:Two-node Active-Active HA(Go + Rust,審核決策狀態同步層)
 
@@ -46,7 +48,7 @@
 **2. 問題與限制(卡住別人的是什麼)**
 
 - Exactly **two nodes** — product form factor; a third machine is not an option.
-- Runs **on customer premises**: no DBA, must **self-converge** after faults, no manual repair.(⚠ 確認項 2)
+- Runs **on customer premises**, and **mail flow must never stop**: if the inter-node link drops at 3 a.m., both nodes keep accepting mail independently and reconcile later — pausing to wait for a human is not an option.
 - Network between nodes: drops, stalls, duplicates. **No trusted global clock.**
 - Either node can die; service must continue, and states must converge after recovery.
 
@@ -59,14 +61,15 @@
 
 **4. Trade-off ≥2(每個都有被否決的對手)**
 
-- **vs PostgreSQL replication**:streaming = single writer,拿不到 Active-Active;雙向邏輯複製要 PG 16 `origin=none`(⚠ 確認項 1);決定性的一點——**no automatic conflict resolution**:衝突會讓複製停下來等人。關鍵句逐字:"**Replication is a transport-layer concern; conflict resolution is a policy-layer concern. Off-the-shelf tools move the data, but they can't decide which write should win.**"
+- **vs PostgreSQL replication**:**we were on PG 14** — streaming = single writer,拿不到 Active-Active;雙向邏輯複製當時不可用(要 PG 16 `origin=none`),一句結案。更根本的:**replication has no notion of which write should win** — 它排不出兩個分區寫入的先後,更不知道哪個操作(a delete, a send)已經不可挽回。關鍵句逐字:"**Replication is a transport-layer concern; conflict resolution is a policy-layer concern. Off-the-shelf tools move the data, but they can't decide which write should win — and they certainly don't know that one of the writes already sent an email.**"
 - **vs Raft/Paxos**:n=2 → quorum 門檻 2 → **任一節點掛掉全組停寫——可用性反而比單機差**;n=3 產品形態不允許。所以換問題:不問 "who is allowed to write",改成 "both sides write, replay-safe, converge afterwards."
 - **vs Last-Write-Wins**:時鐘不可信,而且 "later" ≠ "should win"——LWW 會靜默覆蓋已對現實世界產生後果的操作。
 - **主動講代價**:收斂前存在 **inconsistency window**;衝突規則是**自己定義、自己驗證的 policy**。
 
-**5. 數字**
+**5. 數字(含觀測手段——這題必被問,答案是武器不是弱點)**
 
 - 2 nodes · 6+ months production · 1 real failover(郵件收發無延遲)· v3 代價 = **每操作多一次本地寫入**。
+- 「你怎麼知道零不一致?」逐字:"**We don't just hope it's consistent — the system detects divergence, re-syncs automatically, and counts every occurrence. Across every customer machine, for six-plus months, that counter stayed at zero — and support never received a single inconsistency report.**"
 
 **6. 最難的 bug(v2 遺失視窗——演進本身就是證據)**
 
@@ -75,33 +78,39 @@
 
 **7. 如果重來**
 
-- Add a **witness / fencing token** to break the two-node symmetry(future work #1;當時部署形態不允許額外元件)。
-- **Active inconsistency detection(reconciliation job)from day one**。「你怎麼知道沒事故?」的誠實句逐字:"**Strictly speaking, what I can guarantee is that no inconsistency was ever reported or caught by our checks; proactive reconciliation is the first thing I'd invest in if I rebuilt it.**"(⚠ 確認項 3:把實際觀測手段填進來)
+- Add a **witness / fencing token** to break the two-node symmetry(future work #1;當時部署形態不允許額外元件——誠實講這是設計邊界)。
 
 **預期追問(簡報 notes 原有,保留)**:Redis 在關鍵路徑是不是單點(誠實講 persistence 設定 + AOF fsync 視窗)| consumer group / PEL / XAUTOCLAIM,訊息卡在 PEL 怎麼辦 | message-ID 表成長 → 時間窗回收,**窗口必須大於最大重試視窗** | 兩邊都做了不可逆操作?→ 設計上不允許同時發生;若真可能就得退回 fencing / witness——誠實說這是設計邊界。
 
-### 專案二:High-concurrency system-logging daemon(Modern C++ / Asio)——Etched 主打
+### 專案二:Log-ingestion pipeline + C++ daemon(Modern C++ / Asio)——Etched 主打
+
+> 誠實版架構(7/29 確認):**dovecot → syslog → syslog-ng(路由/過濾)→ 自寫 C++ daemon(解析/正規化)→ DB**。
+> 別再講「多後端 sink 扇出」那個膨脹版——sink 就是 DB;多後端 logging library 是**另一件事**(各服務發送端的統一介面,−30% 重複碼),兩者分開講。
 
 **1. 90-second elevator**
 
-- "I built the **system-logging daemon** for the mail platform: every service on the box sends diagnostics to it; an **Asio event loop** receives, parses, routes and filters; a **multi-backend logging library** fans out to file, remote and system sinks."
-- Etched 定位句逐字:"**It's a telemetry pipeline: many producers, one collector, multiple sinks — the same shape as an event-loop-over-hardware-signals problem, just with logs instead of interrupts.**"
-- "Standardizing the diagnostics format cut roughly **30% of duplicated logging code** across services."
+- "I own the **tail of the mail platform's log pipeline**: services log through syslog, **syslog-ng** does the routing and filtering, and a **C++ daemon I wrote consumes that stream, parses and normalizes it, and lands it in a database** so diagnostics are queryable instead of grep-able."
+- "Alongside it, a **shared logging library** standardized how services emit diagnostics — that cut roughly **30% of duplicated logging code**."
+- Etched 定位句逐字:"**It's a telemetry pipeline: many producers, a routing layer, one structured sink — the same shape as an event-loop-over-hardware-signals problem, just with logs instead of interrupts.**"
 
-**2. 問題與限制**:各服務自刻 logging(格式發散、程式碼重複);**慢 sink 不能拖住 producer**(⚠ 確認項 5:實際策略);daemon 要能活過個別服務重啟。
+**2. 問題與限制**:診斷資料散在各服務的純文字 log 裡,查一個跨服務問題要 grep 好幾種格式;需要**可查詢的結構化落地**,而且收集不能干擾收發信主路徑。
 
-**3. 設計**:single `io_context` event loop;receive/parse → route/filter → 統一 sink 介面,後端可插拔(file / remote / system)。
+**3. 設計**:站在 syslog 生態上——傳輸與路由交給 syslog-ng(現成、可靠、config 管理);自寫 daemon 只擁有兩件事:**解析/正規化邏輯**與 **DB schema**。Asio 處理 daemon 的 IO。
 
-**4. Trade-off ≥2**:統一 library vs 各服務自由(代價 = 遷移工 + 一個共同依賴;沒走的路 = 放任,代價是跨服務查問題要先學每一種格式)| 慢 sink:block vs drop vs buffer(⚠ 填實際選擇與理由)| 單 event loop vs thread-per-source。
+**4. Trade-off ≥2(誠實版,每個都答得出 why)**
 
-**5. 數字**:−30% duplicated code;全平台服務接入;(⚠ 確認項 5:有吞吐數字就補)。
+- **重用 syslog/syslog-ng vs 自建 collector**:現成傳輸久經沙場、退場成本低;代價 = 綁定 syslog 的格式與投遞語意。"I didn't build a transport — the interesting problem was parsing and schema, so that's where my code lives."
+- **獨立 daemon vs syslog-ng 直寫 DB**:解析規則和 schema 是會演化、要測試的**程式**,不想塞進 syslog-ng 的 config 層;daemon 掛了 syslog-ng 還能緩衝,兩層解耦。
+- **結構化落 DB vs 留純文字**:查詢能力 vs 寫入成本。**吞吐數字不掰**——被問就誠實:"I don't have the throughput number from memory; the bottleneck by construction is the DB write path, not the parse."
+
+**5. 數字**:−30% duplicated logging code(library 那條);其餘不編數字。
 
 **6. 最難的 bug——兩個 war story(Etched 加分區:strace/perf 紀律)**
 
 - **FD exhaustion 全服務中斷,10 分鐘內復原**:現象 = 程序活著但所有連線失敗 → 關鍵句逐字:"**First split 'the program is wrong' from 'a resource is exhausted' — the two paths need completely different evidence.**" → 部署後負載尖峰疊 DDoS,fd 耗盡。追問備案:止血與根因並行,rollback 前保留現場。
-- **CPU 空轉追到確切 syscall**:`perf` 熱點在 `read` → `strace` 看到同一個 fd 反覆回傳 0 → read loop 沒把 0-byte 當 EOF。關鍵句逐字:"**A 0-byte read is EOF, not 'no data this time'. Loop exit conditions have to match the syscall contract.**"(⚠ 確認項 4)
+- **CPU 空轉追到確切 syscall**(✅ 確認:**前人程式碼的陳年 bug,我是追查者**——當 debugging 故事講,不認領也不指責,說 "a long-standing bug in inherited code"):`perf` 熱點在 `read` → `strace` 看到同一個 fd 反覆回傳 0 → read loop 沒把 0-byte 當 EOF。關鍵句逐字:"**A 0-byte read is EOF, not 'no data this time'. Loop exit conditions have to match the syscall contract.**"
 
-**7. 如果重來**:(挑一個講)end-to-end structured backpressure(per-source 計帳——跟 telemetry 題同構)/ 評估 completion-model IO(io_uring),並講清楚為什麼當時 readiness 就夠。
+**7. 如果重來**:daemon 端補**顯式的 backpressure/丟棄帳**(現在依賴 syslog-ng 的緩衝行為,策略不在我手上——把「掉了多少」變成自己記的數字,跟 telemetry 題的 dropped counter 同構)。
 
 ### 專案三:Real-time content-inspection microservices(Rust / Tokio / gRPC)
 
