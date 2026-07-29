@@ -1,0 +1,89 @@
+# 全場模擬題本 i–m(spec-heavy,45m 計時)
+
+**運作方式**:開跑時只讀本檔該題的 Phase 1;Claude 當面試官(拿著 [sim-interviewer-guide.md](sim-interviewer-guide.md),⚠ 你在跑題時不准開)。clarify 用打字來回,拿到的答案就是 spec;**Phase 1 被面試官驗收後才會給 Phase 2**。harness(fake API 可編譯單檔)由 Claude 開場時生到 `scratch/`,不入庫。
+
+時間預算:clarify ≤10m → Phase 1 ~20m → Phase 2 ~15m → 收尾宣言。
+
+---
+
+## Sim i — DMA dispatcher v2
+
+**Phase 1 (given at start):**
+
+> You are writing the dispatch layer for a DMA subsystem with **6 DMA engines** (ids 0–5). DMA requests arrive from upstream; each request covers `block_nums` consecutive blocks starting at `block_start_pos`. An engine processes **one block at a time**. Your job: receive requests, feed blocks to engines, and report each request when **all** of its blocks are done.
+>
+> ```rust
+> struct DmaRequest { request_id: u64, block_nums: u32, block_start_pos: u64 }
+> fn get_dma_request() -> Option<DmaRequest>;
+> fn send_dma_request_to_engine(engine_id: u32, block_num: u32, block_start_pos: u64);
+> fn get_dma_result_done() -> Option<u32>;   // engine id that just finished
+> fn wait_event();
+> fn submit_dma_request_result_done(request_id: u64);
+> ```
+>
+> Implement `fn run()`. Ask any questions you need.
+
+**Phase 2**:面試官驗收 Phase 1 後口頭給。
+
+## Sim j — Sensor interrupt pipeline
+
+**Phase 1:**
+
+> A sensor raises an interrupt when its hardware FIFO crosses a watermark. Your ISR runs in **interrupt context**. Samples must reach a logging thread without stalling the interrupt path.
+>
+> ```rust
+> fn read_fifo() -> Option<Sample>;              // ISR context only
+> fn ring_try_push(s: Sample) -> Result<(), Full>;
+> fn ring_try_pop() -> Option<Sample>;
+> fn wake_worker();
+> fn sleep_until_woken();                        // worker side
+> fn log(s: Sample);                             // slow; worker side only
+> ```
+>
+> Implement `fn isr()` and `fn worker_loop()`. Ask any questions you need.
+
+## Sim k — Per-core telemetry fan-in
+
+**Phase 1:**
+
+> A machine has **N worker cores**, each producing telemetry records. Records must reach a single aggregator thread that writes them out. Producers must never block on the aggregator.
+>
+> ```rust
+> fn core_count() -> usize;
+> fn spsc_new(cap: usize) -> (Producer, Consumer);   // per-core channel
+> fn produce_hook(core_id: usize, f: impl FnMut(Record));  // your producer-side code
+> fn write_out(r: Record);                            // aggregator side, slow
+> fn park(); fn unpark_aggregator();
+> ```
+>
+> Implement the producer hook and `fn aggregator_loop()`. Ask any questions you need.
+
+## Sim l — MMIO command queue
+
+**Phase 1:**
+
+> You drive a hardware accelerator through a memory-mapped **submission ring** and a **completion ring**. To submit: write a descriptor into the next submission slot, then write the new tail index to the **doorbell register**. The device consumes descriptors and posts completions to the completion ring, advancing a completion tail you can read.
+>
+> ```rust
+> fn mmio_write(reg: Reg, val: u64);
+> fn mmio_read(reg: Reg) -> u64;      // Reg::SubmitHead, Reg::Doorbell, Reg::CompTail
+> fn slot_write(ring: Ring, idx: usize, d: Descriptor);
+> fn slot_read(ring: Ring, idx: usize) -> Descriptor;
+> fn barrier();                        // full memory barrier to the device
+> ```
+>
+> Implement `fn submit(cmd: Command) -> Result<(), Full>` and `fn poll_completions(on_done: impl FnMut(Command))`. Ask any questions you need.
+
+## Sim m — Engine watchdog(R1 延伸)
+
+**Phase 1:**
+
+> Same setting as the DMA dispatcher, but engines occasionally **hang and never report done**. Requests must still complete. You now have:
+>
+> ```rust
+> fn now_ms() -> u64;
+> fn wait_event_timeout(ms: u64);     // replaces wait_event()
+> // plus the six R1 APIs
+> ```
+>
+> Extend your dispatcher so a hung engine cannot stall a request forever. Ask any questions you need.
