@@ -7,9 +7,11 @@
 | 輪次 | 日期 | 結果 |
 |---|---|---|
 | R1 coding(DMA dispatcher) | 2026-07-28 | ✅ 過,feedback 正向 → [紀錄](2026-07-28-tps-round1-dma.md) |
-| coding #2 | **8/6(四)09:15** | — |
-| coding #3 | **8/11(二)09:15** | — |
-| technical deep dive(履歷/過去專案)+ culture fit | **8/12(三)09:15** | — |
+| coding #2 | **8/6(四)09:15–09:45 開場**(待 coordinator 確認) | — |
+| coding #3 | **8/11(二)09:15–09:45 開場**(同上) | — |
+| technical deep dive(履歷/過去專案) | **8/12(三)09:15–09:45 開場**(同上) | — |
+
+Onsite 結構(2026-07-29 邀請信):3×45m(2 coding + 1 deep dive)+ 最後 15m recruiter debrief;**culture fit 沒有獨立場**——散在各場 behavioral 提問 + debrief,culture fit 稿的用途 = 每場開頭自介 + debrief 15 分。拆三天 + 台北早上時段已去信要求,實際時段以 Ashby 確認為準。
 
 R1 前的衝刺計畫在 `../../SCHEDULE.md`(7/16→7/28,已結案)。
 
