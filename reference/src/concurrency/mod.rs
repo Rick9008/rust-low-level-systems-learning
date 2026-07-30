@@ -30,3 +30,11 @@ pub mod rcu_snapshot;
 // stage 4.5:同步策略對照組——同一個資料結構,鎖版/無鎖版並排
 // (誰值得無鎖、誰上鎖就夠、無鎖版為何有時不存在:docs/concurrency/ds_sync.md)
 pub mod ds_sync;
+
+// R2 sim 系列教學版(⚠ 對應計時場跑完前不要開:j=7/31、k=8/1、n=8/9)
+// signal_pipeline 的 spec-heavy 版:ISR 三禁 + sticky-flag 喚醒 + shutdown drain
+pub mod isr_pipeline;
+// 扇入節的 spec-heavy 版:per-core SPSC + budget 公平 + 全空一輪才睡
+pub mod percpu_fanin;
+// 兩層閘門:DAG indegree 入場閘 + BinaryHeap 優先權閘(Kahn 的事件驅動版)
+pub mod job_scheduler;

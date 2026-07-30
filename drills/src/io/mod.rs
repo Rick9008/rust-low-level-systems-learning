@@ -10,3 +10,5 @@ pub mod tcp_echo;
 
 // R2 sim 系列填空版(⚠ 對應計時場跑完前不要開 j–n 的檔)
 pub mod dma_dispatcher;
+pub mod engine_watchdog;
+pub mod mmio_cmdq;
