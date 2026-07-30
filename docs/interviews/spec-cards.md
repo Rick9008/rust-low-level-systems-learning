@@ -30,6 +30,9 @@ fn log(s: Sample);                        // slow; worker side only
 > 定界宣言的 assume 槽空白(用法:把未經確認的預設講出口給面試官否決的機會);
 > state 表「ISR has a queue」誤——ISR 零持有,手上只有 producer 端 + 計數。
 > 醒睡紀律有摸到一半(「醒來先撈資料」有,「睡前確認空」沒說)。
+> 加時延伸(本卡最大收穫):從 loop 形狀自己推到 **freshness vs completeness 是 clarify 問題**
+> ——audit log(順序/完整)vs freshness feed(最新至上)是兩個不同的程式;
+> 後者推到底 = conflation slot,不是 queue。「該問什麼」從試寫裡長出來,不是從檢查表。
 
 ## Card FP — Frame parser with heartbeat
 
