@@ -41,7 +41,7 @@
 >
 > Three things fill my typical day. First, a two-node active-active high-availability layer — I built the state replication that keeps human approval decisions consistent when the network between the nodes partitions. Second, a C++ telemetry and logging daemon on an Asio event loop — many producers feeding one structured sink. And third, Rust microservices on Tokio doing real-time content inspection, at about thirty-five hundred messages a second per node.
 >
-> My job, in one sentence: keep systems predictable when the network is unreliable, the load spikes, and a node dies.
+> My job, in one sentence: keep systems predictable when the network is unreliable, the load spikes, and a node dies. And 'predictable' includes fast — tail latency is part of the contract.
 >
 > Outside work, I build systems from scratch to understand them — a Redis-compatible key-value engine in Rust, and a deep dive into how async runtimes actually work.
 >
@@ -51,17 +51,19 @@
 第二段是舊稿的「三件日常」條列展開成的句子:每件 = 名字 + 我做了什麼 + 一個規格詞(partitions / structured sink / 3,500 msg/s)。
 最後一句就是 why-Etched 的鉤子,面試官十之八九順著它問——正中下懷。
 
-### 2. ★ Why Etched? Why leave?(~120 words ≈ 60s;不講負面)
+### 2. ★ Why Etched? Why leave?(~140 words ≈ 70s;不講負面;7/31 深夜四輪改版)
 
 **逐字稿(直接唸)**
 
 > "For me this is a toward move, not an away move. I've learned a lot where I am — but the ceiling is that software stops at the kernel; the hardware underneath is always someone else's black box.
 >
-> Etched is making the kind of bet where systems software decides whether the silicon actually delivers — schedulers, event loops, telemetry, the runtime between the model and the chip. That layer is what I already do every day: event loops, backpressure, binary protocols, latency budgets. The vocabulary transfers one to one. I want the other side of the API to be real hardware.
+> Etched is making a bet I love: the chip sets the ceiling, and the systems software decides how close you get to it — schedulers, event loops, telemetry, the runtime between the model and the chip. That layer gets built from scratch, and it's performance-critical — which is exactly what I chase. My daily vocabulary — event loops, backpressure, binary protocols, latency budgets — transfers one to one. And the from-scratch part: today that's what I do on my own time; I want it to be the day job.
 >
 > So no — I'm not leaving something broken. I'm running toward the layer I've been trying to get closer to for years."
 
-**唸法註(不唸)**:骨架 = toward-not-away → Etched 的賭注是什麼 → 我的日常詞彙一比一遷移 → 收尾金句。
+**唸法註(不唸)**:骨架 = toward-not-away(kernel 天花板)→ 晶片天花板/軟體貼多近 → from-scratch + 效能是我在追的 → 詞彙一比一 → 嗜好變正職 → 收尾金句。
+「晶片定天花板、軟體定貼多近」是**產業通則**(utilization gap;CUDA 護城河同理),不需要 Etched 內部知識,被追問也站得住——7/31 換掉原本的 "software decides whether the silicon delivers"(斷言了他們內部現實,你不確定)。
+兩個天花板互相呼應:第一段我的天花板是 kernel,第二段晶片的天花板由軟體逼近。
 被追問「離職原因」負面細節時,回到第一句重申 toward,不展開任何抱怨。
 
 ### 3. ★ Work-life balance(陷阱題:兩個極端都扣分;~135 words ≈ 65s)
@@ -70,13 +72,16 @@
 
 > "Honest answer: I have my own rhythm, and I protect sleep — tired engineers write outages.
 >
-> But when something matters, I can sustain real intensity. This past month is a live example: I ran a full-time job plus a structured interview-prep schedule every night — and what made that sustainable was scheduling and a hard sleep red-line, not willpower.
+> But when something matters, I can sustain real intensity. Concrete example: my teammate and I were driving our content-moderation feature to a hard demo deadline — a stretch of focused, genuinely high-intensity development. What made it sustainable was scheduling and a hard sleep red-line, not willpower — that's what kept day ten as sharp as day one. And we made the demo.
 >
 > Long-term, I side with something Jon Gjengset — a Rust systems educator I learn a lot from — has argued: consistent, focused hours out-produce heroic hours over anything longer than a sprint. Sprints are fine when they matter, as long as they're sprints and not the steady state.
 >
 > I manage energy the way I manage capacity in a system: leave headroom, or the tail latency gets you."
 
-**唸法註(不唸)**:結構 = 誠實 → 證據(這個月)→ 論點背書(Gjengset)→ 系統比喻收尾。
+**唸法註(不唸)**:結構 = 誠實 → 證據(Moderation 衝刺)→ 論點背書(Gjengset)→ 系統比喻收尾。
+⚠ **證據段三細節待補真(7/31 深夜換稿:原「面試準備」例退役——自我指涉+非工作產出)**:
+① 衝刺時長("a stretch" 換真數字,如 "two weeks");② 結局補一句(demo 之後 feature 上線?);
+③ 是否點名隊友("my teammate William and I" 比匿名更真,加分不是風險——你選)。
 ⚠ **Gjengset 引用的使用守則(7/31 加)**:上場前自己把那篇 40-hours 文章重讀一遍,確認你轉述的論點正確;
 被追問文章內容就講論點、不掰細節;如果對面的「拼命文化」訊號很強,把人名句縮短成
 "I optimize for sustained throughput, not heroics" ——論點不變,少一個可以被挑戰的引用。

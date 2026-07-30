@@ -73,5 +73,6 @@ culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict�
 
 **稿件狀態(7/29 晚,二輪定稿)**:deep dive 三專案 + culture fit 五題 ★ 已起草並按 Withers 回填的五個確認項修正(PG 14/收信不能停/內建不一致偵測計數 0/CPU-spin=前人 bug 只當 debugging 故事/logging daemon 誠實架構 = syslog-ng 尾端寫 DB);個人 failure 改用 **authz/authn 缺失 → CVSS 10.0** 故事。素材 = 履歷 + Holdwin 簡報轉軸,交易對照句已拿掉;唸稿鏡像頁 `html_p/r2-interview-scripts.html`(claude.ai index R2 備戰區有卡)。**仍待補**:conflict 故事的實際人物場景、專案三最難的 bug。
 **7/31 三輪(逐字化)**:culture fit ★1/★2/★3/★6/★7 全數升級為**全英文逐字稿**(骨架版實測唸不出來——句間中文接縫卡嘴;中文降級為「唸法註」不出聲);★3 織入 Jon Gjengset 40-hours 論點(含使用守則:上場前重讀原文、被追問講論點不掰細節、拼命文化訊號強就把人名句縮成 "I optimize for sustained throughput, not heroics")。deep dive 專案二全段口述化(今晚口述 #1 用)、專案一 trade-off/演進段口述化、專案三問題/設計補口述句;唸稿鏡像頁同步重發。
+**7/31 深夜四輪(討論後定稿)**:★1 金句後補 p99 句("'predictable' includes fast — tail latency is part of the contract",效能訊號不動金句節奏);★2 換「晶片定天花板、軟體定貼多近」句(產業通則取代對 Etched 內部現實的斷言)+ 織入 from-scratch/performance-critical(嗜好變正職句);★3 證據段換 **Moderation demo 衝刺**(原「面試準備」例退役:自我指涉+非工作產出)——⚠ 三細節待補真:時長、結局一句、是否點名 William。culture fit 剩餘討論(★6/★7 等)下次繼續。
 
 閥門(時間不夠的砍序):認題卡 →(8/9)重打 → k;**i、j、l、m、兩段 taper、早起梯度不砍**。模擬題超時 = 挖到洞,記洞不記違規。
