@@ -16,6 +16,7 @@ use reference::io::dma_dispatcher::{DmaBus, DmaRequest, ENGINE_COUNT};
 use std::collections::{HashMap, VecDeque};
 
 /// 表 3 的一列:每張 request 的進度。
+#[derive(Debug)]
 pub struct ReqState {
     pub blocks_total: u32,
     pub start: u64,
@@ -58,14 +59,42 @@ impl Dispatcher {
     /// **收單即完成**(直接 `submit_dma_request_result_done`,不進表);
     /// 其餘建 `ReqState` 入 `reqs`,request_id 排進 `queue` 尾。
     pub fn register(&mut self, bus: &mut impl DmaBus, r: DmaRequest) {
-        todo!("spec: 0 塊即完成;其餘入表 + 入待派 queue")
+        // todo!("spec: 0 塊即完成;其餘入表 + 入待派 queue")
+        if r.block_nums == 0 {
+            bus.submit_dma_request_result_done(r.request_id);
+            return;
+        }
+        self.reqs.insert(
+            r.request_id,
+            ReqState {
+                blocks_total: r.block_nums,
+                start: r.block_start_pos,
+                next_block: 0,
+                done: 0,
+                in_flight: 0,
+                cancelled: false,
+            },
+        );
+        self.queue.push_back(r.request_id);
     }
 
     /// spec:取消。不認識的 id(已完成/從沒來過)是 no-op——cancel 要冪等。
     /// 已知的單:標 `cancelled`、讓它從此派不出塊;`in_flight == 0` 的
     /// 現在就退場(移出 `reqs`),否則留給 `on_done` 收最後一塊。
     pub fn cancel(&mut self, id: u64) {
-        todo!("spec: 冪等 no-op;停止再派;in_flight==0 才退場")
+        // todo!("spec: 冪等 no-op;停止再派;in_flight==0 才退場")
+        if !self.reqs.contains_key(&id) {
+            return;
+        }
+        let req = self.reqs.get_mut(&id).unwrap();
+        if req.cancelled {
+            return;
+        }
+        req.cancelled = true;
+        req.blocks_total = req.next_block;
+        if req.in_flight == 0 {
+            self.reqs.remove(&id);
+        }
     }
 
     /// spec:派工。只要還有空 engine **且**還有塊沒派,就一直派(FIFO 填滿:
@@ -73,7 +102,31 @@ impl Dispatcher {
     /// 派一塊 = `send_dma_request_to_engine(eid, b, start + b)` +
     /// **派工當下記 `owner[eid]`** + `next_block`/`in_flight` 前進。
     pub fn dispatch(&mut self, bus: &mut impl DmaBus) {
-        todo!("spec: 有空有工就派;owner 當下記;前端清掉派不動的單")
+        // todo!("spec: 有空有工就派;owner 當下記;前端清掉派不動的單")
+        while !self.free.is_empty() && !self.queue.is_empty() {
+            let peek = self.queue.front().unwrap();
+            if !self.reqs.contains_key(peek) {
+                self.queue.pop_front();
+                continue;
+            }
+            let peek_job = self.reqs.get_mut(peek).unwrap();
+            if peek_job.cancelled {
+                self.queue.pop_front();
+                continue;
+            }
+            let free_engine = self.free.pop_front().unwrap();
+            bus.send_dma_request_to_engine(
+                free_engine,
+                peek_job.next_block,
+                peek_job.start + peek_job.next_block as u64,
+            );
+            self.owner[free_engine as usize] = Some((*peek, peek_job.next_block));
+            peek_job.next_block += 1;
+            peek_job.in_flight += 1;
+            if peek_job.next_block == peek_job.blocks_total {
+                self.queue.pop_front();
+            }
+        }
     }
 
     /// spec:收工。done 只帶 engine id → `owner[eid].take()` 路由回 (request, block);
@@ -81,7 +134,25 @@ impl Dispatcher {
     /// cancelled 的單:塊不計數,最後一塊回來(`in_flight == 0`)靜默退場、不 submit。
     /// 正常單:`done += 1`,`done == blocks_total` 才 submit + 退場。
     pub fn on_done(&mut self, bus: &mut impl DmaBus, eid: u32) {
-        todo!("spec: owner 路由;engine 先還;cancelled 靜默收尾;計數歸零才 submit")
+        // todo!("spec: owner 路由;engine 先還;cancelled 靜默收尾;計數歸零才 submit")
+        // Invariant: eid should be sent
+        let (job_id, done_block) = self.owner[eid as usize]
+            .take()
+            .expect("done is from a engine without dispatching job");
+        self.free.push_back(eid);
+        let peek_job = self.reqs.get_mut(&job_id).unwrap();
+        peek_job.in_flight -= 1;
+        if peek_job.cancelled {
+            if peek_job.in_flight == 0 {
+                self.reqs.remove(&job_id);
+            }
+            return;
+        }
+        peek_job.done += 1;
+        if peek_job.done == peek_job.blocks_total {
+            bus.submit_dma_request_result_done(job_id);
+            self.reqs.remove(&job_id);
+        }
     }
 }
 
@@ -118,7 +189,6 @@ mod tests {
 
     /// 單一 request 3 塊:塊 0/1/2 依序派上 engine 0/1/2,三塊全回才 submit。
     #[test]
-    #[ignore = "drill:填完 register/dispatch/on_done 後拔掉"]
     fn single_request_lifecycle() {
         let mut bus = MockBus::new().request_at(0, 1, 3, 100);
         run(&mut bus);
@@ -129,7 +199,6 @@ mod tests {
     /// pipeline 分水嶺:lifo 完成序,A=6 塊、B=1 塊同時到 → B 必須先 submit。
     /// (sequential 版會是 [1, 2]——這條測試就是在打 R1 的洞。)
     #[test]
-    #[ignore = "drill:填完後拔掉"]
     fn pipeline_small_request_overtakes() {
         let mut bus = MockBus::new()
             .lifo()
@@ -141,7 +210,6 @@ mod tests {
 
     /// 8 塊 > 6 台:後兩塊要等 engine 釋出才派得出去。
     #[test]
-    #[ignore = "drill:填完後拔掉"]
     fn more_blocks_than_engines_queue_and_reuse() {
         let mut bus = MockBus::new().request_at(0, 1, 8, 0);
         run(&mut bus);
@@ -152,7 +220,6 @@ mod tests {
     /// cancel in-flight:停止再派、在飛塊自然 done 不計數、engine 回收給下一單,
     /// 被取消的單靜默退場(不 submit)。
     #[test]
-    #[ignore = "drill:填完 cancel/on_done 後拔掉"]
     fn cancel_in_flight_silent_exit_engines_recycled() {
         let mut bus = MockBus::new()
             .request_at(0, 1, 6, 0)
@@ -165,7 +232,6 @@ mod tests {
     /// cancel 搶在第一次派工前(同輪收單→收 cancel→派工):一塊都不准派;
     /// 順帶驗 cancel 不認識的 id(99)是 no-op。
     #[test]
-    #[ignore = "drill:填完 cancel 後拔掉"]
     fn cancel_before_any_dispatch_and_unknown_id_noop() {
         let mut bus = MockBus::new()
             .request_at(0, 1, 3, 0)
@@ -179,7 +245,6 @@ mod tests {
 
     /// boundary:0 塊的單收單即完成,不派任何工。
     #[test]
-    #[ignore = "drill:填完 register 後拔掉"]
     fn zero_block_request_completes_immediately() {
         let mut bus = MockBus::new().request_at(0, 7, 0, 500);
         run(&mut bus);
