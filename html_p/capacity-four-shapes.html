@@ -350,6 +350,30 @@ worker pool:Little's law,rate × 最壞佔用 = 100/s × 1 s <u>= 100 workers</u
 <!-- ================= T5 ================= -->
 <section class="panel" id="t5">
 
+<h2>名詞卡——這個域的常用名詞(名詞是便宜的,先除這層膜)</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>名詞</th><th>一句話</th><th>今天在哪遇到</th></tr>
+  <tr><td><b>counter</b></td><td>只會往上加的整數,記某事累計發生幾次——機器上散落的里程表(<code>packets_sent</code>、<code>errors_total</code>)</td><td>你在 drill 裡寫的 <code>dropped: AtomicU64</code> 就是一個</td></tr>
+  <tr><td><b>gauge</b></td><td>會上下浮動的當前值(溫度、記憶體用量)——counter 的兄弟,不能用差分算 rate</td><td>R1 的對照概念</td></tr>
+  <tr><td><b>sample</b></td><td>對某個 counter/gauge 抄一次讀數,得到的那一筆(id + 值 + 時間戳)</td><td>R1 的 32 B 就是一筆</td></tr>
+  <tr><td><b>watermark</b></td><td>水位線:FIFO 積到 N 筆才觸發(中斷批次化,不是每筆一發)</td><td>卡 SP 第一問</td></tr>
+  <tr><td><b>debounce</b></td><td>去抖動:訊號連續 N 次才當真——單次瞬間訊號不可信</td><td>R3 的 N=3</td></tr>
+  <tr><td><b>backlog</b></td><td>積壓:進貨比消化快時堆起來的那段(= 形狀 1 要算的量)</td><td>worker 在 log 時 ring 裡長的東西</td></tr>
+  <tr><td><b>drain</b></td><td>把佇列一口氣撈到空(pop until empty)</td><td>worker loop 迴圈頂</td></tr>
+  <tr><td><b>conflation</b></td><td>同 key 新值蓋舊值,只留最新——freshness 至上時 queue 塌縮成的形狀</td><td>卡 SP 的「最新最值錢」推到底</td></tr>
+  <tr><td><b>backpressure</b></td><td>下游滿了往上游反壓(擋住/變慢),而不是默默丟</td><td>你在 R2 裁決自己寫的</td></tr>
+  <tr><td><b>in-flight</b></td><td>已發出、還沒回來的那些(= Little's law 的 L)</td><td>dispatcher 的 in_flight 欄位</td></tr>
+  <tr><td><b>SLA / p99</b></td><td>對外承諾的上限(20s 內判死)/ 第 99 百分位延遲——設計對齊它,不對齊平均值</td><td>R3 的 20s;pool 為風暴配</td></tr>
+  <tr><td><b>flapping</b></td><td>狀態抖動:死→活→死→活地閃——debounce 要消滅的現象</td><td>R3 為什麼要 N=3</td></tr>
+</table></div>
+
+<div class="card info">
+  <span class="tag">遇到不認識的名詞,場上的動作</span>
+  <p>直接問,5 秒來回:<span class="en">"When you say counters — cumulative event counts, like packets_sent?"</span>
+  帶著你的猜測問(yes/no 題),比開放式問更快、也展示你有概念地圖。R1 你就是這樣過的。</p>
+</div>
+
 <h2>錨點數字庫——背這一張就夠(對照 docs/cost-model.md)</h2>
 
 <h3>時間錨</h3>
