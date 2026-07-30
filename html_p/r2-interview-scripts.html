@@ -82,7 +82,7 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 
 <header class="top">
   <h1>R2 稿件唸稿頁 — deep dive × culture fit</h1>
-  <div class="sub">8/12 technical deep dive 主戰 + 每場開頭自介/行為題/debrief 15m ｜ 2026-07-29 起草;canonical = docs/interviews/*.md,稿子大改後重發本頁</div>
+  <div class="sub">8/12 technical deep dive 主戰 + 每場開頭自介/行為題/debrief 15m ｜ 2026-07-29 起草、<b>07-31 三輪:★ 題與口述段全面逐字化</b>;canonical = docs/interviews/*.md,稿子大改後重發本頁</div>
 </header>
 
 <nav class="tabbar" id="tabbar">
@@ -95,8 +95,9 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 <section class="panel active" id="t0">
 
 <div class="anchor">
-  <div class="big">練法:白天寫稿(bullet 骨架,每題 5–8 句)→ 晚上出聲唸 → Claude 模擬追問。不背逐字稿——背骨架 + 關鍵句。</div>
-  <div class="small">黃色底線句 = 一般稿句;綠色 = 關鍵句,要能逐字講出來。中文行只是對照,唸的時候全英文。</div>
+  <div class="big">兩層規格(7/31 三輪定案):★ 題與口述段 = 全英文逐字稿,開口直接連著唸;其餘題 = bullet 骨架,臨場組句。</div>
+  <div class="small">黃色框 = 逐字稿段落(<b>全部唸出來,一段接一段</b>);綠色框 = 關鍵句(要能單獨脫口)。
+  中文行一律是「唸法註」——只給眼睛看,不唸出聲。7/29 的「只背骨架」規格作廢:實測骨架唸不出來,句間的中文接縫會卡住嘴。</div>
 </div>
 
 <h2>唸稿排程(README 晚間欄)</h2>
@@ -144,19 +145,20 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 <div class="say"><div class="en">"I own the <b>tail of the mail platform's log pipeline</b>: services log through syslog, <b>syslog-ng</b> does the routing and filtering, and a <b>C++ daemon I wrote consumes that stream, parses and normalizes it, and lands it in a database</b> — so diagnostics are queryable instead of grep-able. Alongside it, a shared logging library standardized how services emit diagnostics — roughly <b>30% less duplicated logging code</b>."</div><div class="zh">我擁有平台 log 管線的尾端:服務走 syslog、syslog-ng 做路由過濾、我寫的 C++ daemon 消費串流、解析正規化後落 DB——診斷從「用 grep 撈」變成「可查詢」。另有共用 library 統一發送端格式,砍約 30% 重複碼。</div></div>
 <div class="say key"><div class="en">"It's a <b>telemetry pipeline: many producers, a routing layer, one structured sink</b> — the same shape as an event-loop-over-hardware-signals problem, just with logs instead of interrupts."</div><div class="zh">Etched 定位句:它就是 telemetry pipeline——多 producer、一層路由、一個結構化 sink,跟「event loop 蓋在硬體訊號上」同形。</div></div>
 
-<h3>Trade-off(≥2,每個都答得出 why)</h3>
-<ul>
-  <li><b>重用 syslog/syslog-ng vs 自建 collector</b>:現成傳輸久經沙場;代價 = 綁定 syslog 格式與投遞語意。"I didn't build a transport — the interesting problem was parsing and schema, so that's where my code lives."</li>
-  <li><b>獨立 daemon vs syslog-ng 直寫 DB</b>:解析規則與 schema 是會演化、要測試的程式,不塞進 config 層;daemon 掛了 syslog-ng 還能緩衝,兩層解耦。</li>
-  <li><b>結構化落 DB vs 留純文字</b>:查詢能力 vs 寫入成本。吞吐數字不掰——被問就誠實:"I don't have the number from memory; the bottleneck by construction is the DB write path, not the parse."</li>
-</ul>
+<h3>問題與設計(口述版,兩段連著唸)</h3>
+<div class="say"><div class="en">"Before this, diagnostics lived in plain-text logs scattered across services, each with its own format — debugging one cross-service issue meant grepping three formats and joining them in your head. We needed a structured, queryable landing zone — and the collection path must never interfere with the mail-delivery hot path."</div><div class="zh">問題:散裝純文字 → 要可查詢;採集不能碰主路徑。</div></div>
+<div class="say"><div class="en">"I stood on the syslog ecosystem instead of fighting it: transport and routing go to syslog-ng — battle-tested, config-driven. My daemon owns exactly two things: the parsing-and-normalization logic, and the database schema. Asio drives the daemon's IO."</div><div class="zh">設計:傳輸交給生態,自己的 code 只擁有解析與 schema 兩件事。</div></div>
+
+<h3>Trade-off(≥2;口述版,中文只是標籤)</h3>
+<div class="say"><div class="en"><b>重用 vs 自建</b>:"The off-the-shelf transport is battle-tested and cheap to walk away from; the cost is being bound to syslog's format and delivery semantics. I didn't build a transport — the interesting problem was parsing and schema, so that's where my code lives."</div></div>
+<div class="say"><div class="en"><b>獨立 daemon vs 直寫 DB</b>:"Parsing rules and schema are code — they evolve and they need tests. I didn't want that living in a config layer. And the failure modes decouple: if my daemon dies, syslog-ng still buffers."</div></div>
+<div class="say"><div class="en"><b>結構化 vs 純文字</b>:"Query power versus write cost. And I won't invent a throughput number — I don't have it from memory; the bottleneck by construction is the DB write path, not the parse."</div></div>
 
 <h3>兩個 war story(strace/perf 紀律——Etched 加分區)</h3>
 <div class="card">
-  <h4>① FD exhaustion・全服務中斷・10 分鐘內復原</h4>
-  <p>現象:程序活著但所有連線失敗。</p>
-  <div class="say key"><div class="en">"<b>First split 'the program is wrong' from 'a resource is exhausted'</b> — the two paths need completely different evidence."</div><div class="zh">先分「程式錯了」還是「資源用完了」——兩條路要看的證據完全不同。</div></div>
-  <p>→ 部署後負載尖峰疊 DDoS,file descriptor 耗盡。追問備案:止血與根因並行;rollback 前先保留現場。</p>
+  <h4>① FD exhaustion・全服務中斷・10 分鐘內復原(口述版)</h4>
+  <div class="say"><div class="en">"The process was alive, but every new connection failed. <b>First move: split 'the program is wrong' from 'a resource is exhausted'</b> — the two paths need completely different evidence. It turned out a post-deploy load spike stacked on a DDoS, and we ran out of file descriptors. Service was back in about ten minutes."</div><div class="zh">現象 → 分流原則 → 根因 → 復原時間,一段講完。</div></div>
+  <div class="say"><div class="en">追問備案:"We stopped the bleeding and chased the root cause in parallel — and we captured the scene before any rollback, because a rollback destroys your evidence."</div></div>
 </div>
 <div class="card">
   <h4>② CPU 空轉・追到確切的 syscall(✅ 前人程式碼的陳年 bug——當 debugging 故事講,說 "a long-standing bug in inherited code",不認領不指責)</h4>
@@ -164,8 +166,8 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   <div class="say key"><div class="en">"<b>A 0-byte read is EOF, not 'no data this time'. Loop exit conditions have to match the syscall contract.</b>"</div><div class="zh">0-byte return 是 EOF,不是「這次沒資料」。迴圈終止條件永遠對照 syscall 契約。</div></div>
 </div>
 
-<h3>如果重來</h3>
-<p>daemon 端補<b>顯式的 backpressure / 丟棄帳</b>——現在依賴 syslog-ng 的緩衝行為,策略不在我手上;把「掉了多少」變成自己記的數字(跟 telemetry 題的 dropped counter 同構)。</p>
+<h3>如果重來(口述版)</h3>
+<div class="say"><div class="en">"I'd add an explicit backpressure-and-drop ledger on the daemon side. Today I inherit syslog-ng's buffering behavior, so the drop policy isn't in my hands — I want 'how much did we lose' to be a number I own. It's the same dropped-counter shape as any telemetry pipeline."</div><div class="zh">顯式丟棄帳——跟 telemetry 題的 dropped counter 同構。</div></div>
 
 <h2>專案一:Two-node Active-Active HA(Go + Rust)</h2>
 
@@ -179,10 +181,8 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 
 <h3>為什麼現成方案都不行(必被問)</h3>
 <div class="say key"><div class="en">"<b>Replication is a transport-layer concern; conflict resolution is a policy-layer concern.</b> Off-the-shelf tools move the data, but they can't decide which write should win."</div><div class="zh">複製是運輸層,衝突解決是策略層——現成工具搬得動資料,決定不了誰該贏。</div></div>
-<ul>
-  <li>PG replication:<b>當時是 PG 14</b>——streaming = 單寫者拿不到 AA;雙向邏輯複製當時不可用(要 PG16 <code>origin=none</code>),一句結案。更根本:<b>複製排不出兩個分區寫入的先後,更不知道哪個操作(刪除、寄出)已不可挽回</b>。</li>
-  <li>Raft/Paxos:n=2 → quorum 2 → 任一節點掛掉全組停寫,<b>可用性比單機還差</b>;n=3 不允許。→ 換問題:both sides write, replay-safe, converge afterwards。</li>
-</ul>
+<div class="say"><div class="en"><b>vs PG replication</b>:"We were on Postgres fourteen. Streaming replication is single-writer, so no active-active; and bidirectional logical replication wasn't available yet — that needs Postgres sixteen. But the deeper reason holds on any version: replication can't order two partitioned writes, and it certainly doesn't know that one of them already sent an email."</div><div class="zh">版本一句結案 + 更根本的政策層理由。</div></div>
+<div class="say"><div class="en"><b>vs Raft/Paxos</b>:"With Raft or Paxos at n equals two, the quorum is two — lose either node and the whole system stops writing. Availability would be worse than a single machine, and a third node wasn't an option. So I changed the question: instead of asking who is allowed to write, both sides write, replay-safe, and converge afterwards."</div><div class="zh">n=2 的 quorum 悖論 → 換問題。</div></div>
 
 <h3>兩個核心機制(關鍵句都要逐字)</h3>
 <div class="say key"><div class="en">"<b>The check and the write have to be one atomic operation</b> — otherwise two concurrent retries both see 'not processed' and double-execute. Idempotency that isn't atomic only <b>looks</b> like idempotency."</div><div class="zh">冪等:查與寫必須同一個原子操作,否則兩個併發 retry 會雙做——不原子的冪等只是看起來冪等。</div></div>
@@ -190,7 +190,7 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 
 <h3>演進 + 數字 + 如果重來</h3>
 <ul>
-  <li>v1 NFS 共享(鎖不可靠 + SPOF)→ v2 指令佇列(consumer 重啟 = 遺失視窗)→ v3 派送前本地備份、對端確認才清除。"Each version was forced by a concrete failure, not by a whiteboard."</li>
+  <li>演進口述版:<span class="hl-yel">"Version one used shared NFS — after a link flap the file locks were unreliable, and the shared storage itself was a single point of failure. Version two moved to command queues on each node's local database — but if the queue drained or the consumer restarted, operations that hadn't landed on the peer were simply gone. That loss window forced version three: back up locally before dispatch, and only clear the backup after the peer confirms it landed. Each version was forced by a concrete failure, not by a whiteboard."</span></li>
   <li>數字:2 nodes · 6+ months · 1 real failover · v3 代價 = 每操作多一次本地寫。</li>
   <li>「你怎麼知道零不一致?」——武器句逐字:<span class="hl-grn">"We don't just hope it's consistent — the system detects divergence, re-syncs automatically, and counts every occurrence. Across every customer machine, for six-plus months, that counter stayed at zero — and support never received a single inconsistency report."</span></li>
   <li>如果重來:witness / fencing token 破兩節點對稱(future work #1;當時部署形態不允許額外元件——誠實講是設計邊界)。</li>
@@ -214,52 +214,40 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 
 <p>onsite 沒有獨立 culture fit 場——這些稿的用途:<b>每場開頭 60–90 秒自介</b> + 散在各場的行為題 + <b>最後 15 分鐘 recruiter debrief</b>(反問三條在這裡用)。★ = 必寫稿,已全數起草;其餘 bullet 骨架。</p>
 
-<div class="qa"><div class="qhead"><span class="star">★ 1</span> Tell me about yourself(60–90s)</div><div class="qbody">
-  <ul>
-    <li>Systems / infrastructure engineer at Synology's mail platform since 2023 — Rust, Go, modern C++ on Linux.</li>
-    <li>三件日常:two-node Active-Active HA layer(分區下的衝突解決)· C++ telemetry/logging daemon(Asio event loop)· Rust microservices on Tokio(~3,500 msg/s)。</li>
-    <li>Outside work: build systems from scratch to understand them — a Redis-compatible KV engine, an async-runtime deep-dive.</li>
-  </ul>
-  <div class="say key"><div class="en">"<b>My job, in one sentence: keep systems predictable when the network is unreliable, the load spikes, and a node dies.</b>"</div><div class="zh">一句人設:網路不可靠、流量爆量、節點掛掉的時候,讓系統行為仍然可預期。</div></div>
-  <div class="say"><div class="en">收尾鉤:"That's why a company doing hardware-software co-design is exactly where I want to be — <b>the interesting failures live at that boundary</b>."</div><div class="zh">收在 why-Etched:有趣的故障都住在軟硬體交界。</div></div>
+<div class="qa"><div class="qhead"><span class="star">★ 1</span> Tell me about yourself(60–90s;~170 words ≈ 80s,五段連著唸)</div><div class="qbody">
+  <div class="say"><div class="en">"I'm a systems and infrastructure engineer on Synology's mail platform — I've been there since twenty twenty-three, working in Rust, Go, and modern C++ on Linux."</div><div class="zh">開場:身分 + 年份 + 語言棧。2023 唸 "twenty twenty-three"。</div></div>
+  <div class="say"><div class="en">"Three things fill my typical day. First, a two-node active-active high-availability layer — I built the state replication that keeps human approval decisions consistent when the network between the nodes partitions. Second, a C++ telemetry and logging daemon on an Asio event loop — many producers feeding one structured sink. And third, Rust microservices on Tokio doing real-time content inspection, at about thirty-five hundred messages a second per node."</div><div class="zh">舊稿的「三件日常」條列展開成句:每件 = 名字 + 我做了什麼 + 一個規格詞。3,500 唸 "thirty-five hundred"。</div></div>
+  <div class="say key"><div class="en">"<b>My job, in one sentence: keep systems predictable when the network is unreliable, the load spikes, and a node dies.</b>"</div><div class="zh">一句人設。</div></div>
+  <div class="say"><div class="en">"Outside work, I build systems from scratch to understand them — a Redis-compatible key-value engine in Rust, and a deep dive into how async runtimes actually work."</div><div class="zh">工作外:手搓系統派。</div></div>
+  <div class="say"><div class="en">"And that's why a company doing hardware-software co-design is exactly where I want to be — <b>the interesting failures live at that boundary</b>."</div><div class="zh">收尾鉤 why-Etched——面試官十之八九順著它問,正中下懷。</div></div>
 </div></div>
 
-<div class="qa"><div class="qhead"><span class="star">★ 2</span> Why Etched? Why leave?(不講負面)</div><div class="qbody">
-  <ul>
-    <li><b>Toward, not away</b>:現職學到很多,但軟體只能貼到 kernel 為止。</li>
-    <li>"Etched is making the kind of bet where <b>systems software decides whether the silicon actually delivers</b> — schedulers, event loops, telemetry, the runtime between the model and the chip. That layer is what I already do every day; I want the other side of the API to be real hardware."</li>
-    <li>證據句:daily work = event loops、backpressure、binary protocols、latency budgets — "the vocabulary transfers one-to-one."</li>
-  </ul>
-  <div class="say key"><div class="en">"<b>I'm not leaving something broken — I'm running toward the layer I've been trying to get closer to for years.</b>"</div><div class="zh">不是逃離什麼壞掉的東西,是跑向多年來一直想貼近的那一層。</div></div>
+<div class="qa"><div class="qhead"><span class="star">★ 2</span> Why Etched? Why leave?(~120 words ≈ 60s;不講負面)</div><div class="qbody">
+  <div class="say"><div class="en">"For me this is a toward move, not an away move. I've learned a lot where I am — but the ceiling is that software stops at the kernel; the hardware underneath is always someone else's black box."</div><div class="zh">toward-not-away 開場;被追離職負面細節就回到這句重申,不展開抱怨。</div></div>
+  <div class="say"><div class="en">"Etched is making the kind of bet where <b>systems software decides whether the silicon actually delivers</b> — schedulers, event loops, telemetry, the runtime between the model and the chip. That layer is what I already do every day: event loops, backpressure, binary protocols, latency budgets. The vocabulary transfers one to one. I want the other side of the API to be real hardware."</div><div class="zh">賭注 + 日常詞彙一比一遷移(證據句已織入)。</div></div>
+  <div class="say key"><div class="en">"So no — <b>I'm not leaving something broken. I'm running toward the layer I've been trying to get closer to for years.</b>"</div><div class="zh">收尾金句。</div></div>
 </div></div>
 
-<div class="qa"><div class="qhead"><span class="star">★ 3</span> Work-life balance(陷阱題:兩個極端都扣分)</div><div class="qbody">
-  <ul>
-    <li>誠實:"I have my own rhythm — I protect sleep, because tired engineers write outages."</li>
-    <li>證據(這個月就是實例):"This past month I ran a full-time job plus a structured interview-prep schedule every night — sustainable because of <b>scheduling and a hard sleep red-line, not willpower</b>."</li>
-    <li>邊界:"Sprints are fine when they matter — as long as they're sprints, not the steady state."</li>
-  </ul>
-  <div class="say key"><div class="en">"<b>I manage energy like I manage capacity in a system: leave headroom, or the tail latency gets you.</b>"</div><div class="zh">管理精力像管理系統容量:留餘裕,不然尾延遲遲早找上你。</div></div>
+<div class="qa"><div class="qhead"><span class="star">★ 3</span> Work-life balance(陷阱題:兩個極端都扣分;~135 words ≈ 65s)</div><div class="qbody">
+  <div class="say"><div class="en">"Honest answer: I have my own rhythm, and I protect sleep — tired engineers write outages."</div><div class="zh">誠實開場。</div></div>
+  <div class="say"><div class="en">"But when something matters, I can sustain real intensity. This past month is a live example: I ran a full-time job plus a structured interview-prep schedule every night — and what made that sustainable was <b>scheduling and a hard sleep red-line, not willpower</b>."</div><div class="zh">證據:這個月本身就是實例。</div></div>
+  <div class="say"><div class="en">"Long-term, I side with something Jon Gjengset — a Rust systems educator I learn a lot from — has argued: consistent, focused hours out-produce heroic hours over anything longer than a sprint. Sprints are fine when they matter, as long as they're sprints and not the steady state."</div><div class="zh">⚠ Gjengset 引用守則(7/31):上場前把那篇 40-hours 文章自己重讀一遍;被追問講論點、不掰細節;對面「拼命文化」訊號強 → 縮成 "I optimize for sustained throughput, not heroics",論點不變、少一個可被挑戰的引用。</div></div>
+  <div class="say key"><div class="en">"<b>I manage energy the way I manage capacity in a system: leave headroom, or the tail latency gets you.</b>"</div><div class="zh">系統比喻收尾。</div></div>
 </div></div>
 
 <div class="qa"><div class="qhead"><span class="star">★ 6</span> Conflict / disagreement(SAR)</div><div class="qbody">
-  <ul>
-    <li><b>S</b>:split-brain 衝突解法,團隊(含我)最初傾向 Last-Write-Wins with timestamps。</li>
-    <li><b>A</b>:I pushed back <b>with a concrete failure scenario, not an opinion</b> — a partition where node A approves and the mail is actually sent, node B later rejects:"you cannot recall a sent email by overwriting a row." 加上兩節點沒有可信時鐘。</li>
-    <li><b>R</b>:改成從操作語意推規則(irreversible actions win);上線 6+ 個月零不一致。</li>
-  </ul>
-  <div class="say key"><div class="en">"<b>We didn't converge because someone argued better — we converged because a failure scenario made the answer obvious.</b> That's how I like to disagree: bring the counterexample, not the volume."</div><div class="zh">不是誰口才好誰贏,是失敗場景讓答案自明——帶反例來吵架,不是帶音量。</div></div>
-  <div class="todo"><b>⚠ 確認</b>:當時實際的討論對象與場景,講之前把人物補真。</div>
+  <div class="say"><div class="en">"Sure — this happened on the two-node H-A project. When we designed the split-brain conflict resolution, the team's first instinct — mine included — was last-write-wins with timestamps. It's the intuitive answer."</div><div class="zh">S:場景。⚠ 上場前把人物補真,一句就夠:"my tech lead and I both started from..."。</div></div>
+  <div class="say"><div class="en">"I pushed back, but with a concrete failure scenario rather than an opinion. Picture a partition where node A approves a message and the mail actually goes out — and node B later rejects it. <b>You cannot recall a sent email by overwriting a row.</b> And with exactly two nodes, there's no trusted clock to even say which write was 'later'."</div><div class="zh">A:帶反例不帶意見。</div></div>
+  <div class="say"><div class="en">"That scenario reframed the discussion. We derived the rules from operation semantics — irreversible actions win — and that design has now run in production for over six months with zero inconsistency incidents."</div><div class="zh">R:語意規則 + 六個月零事故。</div></div>
+  <div class="say key"><div class="en">"<b>We didn't converge because someone argued better — we converged because a failure scenario made the answer obvious.</b> That's how I like to disagree: bring the counterexample, not the volume."</div><div class="zh">方法論收尾。</div></div>
 </div></div>
 
 <div class="qa"><div class="qhead"><span class="star">★ 7</span> Failure(✅ 7/29 改用 authz 故事——真正自己寫出的 bug)</div><div class="qbody">
-  <ul>
-    <li><b>S</b>:"The failure that's genuinely mine: I shipped a cross-cluster operations interface <b>without proper authentication and authorization</b>. It was internal-only, so I treated the network boundary as the security boundary."</li>
-    <li><b>損失</b>:"It later surfaced as a <b>critical vulnerability — CVSS 10.0</b>."(CVE embargo:場上不講技術細節,講設計與教訓;被追細節就說 embargo——這本身是專業訊號)</li>
-    <li><b>A(修的人也是我)</b>:"I designed the mitigation myself: <b>defense-in-depth</b> — mTLS at the transport layer, application-level authn/authz, and localhost-scoped access control for cross-cluster operations."</li>
-    <li><b>機制性改變</b>:"Security review moved into the design phase instead of being a bolt-on; and my default flipped — <b>every interface gets authn/authz, and 'internal-only' never counts as a boundary again</b>."</li>
-  </ul>
-  <div class="say key"><div class="en">"<b>The lesson wasn't 'be more careful' — it was that 'internal-only' is an assumption, not a boundary. Assumptions rot; boundaries hold.</b>"</div><div class="zh">學到的不是「更小心」——是「internal-only 是假設,不是邊界。假設會爛掉,邊界才守得住」。</div></div>
+  <div class="say"><div class="en">"The failure that's genuinely mine: I shipped a cross-cluster operations interface without proper authentication and authorization. It was internal-only — so I treated the network boundary as the security boundary."</div><div class="zh">S:自己寫出的 bug,認領乾脆。</div></div>
+  <div class="say"><div class="en">"It later surfaced as a critical vulnerability — CVSS ten point zero. I can't share the technical details because the CVE is still under embargo, but the design lesson is fully mine to own."</div><div class="zh">損失具體化。CVSS 10.0 唸 "ten point zero";embargo 那句本身是專業訊號。</div></div>
+  <div class="say"><div class="en">"I also designed the fix myself: defense in depth — mutual TLS at the transport layer, application-level authentication and authorization on every call, and localhost-scoped access control for the cross-cluster operations."</div><div class="zh">修的人也是我。authn/authz 口語直接說全稱,縮寫唸出來反而卡。</div></div>
+  <div class="say"><div class="en">"Two things changed mechanically after that. Security review moved into the design phase instead of being a bolt-on. And my personal default flipped: every interface gets auth, and 'internal-only' never counts as a boundary again."</div><div class="zh">機制性改變兩條。</div></div>
+  <div class="say key"><div class="en">"<b>The lesson wasn't 'be more careful'. The lesson was that internal-only is an assumption, not a boundary. Assumptions rot; boundaries hold.</b>"</div><div class="zh">收尾金句。</div></div>
   <p class="note">備案 B:v2 遺失視窗(設計層 failure,主戰放 deep dive 專案一演進段)。CPU-spin 不用——前人程式碼,只當 debugging 故事。</p>
 </div></div>
 

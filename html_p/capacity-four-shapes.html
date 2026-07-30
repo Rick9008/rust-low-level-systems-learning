@@ -142,6 +142,51 @@ li{margin:5px 0;}
 <p>認形本身就是練出來的反射——聽到「斷線/災難撐多久」先想形 1;聽到「一人一份塞不塞得下」先想形 2;
 聽到「死線倒推」先想形 3;聽到「幾個工人/多深佇列」先想形 4。分頁⑥有認形快打。</p>
 
+<h2>四形狀英文對白——認題的耳朵、敘算的嘴巴</h2>
+
+<p>觸發句在場上是<b>英文</b>進來的,算式也要用英文唸出去——這節是本頁的出聲練習區:
+每晚挑一個形狀,把「面試官這樣問 → 你這樣接」連起來唸 3 遍(其他分頁默讀即可)。
+敘算句的骨架都是同一條:<b>先喊形狀的一行式,再帶著單位走 2–3 步,收在一個量級</b>。</p>
+
+<div class="tablewrap"><table>
+  <tr><th>形狀</th><th>面試官會這樣問(認題耳朵)</th><th>你的敘算句(接住它,邊算邊講)</th></tr>
+  <tr>
+    <td><b style="color:var(--yellow)">1. 容量</b></td>
+    <td><span class="en">"The uplink can be down for five minutes — where does the data go?"</span><br>
+        <span class="en">"How much backlog builds up while the consumer is stalled?"</span></td>
+    <td><span class="en">"Let me size that — it's rate times outage duration. 2,000 counters every 10 seconds at 32 bytes each is 6.4 kilobytes a second; over 300 seconds that's roughly 2 megabytes."</span></td>
+  </tr>
+  <tr>
+    <td><b style="color:var(--yellow)">2. 預算</b></td>
+    <td><span class="en">"Each connection keeps 32 KB of buffers — does that fit in 4 gigabytes?"</span><br>
+        <span class="en">"We expect 50,000 concurrent clients. What's the memory story?"</span></td>
+    <td><span class="en">"That's a budget check — per-unit cost times count. 32 KB times 50,000 is 1.6 gigabytes, about 40% of the budget; but that's only my userspace share — the kernel holds the same order again for active sockets."</span></td>
+  </tr>
+  <tr>
+    <td><b style="color:var(--yellow)">3. 反解鏈</b></td>
+    <td><span class="en">"We must flag a dead node within 20 seconds — how often would you probe?"</span><br>
+        <span class="en">"Detection has to happen within X seconds — what does that force on the parameters?"</span></td>
+    <td><span class="en">"This is a deadline chain — let me lay the worst case on a timeline. The node dies right after a successful probe, so the third failure completes at 3T plus one timeout. Setting 3T plus 1 under 20 gives T below 6.3 — I'd probe every 5 seconds and keep the slack for scheduling jitter."</span></td>
+  </tr>
+  <tr>
+    <td><b style="color:var(--yellow)">4. Little's law</b></td>
+    <td><span class="en">"How many workers do you need?"</span><br>
+        <span class="en">"How many requests are in flight at any moment?"</span></td>
+    <td><span class="en">"Little's law — concurrency is arrival rate times time in system. 100 probes a second times a 1-second worst-case timeout is 100 workers. I size the pool for the storm, not the average — on a normal day only two of them are busy."</span></td>
+  </tr>
+</table></div>
+
+<div class="card info">
+  <span class="tag">把數字唸出來(卡最兇的其實是這層)</span>
+  <p>單位和量級的英文唸法先熱好,上面的句子才接得順:<br>
+  <span class="en">6.4 KB/s → "six point four kilobytes a second"</span><br>
+  <span class="en">1.6 GB vs 4 GB → "one point six gigs against a four-gig budget — that's forty percent"</span><br>
+  <span class="en">10⁵ → "ten to the fifth" — "a day is about ten to the fifth seconds"</span><br>
+  <span class="en">12,000 → "twelve thousand records per batch"(掉零疫苗:唸出來就掉不了)</span><br>
+  <span class="en">≈ → "roughly two megabytes" / "call it 2 MB" / "on the order of megabytes"</span><br>
+  <span class="en">餘裕 → "that leaves sixty percent headroom" / "above eighty percent of budget — that's tight"</span></p>
+</div>
+
 <h2>上場 30 秒節奏</h2>
 
 <pre class="code">clarify 拿到數字 ──→ <b>認形</b>(上表)──→ <b>單位鏈</b>(2–4 步,每步帶單位)

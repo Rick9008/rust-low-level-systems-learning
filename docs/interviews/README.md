@@ -26,6 +26,9 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 **轉製層已入庫(2026-07-30)**:六題各有 reference 教學版(5-pillar 檔頭 + mock + 手 trace 測試)
 + drills 填空版(挖核心轉移函式),對照表與複打流程在 `rehearsals/README.md` 進度狀態表下方;
 各檔頂防雷 banner 標開放日期——**該題計時場跑完才開**,跑完把它轉入 drills 複打當固化練習。
+**圖解鏡像(2026-07-31)**:`html_p/r2-sim-walkthroughs.html`(claude.ai 鏡像在 index 頂部 R2 備戰區,🔬)
+——六題各一分頁:provided API 逐函式解剖表、全景示意圖(資料流 + 區域著色 + 怎麼讀)、互動 stepper、
+code 走讀、陷阱清單;**每分頁掛同款防雷門**(i 已開,j/k/l/m/n 各自計時場跑完才開),賽前仍讀作戰本前導卡。
 
 **圖解作戰本**:`html_p/r2-onsite-visual-guide.html`(claude.ai 鏡像在 artifacts gallery,index 已收卡)——題型解剖(API 三堆分類法 + reactor 五步骨架)、sim i 三張表互動 stepper(pipeline 分水嶺劇本)、sim j–n 概念前導與 clarify 種子(刻意不含解法,跑題前讀是安全的)、英文對白道場五場景(雙語,R1 洞①的處方)。用法:各 sim 開跑前 10 分鐘讀對應前導卡;對白每晚出聲場挑一景唸 3 遍。
 
@@ -51,15 +54,15 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 | 日期 | 白天(公司,~90m 上限) | 晚上(出聲) |
 |---|---|---|
 | 7/29 三 | **休息日(輕活)**:讀 `sol_sim_i_dma.rs`(三張表 + Dry-Run 紙上走) | deep dive / culture fit 英文稿起草(打字,輕;材料先貼給 Claude) |
-| 7/30 四 | ✅ 實績:i-lite 40m(R1 兩洞親手關,drill 6/6 綠)+ 卡 SP(超時但值;批改入 spec-cards.md;兩課:freshness vs completeness 是 clarify 問題、API 層/primitive 層分層)+ 量級 reps v3 批改入檔(R1 掉零重寫/R2 補一行/R3 忘 timeout;荒謬檢查 0/3)+ 除膜手冊上線 `html_p/capacity-four-shapes.html`(四形狀+單位攜帶+名詞卡+錨點庫) | 唸稿:自介 60–90s + why-us;**加開 live spec-heavy 一場**(Claude 出全新題、當面試官;不碰 j–n 域;新規矩:**開錶前圈名詞、全部問完才計時**)+ 補收 reps 殘帳(R1 數字鏈/R3 重算,5m) |
-| 7/31 五 | 🔴 j:ISR → bottom-half(開跑前 10 分鐘讀作戰本 j 前導卡即可;原排的 signal_pipeline 頁複讀已被 7/30 卡 SP 深討論覆蓋,砍)| deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
+| 7/30 四 | ✅ 實績:i-lite 40m(**drills 填空版** 6/6 綠——R1 兩洞在 drill 層關掉;空白重寫層的驗證留給 8/8 的 sim m,它是 R1 的直系延伸)+ 卡 SP(超時但值;批改入 spec-cards.md;兩課:freshness vs completeness 是 clarify 問題、API 層/primitive 層分層)+ 量級 reps v3 批改入檔(R1 掉零重寫/R2 補一行/R3 忘 timeout;荒謬檢查 0/3)+ 除膜手冊上線 `html_p/capacity-four-shapes.html`(四形狀+單位攜帶+名詞卡+錨點庫;7/30 晚應用戶要求補「四形狀英文對白」節——每形狀配面試官認題句+敘算句+數字唸法卡,晚上出聲場每晚挑一形狀唸 3 遍) | 唸稿:自介 60–90s + why-us + 補收 reps 殘帳(R1 數字鏈/R3 重算,5m)。**live spec-heavy 移 7/31 白天**(7/30 晚體力不足當晚拍板;它本來就是加開項,砍序第一位) |
+| 7/31 五 | 開機:**卡 SP 重做**(15–20m;針對 7/30 批改的三洞——drop-oldest 被 API 封死、口頭需求掉了計數、scope creep——加「assume 槽」「state 表持有權」兩個待修項,整張重跑驗收;開錶前先圈名詞)→ 🔴 j:ISR → bottom-half(開跑前 10 分鐘讀作戰本 j 前導卡即可;原排的 signal_pipeline 頁複讀已被 7/30 卡 SP 深討論覆蓋,砍)→ 下午:**live spec-heavy(自 7/30 晚移入)**——Claude 出全新題當面試官、不碰 j–n 域、開錶前圈名詞全部問完才計時;**建議跑 25m「clarify-only」版**:只跑到 state 表為止不寫實作,因為寫作段當天已由 sim j 練過,這場要練的是前 15 分鐘的節奏(圈名詞→clarify→定界→state 表)。**當日閥門:正職吃掉時間就先砍 live spec-heavy(滑 8/1 白天);卡 SP 重做與 sim j 不砍** | deep dive 口述 #1:**專案二(logging daemon)**——7/31 修正:照 deep-dive 稿自己的建議「開場順序二→一→三、專案二對 Etched 命中率最高」,先練它(原寫專案一,與唸稿頁排程矛盾,以此為準)|
 | 8/1 六 | 🔴 k:多核 per-CPU fan-in + 卡 FP(週末塊) | culture fit 唸 #1 + 模擬追問 |
-| 8/2 日 | 🔴 l:MMIO command queue(HW-L 卡當 10m 前導)+ culture fit 三條故事(7/26)改英文稿 | deep dive 口述 #2 |
+| 8/2 日 | 🔴 l:MMIO command queue(HW-L 卡當 10m 前導)+ culture fit 三條故事(7/26)改英文稿 | deep dive 口述 #2:**專案一(Active-Active HA)** |
 | 8/3 一 | **sim m+n 認題輪**(7/29 加,用戶點名「上場前不能完全沒看過」:各 ~20m,Phase 1 冷讀 → ≥3 clarify 問 → 30 秒英文定界出聲 → state 表手寫;**m 加 15m 非計時骨架快寫**——R1 直系延伸、#2 命中率最高;全程不開 oracle/sol/參考測試,8/8–8/9 計時場保留改當執行練)+ 骨架默寫抽查 15m;認題卡 FR/TA/TQ 降選配讓位 | (選)clarify 句庫一類唸 3 遍 |
 | 8/4 二 | 輕:i–l 洞複掃 + **sol_m / sol_n 檔頭預讀**(還沒跑的兩題先拿「怎麼說」,計時寫 8/8、8/9 照跑) | **08:30 起(梯度開始;9:15 場只需 07:45 起,比 R1 的 8:45 場輕)** |
 | 8/5 三 | taper:不碰新題、檢查表 + 時間預算 + **六題 30 秒英文定界唸一輪**(sol 檔頭 + spec-cards-answers) | 08:00 起、00:30 熄燈 |
 | **8/6 四** | **coding #2(09:15)**,07:45 起 | 當天紀錄入庫 + 洞清單 |
-| 8/7 五 | 修 #2 暴露的洞(targeted) | deep dive 口述 #3 |
+| 8/7 五 | 修 #2 暴露的洞(targeted) | deep dive 口述 #3:**專案三(Rust/Tokio)** |
 | 8/8 六 | 🔴 m:engine watchdog(HW-M 卡前導;吃 #2 暴露的方向) | culture fit 全串 |
 | 8/9 日 | 🔴 n:priority scheduler + DAG 全場(已備;8/6 若指向他型,當天換皮或改 a–h 重打) | deep dive 全串(15m/專案) |
 | 8/10 一 | taper | 早睡(8/6 後不回彈,整段維持 ≤08:30 起) |
@@ -69,5 +72,6 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict、failure、proudest project、想問他們的 3 個問題;底稿 = 7/26 的三條經驗故事。稿子檔案:`culture-fit-script.md`(寫完放本資料夾)。
 
 **稿件狀態(7/29 晚,二輪定稿)**:deep dive 三專案 + culture fit 五題 ★ 已起草並按 Withers 回填的五個確認項修正(PG 14/收信不能停/內建不一致偵測計數 0/CPU-spin=前人 bug 只當 debugging 故事/logging daemon 誠實架構 = syslog-ng 尾端寫 DB);個人 failure 改用 **authz/authn 缺失 → CVSS 10.0** 故事。素材 = 履歷 + Holdwin 簡報轉軸,交易對照句已拿掉;唸稿鏡像頁 `html_p/r2-interview-scripts.html`(claude.ai index R2 備戰區有卡)。**仍待補**:conflict 故事的實際人物場景、專案三最難的 bug。
+**7/31 三輪(逐字化)**:culture fit ★1/★2/★3/★6/★7 全數升級為**全英文逐字稿**(骨架版實測唸不出來——句間中文接縫卡嘴;中文降級為「唸法註」不出聲);★3 織入 Jon Gjengset 40-hours 論點(含使用守則:上場前重讀原文、被追問講論點不掰細節、拼命文化訊號強就把人名句縮成 "I optimize for sustained throughput, not heroics")。deep dive 專案二全段口述化(今晚口述 #1 用)、專案一 trade-off/演進段口述化、專案三問題/設計補口述句;唸稿鏡像頁同步重發。
 
 閥門(時間不夠的砍序):認題卡 →(8/9)重打 → k;**i、j、l、m、兩段 taper、早起梯度不砍**。模擬題超時 = 挖到洞,記洞不記違規。

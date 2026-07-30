@@ -28,29 +28,59 @@
 12. 對技術:軟體最痛的瓶頸現在在哪一層(runtime? driver? tooling)?
 13. 對成長:六個月後怎麼定義這個位子做得好?
 
-## 我的稿(2026-07-29 起草;bullet 骨架 + 關鍵句逐字,晚上出聲唸)
+## 我的稿(2026-07-29 起草;**2026-07-31 三輪:★ 題升級全英文逐字稿**,唸的時候只唸引文區,中文全是「唸法註」不出聲)
 
-### 1. ★ Tell me about yourself(60–90s)
+> 兩層規格:**★ 題 = 逐字稿**(7/31 定案:骨架版實測唸不出來——句間的中文接縫會卡住嘴);
+> 其餘題保持 bullet 骨架(它們是低頻選配,臨場組句即可)。
 
-- Systems / infrastructure engineer at **Synology's mail platform** since 2023 — Rust, Go, modern C++ on Linux.
-- Three things I do daily: **a two-node Active-Active HA layer**(conflict resolution when the network partitions)、**a C++ telemetry/logging daemon**(Asio event loop, many producers → multiple sinks)、**Rust microservices on Tokio**(real-time content inspection, ~3,500 msg/s per node)。
-- 一句人設逐字:"**My job, in one sentence: keep systems predictable when the network is unreliable, the load spikes, and a node dies.**"
-- Outside work: build systems from scratch to understand them — a Redis-compatible KV engine in Rust, an async runtime deep-dive.
-- 收尾鉤到 why-Etched:"That's why a company doing hardware-software co-design is exactly where I want to be — the interesting failures live at that boundary."
+### 1. ★ Tell me about yourself(60–90s;~170 words ≈ 80s)
 
-### 2. ★ Why Etched? Why leave?(不講負面)
+**逐字稿(直接唸)**
 
-- **Toward, not away**(骨架):現職學到很多,但成長天花板在「軟體只能貼到 kernel 為止」。
-- "Etched is making the kind of bet where **systems software decides whether the silicon actually delivers** — schedulers, event loops, telemetry, the runtime between the model and the chip. That software layer is what I already do every day; I want the other side of the API to be real hardware."
-- 逐字:"**I'm not leaving something broken — I'm running toward the layer I've been trying to get closer to for years.**"
-- 證據句:daily work = event loops(Asio)、backpressure、binary protocols、latency budgets——"the vocabulary transfers one-to-one."
+> "I'm a systems and infrastructure engineer on Synology's mail platform — I've been there since twenty twenty-three, working in Rust, Go, and modern C++ on Linux.
+>
+> Three things fill my typical day. First, a two-node active-active high-availability layer — I built the state replication that keeps human approval decisions consistent when the network between the nodes partitions. Second, a C++ telemetry and logging daemon on an Asio event loop — many producers feeding one structured sink. And third, Rust microservices on Tokio doing real-time content inspection, at about thirty-five hundred messages a second per node.
+>
+> My job, in one sentence: keep systems predictable when the network is unreliable, the load spikes, and a node dies.
+>
+> Outside work, I build systems from scratch to understand them — a Redis-compatible key-value engine in Rust, and a deep dive into how async runtimes actually work.
+>
+> And that's why a company doing hardware-software co-design is exactly where I want to be — the interesting failures live at that boundary."
 
-### 3. ★ Work-life balance(陷阱題:兩個極端都扣分)
+**唸法註(不唸)**:數字唸法——2023 = "twenty twenty-three"、3,500 = "thirty-five hundred"。
+第二段是舊稿的「三件日常」條列展開成的句子:每件 = 名字 + 我做了什麼 + 一個規格詞(partitions / structured sink / 3,500 msg/s)。
+最後一句就是 why-Etched 的鉤子,面試官十之八九順著它問——正中下懷。
 
-- **誠實**:"I have my own rhythm — I protect sleep, because tired engineers write outages."
-- **證據**(這一個月就是實例):"When something matters I can sustain real intensity: this past month I ran a full-time job plus a structured interview-prep schedule every night — and the way I made that sustainable was **scheduling and a hard sleep red-line, not willpower**."
-- **邊界**:"Sustainable pace is what protects output quality; sprints are fine when they matter, as long as they're sprints and not the steady state."
-- 一句收尾逐字:"**I manage energy like I manage capacity in a system: leave headroom, or the tail latency gets you.**"
+### 2. ★ Why Etched? Why leave?(~120 words ≈ 60s;不講負面)
+
+**逐字稿(直接唸)**
+
+> "For me this is a toward move, not an away move. I've learned a lot where I am — but the ceiling is that software stops at the kernel; the hardware underneath is always someone else's black box.
+>
+> Etched is making the kind of bet where systems software decides whether the silicon actually delivers — schedulers, event loops, telemetry, the runtime between the model and the chip. That layer is what I already do every day: event loops, backpressure, binary protocols, latency budgets. The vocabulary transfers one to one. I want the other side of the API to be real hardware.
+>
+> So no — I'm not leaving something broken. I'm running toward the layer I've been trying to get closer to for years."
+
+**唸法註(不唸)**:骨架 = toward-not-away → Etched 的賭注是什麼 → 我的日常詞彙一比一遷移 → 收尾金句。
+被追問「離職原因」負面細節時,回到第一句重申 toward,不展開任何抱怨。
+
+### 3. ★ Work-life balance(陷阱題:兩個極端都扣分;~135 words ≈ 65s)
+
+**逐字稿(直接唸)**
+
+> "Honest answer: I have my own rhythm, and I protect sleep — tired engineers write outages.
+>
+> But when something matters, I can sustain real intensity. This past month is a live example: I ran a full-time job plus a structured interview-prep schedule every night — and what made that sustainable was scheduling and a hard sleep red-line, not willpower.
+>
+> Long-term, I side with something Jon Gjengset — a Rust systems educator I learn a lot from — has argued: consistent, focused hours out-produce heroic hours over anything longer than a sprint. Sprints are fine when they matter, as long as they're sprints and not the steady state.
+>
+> I manage energy the way I manage capacity in a system: leave headroom, or the tail latency gets you."
+
+**唸法註(不唸)**:結構 = 誠實 → 證據(這個月)→ 論點背書(Gjengset)→ 系統比喻收尾。
+⚠ **Gjengset 引用的使用守則(7/31 加)**:上場前自己把那篇 40-hours 文章重讀一遍,確認你轉述的論點正確;
+被追問文章內容就講論點、不掰細節;如果對面的「拼命文化」訊號很強,把人名句縮短成
+"I optimize for sustained throughput, not heroics" ——論點不變,少一個可以被挑戰的引用。
+引用的價值:證明你對產能的想法是讀過、想過的立場,不是怕加班的托詞。
 
 ### 4. How do you feel about working across timezones with a US team?(bullet 骨架)
 
@@ -60,21 +90,39 @@
 
 - 用實例不用形容詞:two-node HA 的衝突規則沒有現成答案 → 自己定義、自己驗證、自己扛結果——"that's startup-shaped work inside a bigger company. I liked that part best."
 
-### 6. ★ Conflict / disagreement(SAR;收在「用資料或失敗場景收斂,不是誰說服誰」)
+### 6. ★ Conflict / disagreement(SAR;~160 words ≈ 75s)
 
-- **S**:split-brain 衝突解法,團隊(包括我)最初傾向 **Last-Write-Wins** with timestamps——最直觀。
-- **A**:I pushed back **with a concrete failure scenario, not an opinion**:a partition where node A approves and the mail is *actually sent*, node B later rejects — "**you cannot recall a sent email by overwriting a row.**" 加上兩節點沒有可信時鐘。
-- **R**:改成從**操作語意**推規則(irreversible actions win);上線 6+ 個月零不一致事故。
-- 方法論收尾逐字:"**We didn't converge because someone argued better — we converged because a failure scenario made the answer obvious. That's how I like to disagree: bring the counterexample, not the volume.**"(⚠ 確認:當時實際的討論對象/場景,講之前把人物補真)
+**逐字稿(直接唸)**
 
-### 7. ★ Failure(要有具體損失 + 機制性改變;✅ 7/29 確認改用 authz 故事——真正自己寫出的 bug)
+> "Sure — this happened on the two-node H-A project. When we designed the split-brain conflict resolution, the team's first instinct — mine included — was last-write-wins with timestamps. It's the intuitive answer.
+>
+> I pushed back, but with a concrete failure scenario rather than an opinion. Picture a partition where node A approves a message and the mail actually goes out — and node B later rejects it. You cannot recall a sent email by overwriting a row. And with exactly two nodes, there's no trusted clock to even say which write was 'later'.
+>
+> That scenario reframed the discussion. We ended up deriving the rules from operation semantics — irreversible actions win — and that design has now run in production for over six months with zero inconsistency incidents.
+>
+> We didn't converge because someone argued better — we converged because a failure scenario made the answer obvious. That's how I like to disagree: bring the counterexample, not the volume."
 
-- **S**:"The failure that's genuinely mine: I shipped a cross-cluster operations interface **without proper authentication and authorization**. It was internal-only, so I treated the network boundary as the security boundary."
-- **損失具體化**:"It later surfaced as a **critical vulnerability — CVSS 10.0**."(CVE 還在 embargo:場上不講技術細節,講設計與教訓;被追細節就說 embargo——這本身是專業訊號)
-- **A(修的人也是我)**:"I designed the mitigation myself: **defense-in-depth** — mTLS at the transport layer, application-level authentication and authorization, and localhost-scoped access control for cross-cluster operations."
-- **機制性改變**:"Security review moved into the design phase instead of being a bolt-on; and my default flipped — **every interface gets authn/authz, and 'internal-only' never counts as a boundary again**."
-- 收尾逐字:"**The lesson wasn't 'be more careful' — it was that 'internal-only' is an assumption, not a boundary. Assumptions rot; boundaries hold.**"
-- 備案 B:v2 遺失視窗(設計層 failure,主戰放 deep dive 專案一的演進段)。CPU-spin 不用——前人程式碼,只當 debugging 故事。
+**唸法註(不唸)**:SAR 全在裡面(S=LWW 直覺、A=反例場景、R=語意規則+六個月零事故)。
+⚠ **仍待補真**:當時實際的討論對象與場景(誰主張 LWW、在什麼會議)——上場前把人物填進第一段,
+一句就夠:"my tech lead and I both started from..."。
+
+### 7. ★ Failure(✅ authz 故事——真正自己寫出的 bug;~155 words ≈ 75s)
+
+**逐字稿(直接唸)**
+
+> "The failure that's genuinely mine: I shipped a cross-cluster operations interface without proper authentication and authorization. It was internal-only — so I treated the network boundary as the security boundary.
+>
+> It later surfaced as a critical vulnerability — CVSS ten point zero. I can't share the technical details because the CVE is still under embargo, but the design lesson is fully mine to own.
+>
+> I also designed the fix myself: defense in depth — mutual TLS at the transport layer, application-level authentication and authorization on every call, and localhost-scoped access control for the cross-cluster operations.
+>
+> Two things changed mechanically after that. Security review moved into the design phase instead of being a bolt-on. And my personal default flipped: every interface gets auth, and 'internal-only' never counts as a boundary again.
+>
+> The lesson wasn't 'be more careful'. The lesson was that internal-only is an assumption, not a boundary. Assumptions rot; boundaries hold."
+
+**唸法註(不唸)**:CVSS 10.0 唸 "CVSS ten point zero";authn/authz 口語直接說 "authentication and authorization"
+(縮寫唸出來反而卡)。被追 CVE 細節 → "still under embargo, so I'll stay at the design level"——這句本身是專業訊號。
+備案 B:v2 遺失視窗(設計層 failure,主戰放 deep dive 專案一演進段)。CPU-spin 不用——前人程式碼,只當 debugging 故事。
 
 ### 8. Proudest project(bullet 骨架)
 

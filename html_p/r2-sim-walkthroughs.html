@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim i–n 圖解全解 — provided API 解剖 × stepper × code 走讀</title>
+<style>
+:root{
+  --bg0:#282828; --bg0dim:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg0:#d4be98; --fg1:#ddc7a1;
+  --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665; --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; background:var(--bg0dim); color:var(--fg0);
+  font-family:'JetBrains Mono','Fira Code',ui-monospace,Consolas,monospace;
+  font-size:15px; line-height:1.65;
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:0 16px 80px;}
+header.top{padding:26px 0 10px;}
+header.top h1{font-size:20px; margin:0 0 4px; color:var(--yellow);}
+header.top .sub{color:var(--grey2); font-size:13px;}
+.tabbar{
+  position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:6px;
+  background:var(--bg0dim); padding:10px 0 8px; border-bottom:1px solid var(--bg3); margin-bottom:20px;
+}
+.tabbtn{
+  font:inherit; cursor:pointer; border:1px solid var(--bg3); background:var(--bg1); color:var(--grey2);
+  padding:7px 12px; border-radius:8px; font-size:13px; transition:.12s;
+}
+.tabbtn:hover{border-color:var(--bg4); color:var(--fg0);}
+.tabbtn:focus-visible{outline:2px solid var(--yellow); outline-offset:2px;}
+.tabbtn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.panel{display:none;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.panel.active{animation:none;} *{transition:none !important;}}
+h2{font-size:17px; color:var(--aqua); border-left:3px solid var(--aqua); padding-left:10px; margin:30px 0 12px;}
+h3{font-size:15px; color:var(--orange); margin:22px 0 8px;}
+p{margin:10px 0;}
+code{background:var(--bg1); padding:1px 5px; border-radius:4px; font-size:.92em; color:var(--fg1);}
+pre.code{
+  background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px;
+  overflow-x:auto; font-size:13px; line-height:1.6; color:var(--fg0);
+}
+pre.code i{color:var(--grey); font-style:normal;}
+pre.code b{color:var(--yellow); font-weight:700;}
+pre.code u{color:var(--aqua); text-decoration:none;}
+pre.code b.bad{color:var(--red);}
+.anchor{
+  background:linear-gradient(135deg,var(--bg2),var(--bg1)); border:1px solid var(--yellow);
+  border-radius:12px; padding:18px 20px; margin:18px 0;
+}
+.anchor .big{font-size:17px; color:var(--yellow); font-weight:700;}
+.anchor .small{color:var(--grey2); font-size:13px; margin-top:6px;}
+.card{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px; margin:14px 0;}
+.card.warn{border-color:var(--red);}
+.card.good{border-color:var(--green);}
+.card.info{border-color:var(--blue);}
+.card .tag{font-size:12px; font-weight:700; letter-spacing:.06em;}
+.card.warn .tag{color:var(--red);}
+.card.good .tag{color:var(--green);}
+.card.info .tag{color:var(--blue);}
+table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.5px;}
+th,td{border:1px solid var(--bg3); padding:8px 10px; text-align:left; vertical-align:top;}
+th{background:var(--bg2); color:var(--fg1);}
+td{background:var(--bg1);}
+td.num,th.num{font-variant-numeric:tabular-nums;}
+.tablewrap{overflow-x:auto;}
+.en{color:var(--blue);}
+ul,ol{margin:8px 0; padding-left:22px;}
+li{margin:5px 0;}
+.footer{margin-top:40px; color:var(--grey); font-size:12.5px; border-top:1px solid var(--bg3); padding-top:14px;}
+/* ── 防雷門 ── */
+.gate{border:2px solid var(--red); background:linear-gradient(135deg,#3a2020,var(--bg1));
+  border-radius:12px; padding:14px 18px; margin:16px 0;}
+.gate .when{color:var(--red); font-weight:700; font-size:15px;}
+.gate .rule{color:var(--grey2); font-size:13px; margin-top:4px;}
+.gate.open{border-color:var(--green); background:linear-gradient(135deg,#22301f,var(--bg1));}
+.gate.open .when{color:var(--green);}
+/* ── 檔案指標 ── */
+.files{font-size:12.5px; color:var(--grey2); background:var(--bg1); border:1px dashed var(--bg4);
+  border-radius:8px; padding:8px 12px; margin:10px 0;}
+.files code{background:var(--bg2);}
+/* ── stepper ── */
+.stepper{background:var(--bg1); border:1px solid var(--bg4); border-radius:12px; padding:14px 16px; margin:16px 0;}
+.stepper .svc{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+.stepper .svc button{
+  font:inherit; font-size:13px; cursor:pointer; border:1px solid var(--bg4); background:var(--bg2);
+  color:var(--fg0); padding:6px 14px; border-radius:8px;
+}
+.stepper .svc button:hover:not(:disabled){border-color:var(--yellow); color:var(--yellow);}
+.stepper .svc button:disabled{opacity:.35; cursor:not-allowed;}
+.stepper .svc .pos{color:var(--grey2); font-size:13px; margin-left:auto;}
+.frame{display:none;}
+.frame.on{display:block; animation:fade .15s ease;}
+.statebar{display:flex; flex-wrap:wrap; gap:10px; margin:8px 0;}
+.sbox{flex:1 1 200px; background:var(--bg0); border:1px solid var(--bg3); border-radius:8px; padding:8px 10px;}
+.sbox h4{margin:0 0 6px; font-size:12px; color:var(--grey2); font-weight:700; letter-spacing:.05em;}
+.sbox .line{font-size:12.5px; margin:2px 0; color:var(--fg1);}
+.chip{display:inline-block; border:1px solid var(--bg4); background:var(--bg2); border-radius:6px;
+  padding:1px 7px; margin:1px 2px; font-size:12px; color:var(--fg1);}
+.chip.hot{border-color:var(--yellow); color:var(--yellow);}
+.chip.ok{border-color:var(--green); color:var(--green);}
+.chip.bad{border-color:var(--red); color:var(--red);}
+.chip.dim{opacity:.45;}
+.cap{border-left:3px solid var(--aqua); padding:6px 12px; margin-top:10px; font-size:13.5px; color:var(--fg0); background:var(--bg0);}
+.cap.bad{border-left-color:var(--red); background:#2e1d1d;}
+.cap.good{border-left-color:var(--green);}
+.cap b{color:var(--yellow);}
+/* ── 全景示意圖 ── */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:4px; margin:10px 0;}
+.fnode{background:var(--bg1); border:1px solid var(--bg4); border-radius:10px; padding:8px 12px; text-align:center; align-self:center;}
+.fnode .t{font-weight:700; color:var(--fg1); font-size:13px;}
+.fnode .d{font-size:11.5px; color:var(--grey2); margin-top:2px;}
+.fnode.hot{border-color:var(--yellow);} .fnode.hw{border-color:var(--purple);}
+.fnode.ok{border-color:var(--green);} .fnode.bad{border-color:var(--red);}
+.farrow{display:flex; flex-direction:column; justify-content:center; align-items:center;
+  padding:0 4px; color:var(--aqua); font-size:14px; min-width:84px; text-align:center;}
+.farrow .lbl{font-size:11px; color:var(--grey2); line-height:1.35;}
+.farrow.bad{color:var(--red);}
+.zone{border:1px dashed var(--bg4); border-radius:12px; padding:12px 10px 8px; position:relative;
+  margin:6px 2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.zone .zl{position:absolute; top:-9px; left:10px; background:var(--bg0dim); padding:0 6px;
+  font-size:11px; color:var(--grey2); letter-spacing:.04em;}
+.zone.irq{border-color:var(--red);} .zone.irq .zl{color:var(--red);}
+.zone.hw{border-color:var(--purple);} .zone.hw .zl{color:var(--purple);}
+.zone.sw{border-color:var(--green);} .zone.sw .zl{color:var(--green);}
+.zone.you{border-color:var(--yellow);} .zone.you .zl{color:var(--yellow);}
+.figcap{border-left:3px solid var(--blue); padding:6px 12px; margin:10px 0 4px;
+  font-size:13px; color:var(--grey2); background:var(--bg0);}
+.figcap b{color:var(--fg1);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>🔬 sim i–n 圖解全解 — provided API 解剖 × stepper × code 走讀</h1>
+  <div class="sub">六題 spec-heavy 模擬的解密頁:每題「計時場跑完之後」才開對應分頁。教學本體在
+  <code>reference/src/{io,concurrency}/</code> 六模組(5-pillar 檔頭 + oracle mock + 手 trace 測試),
+  本頁是它們的圖解鏡像;跑完 → 讀這頁 → 轉 <code>drills/</code> 複打固化(對照表:<code>rehearsals/README.md</code>)。</div>
+</header>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tabbtn active" data-t="t0">⓪ 總覽與門禁</button>
+  <button class="tabbtn" data-t="ti">i · DMA dispatcher</button>
+  <button class="tabbtn" data-t="tj">j · ISR pipeline</button>
+  <button class="tabbtn" data-t="tk">k · per-core fan-in</button>
+  <button class="tabbtn" data-t="tl">l · MMIO cmdq</button>
+  <button class="tabbtn" data-t="tm">m · watchdog</button>
+  <button class="tabbtn" data-t="tn">n · job scheduler</button>
+</nav>
+
+<!-- ================= T0 總覽 ================= -->
+<section class="panel active" id="t0">
+
+<div class="anchor">
+  <div class="big">這頁是「賽後解剖室」,不是賽前預習頁。</div>
+  <div class="small">賽前要讀的是作戰本(r2-onsite-visual-guide)的概念前導卡——那邊刻意不含解法。
+  本頁每個分頁含完整解法、oracle 行為、傷疤清單;<b>該題計時場跑完才准開</b>,規則同
+  reference/drills 檔頂的防雷 banner。</div>
+</div>
+
+<h2>門禁表——現在能開哪些分頁</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>分頁</th><th>計時場</th><th>開放條件</th><th>賽前可讀的替代品</th></tr>
+  <tr><td><b>i · DMA dispatcher</b></td><td class="num">R1 已考(7/28)+ i-lite 已修(7/30)</td><td style="color:var(--green)"><b>已開放</b></td><td>—</td></tr>
+  <tr><td><b>j · ISR pipeline</b></td><td class="num">7/31</td><td>7/31 計時場收工後</td><td>作戰本 j 前導卡</td></tr>
+  <tr><td><b>k · per-core fan-in</b></td><td class="num">8/1</td><td>8/1 計時場收工後</td><td>作戰本 k 前導卡</td></tr>
+  <tr><td><b>l · MMIO cmdq</b></td><td class="num">8/2</td><td>8/2 計時場收工後</td><td>作戰本 l 前導卡 + 卡 HW-L</td></tr>
+  <tr><td><b>m · watchdog</b></td><td class="num">8/8(認題輪 8/3)</td><td><b>8/8 計時場收工後</b>(8/3 認題輪也不開——那輪練冷讀)</td><td>作戰本 m 前導卡 + 卡 HW-M</td></tr>
+  <tr><td><b>n · job scheduler</b></td><td class="num">8/9(認題輪 8/3)</td><td><b>8/9 計時場收工後</b>(同上)</td><td>作戰本 n 前導卡</td></tr>
+</table></div>
+
+<h2>六題的共同骨架——spec-heavy 題型的三堆 API</h2>
+
+<p>R1 實測的題型長相:長英文 spec(有洞)+ 一堆 provided API + 實作一個 fn。
+六題的 API 全部落在三堆裡,認出堆就認出骨架:</p>
+
+<div class="tablewrap"><table>
+  <tr><th>堆</th><th>形狀</th><th>六題裡的成員</th><th>共同合約</th></tr>
+  <tr>
+    <td><b style="color:var(--aqua)">收(pull)</b></td>
+    <td class="num">fn get_*() -&gt; Option&lt;T&gt;</td>
+    <td>get_dma_request / read_fifo / try_pop / get_worker_done / mmio_read</td>
+    <td><code>None</code> = 「現在沒有」不是「永遠沒有」→ 一律 <code>while let</code> 收乾,別收一筆就走</td>
+  </tr>
+  <tr>
+    <td><b style="color:var(--orange)">出(push)</b></td>
+    <td class="num">fn send_* / submit_* / assign_*</td>
+    <td>send_dma_request_to_engine / try_push / write_out / mmio_write / submit_*_done</td>
+    <td>每個都有<b>前置條件</b>(engine 空閒、全部塊完成、相依已齊…)——mock 是 oracle,違約當場 panic;真面試的 oracle 是面試官</td>
+  </tr>
+  <tr>
+    <td><b style="color:var(--purple)">睡(wait)</b></td>
+    <td class="num">fn wait_event[_timeout] / sleep / park</td>
+    <td>wait_event / sleep_until_woken / park / wait_event_timeout</td>
+    <td><b>醒了不保證任何事</b>(spurious、合併喚醒)→ 醒來回到迴圈頂重新 poll,是六題共用的一行紀律</td>
+  </tr>
+</table></div>
+
+<div class="card good">
+  <span class="tag">event loop 的兩條家規(六題通用)</span>
+  <p>① <b>收工後不睡</b>:done/完成事件會釋出資源(engine、worker、ring 空位),
+  處理完要回頭再派一輪、再收一輪,<code>progressed → continue</code>,別急著 wait——
+  睡掉的是吞吐。② <b>迴圈順序固定</b>:收單 → 收控制事件(cancel/stop)→ 派工 → 收工;
+  順序亂了會出現「同輪先派了才看到 cancel」這類自找的 race。</p>
+</div>
+
+<div class="card info">
+  <span class="tag">用法(跑完該題之後)</span>
+  <p>① 先自己寫完計時場 + review;② 開本頁該分頁:對 API 解剖表檢查 clarify 漏了哪格 →
+  走一遍 stepper 對劇本 → 讀 code 走讀比對自己的版本;③ 把
+  <code>drills/</code> 的挖空版填綠當固化練習(檔案對照在 <code>rehearsals/README.md</code> 進度狀態表下方)。</p>
+</div>
+
+<h2>真實世界的原型——這六題各自在模擬什麼</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>sim</th><th>原型</th><th>一句話</th></tr>
+  <tr><td><b>i / m</b></td><td>NVMe / DMA 多引擎驅動</td><td>硬體完成事件不帶上下文(中斷就是一個號碼),誰派的工誰記帳——owner 表是驅動的日常</td></tr>
+  <tr><td><b>j</b></td><td>Linux IRQ top-half / bottom-half</td><td>ISR 三禁(不 alloc、不 block、不 log)是 kernel 的真規矩;kfifo + workqueue 就是這對搭檔</td></tr>
+  <tr><td><b>k</b></td><td>per-CPU buffer 扇入(ftrace / perf)</td><td>每核一條 SPSC 繞開 tail 上的 CAS 競爭;熱核不能餓冷核 = 排程公平性的縮影</td></tr>
+  <tr><td><b>l</b></td><td>NVMe SQ/CQ、virtio vring 的 doorbell</td><td>「填 descriptor → 柵欄 → 敲鈴」是所有現代裝置佇列的鐵律;柵欄 = store-release 的硬體版</td></tr>
+  <tr><td><b>n</b></td><td>runqueue + 建置系統 DAG(Kahn)</td><td>priority 決定「誰先出閘」,DAG 決定「誰能進閘」——兩層閘門互不干涉</td></tr>
+</table></div>
+
+</section>
+
+<!-- ================= Ti · sim i ================= -->
+<section class="panel" id="ti">
+
+<div class="gate open">
+  <div class="when">✅ 已開放 —— R1 考過(7/28)、i-lite 修洞完成(7/30)</div>
+  <div class="rule">pipeline 分水嶺 stepper(A=6 塊、B=1 塊,B 先 submit)在作戰本 sim i 分頁,那邊已可讀;
+  本分頁補的是它沒有的:API 逐函式解剖、<b>cancel 惰性收尾</b> stepper、code 走讀。</div>
+</div>
+
+<div class="files">檔案:reference <code>reference/src/io/dma_dispatcher.rs</code> · drill
+<code>drills/src/io/dma_dispatcher.rs</code>(7/30 已填綠)· harness <code>rehearsals/src/sim_i_dma.rs</code> ·
+sol <code>rehearsals/examples/sol_sim_i_dma.rs</code></div>
+
+<h2>Provided API 解剖——每個函式都是一條 spec</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>API</th><th>它是什麼</th><th>合約細節(場上要抓的)</th><th>clarify 該問</th></tr>
+  <tr>
+    <td class="num">get_dma_request()<br>→ Option&lt;DmaRequest&gt;</td>
+    <td>收單口(pull 式)</td>
+    <td><code>None</code>=現在沒單;同一輪可能連到多張 → <code>while let</code> 收乾。
+    <code>DmaRequest</code> 三欄位:id、塊數、<b>起始物理位置</b>。</td>
+    <td>「多單會同時在飛嗎?」——答案 yes 就是 pipeline 題,sequential 版直接出局</td>
+  </tr>
+  <tr>
+    <td class="num">send_dma_request_to_engine(<br>engine_id, block_num,<br>block_start_pos)</td>
+    <td>派一塊工給一台 engine</td>
+    <td><b>兩套座標系</b>:<code>block_num</code> = 單內邏輯序號(0..nums)、
+    <code>block_start_pos</code> = 全域物理位置(start + b)。連續區間只是特例——7/30 i-lite 的那一刀。
+    前置條件:engine 必須空閒(oracle 抓「對忙碌台派工」)。</td>
+    <td>「engine 一次吃一塊,做完才空?」(yes——所以要有 free 名單)</td>
+  </tr>
+  <tr>
+    <td class="num">get_dma_result_done()<br>→ Option&lt;u32&gt;</td>
+    <td>完成事件口</td>
+    <td><b>只給 engine id</b>——整題的鑰匙。哪張單的哪一塊完成了,硬體不說,
+    你派工當下就要記進 owner 表。真硬體的中斷也只是一個號碼。</td>
+    <td>「done 的順序有保證嗎?」(沒有——lifo 測試就是在考這個)</td>
+  </tr>
+  <tr>
+    <td class="num">wait_event() → bool</td>
+    <td>睡到有事發生</td>
+    <td>醒了不保證有事,回迴圈頂重 poll;回傳 false = 模擬耗盡(真面試永遠 true)。</td>
+    <td>—(這是三堆裡的「睡」,合約六題同款)</td>
+  </tr>
+  <tr>
+    <td class="num">submit_dma_request_<br>result_done(request_id)</td>
+    <td>回報一張單完成</td>
+    <td>前置條件:<b>該單全部塊都 done</b>。oracle 對帳:少一塊就 submit = panic;
+    submit 兩次同罪。</td>
+    <td>「完成回報要照到達序嗎?」(不用——誰先做完誰先報)</td>
+  </tr>
+  <tr>
+    <td class="num">get_cancel_request()<br>→ Option&lt;u64&gt;(Phase 2)</td>
+    <td>取消事件口</td>
+    <td>Phase 1 永遠 <code>None</code>。cancel 的語意要 clarify(見 stepper)——
+    <b>in-flight 塊不可搶佔</b>,硬體沒有「拔線」這回事。</td>
+    <td>「cancel 到的時候塊已經在 engine 上怎麼辦?」——這一問直接命中隱藏 spec</td>
+  </tr>
+</table></div>
+
+<h2>全景示意圖——一個號碼的旅行</h2>
+
+<h3>去程:request 怎麼變成塊、塊怎麼上機</h3>
+<div class="flow">
+  <div class="zone sw"><span class="zl">上游(題目那側)</span>
+    <div class="fnode"><div class="t">request 流</div><div class="d">id · 塊數 · 起點</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">get_dma_request()<br>while let 收乾</div></div>
+  <div class="zone you"><span class="zl">你的 Dispatcher</span>
+    <div class="fnode hot"><div class="t">free</div><div class="d">誰有空</div></div>
+    <div class="fnode hot"><div class="t">owner</div><div class="d">engine→(單,塊)</div></div>
+    <div class="fnode hot"><div class="t">reqs</div><div class="d">每單進度</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">send(engine, b, start+b)<br>派工當下寫 owner</div></div>
+  <div class="zone hw"><span class="zl">硬體</span>
+    <div class="fnode hw"><div class="t">6× DMA engine</div><div class="d">一次一塊,做完才空</div></div>
+  </div>
+</div>
+
+<h3>回程:一個號碼怎麼變回完成回報</h3>
+<div class="flow">
+  <div class="zone hw"><span class="zl">硬體</span>
+    <div class="fnode hw"><div class="t">engine 完成一塊</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">get_dma_result_done()<br><b style="color:var(--red)">只有 engine id</b></div></div>
+  <div class="zone you"><span class="zl">你的 Dispatcher</span>
+    <div class="fnode hot"><div class="t">owner[e].take()</div><div class="d">號碼 → (單,塊)</div></div>
+    <div class="fnode"><div class="t">free.push(e)</div><div class="d">先還台</div></div>
+    <div class="fnode hot"><div class="t">reqs 計數</div><div class="d">done == total?</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">submit_…_done(id)<br>計數歸零才准</div></div>
+  <div class="zone sw"><span class="zl">上游</span>
+    <div class="fnode ok"><div class="t">收回報</div></div>
+  </div>
+</div>
+
+<div class="figcap"><b>怎麼讀這張圖</b>:整條回程的資訊量只有「一個號碼」——這就是本題的全部難度來源。
+owner 表是把號碼翻譯回上下文的字典:<b>派工當下寫入、收工當下取走</b>,兩個時刻缺一不可。
+三張表各管一件事:free 管產能、owner 管路由、reqs 管完成判定;任何一張想省掉,回程就在那一站斷鏈。
+迴圈的節奏:done 釋出了 engine → 回頭再派再收(收工後不睡),事件迴圈一輪推進多件事。</div>
+
+<h2>狀態結構——三張表,一張都不能省</h2>
+
+<div class="statebar">
+  <div class="sbox"><h4>表 1 free:誰有空</h4>
+    <div class="line"><span class="chip ok">e2</span><span class="chip ok">e4</span> (VecDeque)</div>
+    <div class="line" style="color:var(--grey2)">派工 pop,done 還回來 push</div></div>
+  <div class="sbox"><h4>表 2 owner:engine → (單, 塊)</h4>
+    <div class="line"><span class="chip hot">e0→(A,3)</span><span class="chip hot">e1→(B,0)</span></div>
+    <div class="line" style="color:var(--grey2)">done 只帶 engine id,路由全靠它</div></div>
+  <div class="sbox"><h4>表 3 reqs:每單進度</h4>
+    <div class="line"><span class="chip">A: next=4 done=2 fly=2</span></div>
+    <div class="line" style="color:var(--grey2)">完成判定唯一正解:done == blocks_total</div></div>
+</div>
+
+<div class="card warn">
+  <span class="tag">R1 的洞(親手關過,7/30 drill 層)</span>
+  <p>①「剩餘塊==0 且 free 回到 6」當完成判定——單 request 模式碰巧成立,兩單同飛時
+  engine 空不空與「哪一單完成」再無關係;正解是 <b>per-request 計數歸零</b>。
+  ② done 路由:owner 表要用 <code>take()</code> 拿走(engine 還了工才算空),忘了清就是幽靈路由。</p>
+</div>
+
+<h2>Stepper——cancel 的惰性收尾(Phase 2 劇本)</h2>
+
+<p>劇本 = reference 測試 <code>cancel_in_flight_silent_exit_engines_recycled</code>:
+req1(6 塊)全在飛時被 cancel,req2(3 塊)隨後到。cancel 三律:<b>停派、不計數、不搶佔</b>。</p>
+
+<div class="stepper" data-n="8">
+  <div class="svc"><button class="prev">← 上一步</button><button class="next">下一步 →</button><span class="pos"></span></div>
+
+  <div class="frame on">
+    <div class="statebar">
+      <div class="sbox"><h4>free</h4><div class="line"><span class="chip dim">(空)</span></div></div>
+      <div class="sbox"><h4>owner</h4><div class="line"><span class="chip hot">e0→(1,b0)</span><span class="chip hot">e1→(1,b1)</span><span class="chip hot">e2→(1,b2)</span><span class="chip hot">e3→(1,b3)</span><span class="chip hot">e4→(1,b4)</span><span class="chip hot">e5→(1,b5)</span></div></div>
+      <div class="sbox"><h4>reqs</h4><div class="line"><span class="chip">req1: next=6 done=0 fly=6</span></div></div>
+    </div>
+    <div class="cap">t0:req1(6 塊)到,dispatch 一輪把 6 台全佔滿。free 空了,等 done。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>owner</h4><div class="line"><span class="chip hot">e0..e5 → (1, b0..b5)</span>(不變)</div></div>
+      <div class="sbox"><h4>reqs</h4><div class="line"><span class="chip bad">req1: cancelled=true next=6→6 fly=6</span></div></div>
+    </div>
+    <div class="cap"><b>cancel(1) 到</b>:標 <code>cancelled</code>、<code>next_block = blocks_total</code>(這單從此派不出塊)。
+    fly=6 ≠ 0 → <b>不能現在退場</b>——6 塊還在硬體上跑,硬體不會因為你想取消就停手。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>queue(待派)</h4><div class="line"><span class="chip">req2</span></div></div>
+      <div class="sbox"><h4>free</h4><div class="line"><span class="chip dim">(仍空)</span></div></div>
+      <div class="sbox"><h4>reqs</h4><div class="line"><span class="chip bad">req1: fly=6</span><span class="chip">req2: next=0 done=0 fly=0</span></div></div>
+    </div>
+    <div class="cap">req2(3 塊)到:入表、入待派 queue。free 是空的 → dispatch 派不動,乾等 done。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>e0 done</h4><div class="line">owner.take() → (1, b0);還 e0 進 free</div></div>
+      <div class="sbox"><h4>reqs</h4><div class="line"><span class="chip bad">req1: fly=5(done 不加!)</span></div></div>
+      <div class="sbox"><h4>dispatch</h4><div class="line"><span class="chip ok">e0 → (2, b0)</span></div></div>
+    </div>
+    <div class="cap">e0 done:req1 已 cancel → 這塊<b>不計數</b>,只把 fly 減一、engine 照還。
+    收工後不睡 → 回頭 dispatch:e0 立刻轉去做 req2 塊 0。<b>engine 回收與單的成敗無關。</b></div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>owner</h4><div class="line"><span class="chip ok">e0→(2,b0)</span><span class="chip ok">e1→(2,b1)</span><span class="chip ok">e2→(2,b2)</span><span class="chip hot">e3..e5→(1,b3..b5)</span></div></div>
+      <div class="sbox"><h4>reqs</h4><div class="line"><span class="chip bad">req1: fly=3</span><span class="chip">req2: next=3 fly=3</span></div></div>
+    </div>
+    <div class="cap">快轉:e1、e2 陸續 done → 同樣「不計數、還台、轉派」。req2 三塊全部上機;req1 還剩 3 塊在飛。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>reqs</h4><div class="line"><span class="chip">req2: fly=3</span> <span class="chip dim">req1:(已移除)</span></div></div>
+    </div>
+    <div class="cap">req1 最後一塊回來:fly 0 → <b>靜默退場</b>——從 reqs 移除、<b>不 submit</b>。
+    oracle 在盯:cancel 過的單敢 submit 就 panic。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>submitted</h4><div class="line"><span class="chip ok">[2]</span></div></div>
+      <div class="sbox"><h4>free</h4><div class="line"><span class="chip ok">e0..e5 全回籠</span></div></div>
+    </div>
+    <div class="cap good">req2 三塊 done → 計數 3/3 → submit(2)。終局:submitted=[2],req1 彷彿沒存在過,
+    但它的 6 塊硬體都<b>真的做完了</b>——cancel 省的是「之後的派工」,不是「已出去的工」。</div>
+  </div>
+
+  <div class="frame">
+    <div class="cap bad"><b>反例:cancel 時立即退場(刪表)會怎樣?</b>
+    之後 e0 done 進來,owner 查到 (1, b0),回頭找 reqs[1]——沒有了。輕則 unwrap panic,
+    重則你為了不 panic 把 owner 也順手清了,結果 engine busy 狀態和現實脫鉤,
+    下一輪對「其實還在忙」的台派工,oracle 抓:<i>engine 還在忙就再被派工</i>。
+    <b>硬體事件不會因為你刪了帳本就不來。</b></div>
+  </div>
+</div>
+
+<h2>Code 走讀——cancel 與 on_done 的收尾協定</h2>
+
+<pre class="code"><i>// cancel:停止再派;在飛的塊等自然 done。不認識的 id 是 no-op——cancel 天生要冪等。</i>
+pub fn cancel(&amp;mut self, id: u64) {
+    let Some(st) = self.reqs.get_mut(&amp;id) else { <u>return;</u> };  <i>// 冪等:已完成/沒來過 → no-op</i>
+    st.cancelled = true;
+    <b>st.next_block = st.blocks_total;</b>          <i>// 這單從此派不出塊(停派)</i>
+    if st.in_flight == 0 {
+        self.reqs.remove(&amp;id);                 <i>// 沒有在飛的塊,現在就能退場</i>
+    }
+}
+
+pub fn on_done(&amp;mut self, bus: &amp;mut impl DmaBus, eid: u32) {
+    let (rid, _b) = <b>self.owner[eid as usize].take()</b>   <i>// take:拿走路由,engine 才算空</i>
+        .expect("done 來自一台沒派工的 engine");
+    <u>self.free.push_back(eid);</u>                  <i>// 先還台——engine 回收與單的成敗無關</i>
+    let st = self.reqs.get_mut(&amp;rid).unwrap();
+    st.in_flight -= 1;
+    if st.cancelled {
+        if st.in_flight == 0 { self.reqs.remove(&amp;rid); }  <i>// 最後一塊回來 → 靜默退場</i>
+        <b class="bad">return;</b>                           <i>// 不計數、不 submit——cancel 三律的後兩律</i>
+    }
+    st.done += 1;
+    if <b>st.done == st.blocks_total</b> {            <i>// 完成判定唯一正解:計數歸零</i>
+        bus.submit_dma_request_result_done(rid);
+        self.reqs.remove(&amp;rid);
+    }
+}</pre>
+
+<div class="card info">
+  <span class="tag">dispatch 的一個攤銷細節</span>
+  <p>待派 queue 前端可能積著「派完了/取消了」的殭屍單,dispatch 用一個內層 loop
+  順手 <code>pop_front</code> 清掉再派。每張單一生最多被 pop 一次 → 攤銷 O(1),
+  講 Big-O 時說得出「攤銷」兩個字就是加分。</p>
+</div>
+
+<h2>陷阱清單(oracle 會抓的違規)</h2>
+<ul>
+  <li><b>0 塊的單</b>:沒有工可派,收單即完成——漏掉它的實作讓這單永遠不 submit(boundary 測試第一格)。</li>
+  <li><b>同一塊派兩次 / 對忙碌 engine 派工 / 對已取消單派工</b>:三種當場 panic。</li>
+  <li><b>座標系</b>:<code>block_num</code> 是邏輯序號、<code>block_start_pos = start + b</code> 是物理位置,oracle 驗 pair 一致。</li>
+  <li><b>submit 不完整的單 / submit 兩次 / submit 已取消的單</b>:對帳全抓。</li>
+</ul>
+
+</section>
+
+<!-- ================= Tj · sim j ================= -->
+<section class="panel" id="tj">
+
+<div class="gate">
+  <div class="when">⚠ 防雷門:7/31 計時場收工後才開本分頁</div>
+  <div class="rule">賽前可讀的替代品 = 作戰本 sim j 前導卡(ISR burst 概念 stepper + clarify 種子,無解法)。</div>
+</div>
+
+<div class="files">檔案:reference <code>reference/src/concurrency/isr_pipeline.rs</code> · drill
+<code>drills/src/concurrency/isr_pipeline.rs</code> · harness <code>rehearsals/src/sim_j_isr.rs</code> ·
+sol <code>rehearsals/examples/sol_sim_j_isr.rs</code> · 手搓版近親 <code>signal_pipeline</code>(同一張 JD 本尊圖)</div>
+
+<h2>Provided API 解剖</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>API</th><th>它是什麼</th><th>合約細節(場上要抓的)</th><th>clarify 該問</th></tr>
+  <tr>
+    <td class="num">read_fifo()<br>→ Option&lt;Sample&gt;</td>
+    <td>硬體 FIFO 讀口(<b>ISR context only</b>)</td>
+    <td>drain until <code>None</code>——中斷觸發時 FIFO 裡通常不只一筆(watermark 語意)。
+    硬體側 overflow 你控不了;你能控的是下一站的 ring。</td>
+    <td>「一次中斷代表幾筆?」(watermark → 一波)</td>
+  </tr>
+  <tr>
+    <td class="num">ring_try_push(s)<br>→ Result&lt;(), Sample&gt;</td>
+    <td>ISR → worker 的交棒 ring(try-only)</td>
+    <td>滿了把 sample <b>還給你</b>——drop policy 是呼叫者的決定,API 刻意不替你決定。
+    try-only = ISR 永不等待的結構性保證。</td>
+    <td>「掉資料可以嗎?丟新丟舊?要不要計數?」——三連問,缺一格都是 R1 型的洞</td>
+  </tr>
+  <tr>
+    <td class="num">ring_try_pop()<br>→ Option&lt;Sample&gt;</td>
+    <td>worker 側取貨口</td>
+    <td>批次 drain(迴圈拉到空)再一次寫出——鎖次數 O(波數) 而非 O(樣本數)。</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td class="num">wake_worker()</td>
+    <td>叫醒 worker</td>
+    <td><b>會合併</b>:N 次呼叫可能只有一次喚醒 → worker 不能假設「一醒一事」。
+    一波 drain 完叫一次就夠(反正會合併,多叫只是白付鎖)。</td>
+    <td>「wake 有計數語意嗎?」(沒有——它是 flag 不是 counter)</td>
+  </tr>
+  <tr>
+    <td class="num">sleep_until_woken()</td>
+    <td>worker 睡眠</td>
+    <td>可能 spurious 醒;醒了不代表有事 → 回迴圈頂重新 drain。</td>
+    <td>—(三堆的「睡」,合約同款)</td>
+  </tr>
+  <tr>
+    <td class="num">log(s)</td>
+    <td>慢速輸出(<b>worker side only</b>)</td>
+    <td>「慢」+「worker-only」兩個標籤合起來就是題目的主旨:ISR 絕不能碰它。</td>
+    <td>「log 有多慢?」(數量級決定 ring 容量——形狀 1)</td>
+  </tr>
+</table></div>
+
+<div class="card warn">
+  <span class="tag">隱藏 spec(clarify 才拿得到)</span>
+  <p>① <b>ISR 三禁</b>:不 alloc、不 block、不 log——ISR 裡只准「搬 + 計數 + 叫醒」;
+  ② 丟多少要可觀測(dropped 計數);③ shutdown(Phase 2):stop 是「別再睡」,
+  不是「丟掉手上的貨」——殘貨要 drain 完才退。</p>
+</div>
+
+<h2>全景示意圖——三個世界,一條通道,一張貼紙</h2>
+
+<div class="flow">
+  <div class="zone hw"><span class="zl">硬體</span>
+    <div class="fnode hw"><div class="t">感測器</div><div class="d">FIFO 過 watermark<br>→ 拉中斷線</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">中斷!<br>read_fifo() drain 一波</div></div>
+  <div class="zone irq"><span class="zl">中斷 context(三禁區)</span>
+    <div class="fnode bad"><div class="t">isr()</div><div class="d">搬 + 計數 + 叫醒<br>不 alloc/block/log</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">try_push(s)<br>滿 → dropped++</div></div>
+  <div class="zone you"><span class="zl">唯一跨區通道</span>
+    <div class="fnode hot"><div class="t">ring(cap 固定)</div><div class="d">try-only<br>= ISR 永不等的結構保證</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">try_pop() 批次 drain</div></div>
+  <div class="zone sw"><span class="zl">執行緒 context</span>
+    <div class="fnode ok"><div class="t">worker_loop()</div><div class="d">drain → 批次寫出<br>→ 查 stop → 睡</div></div>
+    <div class="fnode"><div class="t">log(s)</div><div class="d">慢;只有這區能碰</div></div>
+  </div>
+</div>
+
+<div class="flow">
+  <div class="zone irq"><span class="zl">ISR 側</span>
+    <div class="fnode"><div class="t">wake()</div><div class="d">貼紙 flag=true</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">會合併:N 次叫 = 1 次醒</div></div>
+  <div class="zone sw"><span class="zl">worker 側</span>
+    <div class="fnode hot"><div class="t">sleep()</div><div class="d">先看貼紙再睡<br>有 → 撕掉立刻返回</div></div>
+  </div>
+</div>
+
+<div class="figcap"><b>怎麼讀這張圖</b>:三個區的規則各不相同——中斷區內只准 O(1) 動作(三禁),
+執行緒區才准做慢事(log)。ring 是兩區之間<b>唯一的資料通道</b>,try-only 不是效能選擇而是結構保證;
+Waker 貼紙是<b>唯一的喚醒橋</b>:wake 貼、sleep 先看再睡,「drain 完 → 睡」的縫隙因此免疫。
+把任何慢動作搬進紅區、或把等待搬進 ISR,圖就畫不出來了——這正是判斷答案對錯的視覺化方式。</div>
+
+<h2>狀態結構——一條 ring、一張貼紙、一面 stop 旗</h2>
+
+<div class="statebar">
+  <div class="sbox"><h4>ISR 側(中斷 context)</h4>
+    <div class="line">硬體 FIFO → <span class="chip hot">try_push</span> → 滿了 <span class="chip bad">dropped++</span></div>
+    <div class="line" style="color:var(--grey2)">O(1) 收尾,最壞情況也只是「試一下、失敗、+1」</div></div>
+  <div class="sbox"><h4>交棒 ring(cap 固定)</h4>
+    <div class="line"><span class="chip">s₀</span><span class="chip">s₁</span><span class="chip">s₂</span><span class="chip dim">…</span></div>
+    <div class="line" style="color:var(--grey2)">協定同 spsc_ring;換 lock-free 版兩端 code 不動</div></div>
+  <div class="sbox"><h4>Waker 貼紙 + stop 旗</h4>
+    <div class="line"><span class="chip hot">flag: bool</span> <span class="chip">stop: AtomicBool</span></div>
+    <div class="line" style="color:var(--grey2)">wake=貼、sleep=先看再睡;stop 立旗要在 wake 之前</div></div>
+</div>
+
+<h2>Stepper——「drain 完 → 睡」的縫隙與貼紙</h2>
+
+<p>主劇本:lost-wakeup 的縫隙被 sticky flag(貼紙)補住;反例幀演裸 condvar 睡死。</p>
+
+<div class="stepper" data-n="7">
+  <div class="svc"><button class="prev">← 上一步</button><button class="next">下一步 →</button><span class="pos"></span></div>
+
+  <div class="frame on">
+    <div class="statebar">
+      <div class="sbox"><h4>ISR</h4><div class="line">burst 10 筆 → ring(cap 4)收 4,<span class="chip bad">dropped=6</span></div></div>
+      <div class="sbox"><h4>貼紙</h4><div class="line"><span class="chip hot">flag=true</span>(wake 貼上)</div></div>
+    </div>
+    <div class="cap">中斷來一波:ISR drain 硬體 FIFO → try_push ×10,前 4 進 ring、後 6 被拒 →
+    dropped+=6(<b>drop-newest</b>:try_push 拒的是新貨;要 drop-oldest 得 ring 自己支援——
+    consumer 單寫的 head,producer 動不了,說得出這個限制是加分點)。收尾 wake 一次。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>worker</h4><div class="line">醒來(貼紙撕掉 flag=false)→ drain 4 筆 → 一次鎖寫出</div></div>
+      <div class="sbox"><h4>ring</h4><div class="line"><span class="chip dim">(空)</span></div></div>
+    </div>
+    <div class="cap">worker 醒:批次 drain 到空,batch 一次寫出。鎖次數 O(波數),不是每筆搶一次。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>worker</h4><div class="line">迴圈頂 drain → 空;查 stop=false;<b>準備睡</b></div></div>
+      <div class="sbox"><h4>縫隙</h4><div class="line"><span class="chip bad">← 就是這裡</span></div></div>
+    </div>
+    <div class="cap"><b>危險窗口</b>:worker 判定「沒事了」到真正睡著之間,有一段誰都攔不住的縫。
+    ISR 恰好在這一刻插隊會怎樣?下一幀。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>ISR(插隊)</h4><div class="line">push 3 筆 → <span class="chip hot">wake:flag=true</span></div></div>
+      <div class="sbox"><h4>worker</h4><div class="line">(還沒睡著)</div></div>
+    </div>
+    <div class="cap">ISR 在縫隙裡完成一整波:資料進了 ring,貼紙貼上了。關鍵:<b>貼紙不會因為
+    沒人在睡就蒸發</b>——它是狀態,不是脈衝。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>worker sleep()</h4><div class="line">先看貼紙 → <span class="chip ok">flag=true → 立刻返回</span>(撕掉)</div></div>
+      <div class="sbox"><h4>ring</h4><div class="line"><span class="chip">3 筆</span> → 迴圈頂 drain ✓</div></div>
+    </div>
+    <div class="cap good">sleep 的第一件事是看貼紙:有 → 撕掉、立刻返回、不睡。縫隙裡來的貨
+    在下一輪迴圈頂被收走。<b>wake 先於 sleep 也不丟</b>——這就是 sticky flag 的全部。</div>
+  </div>
+
+  <div class="frame">
+    <div class="cap bad"><b>反例:裸 condvar(沒有貼紙)。</b>第 4 幀的 notify 發生在 worker
+    「檢查完(空)」與「wait 睡下」之間 → notify 沒人接,脈衝消失 = <b>lost wakeup</b>。
+    worker 睡死,3 筆貨臭在 ring;下一波中斷才會救它——如果還有下一波的話。
+    (mock 的 sleep 帶 1 秒安全網,只是讓測試不吊死;<b>真硬體沒有安全網</b>。)
+    這是 b#1 三紅之一、g#1 review 洞①的同一隻鬼:condvar 是脈衝,flag 才是狀態。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>shutdown 協定</h4><div class="line"><span class="chip hot">① stop=true</span> → <span class="chip hot">② wake()</span></div></div>
+      <div class="sbox"><h4>worker</h4><div class="line">醒 → drain 殘貨 → 見 stop → 最後一輪 drain → 退</div></div>
+    </div>
+    <div class="cap"><b>先 flag 後 wake</b>:順序反過來,worker 可能在 stop=true 落地前醒來、
+    沒看到旗又睡回去。worker 側對稱的紀律:見到 stop 不是立刻退,是<b>把殘貨 drain 完</b>才退
+    ——out + dropped 必須等於進來的總數,一筆不蒸發(守恆測試)。</div>
+  </div>
+</div>
+
+<h2>Code 走讀——isr 與 worker_loop</h2>
+
+<pre class="code"><i>// ISR:三禁之下的最小形狀——搬(O(1)/筆)、計數(Relaxed 就夠:只是統計,</i>
+<i>// 不同步任何資料)、叫醒(一波一次,合併友好)。</i>
+pub fn isr(fifo: &amp;mut HwFifo, ring: &amp;Ring, waker: &amp;Waker, dropped: &amp;AtomicU64) {
+    while let Some(s) = fifo.read_fifo() {          <i>// drain 硬體 FIFO(watermark=一波)</i>
+        if ring.try_push(s).is_err() {
+            <b>dropped.fetch_add(1, Ordering::Relaxed);</b> <i>// drop-newest + 可觀測</i>
+        }
+    }
+    <u>waker.wake();</u>                                   <i>// 一波叫一次;反正會合併</i>
+}
+
+pub fn worker_loop(ring: &amp;Ring, waker: &amp;Waker, stop: &amp;AtomicBool, out: &amp;Mutex&lt;Vec&lt;Sample&gt;&gt;) {
+    loop {
+        let mut batch = Vec::new();
+        while let Some(s) = ring.try_pop() { batch.push(s); }   <i>// 批次 drain</i>
+        if !batch.is_empty() { out.lock().unwrap().extend(batch); } <i>// 一次鎖寫出</i>
+        if stop.load(Ordering::SeqCst) {
+            <b>// stop 後最後一輪 drain:「先 flag 後 wake」協定下,殘貨保證不蒸發</b>
+            let mut rest = Vec::new();
+            while let Some(s) = ring.try_pop() { rest.push(s); }
+            if !rest.is_empty() { out.lock().unwrap().extend(rest); }
+            return;
+        }
+        <u>waker.sleep();</u>   <i>// 醒了不代表有事——回迴圈頂重 drain 就是答案</i>
+    }
+}</pre>
+
+<h2>陷阱清單</h2>
+<ul>
+  <li><b>「等一下就有位子」</b>:任何在 ISR 裡等待的念頭都是紅牌——try-only 是結構性保證,不是效能優化。</li>
+  <li><b>每筆一鎖</b>:worker 逐筆搶 out 的鎖 = 鎖次數 O(樣本數);批次收、一次寫。</li>
+  <li><b>先 wake 後 flag</b>:shutdown 順序反了 = 醒來沒看到 stop 又睡回去。</li>
+  <li><b>dropped 用 SeqCst</b>:不算錯,但講不出「為什麼 Relaxed 就夠(統計、不同步資料)」= ordering 理解沒過線。</li>
+</ul>
+
+</section>
+
+<!-- ================= Tk · sim k ================= -->
+<section class="panel" id="tk">
+
+<div class="gate">
+  <div class="when">⚠ 防雷門:8/1 計時場收工後才開本分頁</div>
+  <div class="rule">賽前可讀的替代品 = 作戰本 sim k 前導卡(扇入 + lost-wakeup 概念 stepper,無解法)。</div>
+</div>
+
+<div class="files">檔案:reference <code>reference/src/concurrency/percpu_fanin.rs</code> · drill
+<code>drills/src/concurrency/percpu_fanin.rs</code> · harness <code>rehearsals/src/sim_k_fanin.rs</code> ·
+sol <code>rehearsals/examples/sol_sim_k_fanin.rs</code></div>
+
+<h2>Provided API 解剖</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>API</th><th>它是什麼</th><th>合約細節(場上要抓的)</th><th>clarify 該問</th></tr>
+  <tr>
+    <td class="num">core_count() → usize<br>spsc_new(cap) / make_channels</td>
+    <td>N 核、每核一條 SPSC channel</td>
+    <td><b>為什麼是 N 條 SPSC 不是一條 MPSC?</b>——共用一條的 tail 上全是 CAS 競爭,
+    單寫者優勢全丟。題目把結構給你,是在考你講不講得出這個理由。</td>
+    <td>「core 數的量級?」(N×cap×16B 的記憶體帳——形狀 2)</td>
+  </tr>
+  <tr>
+    <td class="num">produce_hook(core_id, f)</td>
+    <td>你的 producer 側 code,跑在<b>人家的熱路徑</b>上</td>
+    <td><b>絕不 block</b>:try_push 失敗 → dropped++ 一行收工。
+    每筆 wake 也行(flag 合併,一次鎖 + 偶爾 notify,不貴)。</td>
+    <td>「producer 被塞住可以嗎?」(不行——這一問把 try-only 釘進 spec)</td>
+  </tr>
+  <tr>
+    <td class="num">write_out(r)</td>
+    <td>aggregator 側輸出(slow)</td>
+    <td>慢的一側才需要批次與公平性——問題全在消費端。</td>
+    <td>「輸出要保序嗎?」(<b>per-core 要、跨核沒有</b>——說出口就是 clarify 的料)</td>
+  </tr>
+  <tr>
+    <td class="num">park() / unpark_aggregator()</td>
+    <td>睡與叫醒</td>
+    <td>合併 + spurious,合約同 j。睡前條件是這題的主考點(見 stepper)。</td>
+    <td>—</td>
+  </tr>
+</table></div>
+
+<div class="card warn">
+  <span class="tag">隱藏 spec(clarify 才拿得到)</span>
+  <p>① 熱核不能餓死冷核(Phase 2 的 budget);② per-core 順序要保住,跨核全域順序<b>沒有</b>;
+  ③ shutdown:停之前每條 channel 都要 drain 完。</p>
+</div>
+
+<h2>全景示意圖——扇入拓撲:N 條專屬通道收進一個口</h2>
+
+<div class="flow">
+  <div class="zone sw"><span class="zl">N 個核(各自的熱路徑)</span>
+    <div class="fnode"><div class="t">core 0</div><div class="d">produce:try_push<br>失敗 → dropped++</div></div>
+    <div class="fnode"><div class="t">core 1</div><div class="d">同上</div></div>
+    <div class="fnode"><div class="t">core N−1</div><div class="d">同上</div></div>
+  </div>
+  <div class="farrow">═══▶<div class="lbl">每核一條 SPSC<br>ch0 · ch1 · … · chN−1<br>互不相見</div></div>
+  <div class="zone you"><span class="zl">aggregator(單執行緒)</span>
+    <div class="fnode hot"><div class="t">round-robin</div><div class="d">每輪每條 ≤ budget</div></div>
+    <div class="fnode hot"><div class="t">睡前條件</div><div class="d">一整輪零收穫</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">write_out(r)<br>slow</div></div>
+  <div class="zone sw"><span class="zl">輸出</span>
+    <div class="fnode ok"><div class="t">out</div><div class="d">per-core FIFO 保序<br>跨核無全域序</div></div>
+  </div>
+</div>
+
+<div class="figcap"><b>怎麼讀這張圖</b>:重點在左邊那束線——<b>每核一條專屬 ring,producer 之間互不相見</b>。
+共用一條 MPSC 的話,所有核在同一個 tail 上做 CAS,單寫者優勢全丟;拓撲把競爭拆掉了,
+剩下的問題全部移到右邊消費端:輪詢公平性(budget)、睡前條件(全空一輪)、喚醒縫隙(貼紙,同 j)。
+「結構先把 race 消滅、政策再管公平」——這一句就是本題的 trade-off 總綱。</div>
+
+<h2>狀態結構——N 條 ring、一個輪詢遊標、一張貼紙</h2>
+
+<div class="statebar">
+  <div class="sbox"><h4>ch0(熱核)</h4><div class="line"><span class="chip hot">seq0..seq11</span>(12 筆)</div></div>
+  <div class="sbox"><h4>ch1(冷核)</h4><div class="line"><span class="chip">seq0</span>(1 筆)</div></div>
+  <div class="sbox"><h4>aggregator</h4><div class="line">round-robin,每輪每條 ≤ <span class="chip hot">budget=4</span></div>
+    <div class="line" style="color:var(--grey2)">一整輪零收穫才准睡</div></div>
+</div>
+
+<h2>Stepper——budget 公平性(dry-run 劇本)</h2>
+
+<div class="stepper" data-n="7">
+  <div class="svc"><button class="prev">← 上一步</button><button class="next">下一步 →</button><span class="pos"></span></div>
+
+  <div class="frame on">
+    <div class="statebar">
+      <div class="sbox"><h4>ch0</h4><div class="line"><span class="chip hot">0 1 2 3 4 5 6 7 8 9 10 11</span></div></div>
+      <div class="sbox"><h4>ch1</h4><div class="line"><span class="chip">c1s0</span></div></div>
+      <div class="sbox"><h4>out</h4><div class="line"><span class="chip dim">(空)</span></div></div>
+    </div>
+    <div class="cap">初始:熱核 ch0 積了 12 筆,冷核 ch1 只有 1 筆。budget=4。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>輪 1 · ch0</h4><div class="line">拿 <span class="chip ok">0 1 2 3</span> → <b>budget 到,停手</b></div></div>
+      <div class="sbox"><h4>ch0 殘</h4><div class="line"><span class="chip hot">4..11</span>(8 筆)</div></div>
+    </div>
+    <div class="cap">輪 1 掃到 ch0:最多拿 budget=4 筆就<b>放下</b>,不管它還有多少——輪次讓給下一條。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>輪 1 · ch1</h4><div class="line">拿 <span class="chip ok">c1s0</span></div></div>
+      <div class="sbox"><h4>out</h4><div class="line">0 1 2 3 <span class="chip ok">c1s0</span></div></div>
+    </div>
+    <div class="cap good">冷核那筆在 out 的位置是 <b>out[4]</b>——它只等了「一個 budget」,
+    不是等熱核清空。這就是公平性的可測量定義(測試就斷言這個下標)。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>輪 2</h4><div class="line">ch0 拿 <span class="chip ok">4 5 6 7</span>;ch1 空</div></div>
+      <div class="sbox"><h4>輪 3</h4><div class="line">ch0 拿 <span class="chip ok">8 9 10 11</span></div></div>
+    </div>
+    <div class="cap">輪 2、輪 3:繼續輪。每輪都給每條 channel 一次機會,熱核塞爆自己的 ring 也搶不走冷核的輪次。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>輪 4</h4><div class="line">ch0 空、ch1 空 → <span class="chip hot">moved=false</span></div></div>
+      <div class="sbox"><h4>決策</h4><div class="line"><span class="chip ok">一整輪零收穫 → 准睡</span></div></div>
+    </div>
+    <div class="cap"><b>睡前條件</b>:一整輪掃過去零收穫——那一刻 N 條 ring 同時是空的。
+    縫隙裡新來的貨由貼紙(sticky flag)補住,同 j 的機制。</div>
+  </div>
+
+  <div class="frame">
+    <div class="cap bad"><b>反例一:沒有 budget。</b>輪 1 對 ch0 一路 drain 12 筆才輪到 ch1——
+    測試裡冷核那筆掉到 out[12];真實世界熱核源源不絕時,這一輪永遠困在 ch0,冷核 = 餓死。
+    <b>反例二:睡前只看單條空。</b>「ch0 空了 → 睡」——ch1 的貨還在,你睡了。
+    睡前條件必須是全體空(零收穫一整輪),不是任一條空。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>trade-off:budget 值</h4>
+        <div class="line">太小 → 輪次開銷占比升</div>
+        <div class="line">太大 → 冷核等待上限 = (N−1)×budget 筆的處理時間</div></div>
+    </div>
+    <div class="cap">budget=64 是「一次 cacheline 批量」量級的示範值。scale 到多條 aggregator:
+    source <b>靜態分片</b>,不要 work-stealing——偷工作同時破壞單寫者與 per-core FIFO,一偷全毀。</div>
+  </div>
+</div>
+
+<h2>Code 走讀——aggregator_loop 的三層迴圈</h2>
+
+<pre class="code">pub fn aggregator_loop(chs: &amp;[Arc&lt;Chan&gt;], waker: &amp;Waker, stop: &amp;AtomicBool,
+                       budget: usize, out: &amp;Mutex&lt;Vec&lt;Record&gt;&gt;) {
+    loop {
+        <i>// 中層:掃到「一整輪零收穫」為止——這一刻所有 ring 同時是空的</i>
+        loop {
+            let mut moved = false;
+            for ch in chs {                                <i>// 內層:round-robin 每條 channel</i>
+                let mut batch = Vec::new();
+                while <b>batch.len() &lt; budget</b> {               <i>// 公平閘:每輪每條最多 budget 筆</i>
+                    match ch.try_pop() {
+                        Some(r) =&gt; batch.push(r),
+                        None =&gt; break,
+                    }
+                }
+                if !batch.is_empty() {
+                    moved = true;
+                    out.lock().unwrap().extend(batch);     <i>// 批次一次鎖</i>
+                }
+            }
+            if <u>!moved</u> { break; }                          <i>// 零收穫一整輪 → 才准考慮睡</i>
+        }
+        if stop.load(Ordering::SeqCst) { <u>return;</u> }        <i>// 剛 drain 到全空,殘貨已清,直接退</i>
+        waker.sleep();                                     <i>// 貼紙補縫隙,同 j</i>
+    }
+}</pre>
+
+<h2>陷阱清單</h2>
+<ul>
+  <li><b>睡前條件寫成單條空</b>:最常見的洞——條件必須是「一整輪 moved==false」。</li>
+  <li><b>無上限 drain</b>:熱核把這一輪困死;budget 是公平性的實體。</li>
+  <li><b>斷言跨核順序</b>:spec 根本沒給;斷言它 = 自己發明需求(測試也只驗 per-core 遞增)。</li>
+  <li><b>記憶體帳</b>:N × cap × 16B——4 核 × 256 × 16B = 16KB 毛毛雨;512 核 = 2MB,要想。用 cost-model 反推 cap,別憑感覺。</li>
+</ul>
+
+</section>
+
+<!-- ================= Tl · sim l ================= -->
+<section class="panel" id="tl">
+
+<div class="gate">
+  <div class="when">⚠ 防雷門:8/2 計時場收工後才開本分頁</div>
+  <div class="rule">賽前可讀的替代品 = 作戰本 sim l 前導卡 + 認題卡 HW-L(10 分鐘前導)。</div>
+</div>
+
+<div class="files">檔案:reference <code>reference/src/io/mmio_cmdq.rs</code> · drill
+<code>drills/src/io/mmio_cmdq.rs</code> · harness <code>rehearsals/src/sim_l_mmio.rs</code> ·
+sol <code>rehearsals/examples/sol_sim_l_mmio.rs</code></div>
+
+<div class="anchor">
+  <div class="big">一句話認題:這是一條 SPSC ring,只是消費者是硬體。</div>
+  <div class="small">device 是另一個「讀者」,它看不見你的程式序——沒柵欄它可能讀到寫一半的 slot。
+  ring_buffer 的 head/tail 口訣全部適用,只是跨到了硬體邊界。</div>
+</div>
+
+<h2>Provided API 解剖</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>API</th><th>它是什麼</th><th>合約細節(場上要抓的)</th><th>clarify 該問</th></tr>
+  <tr>
+    <td class="num">mmio_read(SubmitHead)<br>mmio_read(CompTail)</td>
+    <td>讀 device 的進度暫存器(<b>唯讀</b>)</td>
+    <td><code>SubmitHead</code> = device 消費 submission 到哪;<code>CompTail</code> = device 寫 completion 到哪。
+    這兩個數是 device 在動的——你的 driver <b>不用自己存 head</b>,要用就讀。</td>
+    <td>「head 會回退嗎?」(不會——單調,這是滿判定能用序號差的前提)</td>
+  </tr>
+  <tr>
+    <td class="num">mmio_write(Doorbell, val)</td>
+    <td>敲鈴通知 device(<b>唯寫</b>)</td>
+    <td>只能前進;值 = 新的 submission tail。MMIO 寫 = uncached、貴(~百 ns 到 µs)
+    → 高吞吐走批次(填 N 筆 → 一次柵欄 → 鈴一次跳 N)。</td>
+    <td>「doorbell 一次可以跳多格?」(可以——批次的合法性要問出來)</td>
+  </tr>
+  <tr>
+    <td class="num">slot_write(idx, d)<br>comp_slot_read(idx)</td>
+    <td>共享記憶體裡的 descriptor 格子</td>
+    <td><b>idx 你自己算</b>:idx = seq % cap。descriptor 自帶 tag——Phase 2 亂序 completion
+    靠它路由,driver code 一行不用改。</td>
+    <td>「completion 順序保證嗎?」(Phase 2 就是亂序——先問先贏)</td>
+  </tr>
+  <tr>
+    <td class="num">barrier()</td>
+    <td>對 device 的記憶體柵欄</td>
+    <td><b>store-release 的硬體版</b>:只有柵欄之後,你先前的 slot_write 才保證對 device 可見。
+    MMIO 寫與普通記憶體寫在匯流排上可以亂序——柵欄不是為了編譯器好看。</td>
+    <td>「柵欄要放哪?」(自己答:填完 descriptor 之後、敲鈴之前)</td>
+  </tr>
+</table></div>
+
+<div class="card warn">
+  <span class="tag">隱藏 spec(clarify 才拿得到)</span>
+  <p>① ring 滿了 <code>Err(Full)</code> 立刻回、不等——backpressure 是呼叫端的事;
+  ② driver state 只要<b>兩個單調序號 + 容量</b>(tail、comp_head);
+  ③ 滿判定用序號差 <code>tail − head == cap</code>,不用 <code>%</code> 比較——滿/空不混淆。</p>
+</div>
+
+<h2>全景示意圖——兩條 ring,方向相反,鐵律照鏡子</h2>
+
+<h3>去程:submission(你寫、device 讀)</h3>
+<div class="flow">
+  <div class="zone you"><span class="zl">driver(你)</span>
+    <div class="fnode hot"><div class="t">tail</div><div class="d">我提交到哪(單調)</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">① slot_write(tail % cap)<br>② barrier() ⚡<br>③ doorbell = tail+1</div></div>
+  <div class="zone hw"><span class="zl">共享記憶體</span>
+    <div class="fnode"><div class="t">submission ring</div><div class="d">descriptor 格子<br>(自帶 tag)</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">device slurp 到鈴為止<br>SubmitHead 前進</div></div>
+  <div class="zone hw"><span class="zl">device</span>
+    <div class="fnode hw"><div class="t">SubmitHead</div><div class="d">唯讀:它消費到哪</div></div>
+    <div class="fnode hw"><div class="t">Doorbell</div><div class="d">唯寫:只能前進</div></div>
+  </div>
+</div>
+
+<h3>回程:completion(device 寫、你讀)</h3>
+<div class="flow">
+  <div class="zone hw"><span class="zl">device</span>
+    <div class="fnode hw"><div class="t">完成一筆</div><div class="d">寫 completion slot<br>→ CompTail++</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">completion ring</div></div>
+  <div class="zone you"><span class="zl">driver poll(你)</span>
+    <div class="fnode hot"><div class="t">① 讀 CompTail</div><div class="d">先知道它寫到哪</div></div>
+    <div class="fnode hot"><div class="t">② 才碰 slot</div><div class="d">comp_head..CompTail</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">on_done(tag, payload)<br>tag 天生路由</div></div>
+  <div class="zone sw"><span class="zl">上層</span>
+    <div class="fnode ok"><div class="t">收完成</div></div>
+  </div>
+</div>
+
+<div class="figcap"><b>怎麼讀這張圖</b>:兩條 ring 方向相反,但走的是<b>同一條鐵律的鏡像</b>——
+去程「先資料、後索引」(填 slot → 柵欄 → 敲鈴),回程「先索引、後資料」(讀 CompTail → 才碰 slot)。
+這與 spsc_ring 的 store-Release / load-Acquire 完全同構:對 CPU 讀者你用 Ordering 說這句話,
+對硬體讀者你用 barrier() 說,<b>說的是同一句話</b>。driver 自己只有兩個單調序號(tail、comp_head),
+head 活在 device 的暫存器裡——要用就讀,不要自己養一份會過期的副本。</div>
+
+<h2>狀態結構——兩個序號夾一台硬體</h2>
+
+<div class="statebar">
+  <div class="sbox"><h4>driver(你)</h4>
+    <div class="line"><span class="chip hot">tail</span> 我提交到哪</div>
+    <div class="line"><span class="chip hot">comp_head</span> 我收完成收到哪</div></div>
+  <div class="sbox"><h4>submission ring</h4>
+    <div class="line"><span class="chip">slot0</span><span class="chip">slot1</span> (idx = seq % cap)</div>
+    <div class="line" style="color:var(--grey2)">你寫、device 讀</div></div>
+  <div class="sbox"><h4>device(硬體)</h4>
+    <div class="line"><span class="chip">SubmitHead</span> 它消費到哪(唯讀)</div>
+    <div class="line"><span class="chip">CompTail</span> 它完成到哪(唯讀)</div></div>
+</div>
+
+<h2>Stepper——滿載 backpressure、wrap 重用、柵欄反例(cap=2)</h2>
+
+<div class="stepper" data-n="8">
+  <div class="svc"><button class="prev">← 上一步</button><button class="next">下一步 →</button><span class="pos"></span></div>
+
+  <div class="frame on">
+    <div class="statebar">
+      <div class="sbox"><h4>submit(tag1)</h4><div class="line">head=0, tail=0 → 0−0=0 &lt; 2 不滿</div>
+        <div class="line"><span class="chip ok">slot0 ← d(1)</span> → <span class="chip hot">barrier</span> → tail=1 → <span class="chip hot">鈴=1</span></div></div>
+    </div>
+    <div class="cap">鐵律的完整順序:<b>滿判定(序號差)→ 填 slot → barrier → tail 前進 → 敲鈴</b>。五步,一步不換位。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>submit(tag2)</h4><div class="line"><span class="chip ok">slot1 ← d(2)</span> → barrier → tail=2 → 鈴=2</div></div>
+      <div class="sbox"><h4>狀態</h4><div class="line">tail=2, head=0 → 差=2 = cap</div></div>
+    </div>
+    <div class="cap">兩格填滿。序號差恰好等於容量——ring 滿了。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>submit(tag3)</h4><div class="line">讀 SubmitHead=0;2−0==2==cap → <span class="chip bad">Err(Full)</span></div></div>
+    </div>
+    <div class="cap"><b>Err(Full) 必須不動任何 state</b>——不填 slot、不動 tail、不敲鈴。
+    之後重試要能成功;動了一根手指,重試就是 double-write。backpressure 是呼叫端的事,你只負責誠實地拒絕。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>device step</h4><div class="line">slurp doorbell 前的 2 筆 → SubmitHead=2;完成 tag1 → CompTail=1</div></div>
+    </div>
+    <div class="cap">device 照自己的節奏消費(一口氣吃掉鈴以前的所有 submission)、完成一筆、把 completion 寫進 completion ring。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>poll_completions</h4><div class="line"><b>先讀 CompTail=1</b> → comp_head 0→1 → <span class="chip ok">收 (1, payload)</span></div></div>
+    </div>
+    <div class="cap">poll 側是<b>方向相反的同一條鐵律</b>(load-acquire 的硬體版):
+    先知道 device 寫到哪,才准碰那之前的 slot。先摸 slot 再看 CompTail = 讀到寫一半的完成。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>submit(tag3) 重試</h4><div class="line">head=2, tail=2 → 差=0 &lt; 2;idx = 2 % 2 = <span class="chip hot">slot0(wrap 重用)</span></div></div>
+    </div>
+    <div class="cap good">重試成功:序號永遠單調往前,<b>slot 繞圈重用</b>。序號是邏輯座標、slot 是物理座標
+    ——ring 家族的老朋友,跨到硬體邊界一樣成立。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>終局</h4><div class="line">device 完成 tag2、tag3 → poll 收齊 <span class="chip ok">{1,2,3}</span></div></div>
+    </div>
+    <div class="cap">全部收齊,(tag, payload) 配對正確。Phase 2 亂序完成?同一段 code——tag 在 descriptor 裡,天生路由。
+    真硬體 completion 只回 tag 時才需要 driver 自建 tag→cmd 表——講出這個差異是加分。</div>
+  </div>
+
+  <div class="frame">
+    <div class="cap bad"><b>反例:填了 slot、沒 barrier 就敲鈴。</b>device 收到鈴聲時,descriptor
+    可能還在匯流排的路上——它讀到寫一半的格子。oracle 當場 panic:
+    <i>「敲 doorbell 前必須 barrier():device 可能讀到寫一半的 descriptor」</i>。
+    這與 spsc_ring 的 Release/Acquire 是同構的:<b>先發佈資料、柵欄、再發佈索引</b>;
+    對 CPU 讀者用 Ordering 說,對硬體讀者用 barrier() 說,說的是同一句話。</div>
+  </div>
+</div>
+
+<h2>Code 走讀——submit 與 poll_completions</h2>
+
+<pre class="code"><i>// driver state:兩個單調序號 + 容量,一個欄位都不多。head 活在 device 的暫存器裡。</i>
+pub fn submit(dev: &amp;mut Device, drv: &amp;mut Driver, tag: u32, payload: u64) -&gt; Result&lt;(), Full&gt; {
+    let head = dev.mmio_read(Reg::SubmitHead);
+    if <b>drv.tail - head == drv.cap</b> {          <i>// 滿判定:序號差,不用 % 比較</i>
+        <b class="bad">return Err(Full);</b>                   <i>// 立刻回、state 一根手指不動</i>
+    }
+    let idx = (drv.tail % drv.cap) as usize;   <i>// 邏輯座標 → 物理格子</i>
+    dev.slot_write(idx, Descriptor { tag, payload });
+    <u>dev.barrier();</u>                             <i>// 鐵律:填完 → 柵欄 → 敲鈴</i>
+    drv.tail += 1;
+    dev.mmio_write(Reg::Doorbell, drv.tail);
+    Ok(())
+}
+
+pub fn poll_completions(dev: &amp;mut Device, drv: &amp;mut Driver, on_done: &amp;mut dyn FnMut(u32, u64)) {
+    let tail = <u>dev.mmio_read(Reg::CompTail);</u>   <i>// 先讀進度(load-acquire 的硬體版)</i>
+    while drv.comp_head &lt; tail {               <i>// 才准碰那之前的 slot</i>
+        let idx = (drv.comp_head % drv.cap) as usize;
+        let d = dev.comp_slot_read(idx);
+        on_done(d.tag, d.payload);             <i>// tag 天生路由,亂序免改碼</i>
+        drv.comp_head += 1;
+    }
+}</pre>
+
+<h2>陷阱清單</h2>
+<ul>
+  <li><b>Err(Full) 動了 state</b>:重試 double-write;滿判定要在一切動作之前。</li>
+  <li><b>柵欄放錯邊</b>:barrier 在 slot_write 之前沒有意義——它保證的是「之前的寫」對 device 可見。</li>
+  <li><b>每筆一鈴</b>:正確但貴;批次(N 筆一柵欄一鈴)是吞吐版,規則先站穩再省。</li>
+  <li><b>doorbell 回退 / 跳過 head+cap</b>:oracle 抓「只能前進」與「未消費區間塞不下」。</li>
+</ul>
+
+</section>
+
+<!-- ================= Tm · sim m ================= -->
+<section class="panel" id="tm">
+
+<div class="gate">
+  <div class="when">⚠ 防雷門:8/8 計時場收工後才開本分頁(8/3 認題輪也不開——那輪練冷讀)</div>
+  <div class="rule">賽前可讀的替代品 = 作戰本 sim m 前導卡 + 認題卡 HW-M。R1 直系延伸,coding #2 命中率最高的方向。</div>
+</div>
+
+<div class="files">檔案:reference <code>reference/src/io/engine_watchdog.rs</code> · drill
+<code>drills/src/io/engine_watchdog.rs</code> · harness <code>rehearsals/src/sim_m_watchdog.rs</code> ·
+sol <code>rehearsals/examples/sol_sim_m_watchdog.rs</code></div>
+
+<div class="anchor">
+  <div class="big">sim i 的三張表 + 第三種 state:時間。</div>
+  <div class="small">事件源從兩種(request、done)變三種(request、done、<b>錶到期</b>);
+  wait_event 升級成 wait_event_timeout——睡到最近的錶,不是睡到天亮。watchdog 的醒法是設計的一部分。</div>
+</div>
+
+<h2>Provided API 解剖(相對 R1 的增量)</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>API</th><th>它是什麼</th><th>合約細節(場上要抓的)</th><th>clarify 該問</th></tr>
+  <tr>
+    <td class="num">now_ms() → u64</td>
+    <td>時鐘</td>
+    <td>有了時鐘,「hang」才變成可判定的事件:deadline = 派工時刻 + timeout。</td>
+    <td>「一塊正常多久完成?」(BLOCK_MS=10——timeout 要以它為錨)</td>
+  </tr>
+  <tr>
+    <td class="num">wait_event_timeout(ms)</td>
+    <td>睡,但帶鬧鐘</td>
+    <td><b>醒了什麼都不保證</b>——可能是事件、可能是超時、可能都不是;
+    醒來自己 poll done、自己查錶。睡多久 = 到最近的 deadline,沒錶就用一塊的節拍當輪詢間隔。</td>
+    <td>「醒來能知道是誰叫的嗎?」(不能——所以迴圈頂全查一遍)</td>
+  </tr>
+  <tr>
+    <td class="num">submit_dma_request_error(id)</td>
+    <td>放棄整張 request 的回報口</td>
+    <td>error 與 done 互斥;oracle 抓「已 error 又 submit」「error 兩次」。
+    <b>有這個 API 本身就是提示</b>:題目預期你有放棄政策。</td>
+    <td>「重試幾次才放棄?」(政策你定,理由你講——這裡:同塊 3 次)</td>
+  </tr>
+  <tr>
+    <td class="num">(R1 六件套照舊)</td>
+    <td>—</td>
+    <td>done 仍只帶 engine id;owner 表照用。</td>
+    <td><b>關鍵前提問題:「re-execute 這塊安全嗎?」</b>——spec 的答案:行為冪等,
+    且「隔離舊台 + 單一在飛」保證同塊不會同時跑兩份,重派才合法。這一問是本題 clarify 的皇冠。</td>
+  </tr>
+</table></div>
+
+<h2>全景示意圖——sim i 的圖 + 一圈錶 + 一間隔離室</h2>
+
+<h3>正常路徑(= sim i)+ 上錶</h3>
+<div class="flow">
+  <div class="zone you"><span class="zl">Dispatcher</span>
+    <div class="fnode hot"><div class="t">work 隊</div><div class="d">首派與重派同一條隊</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">派工 + 上錶<br>deadline[e] = now + 50</div></div>
+  <div class="zone hw"><span class="zl">硬體</span>
+    <div class="fnode hw"><div class="t">engine</div><div class="d">正常 10ms 一塊<br>…或 hang 著不說話</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">done → 回帳 + 清錶<br>free 還台</div></div>
+  <div class="zone you"><span class="zl">收工</span>
+    <div class="fnode ok"><div class="t">計數歸零 → submit</div></div>
+  </div>
+</div>
+
+<h3>timeout 路徑(第三種事件源:時間)</h3>
+<div class="flow">
+  <div class="zone you"><span class="zl">錶圈</span>
+    <div class="fnode hot"><div class="t">錶到期</div><div class="d">deadline[e] ≤ now</div></div>
+  </div>
+  <div class="farrow bad">──▶<div class="lbl">隔離:清 owner/錶<br><b>不回 free</b></div></div>
+  <div class="zone irq"><span class="zl">隔離室(嫌疑犯)</span>
+    <div class="fnode bad"><div class="t">engine e</div><div class="d">不再接單</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">zombie done<br>= 生存證明</div></div>
+  <div class="zone sw"><span class="zl">復活</span>
+    <div class="fnode ok"><div class="t">回 free</div><div class="d">owner==None 的 done<br>不碰帳,只放人</div></div>
+  </div>
+</div>
+
+<div class="flow">
+  <div class="zone you"><span class="zl">那一塊的下場</span>
+    <div class="fnode hot"><div class="t">tries[(rid,b)]++</div></div>
+    <div class="fnode"><div class="t">&lt; 3 → 回 work 隊重派</div><div class="d">隔離舊台 ⇒ 同塊單一在飛</div></div>
+    <div class="fnode bad"><div class="t">== 3 → 整張走 error</div><div class="d">無限重試是黑洞</div></div>
+  </div>
+</div>
+
+<div class="figcap"><b>怎麼讀這張圖</b>:上排就是 sim i,只多了「上錶/清錶」兩個動作;中排是新東西——
+時間是<b>不會發事件的事件源</b>,只有錶會替 hang 的 engine 說話,所以 wait 也要升級成
+wait_event_timeout(睡到最近的錶)。隔離室的唯一出口是 zombie done:它同時是「這台活著」的證明
+和「這塊早已重派」的雜訊——<b>owner==None 這一行同時處理了兩件事</b>(放人、不碰帳)。
+下排是政策層:重派合法性靠「冪等 + 單一在飛」,放棄線靠 retry budget。</div>
+
+<h2>狀態結構——三張表 + 錶 + retry 帳</h2>
+
+<div class="statebar">
+  <div class="sbox"><h4>deadline[e](第三種 state)</h4>
+    <div class="line"><span class="chip hot">e0→t50</span><span class="chip hot">e1→t50</span><span class="chip dim">e2..e5→None</span></div>
+    <div class="line" style="color:var(--grey2)">有 owner 必有錶;隔離台兩者皆無</div></div>
+  <div class="sbox"><h4>work 隊(統一待派)</h4>
+    <div class="line"><span class="chip">(rid, block)</span> 首派與重派走同一條隊</div>
+    <div class="line" style="color:var(--grey2)">dispatch 不用知道這塊是不是重派</div></div>
+  <div class="sbox"><h4>tries 帳</h4>
+    <div class="line"><span class="chip">(rid, b) → n</span> 第 3 次 timeout → error</div></div>
+</div>
+
+<h2>Stepper——hang → 錶響 → 隔離重派 → zombie 免疫</h2>
+
+<p>劇本 = <code>hang_once_timeout_and_redispatch</code> + <code>zombie_done_does_not_corrupt_books</code>:
+req1(2 塊),塊 0 首派 hang、500ms 後吐 zombie。TIMEOUT_MS = 5×BLOCK_MS = 50。</p>
+
+<div class="stepper" data-n="8">
+  <div class="svc"><button class="prev">← 上一步</button><button class="next">下一步 →</button><span class="pos"></span></div>
+
+  <div class="frame on">
+    <div class="statebar">
+      <div class="sbox"><h4>t=0 派工</h4><div class="line"><span class="chip hot">e0←(1,b0) 錶50</span><span class="chip hot">e1←(1,b1) 錶50</span></div></div>
+      <div class="sbox"><h4>reqs</h4><div class="line"><span class="chip">req1: done 0/2</span></div></div>
+    </div>
+    <div class="cap">t=0:兩塊各上一台,<b>派工當下上錶</b>(now + 50)。塊 0 這台其實已經 hang 了——但你還不知道。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>t=10 e1 done</h4><div class="line">done 1/2;e1 還台、<span class="chip ok">錶清掉</span></div></div>
+      <div class="sbox"><h4>e0</h4><div class="line"><span class="chip bad">沒動靜,錶還在走(t50 到期)</span></div></div>
+    </div>
+    <div class="cap">塊 1 正常完成(10ms 節拍)。塊 0 悄無聲息——hang 沒有事件,<b>只有錶會替它說話</b>。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>t=50 錶響</h4><div class="line">e0:owner/deadline 清空 → <span class="chip bad">隔離(不回 free)</span></div></div>
+      <div class="sbox"><h4>帳</h4><div class="line">tries[(1,b0)]=1 &lt; 3 → 塊 0 <span class="chip hot">回 work 隊</span></div></div>
+    </div>
+    <div class="cap"><b>隔離不復用</b>:timeout 的 engine 是嫌疑犯,清 owner、不放回 free。
+    塊 0 進重派隊——首派與重派走同一條隊,dispatch 不用分知道。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>dispatch</h4><div class="line"><span class="chip ok">e1←(1,b0) 新錶 t110</span></div></div>
+    </div>
+    <div class="cap">塊 0 重派到 e1(剛還台的好人)。<b>重派合法的前提</b>:行為冪等 +「隔離舊台 ⇒ 同塊單一在飛」
+    ——clarify 皇冠問題的現金價值就在這一步。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>t=60 e1 done</h4><div class="line">done 2/2 → <span class="chip ok">submit(1)</span></div></div>
+      <div class="sbox"><h4>sent_log</h4><div class="line">塊 0 出現<b>兩筆</b>——重派有據可查</div></div>
+    </div>
+    <div class="cap good">req1 完成。錶只誤了它 40ms(50−10),而不是永遠。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>t=500 e0 吐 zombie done</h4><div class="line">owner[e0] = None → <span class="chip hot">不碰帳</span></div></div>
+      <div class="sbox"><h4>free</h4><div class="line"><span class="chip ok">e0 復活回 pool</span></div></div>
+    </div>
+    <div class="cap"><b>zombie 免疫的關鍵一行</b>:<code>owner[e] == None</code> 的 done 一律不碰帳——
+    那塊早已重派並記過帳。zombie 只當「engine 生存證明」:隔離台用它證明自己活著,復活回 free
+    (政策可換:永久除役——講得出兩個選項就好)。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>t=600 req2 到</h4><div class="line">e0 照常服役 → <span class="chip ok">submit(2)</span></div></div>
+      <div class="sbox"><h4>終局</h4><div class="line">submitted=[1,2] · errors=[]</div></div>
+    </div>
+    <div class="cap">復活的 e0 接了 req2。oracle 全程在對帳:zombie 的重複完成只計一次,submit 騙不了它。</div>
+  </div>
+
+  <div class="frame">
+    <div class="cap bad"><b>反例一:zombie 不設防。</b>owner 沒清或沒判 None → zombie done 又給 req1 記一塊
+    → double count → 別的單提前 submit 或帳永遠對不上。<b>反例二:無 retry budget。</b>
+    <code>hang_always</code> 的塊無限重派,每次重派都可能再 hang 一台——engine 一台台被拖進黑洞。
+    第 3 次收手、整張走 error,sent_log 恰好 3 筆。<b>反例三:timeout 亂定。</b>
+    太短誤殺慢引擎(白白重做 + 好引擎被隔離),太長拖住整張 request 的尾延遲;
+    答案的形狀是「p99 塊延遲的數倍」= 5×BLOCK_MS,錨在題目給的節拍上,不是拍腦袋。</div>
+  </div>
+</div>
+
+<h2>Code 走讀——fire_timeouts 與 zombie 免疫</h2>
+
+<pre class="code">pub fn fire_timeouts(&amp;mut self, bus: &amp;mut impl DmaBus, now: u64) -&gt; bool {
+    let mut fired = false;
+    for e in 0..ENGINE_COUNT as usize {
+        if self.deadline[e].is_some_and(|d| d &lt;= now) {
+            let (rid, b) = self.owner[e].take().expect("有錶必有 owner");
+            self.deadline[e] = None;
+            <b class="bad">// 注意這裡沒有 free.push_back(e) —— 隔離,不回 pool</b>
+            fired = true;
+            let t = self.tries.entry((rid, b)).or_insert(0);
+            *t += 1;
+            if *t &gt;= MAX_TRIES {
+                if self.reqs.remove(&amp;rid).is_some() { bus.submit_dma_request_error(rid); }
+            } else {
+                <u>self.work.push_back((rid, b));</u>   <i>// 隔離舊台 ⇒ 同塊單一在飛,重派合法</i>
+            }
+        }
+    }
+    fired
+}
+
+pub fn on_done(&amp;mut self, bus: &amp;mut impl DmaBus, eid: u32) {
+    let Some((rid, _b)) = self.owner[eid as usize].take() else {
+        <b>self.free.push_back(eid);</b>   <i>// zombie:只當生存證明,隔離台復活;帳一根指頭不碰</i>
+        return;
+    };
+    self.deadline[eid as usize] = None;
+    self.free.push_back(eid);
+    let Some(st) = self.reqs.get_mut(&amp;rid) else {
+        <u>return;</u>                      <i>// 單已 error 退場,塊的完成不再有意義</i>
+    };
+    st.done += 1;
+    if st.done == st.total { bus.submit_dma_request_result_done(rid); self.reqs.remove(&amp;rid); }
+}
+
+<i>// 醒法也是設計:睡到最近的錶;沒錶用一塊的節拍當輪詢間隔。</i>
+fn next_sleep_ms(&amp;self, now: u64) -&gt; u64 {
+    self.deadline.iter().flatten().min()
+        .map_or(BLOCK_MS, |&amp;dl| <u>dl.saturating_sub(now).max(1)</u>)
+}</pre>
+
+<h2>陷阱清單</h2>
+<ul>
+  <li><b>timeout 台回 free</b>:嫌疑犯繼續接單,下一張照樣 hang——隔離是政策,回收要靠 zombie 證明。</li>
+  <li><b>錶沒清</b>:done 時忘了 <code>deadline[e]=None</code> → 好引擎被誤殺(錶替死人響)。</li>
+  <li><b>睡到天亮</b>:wait_event_timeout 傳一個大數 = watchdog 名存實亡;睡的長度是最近的錶。</li>
+  <li><b>error 後殘塊</b>:work 隊裡該單殘塊要作廢(dispatch 查 reqs 不在就跳)——error 的單不准再派工。</li>
+</ul>
+
+</section>
+
+<!-- ================= Tn · sim n ================= -->
+<section class="panel" id="tn">
+
+<div class="gate">
+  <div class="when">⚠ 防雷門:8/9 計時場收工後才開本分頁(8/3 認題輪也不開)</div>
+  <div class="rule">賽前可讀的替代品 = 作戰本 sim n 前導卡(雙閘 + seq 破平手概念,無解法)。8/6 若情報指向他型,此題可換皮——已備不浪費。</div>
+</div>
+
+<div class="files">檔案:reference <code>reference/src/concurrency/job_scheduler.rs</code> · drill
+<code>drills/src/concurrency/job_scheduler.rs</code> · harness <code>rehearsals/src/sim_n_scheduler.rs</code> ·
+sol <code>rehearsals/examples/sol_sim_n_scheduler.rs</code> · 單執行緒近親 <code>ds::graph</code> 的 Kahn toposort</div>
+
+<div class="anchor">
+  <div class="big">兩層閘門,各自獨立:DAG 決定「誰能進場」,priority 決定「誰先出場」。</div>
+  <div class="small">入場閘(indegree 歸零才放進 ready)一行不碰出場閘(heap 的 tuple 序);
+  Phase 1 → Phase 2 加的是入場閘三件套,dispatch 一行不改。</div>
+</div>
+
+<h2>Provided API 解剖</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>API</th><th>它是什麼</th><th>合約細節(場上要抓的)</th><th>clarify 該問</th></tr>
+  <tr>
+    <td class="num">get_job()<br>→ Option&lt;Job&gt;</td>
+    <td>收 job 口</td>
+    <td><code>Job { job_id, priority(大者急), deps }</code>;deps Phase 1 恆空——
+    但結構裡有這個欄位就是<b>劇透</b>:Phase 2 八成考它。</td>
+    <td>「同優先權誰先?」(FIFO——這一問決定 heap tuple 長相)</td>
+  </tr>
+  <tr>
+    <td class="num">assign_job_to_worker(w, id)</td>
+    <td>派工</td>
+    <td>前置條件:worker 空閒 + <b>該 job 全部相依已完成</b>——oracle 抓「deps 沒做完就派工」,
+    這是 DAG 入場閘的驗收線。</td>
+    <td>「job 可以搶佔嗎?」(不能——派了就跑到完)</td>
+  </tr>
+  <tr>
+    <td class="num">get_worker_done()<br>→ Option&lt;u32&gt;</td>
+    <td>完成事件口</td>
+    <td><b>只給 worker id</b>——R1 同款 bus 形狀,owner 表照搬(worker → job)。</td>
+    <td>「done 順序保證?」(無;lifo 測試同款)</td>
+  </tr>
+  <tr>
+    <td class="num">submit_job_done(id)</td>
+    <td>回報完成</td>
+    <td>oracle 對帳:沒做完就 submit、submit 兩次,同罪。</td>
+    <td>—</td>
+  </tr>
+</table></div>
+
+<div class="card warn">
+  <span class="tag">隱藏 spec(clarify 才拿得到)</span>
+  <p>① 同優先權要 FIFO(不然同權順序不穩定,難重現、難測);② <b>priority 不能穿越 DAG</b>——再急也得等料;
+  ③ 相依「早已完成」的後到者要立刻可派(不能等一個永遠不會再來的完成事件)。</p>
+</div>
+
+<h2>全景示意圖——兩層閘門的位置</h2>
+
+<div class="flow">
+  <div class="zone sw"><span class="zl">上游</span>
+    <div class="fnode"><div class="t">get_job()</div><div class="d">Job{id, pri, deps}</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">register:發 seq(到達序)</div></div>
+  <div class="zone you"><span class="zl">閘 1:DAG 入場閘</span>
+    <div class="fnode hot"><div class="t">missing == 0?</div><div class="d">只數還沒完成的相依<br>(completed 秒判)</div></div>
+    <div class="fnode bad"><div class="t">waiting 池</div><div class="d">missing&gt;0 在這等<br>+ dependents 反向邊</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">歸零放行(帶原 seq)</div></div>
+  <div class="zone you"><span class="zl">閘 2:優先權出場閘</span>
+    <div class="fnode hot"><div class="t">ready heap</div><div class="d">(pri, Reverse(seq), id)<br>大 pri 先、同 pri 早到先</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">dispatch:有空 worker 就出堆</div></div>
+  <div class="zone hw"><span class="zl">執行</span>
+    <div class="fnode"><div class="t">4× worker</div><div class="d">owner 表:worker→job</div></div>
+  </div>
+</div>
+
+<div class="flow">
+  <div class="zone hw"><span class="zl">完成</span>
+    <div class="fnode"><div class="t">done(worker id)</div></div>
+  </div>
+  <div class="farrow">──▶<div class="lbl">owner 路由 → submit<br>→ completed.insert</div></div>
+  <div class="zone you"><span class="zl">DAG 推進(回饋到閘 1)</span>
+    <div class="fnode ok"><div class="t">dependents[id]</div><div class="d">等它的人 missing−1<br>歸零 → 進 ready</div></div>
+  </div>
+</div>
+
+<div class="figcap"><b>怎麼讀這張圖</b>:priority 之所以「不能穿越 DAG」,不是靠檢查,是靠<b>位置</b>——
+閘 1 在 heap 之前,沒過閘的 job 根本不存在於 heap 裡,dispatch 想插隊也無從插起。
+完成事件是唯一能開閘 1 的鑰匙(missing−1),completed 集合處理「鑰匙早就轉過了」的後到者。
+seq 在<b>到達時</b>發、放行時<b>帶原 seq</b> 進 heap——被相依耽誤的 job 不喪失到達位次,平手順序才穩。
+右下的回饋箭頭就是「收工後不睡」的理由:done 可能剛放行了一張 job,回頭立刻派。</div>
+
+<h2>狀態結構——R1 骨架 + 兩層閘門三件套</h2>
+
+<div class="statebar">
+  <div class="sbox"><h4>出場閘:ready heap</h4>
+    <div class="line"><span class="chip hot">(pri, Reverse(seq), id)</span></div>
+    <div class="line" style="color:var(--grey2)">pri 大者先;同 pri 早到先(seq 到達時發!)</div></div>
+  <div class="sbox"><h4>入場閘:waiting + dependents</h4>
+    <div class="line"><span class="chip">id → missing</span> <span class="chip">dep → [等它的人]</span></div>
+    <div class="line" style="color:var(--grey2)">missing 歸零才放行(Kahn 的事件驅動版)</div></div>
+  <div class="sbox"><h4>completed 集合</h4>
+    <div class="line"><span class="chip ok">{已完成的 id}</span></div>
+    <div class="line" style="color:var(--grey2)">「相依早已完成」的秒判——不記它就死等已逝事件</div></div>
+</div>
+
+<h2>Stepper——priority 不穿越 DAG(dry-run 劇本)</h2>
+
+<p>劇本 = <code>dag_gates_priority</code> + <code>late_arrival_with_completed_dep</code>:
+job1、job2(pri 5,無依)、job3(pri 9,deps [1,2])、job4(pri 9,deps [3])同 tick 到。</p>
+
+<div class="stepper" data-n="7">
+  <div class="svc"><button class="prev">← 上一步</button><button class="next">下一步 →</button><span class="pos"></span></div>
+
+  <div class="frame on">
+    <div class="statebar">
+      <div class="sbox"><h4>register 之後</h4>
+        <div class="line">ready:<span class="chip">1(pri5,seq0)</span><span class="chip">2(pri5,seq1)</span></div>
+        <div class="line">waiting:<span class="chip hot">3(pri9,missing=2)</span><span class="chip hot">4(pri9,missing=1)</span></div></div>
+      <div class="sbox"><h4>dependents</h4><div class="line"><span class="chip">1→[3]</span><span class="chip">2→[3]</span><span class="chip">3→[4]</span></div></div>
+    </div>
+    <div class="cap">四張 job 同時到:1、2 無依直接進 ready;<b>pri 9 的 3 和 4 被入場閘擋在外面</b>
+    ——heap 裡根本沒有它們,不存在「pri 高就插隊」的機會。seq 在<b>到達時</b>發(0,1,2,3)。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>dispatch</h4><div class="line"><span class="chip ok">w0←1</span><span class="chip ok">w1←2</span></div></div>
+      <div class="sbox"><h4>ready</h4><div class="line"><span class="chip dim">(空)</span></div></div>
+    </div>
+    <div class="cap">派工只從 ready 出堆:pri 5 的 1、2 上機,pri 9 的 3 乾瞪眼。
+    <b>這就是 priority inversion 的現場</b>——高優先權等低優先權的相依。
+    真系統的解是 priority inheritance(相依鏈暫時提權);面試指出現象 + 名詞即可,不用實作。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>1 done</h4><div class="line">submit(1);completed={1}</div></div>
+      <div class="sbox"><h4>DAG 推進</h4><div class="line">dependents[1]=[3] → 3.missing 2→<span class="chip hot">1</span>(還不放行)</div></div>
+    </div>
+    <div class="cap">完成事件推 DAG:等 1 的人 missing 減一。3 還缺 job2 → 繼續等。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>2 done</h4><div class="line">3.missing → 0 → <span class="chip ok">進 ready(帶原 seq2)</span></div></div>
+      <div class="sbox"><h4>dispatch</h4><div class="line"><span class="chip ok">w?←3</span></div></div>
+    </div>
+    <div class="cap">missing 歸零 → 放行進 ready,<b>帶著它原本的到達序 seq2</b>——
+    等相依的 job 不因入場晚而喪失到達位次,平手順序才穩定。收工後不睡:完成事件可能放行了 waiting 的 job,回頭就派。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>3 done → 4 放行 → 4 done</h4><div class="line">submitted = <span class="chip ok">[1, 2, 3, 4]</span></div></div>
+    </div>
+    <div class="cap good">鏈式放行到終局。完成序 [1,2,3,4]——pri 9 的兩張最後完成,
+    <b>DAG 的意志壓過 priority 的意志</b>,而 oracle 全程在抓「deps 沒做完就派工」。</div>
+  </div>
+
+  <div class="frame">
+    <div class="statebar">
+      <div class="sbox"><h4>後到補課(t=5)</h4><div class="line">job5(deps [1])到;completed 秒判 <span class="chip ok">missing=0 → 立刻進 ready</span></div></div>
+    </div>
+    <div class="cap"><b>completed 集合的存在理由</b>:相依早已完成的後到者,若只靠「完成事件推進」,
+    它等的是一個<b>永遠不會再來的事件</b>——經典死等。register 時查一次集合,秒判放行。</div>
+  </div>
+
+  <div class="frame">
+    <div class="cap bad"><b>反例一:heap tuple 沒有 Reverse(seq)。</b>同權 job 出堆順序由 id 或內部序定
+    ——不穩定、難重現(<code>equal_priority_is_fifo</code> 測試就會亂)。
+    <b>反例二:seq 在「入場時」發。</b>等相依的 job 放行時拿到新號碼,排到同權後到者後面——平手順序漂移。
+    <b>反例三:循環相依(2↔3)。</b>missing 永不歸零 → 兩張 job 靜默卡死;本實作不偵測(spec 沒要求),
+    真系統要 Kahn 全量檢查或 watchdog 掃 waiting 滯留時間——說得出口就加分,其餘 job 照常、run 正常退出。</div>
+  </div>
+</div>
+
+<h2>Code 走讀——register 與 on_done 的 DAG 推進</h2>
+
+<pre class="code">pub fn register(&amp;mut self, j: Job) {
+    let seq = self.seq; self.seq += 1;          <i>// 到達序:到達時發,不是入場時發</i>
+    let missing = j.deps.iter()
+        .filter(|d| <u>!self.completed.contains(d)</u>).count();   <i>// 只數「還沒完成」的相依</i>
+    for d in &amp;j.deps {
+        if !self.completed.contains(d) {
+            self.dependents.entry(*d).or_default().push(j.job_id);  <i>// 反向邊</i>
+        }
+    }
+    if missing == 0 {
+        <b>self.ready.push((j.priority, Reverse(seq), j.job_id));</b>  <i>// 平手規則長在 tuple 裡</i>
+    } else {
+        self.waiting.insert(j.job_id, Waiting { priority: j.priority, seq, missing });
+    }
+}
+
+pub fn on_done(&amp;mut self, bus: &amp;mut impl JobBus, w: u32) {
+    let id = self.owner[w as usize].take().expect("done 來自沒派工的 worker");
+    self.free.push_back(w);
+    bus.submit_job_done(id);
+    self.completed.insert(id);
+    for dep_id in self.dependents.remove(&amp;id).unwrap_or_default() {
+        let wtg = self.waiting.get_mut(&amp;dep_id).expect("dependents 指向不存在的 waiting");
+        wtg.missing -= 1;
+        if <b>wtg.missing == 0</b> {                   <i>// 歸零才放行——Kahn 的事件驅動版</i>
+            let wtg = self.waiting.remove(&amp;dep_id).unwrap();
+            <u>self.ready.push((wtg.priority, Reverse(wtg.seq), dep_id));</u>  <i>// 帶原到達序</i>
+        }
+    }
+}</pre>
+
+<div class="card info">
+  <span class="tag">trade-off:heap vs 線性掃 max</span>
+  <p>ready 用 <code>BinaryHeap</code>(O(log n) push/pop)vs 每次線性掃 max(O(n)):
+  n 小時掃也行,但 heap 順手就有平手規則的位置(tuple 序),面試檯面上直接選 heap,
+  然後把省下的話語權花在兩層閘門的講解上。</p>
+</div>
+
+<h2>陷阱清單</h2>
+<ul>
+  <li><b>把 deps 檢查塞進 dispatch</b>:每次派工掃全表 O(n·d);正解是入場閘——沒進 ready 的 job 根本不會被 dispatch 看到。</li>
+  <li><b>漏 completed 集合</b>:後到者死等已逝事件(<code>late_arrival</code> 測試)。</li>
+  <li><b>同權不 FIFO / seq 發錯時機</b>:順序不穩,測試難寫、行為難重現。</li>
+  <li><b>循環相依讓 run() hang 住</b>:正確行為是循環裡的 job 靜默卡住、其餘照常、事件耗盡正常退出。</li>
+</ul>
+
+</section>
+
+<div class="footer">
+  sim i–n 圖解全解 · 2026-07-31 · 教學本體:reference 六模組(5-pillar + oracle mock + 手 trace 測試)·
+  賽前讀作戰本前導卡,賽後讀本頁 + 轉 drills 複打 · 門禁:i 已開,j=7/31、k=8/1、l=8/2、m=8/8、n=8/9 計時場後
+</div>
+
+</div>
+<script>
+const bar=document.getElementById('tabbar');
+bar.addEventListener('click',e=>{
+  const b=e.target.closest('.tabbtn'); if(!b) return;
+  document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById(b.dataset.t).classList.add('active');
+  window.scrollTo({top:0});
+});
+document.querySelectorAll('.stepper').forEach(sp=>{
+  const frames=[...sp.querySelectorAll('.frame')];
+  const prev=sp.querySelector('.prev'), next=sp.querySelector('.next'), pos=sp.querySelector('.pos');
+  let i=0;
+  const render=()=>{
+    frames.forEach((f,k)=>f.classList.toggle('on',k===i));
+    prev.disabled=(i===0); next.disabled=(i===frames.length-1);
+    pos.textContent=(i+1)+' / '+frames.length;
+  };
+  prev.addEventListener('click',()=>{ if(i>0){i--; render();} });
+  next.addEventListener('click',()=>{ if(i<frames.length-1){i++; render();} });
+  render();
+});
+</script>
+</body>
+</html>

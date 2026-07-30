@@ -61,10 +61,15 @@
 
 **4. Trade-off ≥2(每個都有被否決的對手)**
 
-- **vs PostgreSQL replication**:**we were on PG 14** — streaming = single writer,拿不到 Active-Active;雙向邏輯複製當時不可用(要 PG 16 `origin=none`),一句結案。更根本的:**replication has no notion of which write should win** — 它排不出兩個分區寫入的先後,更不知道哪個操作(a delete, a send)已經不可挽回。關鍵句逐字:"**Replication is a transport-layer concern; conflict resolution is a policy-layer concern. Off-the-shelf tools move the data, but they can't decide which write should win — and they certainly don't know that one of the writes already sent an email.**"
-- **vs Raft/Paxos**:n=2 → quorum 門檻 2 → **任一節點掛掉全組停寫——可用性反而比單機差**;n=3 產品形態不允許。所以換問題:不問 "who is allowed to write",改成 "both sides write, replay-safe, converge afterwards."
-- **vs Last-Write-Wins**:時鐘不可信,而且 "later" ≠ "should win"——LWW 會靜默覆蓋已對現實世界產生後果的操作。
-- **主動講代價**:收斂前存在 **inconsistency window**;衝突規則是**自己定義、自己驗證的 policy**。
+- **vs PostgreSQL replication**(口述版):
+  > "We were on Postgres fourteen. Streaming replication is single-writer, so no active-active; and bidirectional logical replication wasn't available yet — that needs Postgres sixteen. But the deeper reason holds on any version: replication has no notion of which write should win. It can't order two partitioned writes, and it certainly doesn't know that one of them already sent an email."
+  關鍵句逐字:"**Replication is a transport-layer concern; conflict resolution is a policy-layer concern. Off-the-shelf tools move the data, but they can't decide which write should win.**"
+- **vs Raft/Paxos**(口述版):
+  > "With Raft or Paxos at n equals two, the quorum is two — lose either node and the whole system stops writing. Availability would be worse than a single machine, and a third node wasn't an option in this product. So I changed the question: instead of asking who is allowed to write, both sides write, replay-safe, and converge afterwards."
+- **vs Last-Write-Wins**(口述版):
+  > "Last-write-wins assumes a trusted clock we don't have — and 'later' doesn't mean 'should win'. It silently overwrites operations that already had real-world consequences."
+- **主動講代價**(口述版):
+  > "And I'll volunteer the cost: there is an inconsistency window before convergence, and the conflict rules are a policy I defined and had to validate myself — there's no textbook to point at."
 
 **5. 數字(含觀測手段——這題必被問,答案是武器不是弱點)**
 
@@ -73,8 +78,8 @@
 
 **6. 最難的 bug(v2 遺失視窗——演進本身就是證據)**
 
-- v1 shared NFS:斷線重連後檔案鎖不可靠;共享儲存本身是 SPOF。→ v2 command queue(各自本地 DB):**佇列清空或 consumer 重啟時,尚未在對端落地的操作直接遺失**。→ v3:**派送前先寫本地備份;對端確認落地後才清除**。
-- 講法:"each version was forced by a concrete failure, not by a whiteboard." 不要只講終版。
+- 口述版(直接唸,不要只講終版):
+  > "Version one used shared NFS — after a link flap the file locks were unreliable, and the shared storage itself was a single point of failure. Version two moved to command queues on each node's local database — but if the queue drained or the consumer restarted, operations that hadn't landed on the peer were simply gone. That loss window forced version three: back up locally before dispatch, and only clear the backup after the peer confirms it landed. Each version was forced by a concrete failure, not by a whiteboard."
 
 **7. 如果重來**
 
@@ -93,24 +98,35 @@
 - "Alongside it, a **shared logging library** standardized how services emit diagnostics — that cut roughly **30% of duplicated logging code**."
 - Etched 定位句逐字:"**It's a telemetry pipeline: many producers, a routing layer, one structured sink — the same shape as an event-loop-over-hardware-signals problem, just with logs instead of interrupts.**"
 
-**2. 問題與限制**:診斷資料散在各服務的純文字 log 裡,查一個跨服務問題要 grep 好幾種格式;需要**可查詢的結構化落地**,而且收集不能干擾收發信主路徑。
+**2. 問題與限制(口述版,直接唸)**
 
-**3. 設計**:站在 syslog 生態上——傳輸與路由交給 syslog-ng(現成、可靠、config 管理);自寫 daemon 只擁有兩件事:**解析/正規化邏輯**與 **DB schema**。Asio 處理 daemon 的 IO。
+> "Before this, diagnostics lived in plain-text logs scattered across services, each with its own format — debugging one cross-service issue meant grepping three formats and joining them in your head. We needed a structured, queryable landing zone — and the collection path must never interfere with the mail-delivery hot path."
 
-**4. Trade-off ≥2(誠實版,每個都答得出 why)**
+**3. 設計(口述版,直接唸)**
 
-- **重用 syslog/syslog-ng vs 自建 collector**:現成傳輸久經沙場、退場成本低;代價 = 綁定 syslog 的格式與投遞語意。"I didn't build a transport — the interesting problem was parsing and schema, so that's where my code lives."
-- **獨立 daemon vs syslog-ng 直寫 DB**:解析規則和 schema 是會演化、要測試的**程式**,不想塞進 syslog-ng 的 config 層;daemon 掛了 syslog-ng 還能緩衝,兩層解耦。
-- **結構化落 DB vs 留純文字**:查詢能力 vs 寫入成本。**吞吐數字不掰**——被問就誠實:"I don't have the throughput number from memory; the bottleneck by construction is the DB write path, not the parse."
+> "I stood on the syslog ecosystem instead of fighting it: transport and routing go to syslog-ng — battle-tested, config-driven. My daemon owns exactly two things: the parsing-and-normalization logic, and the database schema. Asio drives the daemon's IO."
+
+**4. Trade-off ≥2(口述版;中文只是標籤)**
+
+- **重用 syslog-ng vs 自建 collector**:
+  > "The off-the-shelf transport is battle-tested and cheap to walk away from; the cost is being bound to syslog's format and delivery semantics. I didn't build a transport — the interesting problem was parsing and schema, so that's where my code lives."
+- **獨立 daemon vs syslog-ng 直寫 DB**:
+  > "Parsing rules and schema are code — they evolve and they need tests. I didn't want that living in a config layer. And the failure modes decouple: if my daemon dies, syslog-ng still buffers."
+- **結構化落 DB vs 留純文字**:
+  > "Query power versus write cost. And I won't invent a throughput number — I don't have it from memory; the bottleneck by construction is the DB write path, not the parse."
 
 **5. 數字**:−30% duplicated logging code(library 那條);其餘不編數字。
 
 **6. 最難的 bug——兩個 war story(Etched 加分區:strace/perf 紀律)**
 
-- **FD exhaustion 全服務中斷,10 分鐘內復原**:現象 = 程序活著但所有連線失敗 → 關鍵句逐字:"**First split 'the program is wrong' from 'a resource is exhausted' — the two paths need completely different evidence.**" → 部署後負載尖峰疊 DDoS,fd 耗盡。追問備案:止血與根因並行,rollback 前保留現場。
+- **FD exhaustion 全服務中斷,10 分鐘內復原**(口述版):
+  > "The process was alive, but every new connection failed. First move: split 'the program is wrong' from 'a resource is exhausted' — the two paths need completely different evidence. It turned out a post-deploy load spike stacked on a DDoS, and we ran out of file descriptors. We restored service in about ten minutes."
+  追問備案(口述):"We stopped the bleeding and chased the root cause in parallel — and we captured the scene before any rollback, because a rollback destroys your evidence."
 - **CPU 空轉追到確切 syscall**(✅ 確認:**前人程式碼的陳年 bug,我是追查者**——當 debugging 故事講,不認領也不指責,說 "a long-standing bug in inherited code"):`perf` 熱點在 `read` → `strace` 看到同一個 fd 反覆回傳 0 → read loop 沒把 0-byte 當 EOF。關鍵句逐字:"**A 0-byte read is EOF, not 'no data this time'. Loop exit conditions have to match the syscall contract.**"
 
-**7. 如果重來**:daemon 端補**顯式的 backpressure/丟棄帳**(現在依賴 syslog-ng 的緩衝行為,策略不在我手上——把「掉了多少」變成自己記的數字,跟 telemetry 題的 dropped counter 同構)。
+**7. 如果重來(口述版,直接唸)**
+
+> "I'd add an explicit backpressure-and-drop ledger on the daemon side. Today I inherit syslog-ng's buffering behavior, so the drop policy isn't in my hands — I want 'how much did we lose' to be a number I own. It's the same dropped-counter shape as any telemetry pipeline."
 
 ### 專案三:Real-time content-inspection microservices(Rust / Tokio / gRPC)
 
@@ -118,7 +134,9 @@
 
 - "I develop and operate **production Rust microservices** doing real-time email content inspection — regex, IP filtering, PII detection, exact-word matching — with **Tokio running matchers concurrently**, sustaining **~3,500 messages/second on a single 8-core node**. I also **introduced Rust into the team's stack**."
 
-**2–3. 問題/設計**:inspection 是 fan-out 形狀(一封信 → 多個 matcher)且延遲敏感;Tokio task per matcher,gRPC 進出;CPU-bound 與 IO-bound 分清楚。
+**2–3. 問題/設計(口述版,直接唸)**
+
+> "Inspection is a fan-out problem — one message hits several matchers at once, and it's latency-sensitive. Tokio runs a task per matcher, gRPC in and out; and the discipline that matters is keeping CPU-bound work and IO-bound work on separate runtimes."
 
 **4. Trade-off ≥2(現成好戲在隔壁團隊的三個 MR)**
 
