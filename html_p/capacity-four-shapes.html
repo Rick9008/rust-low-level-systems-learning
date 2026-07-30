@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>量級反推除膜手冊 — 四個形狀 × 單位攜帶 × 錨點數字庫</title>
+<style>
+:root{
+  --bg0:#282828; --bg0dim:#1d2021; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+  --fg0:#d4be98; --fg1:#ddc7a1;
+  --grey:#928374; --grey2:#a89984;
+  --red:#ea6962; --orange:#e78a4e; --yellow:#d8a657; --green:#a9b665; --aqua:#89b482; --blue:#7daea3; --purple:#d3869b;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; background:var(--bg0dim); color:var(--fg0);
+  font-family:'JetBrains Mono','Fira Code',ui-monospace,Consolas,monospace;
+  font-size:15px; line-height:1.65;
+  -webkit-text-size-adjust:100%; text-size-adjust:100%;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:0 16px 80px;}
+header.top{padding:26px 0 10px;}
+header.top h1{font-size:20px; margin:0 0 4px; color:var(--yellow);}
+header.top .sub{color:var(--grey2); font-size:13px;}
+.tabbar{
+  position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:6px;
+  background:var(--bg0dim); padding:10px 0 8px; border-bottom:1px solid var(--bg3); margin-bottom:20px;
+}
+.tabbtn{
+  font:inherit; cursor:pointer; border:1px solid var(--bg3); background:var(--bg1); color:var(--grey2);
+  padding:7px 12px; border-radius:8px; font-size:13px; transition:.12s;
+}
+.tabbtn:hover{border-color:var(--bg4); color:var(--fg0);}
+.tabbtn:focus-visible{outline:2px solid var(--yellow); outline-offset:2px;}
+.tabbtn.active{background:var(--bg3); color:var(--yellow); border-color:var(--yellow);}
+.panel{display:none;}
+.panel.active{display:block; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.panel.active{animation:none;}}
+h2{font-size:17px; color:var(--aqua); border-left:3px solid var(--aqua); padding-left:10px; margin:30px 0 12px;}
+h3{font-size:15px; color:var(--orange); margin:22px 0 8px;}
+p{margin:10px 0;}
+code{background:var(--bg1); padding:1px 5px; border-radius:4px; font-size:.92em; color:var(--fg1);}
+pre.code{
+  background:var(--bg0); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px;
+  overflow-x:auto; font-size:13px; line-height:1.6; color:var(--fg0);
+}
+pre.code i{color:var(--grey); font-style:normal;}
+pre.code b{color:var(--yellow); font-weight:700;}
+pre.code u{color:var(--aqua); text-decoration:none;}
+pre.code b.bad{color:var(--red);}
+.anchor{
+  background:linear-gradient(135deg,var(--bg2),var(--bg1)); border:1px solid var(--yellow);
+  border-radius:12px; padding:18px 20px; margin:18px 0;
+}
+.anchor .big{font-size:17px; color:var(--yellow); font-weight:700;}
+.anchor .small{color:var(--grey2); font-size:13px; margin-top:6px;}
+.card{background:var(--bg1); border:1px solid var(--bg3); border-radius:10px; padding:14px 16px; margin:14px 0;}
+.card.warn{border-color:var(--red);}
+.card.good{border-color:var(--green);}
+.card.info{border-color:var(--blue);}
+.card .tag{font-size:12px; font-weight:700; letter-spacing:.06em;}
+.card.warn .tag{color:var(--red);}
+.card.good .tag{color:var(--green);}
+.card.info .tag{color:var(--blue);}
+table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.5px;}
+th,td{border:1px solid var(--bg3); padding:8px 10px; text-align:left; vertical-align:top;}
+th{background:var(--bg2); color:var(--fg1);}
+td{background:var(--bg1);}
+td.num,th.num{font-variant-numeric:tabular-nums;}
+.tablewrap{overflow-x:auto;}
+details{
+  background:var(--bg1); border:1px solid var(--bg3); border-radius:10px;
+  padding:10px 14px; margin:12px 0;
+}
+details[open]{border-color:var(--aqua);}
+summary{cursor:pointer; color:var(--yellow); font-weight:700;}
+summary:focus-visible{outline:2px solid var(--yellow); outline-offset:2px;}
+details .body{margin-top:10px;}
+.en{color:var(--blue);}
+.kbd{border:1px solid var(--bg4); border-bottom-width:2px; border-radius:5px; padding:0 6px; background:var(--bg2); font-size:.9em;}
+ul,ol{margin:8px 0; padding-left:22px;}
+li{margin:5px 0;}
+.footer{margin-top:40px; color:var(--grey); font-size:12.5px; border-top:1px solid var(--bg3); padding-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>🧮 量級反推除膜手冊 — 四個形狀 × 單位攜帶 × 錨點數字庫</h1>
+  <div class="sub">從 2026-07-30 量級 reps 實錄長出來的除膜工程。搭配 <code>docs/cost-model.md</code>(延遲/queue/併發轉折)與 <code>scratch/capacity_reps.md</code>(練題)。夜讀 ≤30 分鐘,8/5 taper 前再掃一次「錨點庫」分頁。</div>
+</header>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tabbtn active" data-t="t1">① 除膜診斷</button>
+  <button class="tabbtn" data-t="t2">② 單位攜帶與結帳</button>
+  <button class="tabbtn" data-t="t3">③ 形狀 1+2:容量與預算</button>
+  <button class="tabbtn" data-t="t4">④ 形狀 3+4:反解與 Little</button>
+  <button class="tabbtn" data-t="t5">⑤ 錨點數字庫</button>
+  <button class="tabbtn" data-t="t6">⑥ Self-quiz</button>
+</nav>
+
+<!-- ================= T1 ================= -->
+<section class="panel active" id="t1">
+
+<div class="anchor">
+  <div class="big">薄膜不是「公式沒背」——量級題根本沒有神祕公式。</div>
+  <div class="small">薄膜由三層組成,各有解藥:① 認不出題目是哪個<b>形狀</b>(本頁)② 算的過程<b>單位斷鏈</b>(分頁②)③ 缺<b>錨點事實</b>可代入(分頁⑤)。三層各自擊破,膜就沒了。</div>
+</div>
+
+<h2>四個形狀——所有容量題都是它們的換皮</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>聽到這種話</th><th>形狀</th><th>一行式</th><th>例子</th></tr>
+  <tr>
+    <td>「斷線 X 分鐘,資料放哪?」「backlog 會多大?」</td>
+    <td><b style="color:var(--yellow)">1. 容量</b></td>
+    <td class="num">量 = 速率 × 時間</td>
+    <td>R1 metrics agent、ring 尺寸</td>
+  </tr>
+  <tr>
+    <td>「N 個東西各要 Y,塞得進 Z 嗎?」</td>
+    <td><b style="color:var(--yellow)">2. 預算</b></td>
+    <td class="num">總量 = 單價 × 數量,跟預算比</td>
+    <td>R2 connection memory</td>
+  </tr>
+  <tr>
+    <td>「X 秒內必須偵測到/完成」→ 求參數</td>
+    <td><b style="color:var(--yellow)">3. 反解鏈</b></td>
+    <td class="num">把事件鏈畫上時間軸,令總和 ≤ SLA,解未知數</td>
+    <td>R3 prober 反推</td>
+  </tr>
+  <tr>
+    <td>「要幾個 worker?」「同時在飛幾個?」</td>
+    <td><b style="color:var(--yellow)">4. Little's law</b></td>
+    <td class="num">併發 = 到達率 × 停留時間</td>
+    <td>worker pool、in-flight 上限</td>
+  </tr>
+</table></div>
+
+<p>認形本身就是練出來的反射——聽到「斷線/災難撐多久」先想形 1;聽到「一人一份塞不塞得下」先想形 2;
+聽到「死線倒推」先想形 3;聽到「幾個工人/多深佇列」先想形 4。分頁⑥有認形快打。</p>
+
+<h2>上場 30 秒節奏</h2>
+
+<pre class="code">clarify 拿到數字 ──→ <b>認形</b>(上表)──→ <b>單位鏈</b>(2–4 步,每步帶單位)
+        ──→ <b>荒謬檢查</b>(反推日量 / 常識錨 / 餘裕%)──→ <b>一句裁決</b>收回設計</pre>
+
+<div class="card info">
+  <span class="tag">裁決句型(英文,收尾用)</span>
+  <p><span class="en">"That's ≈ 2 MB — trivially affordable, so I buffer everything within spec and the drop
+  policy only activates beyond the stated outage."</span><br>
+  <span class="en">"640 MB against a 512 MB budget — doesn't fit; the first thing I'd change is ___."</span><br>
+  數字 → 量級 → <b>設計動作</b>,三段一句話。沒有第三段,前兩段就是白算。</p>
+</div>
+
+<div class="card good">
+  <span class="tag">跟 clarify 的關係</span>
+  <p>clarify 五問裡的「速率/規模」就是在<b>餵這四個形狀</b>。問到數字卻不代入形狀=裝飾品;
+  反過來,認出形狀後發現缺哪個數字,就知道該補問什麼——形狀是 clarify 的目標函數。</p>
+</div>
+
+</section>
+
+<!-- ================= T2 ================= -->
+<section class="panel" id="t2">
+
+<h2>單位攜帶紀律(dimensional analysis)</h2>
+
+<div class="anchor">
+  <div class="big">每一步都把單位寫出來。單位不合,式子必錯——這是免費的型別檢查。</div>
+  <div class="small">數字傳播錯誤(抄錯數量級、bytes 當 KB、每 10s 當每 1s)靠「檢查答案」抓不乾淨,只有逐步攜帶單位才能在<b>發生的那一步</b>當場擋下。</div>
+</div>
+
+<pre class="code"><i>示範(R1 的正確帳):</i>
+2,000 counters × 32 B  = 64,000 B          <u>= 64 KB / 每 10 s</u>
+64 KB / 10 s           <u>= 6.4 KB/s</u>          <i>← rate,單位隨身</i>
+6.4 KB/s × 300 s       <u>= 1,920 KB ≈ 1.9 MB</u> <i>← 容量,單位收斂成純量才算完</i></pre>
+
+<h3>動筆前:抄題帳</h3>
+<p>先把題目所有數字抄成<b>一行帳(含單位與週期)</b>,再開始算:</p>
+<pre class="code">R1 帳:2,000 counters / <b>每 10 s</b> / 32 B / 60 s batch / 5 min outage</pre>
+<p>今天的三連錯(2,000→200、B→MB、10s→1s)全部發生在「沒抄帳、邊看題邊算」的時候。
+抄帳 15 秒,買到的是整條鏈的地基。</p>
+
+<h3>心算階梯</h3>
+<div class="tablewrap"><table>
+  <tr><th>法則</th><th>內容</th></tr>
+  <tr><td class="num">×1000 一級</td><td>B → KB → MB → GB → TB,每級三個零。寫成 10³ 走位,不要在腦裡數零。</td></tr>
+  <tr><td class="num">K × K = M</td><td>10³ × 10³ = 10⁶。同理 K × M = G、M × M = T。<br>例:50<b>K</b> 條 × 32 <b>K</b>B = 1,600 <b>M</b>B = 1.6 GB——兩步,不會錯。</td></tr>
+  <tr><td class="num">一天 ≈ 10⁵ s</td><td>86,400 秒,心算用 10⁵。「每秒 X」×10⁵ = 每天量,荒謬檢查的主力武器。</td></tr>
+</table></div>
+
+<h2>實錄案例:2026-07-30 R1(留著當疫苗)</h2>
+
+<div class="card warn">
+  <span class="tag">錯型一:單位滑格 → 1.8 GB(荒謬檢查抓得到)</span>
+  <p>正規化 2,000/10s → 200/s 沒問題,但 200 × 32 = 6,400 <b>B</b> 寫成了 6 <b>MB</b>——
+  一刀 ×1000。<b>這型荒謬檢查抓得到</b>:反推日量 = 6 MB/s × 10⁵ s ≈ 500 GB/day,
+  一個 metrics agent 一天半 TB?荒謬,回查。單位滑格永遠是「量級外」的錯,三招通殺。</p>
+</div>
+
+<div class="card warn">
+  <span class="tag">錯型二:掉零 → 160 KB(荒謬檢查抓不到)</span>
+  <p>換批次法算:60 s × 200/s = 12,000 筆/批,結果寫成 1,200——<b>掉一個零</b>,
+  再加一手粗捨入(38,400 → "32 KB"),得 160 KB。這數字看起來完全無害,
+  <b>荒謬檢查救不了它</b>——錯誤藏在合理量級之內。抓它只有兩招:
+  ① <b>逐步帶單位的帳本</b>(60 s × 200 筆/s,單位相乘時零就掉不了);
+  ② <b>兩條路線互驗</b>——rate 法(6.4 KB/s × 300 s ≈ 1.9 MB)與批次法(384 KB × 5 ≈ 1.9 MB)
+  必須殊途同歸,對不上就是有一條錯了。捨入紀律:保留兩位有效數字,免費。</p>
+</div>
+
+<h2>荒謬檢查三招</h2>
+
+<div class="tablewrap"><table>
+  <tr><th>招</th><th>做法</th><th>例</th></tr>
+  <tr><td>反推日量</td><td>把 rate ×10⁵ 變成每天量,問「這個系統一天生這麼多,合理嗎?」</td><td>6 MB/s → 500 GB/day → agent 級荒謬</td></tr>
+  <tr><td>常識錨</td><td>跟熟悉的實體比:一部電影 ~4 GB、一首 mp3 ~4 MB、一頁文字 ~2 KB</td><td>「計數器 buffer = 半部電影?」</td></tr>
+  <tr><td>餘裕 %</td><td>結果 ÷ 預算。&gt;80% 說 <span class="en">tight</span>,並講第一個要改的東西</td><td>1.6 / 4 GB = 40%,還要留 kernel 的份</td></tr>
+</table></div>
+
+<div class="card info">
+  <span class="tag">特例:量級讓題目消失</span>
+  <p>算出來小到「其實全存得下/根本不塞車」時,不是題目簡單,是<b>你的假設消滅了題目</b>。
+  當場講出來:<span class="en">"At this rate the whole outage fits in 2 MB — so the interesting case
+  must be a longer outage or a higher rate; which should I design for?"</span>
+  這句會把球打回面試官,而且是加分球。</p>
+</div>
+
+<h2>結帳表(每題四項,三缺一重寫)</h2>
+<pre class="code"><b>算式</b>(帶單位的鏈)→ <b>數字</b>(收斂後的量)→ <b>荒謬檢查</b>(三招選一,寫出來)→ <b>一句裁決</b>(數字→設計動作)</pre>
+
+</section>
+
+<!-- ================= T3 ================= -->
+<section class="panel" id="t3">
+
+<h2>形狀 1:容量 = 速率 × 時間</h2>
+<p>觸發詞:「斷線撐 X 分鐘」「consumer 卡住 Y ms」「backlog 會長多大」。時間是<b>災難時長</b>,速率是<b>進貨速度</b>。</p>
+
+<h3>R1 metrics agent 全解</h3>
+<pre class="code"><i>帳:2,000 counters / 每 10 s / 32 B / 60 s batch / 5 min outage</i>
+rate = 2,000 × 32 B / 10 s = 64 KB / 10 s <u>= 6.4 KB/s</u>
+容量 = 6.4 KB/s × 300 s <u>≈ 1.9 MB</u>(+ 常態在途一批 60 s ≈ 0.4 MB)
+荒謬 = 反推日量 ≈ 0.55 GB/day —— agent 級,合理 ✓
+<b>裁決 = "A 4 MB buffer rides out the 5-minute outage with headroom — within spec
+       nothing is dropped. The drop policy only activates beyond spec; and since
+       counters are cumulative, I don't even queue raw samples then — I keep the
+       latest value per counter (conflation) plus an overflow counter."</b></pre>
+
+<div class="card good">
+  <span class="tag">兩個高分件</span>
+  <p>① <b>policy 啟動點</b>:把「什麼時候開始丟」講成規格語言——「規格內零丟失,超規格才啟動」。
+  buffer 尺寸和 policy 因此互相咬合,不是兩句口號。<br>
+  ② <b>domain 觀察</b>:counter 是累計值,新值涵蓋舊值 → 降級路徑天生是 conflation(每 counter 留最新),
+  記憶體從 O(斷線時長) 塌縮成 O(counter 數) = 64 KB,跟時間脫鉤。</p>
+</div>
+
+<h3>同形換皮:ring 尺寸(卡 SP 的收尾句)</h3>
+<pre class="code">ring ≥ 進貨速率 × consumer 最長失聯時間
+    = 10 k samples/s × 1 ms(一次 log 的卡頓)= 10 筆 → 取 2 的冪 16/32</pre>
+
+<h2>形狀 2:總量 = 單價 × 數量,跟預算比</h2>
+<p>觸發詞:「每條連線要…」「N 個 client 各配…」「塞得進 X GB 嗎」。這形狀的主菜永遠是<b>荒謬/餘裕檢查</b>和「不夠時先改哪個」。</p>
+
+<h3>R2 connection memory 全解</h3>
+<pre class="code"><i>帳:50,000 conns / 16 KB read + 16 KB write = 32 KB each / 預算 4 GB</i>
+userspace = 32 KB × 50 K <u>= 1.6 GB</u>(K×K=M:32×50=1,600 M)
+餘裕      = 1.6 / 4 <u>= 40%</u> —— 但這只是「我的」份
+kernel 側 = 每條 socket 還有 kernel 自己的收/送 buffer(見下)
+<b>裁決 = "1.6 GB is only my userspace share. Mostly-idle it fits with headroom;
+       all-active with kernel autotuning it doesn't — first knob: clamp kernel
+       buffers (SO_RCVBUF/SO_SNDBUF) or allocate write buffers lazily.
+       I'd verify with `ss -m`."</b></pre>
+
+<div class="card info">
+  <span class="tag">kernel 為什麼一定有自己的 buffer(推得出來,不用背)</span>
+  <p>TCP 的三個職責,每個都需要 kernel 側記憶體:
+  ① <b>重傳底稿</b>——<code>write()</code> 返回 ≠ 對方收到,沒被 ACK 的 bytes 必須留著;
+  ② <b>收貨窗口</b>——封包在你沒 <code>read()</code> 時照樣到站(receive window 的實體);
+  ③ <b>亂序重組</b>——先到的 segment 等晚到的,等待期要有地方住。<br>
+  量級(可背可查):閒置 socket ~4 KB 結構本體;活躍時 rx 預設 ~85 KB、tx 預設 16 KB,
+  autotuning 可長到 MB 級。→ <b>活躍連線的 kernel 份跟你的 userspace 份同量級。</b></p>
+</div>
+
+<div class="card good">
+  <span class="tag">及格線 vs 加分線</span>
+  <p>及格 = 乘法對 + 餘裕判斷 + 「先改哪個」(lazy write buffer:大多數連線在發呆,寫 buffer 用到再給)。<br>
+  加分 = kernel 層的存在與量級 + 驗證工具(<code>ss -m</code>)。<b>別把加分項誤會成門檻</b>——
+  不知道 kernel 數字時的正確動作在分頁⑤的 protocol。</p>
+</div>
+
+</section>
+
+<!-- ================= T4 ================= -->
+<section class="panel" id="t4">
+
+<h2>形狀 3:deadline 反解鏈</h2>
+<p>觸發詞:「必須在 X 秒內偵測到/回應/收斂」,然後給你幾個機制參數求另一個。
+唯一步驟:<b>把最壞情況的事件鏈畫上時間軸</b>,寫成不等式,解未知數。</p>
+
+<h3>R3 prober 的時間軸(骨架)</h3>
+<pre class="code">t=0    探測成功 ✓ ── 節點<b class="bad">死在這之後一瞬</b>(最壞起點)
+t=T    探測 #1 發出 ──(等滿 timeout 1 s)──✗ 第 1 次失敗
+t=2T   探測 #2 ──✗
+t=3T   探測 #3 ──✗ ← 第 3 次失敗<b>確定於 t = 3T + 1s</b>
+約束:3T + 1 ≤ 20   → 解 T</pre>
+
+<div class="card info">
+  <span class="tag">模型假設要出聲</span>
+  <p>「探測按週期 T 獨立發射」給 <code>N·T + timeout ≤ SLA</code>;
+  「上一發 timeout 完才發下一發」則是 <code>N·(T + timeout) ≤ SLA</code>,更保守。
+  兩種都對——<b>分數在「講出你選了哪個假設」</b>,不在選哪個。取整數時往下取,把零頭留給排程抖動。</p>
+</div>
+
+<details>
+  <summary>⚠ R3 完整數字——自己寫完 R3 才開</summary>
+  <div class="body">
+  <pre class="code">max interval:3T + 1 ≤ 20 → T ≤ 6.3 s → <u>取 5–6 s 留餘裕</u>(保守模型:3(T+1) ≤ 20 → T ≤ 5.6)
+probes/s   :500 targets / 5 s <u>= 100 probes/s</u>
+worker pool:Little's law,rate × 最壞佔用 = 100/s × 1 s <u>= 100 workers</u>
+            <i>平時:100/s × ~20 ms = 2 個在忙——pool 是為「機房斷網、全部吃滿 timeout」
+            那一刻配的,不是為平均值。講出這句才算答完。</i></pre>
+  </div>
+</details>
+
+<h2>形狀 4:Little's law——併發 = 到達率 × 停留時間</h2>
+
+<div class="anchor">
+  <div class="big">L = λ × W:每秒來 λ 件、每件停留 W 秒 → 系統裡平均同時有 λW 件。</div>
+  <div class="small">結帳隊直覺:每秒進店 2 人、每人待 3 分鐘 → 店裡平均 360 人?不對,是 2×180=360——單位先對齊(人/s × s)再乘。它就是「同時在飛多少」的萬用公式。</div>
+</div>
+
+<div class="tablewrap"><table>
+  <tr><th>要算什麼</th><th>λ(到達率)</th><th>W(停留)</th><th>答案形狀</th></tr>
+  <tr><td>worker pool</td><td>任務到達率</td><td>單任務佔用(<b>用最壞情況</b>:全 timeout)</td><td class="num">pool = λ × W_worst</td></tr>
+  <tr><td>in-flight 請求上限</td><td>發射速率</td><td>RTT</td><td class="num">窗口 = λ × RTT</td></tr>
+  <tr><td>佇列深度</td><td>進貨速率</td><td>consumer 卡頓時長</td><td class="num">= 形狀 1 的 ring 尺寸——同一件事</td></tr>
+</table></div>
+
+<div class="card good">
+  <span class="tag">為什麼「最壞情況」是關鍵字</span>
+  <p>平均值算出來的 pool 在正常日子夠用,然後在<b>相關性故障</b>(機房斷網→所有探測同時吃滿 timeout)
+  那天集體排隊。為風暴配 pool、為平均配吞吐——講得出這個區別,這題就是你的。</p>
+</div>
+
+</section>
+
+<!-- ================= T5 ================= -->
+<section class="panel" id="t5">
+
+<h2>錨點數字庫——背這一張就夠(對照 docs/cost-model.md)</h2>
+
+<h3>時間錨</h3>
+<div class="tablewrap"><table>
+  <tr><th>錨</th><th class="num">值</th><th>用途</th></tr>
+  <tr><td>一天</td><td class="num">86,400 s ≈ 10⁵ s</td><td>反推日量(荒謬檢查主力)</td></tr>
+  <tr><td>一年</td><td class="num">≈ 3 × 10⁷ s</td><td>retention 估算</td></tr>
+</table></div>
+
+<h3>吞吐錨</h3>
+<div class="tablewrap"><table>
+  <tr><th>錨</th><th class="num">值</th><th>備註</th></tr>
+  <tr><td>1M events/s × 16 B</td><td class="num">16 MB/s ≈ 1.4 TB/day</td><td>telemetry 的標準量級句</td></tr>
+  <tr><td>1 Gbps</td><td class="num">≈ 125 MB/s</td><td>bit 和 byte 差 8 倍,別在這翻車</td></tr>
+  <tr><td>NVMe 順序寫</td><td class="num">GB/s 級</td><td>disk 不再自動 = 慢</td></tr>
+</table></div>
+
+<h3>每連線記憶體錨</h3>
+<div class="tablewrap"><table>
+  <tr><th>層</th><th class="num">量級</th><th>備註</th></tr>
+  <tr><td>kernel socket 結構(閒置)</td><td class="num">~4 KB</td><td>五萬條閒置 ≈ 0.2 GB</td></tr>
+  <tr><td>kernel rx buffer(活躍)</td><td class="num">預設 ~85 KB,可自動長到 MB 級</td><td><code>tcp_rmem</code>;鉗制用 <code>SO_RCVBUF</code></td></tr>
+  <tr><td>kernel tx buffer(活躍)</td><td class="num">預設 16 KB,可長到 MB 級</td><td><code>tcp_wmem</code>;重傳底稿住這</td></tr>
+  <tr><td>userspace buffer</td><td class="num">你自己定的</td><td>R2 的 32 KB 就是這層</td></tr>
+  <tr><td>tokio task</td><td class="num">KB 級</td><td>thread 是 MB 級(stack)——task-per-conn 便宜的原因</td></tr>
+</table></div>
+
+<h3>大小常識錨(荒謬檢查用)</h3>
+<div class="tablewrap"><table>
+  <tr><th>實體</th><th class="num">量級</th></tr>
+  <tr><td>一頁純文字</td><td class="num">~2 KB</td></tr>
+  <tr><td>一張照片 / 一首 mp3</td><td class="num">~2–5 MB</td></tr>
+  <tr><td>一部電影</td><td class="num">~4 GB</td></tr>
+  <tr><td>L1 / L2 / L3 cache</td><td class="num">32 KB / 256 KB–1 MB / 數十 MB</td></tr>
+  <tr><td>伺服器 RAM</td><td class="num">數十~數百 GB</td></tr>
+</table></div>
+
+<h2>沒有這個數字時怎麼辦——三步 protocol</h2>
+
+<div class="anchor">
+  <div class="big">職責推存在 → 同量級假設 → 宣告 + 驗證工具。</div>
+  <div class="small">面試允許你不知道數字;不允許你不知道「這裡有成本」,更不允許你裝知道。</div>
+</div>
+
+<ol>
+  <li><b>從職責推出「這裡一定有成本」</b>:不用背 sysctl,只要知道元件的工作。
+  TCP 要重傳 ⇒ kernel 一定留著沒 ACK 的 bytes ⇒ 一定有 kernel buffer。
+  epoll 要記 interest ⇒ 每個 fd 一定有 kernel 記錄。</li>
+  <li><b>同量級假設</b>:估不出精確值,就跟已知的同類比:「kernel 的份跟我 userspace 的份同量級」。</li>
+  <li><b>宣告 + 工具</b>:<span class="en">"I don't know the kernel defaults offhand — I'll assume the same
+  order as my userspace buffers and flag it for verification with <code>ss -m</code>."</span>
+  類似句備著:<code>/proc/net/sockstat</code>、<code>perf</code>、<code>htop</code>。宣告不確定性是加分句,不是丟臉句。</li>
+</ol>
+
+</section>
+
+<!-- ================= T6 ================= -->
+<section class="panel" id="t6">
+
+<h2>認形快打——先說形狀,再開答案</h2>
+
+<details>
+  <summary>Q1 <span class="en">An agent writes 500 log lines/s, 200 B each; the uplink can be down for
+  10 minutes. Size the buffer.</span></summary>
+  <div class="body"><pre class="code"><b>形狀 1(容量)</b>
+rate = 500 × 200 B <u>= 100 KB/s</u>
+容量 = 100 KB/s × 600 s <u>= 60 MB</u>
+荒謬 = 日量 100 KB/s × 10⁵ ≈ 10 GB/day —— log agent,偏高但合理;60 MB 對 RAM 是毛毛雨
+裁決 = <span class="en">"64 MB ring buffer rides out the outage; drop-oldest + counter beyond that."</span></pre></div>
+</details>
+
+<details>
+  <summary>Q2 <span class="en">10,000 connections each keep 64 KB of session state. We have 512 MB.
+  Fit?</span></summary>
+  <div class="body"><pre class="code"><b>形狀 2(預算)</b>
+總量 = 10 K × 64 KB <u>= 640 MB</u>(K×K=M)
+餘裕 = 640 / 512 <u>&gt; 100%</u> —— <b class="bad">不夠</b>
+裁決 = <span class="en">"Doesn't fit. First: is all 64 KB hot? Split state into a hot core
+(&lt;8 KB) and spill the rest — or shard across two boxes."</span></pre></div>
+</details>
+
+<details>
+  <summary>Q3 <span class="en">Flag a dead peer within 5 s; debounce N=2, probe timeout 500 ms.
+  Max probe interval?</span></summary>
+  <div class="body"><pre class="code"><b>形狀 3(反解鏈)</b>
+鏈:死在剛探測完 → #1 失敗於 T+0.5 → #2 失敗於 2T+0.5
+約束:2T + 0.5 ≤ 5 → T ≤ 2.25 <u>→ 取 2 s</u>
+裁決 = <span class="en">"Probe every 2 s; worst-case detection 4.5 s, inside the 5 s SLA."</span></pre></div>
+</details>
+
+<details>
+  <summary>Q4 <span class="en">Probes arrive at 400/s; each holds a worker 25 ms on average, 1 s worst
+  case. Pool size?</span></summary>
+  <div class="body"><pre class="code"><b>形狀 4(Little)</b>
+平時 = 400/s × 0.025 s <u>= 10 workers</u>
+風暴 = 400/s × 1 s <u>= 400 workers</u>(全部 timeout 的那一天)
+裁決 = <span class="en">"10 covers steady state; I size for the storm — either 400 workers,
+or cap concurrency and let probes queue, accepting slower detection during outages."</span>
+<i>← 兩個都對,分數在「說出你選了哪個、犧牲了什麼」。</i></pre></div>
+</details>
+
+<h2>計算加練</h2>
+
+<details>
+  <summary>Q5 爆發 1M samples/s、consumer 一次 GC 卡最久 3 ms——ring 至少多大?</summary>
+  <div class="body"><pre class="code"><b>形狀 1 微觀版(= 卡 SP 的 ring 句)</b>
+1 M/s × 0.003 s <u>= 3,000 筆</u> → 取 2 的冪 <u>4,096</u>
+裁決 = <span class="en">"4096 slots absorbs a 3 ms consumer stall at 1M/s; beyond that,
+drop-newest + counter."</span></pre></div>
+</details>
+
+<details>
+  <summary>Q6 有人說「這個 metrics buffer 要 1.8 GB」——用荒謬檢查判他生死</summary>
+  <div class="body"><pre class="code">反推:1.8 GB / 300 s <u>= 6 MB/s</u> → 日量 6 MB/s × 10⁵ <u>≈ 600 GB/day</u>
+一個 metrics agent 一天半 TB → <b class="bad">荒謬,回查式子</b>
+(它就是 7/30 第一輪的 R1。三招裡「反推日量」最快見血。)</pre></div>
+</details>
+
+<div class="card good">
+  <span class="tag">收尾自檢(每題問自己四句)</span>
+  <p>單位每一步都在嗎?荒謬檢查寫出來了嗎(不是心裡想)?裁決句有「設計動作」那一段嗎?
+  這題是四形狀裡的哪一形——下次聽到同類觸發詞,能不能 3 秒內喊出形狀?</p>
+</div>
+
+</section>
+
+<div class="footer">
+  量級反推除膜手冊 · 2026-07-30 · 搭配 docs/cost-model.md(延遲與轉折點)· 練題在 scratch/capacity_reps.md ·
+  形狀 3 的 R3 數字摺疊區「寫完才開」
+</div>
+
+</div>
+<script>
+const bar=document.getElementById('tabbar');
+bar.addEventListener('click',e=>{
+  const b=e.target.closest('.tabbtn'); if(!b) return;
+  document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById(b.dataset.t).classList.add('active');
+  window.scrollTo({top:0});
+});
+</script>
+</body>
+</html>
