@@ -153,3 +153,10 @@ sequence barrier)、tokio 的 mpsc(async 世界的對應)。
 掛牌握手 stepper:fence 與 re-check 兩個開關、四種組合逐步走交錯,
 拔掉 fence 看 consumer 帶著貨睡死(store buffer 的內容畫給你看);
 扇入隔離:按下爆源,看 dropped 只長在它自己的 ring 上。
+
+## spec-heavy 姊妹版(R2 sim 轉製層)
+
+本模組的兩個面試化變體:`concurrency/isr_pipeline`(sim j——ISR 三禁 + sticky-flag
+喚醒 + shutdown drain,⚠ **7/31 計時場後才開**)、`concurrency/percpu_fanin`
+(sim k——扇入節的 spec-heavy 版:per-core SPSC + budget 公平,⚠ **8/1 場後才開**)。
+場前複讀本頁是安全的;那兩個檔(含 drills 同名檔)是解法,別提前開。

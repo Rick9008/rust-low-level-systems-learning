@@ -198,6 +198,15 @@ re-checked predicate — spurious and early wakeups are harmless by construction
 
 ---
 
+## sim i–n(R2 spec-heavy 題型)——定界底稿不在本檔
+
+計時場**後**才讀:`examples/sol_sim_*.rs` 檔頭(30 秒定界句 + 取捨句的出處,
+8/5 taper「六題定界唸一輪」就是唸它)與 `reference` 對應模組檔頭(5-pillar 詳解;
+模組對照表見 [`README.md`](README.md) 進度狀態表下方)。
+場前唯一安全的前導:`html_p/r2-onsite-visual-guide.html` 的概念前導卡(刻意不含解法)。
+
+---
+
 **收尾自檢(每題講完問自己)**:Big-O 有出聲嗎?有講 ≥2 個沒選的解法嗎?
 傷疤有講成 "I've been bitten by ___, so I ___" 嗎?——那是 finding-your-own-bug
 訊號的口述版。

@@ -39,7 +39,21 @@ Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → �
 
 「檔內現況」照掃描時點(重打後自行更新);「已跑」出自衝刺期紀錄(`../SCHEDULE.md`,已結案)。
 sim 排程對照 [`docs/interviews/README.md`](../docs/interviews/README.md) 的逐日計畫。
-**sim j–n 的解答與挖空版已入庫 `reference`/`drills`(見各檔防雷 banner)——計時場前一樣不准開。**
+**sim 六題的解答本與挖空版已入庫 `reference`/`drills`(2026-07-30)——計時場前一樣不准開**
+(各檔頂有防雷 banner)。跑完該題計時場後,複打走填空層:
+
+| sim | reference(答案本)/ drills(填空)模組 | 開放時點 |
+|---|---|---|
+| i | `io/dma_dispatcher` | 已開(sol 7/29 已讀) |
+| j | `concurrency/isr_pipeline` | 7/31 場後 |
+| k | `concurrency/percpu_fanin` | 8/1 場後 |
+| l | `io/mmio_cmdq` | 8/2 場後 |
+| m | `io/engine_watchdog` | 8/8 場後(8/3 認題輪不算開牌) |
+| n | `concurrency/job_scheduler` | 8/9 場後 |
+
+複打流程:`cargo test -p drills <模組名> -- --include-ignored` 看紅 → 讀函式上的 spec
+註解填 `todo!()` → 拔 `#[ignore]` 轉綠;卡住才 diff `reference` 同名模組
+(檔頭 5-pillar 詳解與 Dry-Run 手 trace 也留到那時再讀)。
 
 ## 規則
 

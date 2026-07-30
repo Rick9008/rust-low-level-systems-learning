@@ -5,7 +5,7 @@
 clarify 卡的五問也用英文寫。開場句不變:
 _"Before I start, let me make sure I understand the constraints."_
 
-> **sim i–m(R2 onsite 題型)的英文題幹不在本檔**,在
+> **sim i–n(R2 onsite 題型)的英文題幹不在本檔**,在
 > [`docs/interviews/sim-problems.md`](../docs/interviews/sim-problems.md)——那個題型是
 > live clarify(Claude 當面試官),題幹+隱藏 spec 分家,規則見該檔開頭。
 

@@ -23,6 +23,9 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 練法:題本 [sim-problems.md](sim-problems.md)——每題 **Phase 1 開場給、Phase 2 面試官驗收後才放**(照 R1 的漸進節奏);面試官手冊 `sim-interviewer-guide.md` **跑題中不准開**。clarify 用英文打字來回(句庫:[clarify-phrasebook-en.md](clarify-phrasebook-en.md),含聽力修復句;每晚出聲場挑一類唸 3 遍)→ 計時 45m → review 20m。
 
 **Harness 已全部入庫(跨機器直接執行)**:`rehearsals/src/sim_{i,j,k,l,m,n}_*.rs`——**介面與 requirement 一律英文**(面試全英文,讀英文就是練習;中文對照:[sim-problems-zh.md](sim-problems-zh.md))。上半「題目給的介面」可讀,**mock/SimBus 實作區與 `rehearsals/tests/sim_*_test.rs` 跑題前不准讀**(oracle 會在你違反協定時當場 panic 開燈)。執行:作答區填實作+檔尾寫自己的測試 → `cargo test -p rehearsals sim_<x>` → 跑完拔參考測試的 `#[ignore]` 對邊界 → 開 sol 對照。**六份 sol 全備**(`rehearsals/examples/sol_sim_*.rs`,寫完才開;19/19 參考測試已用解答驗過):i 的兼 7/29 閱讀材料(`cargo run -p rehearsals --example sol_sim_i_dma`),m/n 檔頭 8/4 預讀。
+**轉製層已入庫(2026-07-30)**:六題各有 reference 教學版(5-pillar 檔頭 + mock + 手 trace 測試)
++ drills 填空版(挖核心轉移函式),對照表與複打流程在 `rehearsals/README.md` 進度狀態表下方;
+各檔頂防雷 banner 標開放日期——**該題計時場跑完才開**,跑完把它轉入 drills 複打當固化練習。
 
 **圖解作戰本**:`html_p/r2-onsite-visual-guide.html`(claude.ai 鏡像在 artifacts gallery,index 已收卡)——題型解剖(API 三堆分類法 + reactor 五步骨架)、sim i 三張表互動 stepper(pipeline 分水嶺劇本)、sim j–n 概念前導與 clarify 種子(刻意不含解法,跑題前讀是安全的)、英文對白道場五場景(雙語,R1 洞①的處方)。用法:各 sim 開跑前 10 分鐘讀對應前導卡;對白每晚出聲場挑一景唸 3 遍。
 

@@ -68,6 +68,15 @@ lock-free 升級地圖見 `html_p/runtime-lockfree-upgrade-map.html`。
 
 優先級練完 → `rehearsals/` 計時彩排(見下方「rehearsals 使用法」)。
 
+### 【R2 sim 轉製層 — 跑完計時場才開】
+
+sim i–n(R2 onsite 模擬題,見 `rehearsals/`)各有一份 reference 教學版 + drills
+填空版:`io/dma_dispatcher`(i)、`concurrency/isr_pipeline`(j)、
+`concurrency/percpu_fanin`(k)、`io/mmio_cmdq`(l)、`io/engine_watchdog`(m)、
+`concurrency/job_scheduler`(n)。**這一層不進上面的閱讀順序**——它是各題計時場
+之後的複盤與複打材料,檔頂防雷 banner 標開放日期;對照表與複打流程見
+[`rehearsals/README.md`](rehearsals/README.md) 進度狀態表下方。
+
 ### 【deep-dive 材料 — 不會考,讀懂即可】
 
 原因如上:epoll 在 pad 上「可行但不划算」,不會是題目要求。
@@ -119,6 +128,8 @@ thread-safe 的七站光譜)、[`docs/rust-five-axis.md`](docs/rust-five-axis.md
 上面的順序是把 stage 順序按面試優先級重排過的版本。)
 
 每個主題在 `docs/` 有一份設計取捨文件(非 code 重複),各模組 doc 有交叉連結。
+(sim 轉製層例外:取捨寫在模組檔頭的 5-pillar doc,題幹在
+`docs/interviews/sim-problems.md`,不另開 docs 頁。)
 
 ## 互動教材
 
@@ -207,6 +218,7 @@ cargo run -p reference --example loom_vs_stress    # 見下節
 | `ring_buffer` `lru` `dsu` `graph` `trie` `tree` | systems-level data structures:index-based、O(1) 設計 |
 | `iter_mutate` `inplace_leetcode` | 借用規則下的邊迭代邊改:六形狀、寫指標、O(1) space in-place |
 | `fd_registry` | event registry(JD sleeper):fd-dense slots + generation 防 stale dispatch |
+| `dma_dispatcher` `isr_pipeline` `percpu_fanin` `mmio_cmdq` `engine_watchdog` `job_scheduler` | R2 sim 轉製層:bus 驅動的 event-loop state machine(owner 路由、時間軸、DAG 閘)——⚠ 對應計時場後才開 |
 
 邊寫邊講的數字底稿:[`docs/cost-model.md`](docs/cost-model.md)
 (ns/µs 數量級、queue 三型、poll vs epoll、並發模型轉折點)。
@@ -253,6 +265,9 @@ epoll 綁定已提供,只從頭寫 accept/read/write 迴圈。
 題 e–h(event registry / telemetry aggregator / bounded channel / timer queue)
 對應題型預測的 Q4–Q7,預設做 recognition 練習(讀題 → 定界宣言 → 口述 arc);
 題 e2(fd_registry,generation 防 stale event)是 JD 點名的 sleeper,建議完整跑。
+sim i–n(R2 onsite 準備題,R1 實測題型的 spec-heavy 模擬)也在同一個 crate:
+題幹(英文)在 [`docs/interviews/sim-problems.md`](docs/interviews/sim-problems.md),
+進度與計時場日程見 rehearsals README 的狀態表。
 題目在 [`rehearsals/README.md`](rehearsals/README.md),面試 prompt 風格、不給提示;
 **彩排時題幹讀英文版 [`rehearsals/PROMPTS_EN.md`](rehearsals/PROMPTS_EN.md)**
 (面試全程英文 I/O,中文版當對照)。

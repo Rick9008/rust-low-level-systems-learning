@@ -26,6 +26,10 @@
    - **算出來的量級有沒有讓題目消失?** 如果數字小到「其實存得下 / 根本不會塞車」,
      那是你的假設消滅了題目,不是題目簡單。當場講出來(見 playbook Q2)。
 
+> **sim i–n(R2 題型)不走本卡組**:那個題型的 clarify 是 live 來回
+> (題幹 `docs/interviews/sim-problems.md` + 句庫 `docs/interviews/clarify-phrasebook-en.md`,
+> Claude 當面試官),場前只准讀作戰本的概念前導卡。本卡組是 a–h 域的 5 分鐘獨練。
+
 ---
 
 ## 卡 1:telemetry hub
