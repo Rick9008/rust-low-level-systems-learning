@@ -51,8 +51,8 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 | 日期 | 白天(公司,~90m 上限) | 晚上(出聲) |
 |---|---|---|
 | 7/29 三 | **休息日(輕活)**:讀 `sol_sim_i_dma.rs`(三張表 + Dry-Run 紙上走) | deep dive / culture fit 英文稿起草(打字,輕;材料先貼給 Claude) |
-| 7/30 四 | i-lite:R1 修洞重做 30m(DMA 域考過,不值全場;直接寫 pipeline+cancel 版關掉 R1 的洞,不跑 clarify 全套)+ 卡 SP | culture fit 自介稿 60–90s + why-us(接 7/29 草稿) |
-| 7/31 五 | 🔴 j:ISR → bottom-half(= signal_pipeline 的 spec-heavy 版)+ signal_pipeline 頁複讀 30m | deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
+| 7/30 四 | ✅ 實績:i-lite 40m(R1 兩洞親手關,drill 6/6 綠)+ 卡 SP(超時但值;批改入 spec-cards.md;兩課:freshness vs completeness 是 clarify 問題、API 層/primitive 層分層)+ 量級 reps v3 批改入檔(R1 掉零重寫/R2 補一行/R3 忘 timeout;荒謬檢查 0/3)+ 除膜手冊上線 `html_p/capacity-four-shapes.html`(四形狀+單位攜帶+名詞卡+錨點庫) | 唸稿:自介 60–90s + why-us;**加開 live spec-heavy 一場**(Claude 出全新題、當面試官;不碰 j–n 域;新規矩:**開錶前圈名詞、全部問完才計時**)+ 補收 reps 殘帳(R1 數字鏈/R3 重算,5m) |
+| 7/31 五 | 🔴 j:ISR → bottom-half(開跑前 10 分鐘讀作戰本 j 前導卡即可;原排的 signal_pipeline 頁複讀已被 7/30 卡 SP 深討論覆蓋,砍)| deep dive 口述 #1:專案一(問題→限制→設計→trade-off→數字) |
 | 8/1 六 | 🔴 k:多核 per-CPU fan-in + 卡 FP(週末塊) | culture fit 唸 #1 + 模擬追問 |
 | 8/2 日 | 🔴 l:MMIO command queue(HW-L 卡當 10m 前導)+ culture fit 三條故事(7/26)改英文稿 | deep dive 口述 #2 |
 | 8/3 一 | **sim m+n 認題輪**(7/29 加,用戶點名「上場前不能完全沒看過」:各 ~20m,Phase 1 冷讀 → ≥3 clarify 問 → 30 秒英文定界出聲 → state 表手寫;**m 加 15m 非計時骨架快寫**——R1 直系延伸、#2 命中率最高;全程不開 oracle/sol/參考測試,8/8–8/9 計時場保留改當執行練)+ 骨架默寫抽查 15m;認題卡 FR/TA/TQ 降選配讓位 | (選)clarify 句庫一類唸 3 遍 |
