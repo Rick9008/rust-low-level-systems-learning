@@ -14,3 +14,7 @@ pub mod tcp_echo;
 
 // stage 7:橋接軟硬體(binary protocol + framing + 雙 server)
 pub mod hw_bridge;
+
+// R2 sim 系列教學版:bus 驅動的 event-loop state machine
+// (彩排 harness 在 rehearsals/src/sim_*.rs;⚠ 對應計時場跑完前不要開 j–n 的檔)
+pub mod dma_dispatcher;
