@@ -17,6 +17,30 @@ Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → �
 ——想全程寫也照 protocol 跑,骨架與參考測試都在。
 **題 e2(fd_registry)是 JD 點名的 sleeper**,值得完整 45 分鐘跑一次。
 
+## 進度狀態表(2026-07-30 掃描)
+
+| 題 | 檔案 | 定位 | 檔內現況(todo!/自測) | 計時場排程 | 洞筆記 |
+|---|---|---|---|---|---|
+| a | ring_drop_oldest | 全場主菜 | 9 todo!/3 自測 | 已跑(衝刺期) | |
+| b | pool_graceful_shutdown | 全場主菜 | 2 todo!/3 自測 | 已跑(衝刺期) | |
+| c | frame_parser_heartbeat | 全場主菜 | 全填/2 自測 | 已跑(衝刺期) | |
+| d | tokio_frame_server | 全場主菜(tokio) | 1 todo!/0 自測 | 已跑?(檔內無自測,重打時自查) | |
+| e | event_registry | 認題 Q4 | 1 todo!/1 自測 | recognition | |
+| e2 | fd_registry | JD sleeper,值得全場 | 1 todo!/3 自測 | 已跑(衝刺期) | |
+| f | telemetry_aggregator | 認題 Q5 | 1 todo!/2 自測 | recognition | |
+| g | bounded_channel | 認題 Q6 | 4 todo!/2 自測 | recognition | |
+| h | timer_queue | 認題 Q7 | 6 todo!/1 自測 | recognition | |
+| sim i | sim_i_dma | R2 模擬(i-lite 30m) | 骨架 | 7/30(sol 已開) | |
+| sim j | sim_j_isr | R2 模擬全場 | 骨架 | 7/31 | |
+| sim k | sim_k_fanin | R2 模擬全場 | 骨架 | 8/1 | |
+| sim l | sim_l_mmio | R2 模擬全場 | 骨架 | 8/2 | |
+| sim m | sim_m_watchdog | R2 模擬(認題 8/3→全場 8/8) | 骨架 | 8/3 + 8/8 | |
+| sim n | sim_n_scheduler | R2 模擬(認題 8/3→全場 8/9) | 骨架 | 8/3 + 8/9 | |
+
+「檔內現況」照掃描時點(重打後自行更新);「已跑」出自衝刺期紀錄(`../SCHEDULE.md`,已結案)。
+sim 排程對照 [`docs/interviews/README.md`](../docs/interviews/README.md) 的逐日計畫。
+**sim j–n 的解答與挖空版已入庫 `reference`/`drills`(見各檔防雷 banner)——計時場前一樣不准開。**
+
 ## 規則
 
 1. **計時 45 分鐘一題,照下方〈45 分鐘 protocol〉切段。** 時間到就停筆,誠實記錄做到哪。
