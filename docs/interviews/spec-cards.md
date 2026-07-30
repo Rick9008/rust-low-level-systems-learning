@@ -21,6 +21,16 @@ fn sleep_until_woken();                   // worker side
 fn log(s: Sample);                        // slow; worker side only
 ```
 
+> **批改 2026-07-30(Claude)**:clarify 走語意向(watermark / ISR 等待規則 / logging thread
+> 形狀 / try_push 去向)✓;靠腦內試寫抓到 API 缺 pop ✓——最好的找洞方式。
+> 三洞:① full policy 三度選 drop-oldest——ISR 側只有 try_push,這套 API **做不出**
+> drop-oldest,可實作政策 = drop-newest + dropped 計數;② 面試官口頭需求「丟要留帳」
+> 沒進最終設計——**口頭答覆也是 spec**,API 沒欄位就宣告缺件(同 ring_try_pop 的處理);
+> ③ worker 側多開 thread+queue = scope creep(當場自己收回 ✓)。
+> 定界宣言的 assume 槽空白(用法:把未經確認的預設講出口給面試官否決的機會);
+> state 表「ISR has a queue」誤——ISR 零持有,手上只有 producer 端 + 計數。
+> 醒睡紀律有摸到一半(「醒來先撈資料」有,「睡前確認空」沒說)。
+
 ## Card FP — Frame parser with heartbeat
 
 **Context.** A device streams bytes over a link: length-prefixed frames, and it is expected to send a heartbeat frame periodically. Detect link death. Implement `poll_loop()`.
