@@ -21,7 +21,16 @@ fn sleep_until_woken();                   // worker side
 fn log(s: Sample);                        // slow; worker side only
 ```
 
-> **批改 2026-07-30(Claude)**:clarify 走語意向(watermark / ISR 等待規則 / logging thread
+> **批改 2026-07-31(重做,15:56–16:15 ≈ 19m,錶內)**:五驗收 ①✓ ②✓ ③✗ ④✓ ⑤⚠,過線。
+> ✓ 洞①關(沒提 drop-oldest;Full → 丟新+計數,與 try_push-only 一致;freshness 問題主動問);
+> ✓ 洞②關(口頭「丟要留帳」→ atomic counter 活到定界);✓ 缺 pop 直接從 API 面抓到(上次靠試寫);
+> ✓ assume 槽首現(OOM 假設出聲)——但用錯對象:assume 蓋環境未知,不蓋自己造的洞;
+> ✗ 洞③換皮復發:VecDeque 無界暫存=把有界管線改無界,過載走向 OOM 而非受控丟棄;
+>   「緊了從 vecdeque 丟」是第二丟點沒接計數。修法:上界,或不開。
+> ⚠ 持有權:counter 掛 ISR 欄下;正解=shared static,ISR 只寫、零持有。
+> 醒睡:recheck-before-sleep 補上(7/30 缺的半);wake 語意(sticky/合併)沒問——recheck 正確性懸在此。
+> ISR 細節:Err(Full) 重試兩次=中斷內空轉+FIFO 樣本擱淺沒入帳;正確=計數後繼續抽乾。
+> 下次釘子:③的變形要認得(任何「再加一層 buffer/thread/map」先問:spec 的有界性還在嗎)+ 喚醒語意進 clarify 必問清單。
 > 形狀 / try_push 去向)✓;靠腦內試寫抓到 API 缺 pop ✓——最好的找洞方式。
 > 三洞:① full policy 三度選 drop-oldest——ISR 側只有 try_push,這套 API **做不出**
 > drop-oldest,可實作政策 = drop-newest + dropped 計數;② 面試官口頭需求「丟要留帳」
