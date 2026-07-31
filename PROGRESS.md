@@ -44,6 +44,8 @@ R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07
 | 11 | sharded_map | ☐ | ☐ | ☐ ★ | 降級:讀 + 口述(跨 shard 鎖序用講的) |
 | 12 | signal_pipeline | ☑ 2026-07-23(深夜) | ☑ 3/3 綠 2026-07-24 | ☐ ★ | **讀 = 深夜追問串打穿**(五睡法/throttling≠鬧鈴/futex-epoll 分界=等記憶體位址 vs 等 fd/喚醒鏈終點=IRQ/acq-rel 是條件句→「最後一眼」原則/SB 兩 idiom+fence 四向牆/x86 映射 xchg-mov-mfence/shutdown 三語意;卡在 `scratch/hepta_20260724_fence_sleep_wake.md`)。drill **2026-07-24 收尾 3/3 綠、0 ignored**(Some 路徑摘牌:early return 別跳過 store(false)=每筆 send 白付 unpark;+ 拔 conservation `#[ignore]`)。litmus+扇入讀口述 → 併 7/25 晚口述錄音塊(v9.2);challenge post-TPS |
 | 13 | endian_pack | — | ☑ **2026-07-26**(6/6 綠、0 ignored、clippy 淨;實 ~35–40m 含岔題,照 v9 規則記實際) | — | 7/23 凌晨新增:BE/LE 讀寫+手動 shift+i16 符號擴展+token pack/unpack(e2 mask 傷疤靶場)+混合 header,8 洞 6 測;c 題 framer 與 e2 token 的共用肌肉,drill-only。⚠ `gen` 是 edition 2024 保留字 |
+| 14 | spin_lock | ☐ | ☑ **2026-08-01(凌晨)** 3/3 綠 | ☐ ★(8/6 後固化) | 7/31 晚新增教材(TTAS+RAII guard)。drill 四洞(lock/try_lock/DerefMut/Drop)+紙上五問入檔;review 兩洞當場修(commit bf98da9):①try_lock 誤用 `compare_exchange_weak`——單發假失敗=作偽證(None≠被佔用),改 strong ②成功側 AcqRel 過度訂購(上鎖時無物可發佈),改 Acquire。對話沉澱兩教材頁 mesi-rmw-atomics(🚌 MESI/RMW 家族/TAS vs TTAS/驚群)+ guard-design(🛡️ lifetime 綁定/Send 裁決/poisoning),claude.ai 已發、index 深讀區 +2 卡 |
+| 15 | conflation_slot | ☐ | ☐ 排 8/2 尾或 8/3(加時槽) | ☐ ★(8/6 後固化) | 7/31 晚新增三層教材(值層/通知層分離、invariant queued⟺∈ready);drill 挖 publish/recv/close;使用者自製 stepper 頁(🗜️)7/31 已發本帳號鏡像 |
 
 ### 次優先
 
