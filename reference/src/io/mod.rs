@@ -20,5 +20,5 @@ pub mod hw_bridge;
 pub mod dma_dispatcher;
 // SPSC ring 的硬體邊界版:barrier→doorbell 鐵律 + 序號差滿判定(⚠ 8/2 場後開)
 pub mod mmio_cmdq;
-// dma_dispatcher + 第三種 state「時間」:隔離、zombie 免疫、retry budget(⚠ 8/8 場後開)
+// dma_dispatcher + 第三種 state「時間」:隔離、zombie 免疫、retry budget(⚠ 8/2 場後開)
 pub mod engine_watchdog;

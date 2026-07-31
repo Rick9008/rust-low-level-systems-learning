@@ -1,5 +1,5 @@
 // ⚠⚠ 防雷:本檔是 sim k(per-core telemetry fan-in)的填空版,spec 註解含解法方向。
-// 計時場排在 8/1——在那之前不要讀。自定規則:跑題前不開 oracle/sol。
+// 本檔就是 8/1 lite 場材料(7/31 改制):開跑即用、開跑前不要讀。自定規則:跑題前不開 oracle/sol。
 
 //! drill:percpu_fanin —— 填 produce 與 aggregator_loop(sim k 的填空版)。
 //!

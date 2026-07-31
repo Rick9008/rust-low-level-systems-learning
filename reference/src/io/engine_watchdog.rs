@@ -1,4 +1,4 @@
-// ⚠⚠ 防雷:本檔是 sim m(engine watchdog)的解法。認題輪排在 8/3、計時場 8/8——
+// ⚠⚠ 防雷:本檔是 sim m(engine watchdog)的解法。計時場排在 8/2(7/31 改制,自 8/8 前移)——
 // 在那之前不要讀本檔(含註解與測試)。自定規則:跑題前不開 oracle/sol。
 
 //! # engine_watchdog —— engine timeout 看門狗(sim m 教學版;R1 直系延伸)

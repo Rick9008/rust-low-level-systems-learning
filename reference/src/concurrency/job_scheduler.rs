@@ -1,5 +1,5 @@
-// ⚠⚠ 防雷:本檔是 sim n(priority job scheduler + DAG)的解法。認題輪排在 8/3、
-// 計時場 8/9——在那之前不要讀本檔(含註解與測試)。自定規則:跑題前不開 oracle/sol。
+// ⚠⚠ 防雷:本檔是 sim n(priority job scheduler + DAG)的解法。lite 場排在 8/3
+// (7/31 改制,自 8/9 前移)——在那之前不要讀本檔(含註解與測試)。自定規則:跑題前不開 oracle/sol。
 
 //! # job_scheduler —— priority scheduler + dependency DAG(sim n 教學版)
 //!

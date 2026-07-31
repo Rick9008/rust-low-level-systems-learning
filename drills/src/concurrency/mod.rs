@@ -10,7 +10,7 @@ pub mod mpsc_list;
 pub mod signal_pipeline;
 pub mod spsc_ring;
 
-// R2 sim 系列填空版(⚠ 對應計時場跑完前不要開:j=7/31、k=8/1、n=8/9)
+// R2 sim 系列填空版(⚠ j=7/31 場後開;k、n 填空版是 lite 場材料:8/1、8/3 開跑即用)
 pub mod isr_pipeline;
 pub mod job_scheduler;
 pub mod percpu_fanin;

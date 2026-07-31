@@ -8,7 +8,7 @@ pub mod file_io_offload;
 pub mod hw_bridge;
 pub mod tcp_echo;
 
-// R2 sim 系列填空版(⚠ 對應計時場跑完前不要開 j–n 的檔)
+// R2 sim 系列填空版(⚠ m=8/2 場後開;l 填空版是 8/2 lite 場材料,開跑即用;i 已開)
 pub mod dma_dispatcher;
 pub mod engine_watchdog;
 pub mod mmio_cmdq;

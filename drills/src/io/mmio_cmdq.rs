@@ -1,5 +1,5 @@
 // ⚠⚠ 防雷:本檔是 sim l(MMIO command queue)的填空版,spec 註解含解法方向。
-// 計時場排在 8/2——在那之前不要讀。自定規則:跑題前不開 oracle/sol。
+// 本檔就是 8/2 lite 場材料(7/31 改制):開跑即用、開跑前不要讀。自定規則:跑題前不開 oracle/sol。
 
 //! drill:mmio_cmdq —— 填 submit 與 poll_completions(sim l 的填空版)。
 //!

@@ -170,10 +170,10 @@ li{margin:5px 0;}
   <tr><th>分頁</th><th>計時場</th><th>開放條件</th><th>賽前可讀的替代品</th></tr>
   <tr><td><b>i · DMA dispatcher</b></td><td class="num">R1 已考(7/28)+ i-lite 已修(7/30)</td><td style="color:var(--green)"><b>已開放</b></td><td>—</td></tr>
   <tr><td><b>j · ISR pipeline</b></td><td class="num">7/31</td><td>7/31 計時場收工後</td><td>作戰本 j 前導卡</td></tr>
-  <tr><td><b>k · per-core fan-in</b></td><td class="num">8/1</td><td>8/1 計時場收工後</td><td>作戰本 k 前導卡</td></tr>
-  <tr><td><b>l · MMIO cmdq</b></td><td class="num">8/2</td><td>8/2 計時場收工後</td><td>作戰本 l 前導卡 + 卡 HW-L</td></tr>
-  <tr><td><b>m · watchdog</b></td><td class="num">8/8(認題輪 8/3)</td><td><b>8/8 計時場收工後</b>(8/3 認題輪也不開——那輪練冷讀)</td><td>作戰本 m 前導卡 + 卡 HW-M</td></tr>
-  <tr><td><b>n · job scheduler</b></td><td class="num">8/9(認題輪 8/3)</td><td><b>8/9 計時場收工後</b>(同上)</td><td>作戰本 n 前導卡</td></tr>
+  <tr><td><b>k · per-core fan-in</b></td><td class="num">8/1(lite)</td><td>8/1 lite 場收工後</td><td>作戰本 k 前導卡</td></tr>
+  <tr><td><b>l · MMIO cmdq</b></td><td class="num">8/2(lite)</td><td>8/2 lite 場收工後</td><td>作戰本 l 前導卡 + 卡 HW-L</td></tr>
+  <tr><td><b>m · watchdog</b></td><td class="num">8/2 全場(7/31 改制,自 8/8 前移)</td><td><b>8/2 計時場收工後</b></td><td>作戰本 m 前導卡 + 卡 HW-M</td></tr>
+  <tr><td><b>n · job scheduler</b></td><td class="num">8/3(lite,自 8/9 前移)</td><td><b>8/3 lite 場收工後</b></td><td>作戰本 n 前導卡</td></tr>
 </table></div>
 
 <h2>六題的共同骨架——spec-heavy 題型的三堆 API</h2>
@@ -1112,8 +1112,8 @@ pub fn poll_completions(dev: &amp;mut Device, drv: &amp;mut Driver, on_done: &am
 <section class="panel" id="tm">
 
 <div class="gate">
-  <div class="when">⚠ 防雷門:8/8 計時場收工後才開本分頁(8/3 認題輪也不開——那輪練冷讀)</div>
-  <div class="rule">賽前可讀的替代品 = 作戰本 sim m 前導卡 + 認題卡 HW-M。R1 直系延伸,coding #2 命中率最高的方向。</div>
+  <div class="when">⚠ 防雷門:8/2 計時場收工後才開本分頁(7/31 改制:全場自 8/8 前移,認題輪取消)</div>
+  <div class="rule">賽前可讀的替代品 = 作戰本 sim m 前導卡 + 認題卡 HW-M。R1 直系延伸,coding #2/#3 命中率最高的方向。</div>
 </div>
 
 <div class="files">檔案:reference <code>reference/src/io/engine_watchdog.rs</code> · drill
@@ -1351,8 +1351,8 @@ fn next_sleep_ms(&amp;self, now: u64) -&gt; u64 {
 <section class="panel" id="tn">
 
 <div class="gate">
-  <div class="when">⚠ 防雷門:8/9 計時場收工後才開本分頁(8/3 認題輪也不開)</div>
-  <div class="rule">賽前可讀的替代品 = 作戰本 sim n 前導卡(雙閘 + seq 破平手概念,無解法)。8/6 若情報指向他型,此題可換皮——已備不浪費。</div>
+  <div class="when">⚠ 防雷門:8/3 lite 場收工後才開本分頁(7/31 改制:自 8/9 前移,認題輪取消)</div>
+  <div class="rule">賽前可讀的替代品 = 作戰本 sim n 前導卡(雙閘 + seq 破平手概念,無解法)。#2/#3 併 8/6 同天,換皮窗口不存在——直接吃。</div>
 </div>
 
 <div class="files">檔案:reference <code>reference/src/concurrency/job_scheduler.rs</code> · drill
@@ -1577,7 +1577,7 @@ pub fn on_done(&amp;mut self, bus: &amp;mut impl JobBus, w: u32) {
 
 <div class="footer">
   sim i–n 圖解全解 · 2026-07-31 · 教學本體:reference 六模組(5-pillar + oracle mock + 手 trace 測試)·
-  賽前讀作戰本前導卡,賽後讀本頁 + 轉 drills 複打 · 門禁:i 已開,j=7/31、k=8/1、l=8/2、m=8/8、n=8/9 計時場後
+  賽前讀作戰本前導卡,賽後讀本頁 + 轉 drills 複打 · 門禁:i 已開,j=7/31、k=8/1 lite、l=8/2 lite、m=8/2 全場、n=8/3 lite 場後
 </div>
 
 </div>

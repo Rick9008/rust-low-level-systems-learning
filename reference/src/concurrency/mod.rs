@@ -31,7 +31,7 @@ pub mod rcu_snapshot;
 // (誰值得無鎖、誰上鎖就夠、無鎖版為何有時不存在:docs/concurrency/ds_sync.md)
 pub mod ds_sync;
 
-// R2 sim 系列教學版(⚠ 對應計時場跑完前不要開:j=7/31、k=8/1、n=8/9)
+// R2 sim 系列教學版(⚠ 對應場次跑完前不要開:j=7/31、k=8/1 lite、n=8/3 lite)
 // signal_pipeline 的 spec-heavy 版:ISR 三禁 + sticky-flag 喚醒 + shutdown drain
 pub mod isr_pipeline;
 // 扇入節的 spec-heavy 版:per-core SPSC + budget 公平 + 全空一輪才睡

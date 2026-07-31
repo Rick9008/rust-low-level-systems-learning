@@ -14,7 +14,7 @@
 | 3 market data | conflation slot——repo 無專模組;思路見 `docs/concurrency/signal_pipeline.md` 的 drop-newest vs conflation 節 |
 | 4 log shipper | 彩排 a ring_drop_oldest(bounded + drop-oldest + dropped 計數) |
 | 5 sensor bridge | `reference/src/concurrency/signal_pipeline.rs` 單源版(教科書本尊);ISR 紀律的 spec-heavy 教學版 `concurrency/isr_pipeline`(sim j,⚠ 7/31 場後才開) |
-| 6 health prober | 彩排 h timer_queue + `thread_pool`(bounded submit 天然限流);timeout/重試政策的可執行版 `io/engine_watchdog`(sim m,⚠ 8/8 場後才開) |
+| 6 health prober | 彩排 h timer_queue + `thread_pool`(bounded submit 天然限流);timeout/重試政策的可執行版 `io/engine_watchdog`(sim m,⚠ 8/2 場後才開) |
 
 ---
 

@@ -1,5 +1,5 @@
 // ⚠⚠ 防雷:本檔是 sim n(priority job scheduler + DAG)的填空版,spec 註解含解法方向。
-// 認題輪排在 8/3、計時場 8/9——在那之前不要讀。自定規則:跑題前不開 oracle/sol。
+// 本檔就是 8/3 lite 場材料(7/31 改制,自 8/9 前移):開跑即用、開跑前不要讀。自定規則:跑題前不開 oracle/sol。
 
 //! drill:job_scheduler —— 填兩層閘門的三個轉移函式(sim n 的填空版)。
 //!

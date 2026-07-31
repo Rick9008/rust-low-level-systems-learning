@@ -1,4 +1,4 @@
-// ⚠⚠ 防雷:本檔是 sim l(MMIO command queue)的解法。計時場排在 8/2——
+// ⚠⚠ 防雷:本檔是 sim l(MMIO command queue)的解法。lite 場排在 8/2(7/31 改制)——
 // 在那之前不要讀本檔(含註解與測試)。自定規則:跑題前不開 oracle/sol。
 
 //! # mmio_cmdq —— MMIO command queue:doorbell + completion ring(sim l 教學版)

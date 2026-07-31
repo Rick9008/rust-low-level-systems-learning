@@ -1,4 +1,4 @@
-// ⚠⚠ 防雷:本檔是 sim k(per-core telemetry fan-in)的解法。計時場排在 8/1——
+// ⚠⚠ 防雷:本檔是 sim k(per-core telemetry fan-in)的解法。lite 場排在 8/1(7/31 改制)——
 // 在那之前不要讀本檔(含註解與測試)。自定規則:跑題前不開 oracle/sol。
 
 //! # percpu_fanin —— per-core telemetry fan-in(sim k 教學版)
