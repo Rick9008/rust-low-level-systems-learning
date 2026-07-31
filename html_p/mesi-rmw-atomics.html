@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MESI × Atomic RMW — 一貴一便宜的機器層 · Stepper Handbook</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg0);color:var(--fg);font-family:var(--cjk);
+    line-height:1.65;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;
+    padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;
+    cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);border-color:var(--bg4)}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow)}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.94rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55;-webkit-text-size-adjust:100%}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .t{color:var(--blue)}
+  pre .s{color:var(--green)} pre .n{color:var(--purple)}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0;font-size:.9rem}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .callout.info{border-color:var(--blue)}
+  .lbl{display:block;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gray);margin-bottom:4px}
+  .key{color:var(--orange);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);
+    vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  td.ok{color:var(--green)} td.no{color:var(--red)}
+
+  .inv{background:var(--bg2);border:1px dashed var(--yellow);border-radius:10px;
+    padding:12px 14px;margin:14px 0;font-family:var(--mono);font-size:.86rem;
+    color:var(--yellow);text-align:center}
+
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);
+    color:var(--fg);font-family:var(--mono);font-size:.8rem;padding:5px 14px;
+    border-radius:7px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .ctrl button.mode{border-color:var(--blue);color:var(--blue)}
+  .stepper .ctrl button.mode.on{background:var(--blue);color:var(--bg0);font-weight:700}
+  .stepper .stage{min-height:150px}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+  .stepcount{color:var(--gray);font-family:var(--mono);font-size:.78rem;
+    align-self:center;margin-left:auto}
+
+  /* 核心卡片 */
+  .cores{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+  .core{flex:1 1 130px;background:var(--bg1);border:1px solid var(--bg4);
+    border-radius:9px;padding:8px 10px;min-width:130px}
+  .core h4{margin:0 0 6px;font-family:var(--mono);font-size:.8rem;color:var(--fg-dim)}
+  .core .line{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:.8rem}
+  .st{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+    border-radius:6px;font-family:var(--mono);font-weight:700;font-size:.85rem;
+    border:1px solid var(--bg4)}
+  .st.M{background:var(--red);color:var(--bg0);border-color:var(--red)}
+  .st.E{background:var(--orange);color:var(--bg0);border-color:var(--orange)}
+  .st.S{background:var(--green);color:var(--bg0);border-color:var(--green)}
+  .st.I{background:var(--bg2);color:var(--gray)}
+  .core .v{color:var(--fg)}
+  .core .v.stale{color:var(--gray);text-decoration:line-through}
+  .core.hot{border-color:var(--yellow)}
+  .busmsg{font-family:var(--mono);font-size:.78rem;color:var(--orange);margin-top:6px;
+    white-space:pre-wrap}
+  .buscnt{display:flex;gap:12px;margin-top:8px;font-family:var(--mono);font-size:.8rem}
+  .buscnt b{color:var(--red)}
+  .memrow{font-family:var(--mono);font-size:.8rem;color:var(--gray);margin-top:6px}
+
+  .quiz{background:var(--bg1);border:1px solid var(--orange);border-radius:9px;
+    padding:10px 12px;margin:8px 0}
+  .quiz p{margin:0 0 8px;font-size:.86rem;color:var(--orange)}
+  .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.82rem;padding:5px 12px;border-radius:7px;
+    cursor:pointer;margin-right:6px}
+  .quiz .fb{margin-top:8px;font-size:.84rem;display:none}
+
+  details{background:var(--bg2);border:1px solid var(--bg4);border-radius:9px;
+    padding:10px 14px;margin:8px 0}
+  summary{cursor:pointer;color:var(--yellow);font-size:.9rem}
+  details[open] summary{margin-bottom:8px}
+
+  [data-jump]{color:var(--blue);text-decoration:underline dotted;cursor:pointer}
+  .navrow{display:flex;justify-content:space-between;margin:18px 0 0}
+  .navrow button{background:var(--bg2);border:1px solid var(--bg3);color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.82rem;padding:6px 14px;border-radius:8px;cursor:pointer}
+  footer{color:var(--gray);font-size:.78rem;text-align:center;margin-top:26px;
+    padding-top:14px;border-top:1px solid var(--bg2)}
+</style>
+</head>
+<body>
+
+<nav class="tabbar" id="tabbar">
+  <button data-tab="overview" class="active">總覽 · cache line</button>
+  <button data-tab="mesi">MESI 四態</button>
+  <button data-tab="rmw">RMW 家族</button>
+  <button data-tab="cost">① TAS vs TTAS</button>
+  <button data-tab="herd">② 釋放瞬間</button>
+  <button data-tab="quiz">句庫 · 自測</button>
+</nav>
+
+<div class="wrap">
+
+<!-- ================= OVERVIEW ================= -->
+<div class="tab active" id="tab-overview">
+  <h1>MESI × Atomic RMW — 一貴一便宜的機器層</h1>
+  <div class="sub">spin_lock 教材 Q3 的完整版 · 為什麼 swap 貴、load 便宜 · 2026-08-01</div>
+
+  <section>
+    <h2>出發點:同一個變數,兩種價格</h2>
+    <p>TTAS 自旋鎖的形狀是「外圈 <code>swap</code> 搶鎖、內圈純 <code>load</code> 等待」。兩個操作碰的是<b>同一個 <code>AtomicBool</code></b>,為什麼一個會打爆匯流排、一個幾乎免費?答案不在 Rust,在 cache 一致性協定。這一頁把機器層一次補齊。</p>
+  </section>
+
+  <section>
+    <h2>前置:cache line 是交易單位</h2>
+    <p>CPU 不以 byte 為單位跟記憶體打交道,而是以 <span class="key">cache line(通常 64 bytes)</span>為單位。你的 <code>AtomicBool</code> 只有 1 byte,但它所在的整條 64-byte line 才是各核心 cache 之間搬動、共享、作廢的單位。</p>
+    <p>多核心 = 每核有自己的 L1/L2 cache = 同一條 line 可能同時存在好幾份副本。<b>一致性協定的工作就是讓這些副本不說謊</b>——這就是 MESI。</p>
+    <div class="inv">
+      SWMR 鐵律&nbsp;&nbsp;<b>同一條 line:一個寫者(M/E)&nbsp;XOR&nbsp;多個讀者(S)</b>——絕不並存
+    </div>
+    <div class="callout info">
+      <span class="lbl">文件比喻(字面翻譯在後)</span>
+      很多人可以同時拿<b>影本</b>讀;要改就必須把<b>原稿</b>拿到手,並把所有影本收回作廢。字面意思:核心要寫入一條 line 之前,必須廣播 invalidation 把其他核心的副本全打成 Invalid,自己取得獨占——這個「我要原稿」的匯流排訊息叫 <span class="key">RFO(Read For Ownership)</span>。
+    </div>
+  </section>
+
+  <section>
+    <h2>本頁地圖</h2>
+    <table>
+      <tr><th>分頁</th><th>回答的問題</th></tr>
+      <tr><td><span data-jump="mesi">MESI 四態</span></td><td>副本的四種狀態、誰能讀誰能寫、狀態怎麼轉移(stepper 逐幀走)</td></tr>
+      <tr><td><span data-jump="rmw">RMW 家族</span></td><td>fetch_add / swap / TAS / CAS 各是什麼、為什麼 CAS 要填兩個 Ordering、weak vs strong</td></tr>
+      <tr><td><span data-jump="cost">① TAS vs TTAS</span></td><td>同一場搶鎖,兩種寫法的匯流排流量對比(RFO 計數器)</td></tr>
+      <tr><td><span data-jump="herd">② 釋放瞬間</span></td><td>TTAS 的殘留弱點:unlock 那一刻的驚群;backoff / ticket / MCS 升級路</td></tr>
+    </table>
+    <div class="navrow"><span></span><button data-jump="mesi">MESI 四態 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= MESI ================= -->
+<div class="tab" id="tab-mesi">
+  <h1>MESI 四態</h1>
+  <div class="sub">每核 cache 裡的每條 line,隨時處在其中一態</div>
+
+  <section>
+    <table>
+      <tr><th>態</th><th>全名</th><th>意思</th><th>可讀?</th><th>可直接寫?</th></tr>
+      <tr><td><span class="st M">M</span></td><td>Modified</td><td>只有我有,而且改過(比記憶體新,dirty)</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr><td><span class="st E">E</span></td><td>Exclusive</td><td>只有我有,沒改過(跟記憶體一致)</td><td class="ok">✓</td><td class="ok">✓(靜默升 M)</td></tr>
+      <tr><td><span class="st S">S</span></td><td>Shared</td><td>多核同時持有唯讀副本</td><td class="ok">✓</td><td class="no">✗ 要先 RFO</td></tr>
+      <tr><td><span class="st I">I</span></td><td>Invalid</td><td>這份作廢了,要用得重新去拿</td><td class="no">✗ miss</td><td class="no">✗ miss</td></tr>
+    </table>
+    <div class="callout">
+      <span class="lbl">兩條要背的轉移</span>
+      <b>寫入路</b>:任何態 → 想寫 → 沒獨占就廣播 RFO(其他核全變 I)→ 自己變 M。<br>
+      <b>讀取路</b>:I → load miss → 從記憶體或別核拿 → 有其他讀者就大家一起 S;沒有就 E。E 存在的意義:獨自讀的人之後想寫,<b>不用再廣播</b>(反正沒別人),靜默升 M——省一次匯流排訊息。
+    </div>
+  </section>
+
+  <section>
+    <h2>Stepper:兩核搶一條 line</h2>
+    <p>場景:<code>x</code> 起始為 0,在記憶體裡。逐幀看 C0 / C1 的 load 與 store 如何轉移狀態。<b>第 4 幀有預測題,先答再按 next。</b></p>
+  </section>
+
+  <div class="stepper" id="stepper-mesi">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">帶走的一句</span>
+      <b>讀的代價是一次性的</b>(miss 一次,之後停在 S 免費讀);<b>寫的代價是持續性的</b>(每次要寫都得確保獨占,別人有副本就得作廢別人)。RMW 是寫——這就是「一貴一便宜」的全部來源。
+    </div>
+    <div class="navrow"><button data-jump="overview">◀ 總覽</button><button data-jump="rmw">RMW 家族 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= RMW ================= -->
+<div class="tab" id="tab-rmw">
+  <h1>Atomic RMW 家族</h1>
+  <div class="sub">Read-Modify-Write:讀 → 改 → 寫,三步合一、不可分割</div>
+
+  <section>
+    <h2>定義</h2>
+    <p>RMW 是一種<b>不可分割的原子操作</b>:從記憶體讀值、修改、寫回,整段期間不會被其他核心插隊。硬體上它必須<b>持有 cache line 獨占直到寫回完成</b>——所以每一次 RMW 都至少是一次「寫」的價格(可能觸發 RFO)。</p>
+    <table>
+      <tr><th>操作</th><th>語意</th><th>會失敗嗎?</th><th>Ordering 幾個</th><th>典型用途</th></tr>
+      <tr><td><code>swap(v)</code></td><td>無條件寫入 v,回<b>舊值</b></td><td class="ok">不會</td><td>1</td><td>搶旗標、換手</td></tr>
+      <tr><td>Test-and-Set</td><td><code>swap(true)</code> 的特例:設旗標、回舊值(舊值 false = 我搶到)</td><td class="ok">不會</td><td>1</td><td><b>spin lock 的心臟</b></td></tr>
+      <tr><td><code>fetch_add(n)</code> 等</td><td>讀舊值、加 n、寫回,回舊值(<code>fetch_or/and/xor</code> 同族)</td><td class="ok">不會</td><td>1</td><td>計數器、引用計數(Arc)</td></tr>
+      <tr><td><code>compare_exchange(exp, new)</code></td><td><b>條件寫</b>:目前值 == exp 才寫入 new;回 <code>Result&lt;舊值, 實際值&gt;</code></td><td class="no">會</td><td><b>2</b></td><td>lock-free 演算法、單發 try_lock</td></tr>
+      <tr><td><code>compare_exchange_weak</code></td><td>同上,但允許 <b>spurious failure</b>(值明明相等也可能失敗)</td><td class="no">會(含假失敗)</td><td>2</td><td><b>CAS 迴圈裡</b></td></tr>
+      <tr><td><code>fetch_update(f)</code></td><td>CAS 迴圈的語法糖:load → 閉包算新值 → CAS,失敗重來</td><td class="no">閉包回 None 才失敗</td><td>2</td><td>複雜更新</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>為什麼 CAS 要填兩個 Ordering,fetch_add 只填一個</h2>
+    <p>看<b>結局數</b>,不是看「讀寫兩半」:</p>
+    <ul>
+      <li><code>fetch_add</code> / <code>swap</code> <b>永遠成功</b>——只有一種結局(讀+寫都發生),一個 Ordering 就描述完了。</li>
+      <li>CAS 有<b>兩種結局</b>:成功(讀+寫,套 success ordering)/ 失敗(<b>只有讀</b>,套 failure ordering)。失敗那次沒有寫入,所以 failure ordering 不能是 <code>Release</code>/<code>AcqRel</code>(沒有 store 可以 release),且通常填 <code>Relaxed</code>——沒搶到的人沒有臨界區,不需要可見性保證。</li>
+    </ul>
+    <h3>weak vs strong</h3>
+    <p><code>compare_exchange_weak</code> 在 LL/SC 架構(ARM)上編成更便宜的指令,代價是允許<b>假失敗</b>:值明明等於 expected 也可能回 Err。判準一句話:<span class="key">迴圈裡用 weak(反正會重試),單發用 strong(失敗必須真的代表被佔用)</span>。</p>
+    <div class="callout bad">
+      <span class="lbl">實戰案例:今晚 try_lock 的兩個洞(2026-08-01 drill 實錄)</span>
+      寫成 <code>compare_exchange_weak(false, true, AcqRel, Relaxed)</code>,兩個問題:<br>
+      ① <b>weak 用在單發</b>——try_lock 沒有迴圈,假失敗會讓「鎖明明沒人拿」也回 <code>None</code>,呼叫者被騙去走 fallback 路徑;正解 strong。<br>
+      ② <b>成功側 AcqRel 過度訂購</b>——上鎖的人此刻沒有東西要發佈(要發佈的在<b>解鎖</b>時),Release 半邊是白付的;正解 <code>Acquire</code>。過度訂購不是 bug,但面試裡「說不出每個 Ordering 的理由」就是洞。
+    </div>
+  </section>
+
+  <section>
+    <h2>對 MESI 的翻譯</h2>
+    <p>所有 RMW(包括失敗的 CAS!)都需要對 line 的獨占存取權才能保證原子性——x86 的 <code>lock</code> 前綴指令就是「把這條 line 鎖在我的 cache 裡直到讀改寫完成」。所以:</p>
+    <div class="inv">RMW = 至少一次獨占索取 &nbsp;&nbsp;·&nbsp;&nbsp; 純 load = S 態本地命中,零流量</div>
+    <div class="navrow"><button data-jump="mesi">◀ MESI</button><button data-jump="cost">① TAS vs TTAS ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= COST ================= -->
+<div class="tab" id="tab-cost">
+  <h1>① TAS vs TTAS — 同一場搶鎖,兩張帳單</h1>
+  <div class="sub">C0 持鎖中,C1/C2/C3 在等。切換模式,看匯流排訊息計數</div>
+
+  <section>
+    <pre><span class="c">// TAS(naive):等待 = 反覆 RMW</span>
+<span class="k">while</span> lock.swap(<span class="k">true</span>, Acquire) { <span class="c">/* 空轉 */</span> }
+
+<span class="c">// TTAS:等待 = 純 load;看似有空才出手 swap</span>
+<span class="k">loop</span> {
+    <span class="k">if</span> !lock.swap(<span class="k">true</span>, Acquire) { <span class="k">break</span>; }        <span class="c">// 出手(貴,RFO)</span>
+    <span class="k">while</span> lock.load(Relaxed) { spin_loop(); }         <span class="c">// 等待(免費,S 態)</span>
+}</pre>
+  </section>
+
+  <div class="stepper" id="stepper-cost">
+    <div class="ctrl">
+      <button data-a="mode-tas" class="mode on">TAS</button>
+      <button data-a="mode-ttas" class="mode">TTAS</button>
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">兩張帳單的差</span>
+      TAS:等待期間<b>每一輪每個等待者都是一次 RFO</b>,line 在等待者之間乒乓,持鎖者要放鎖時還得跟他們搶——<b>等的人越努力,放的人越慢</b>。TTAS:等待期間<b>零流量</b>(大家 S 態各讀各的),流量只集中在釋放瞬間的一波。
+    </div>
+    <div class="navrow"><button data-jump="rmw">◀ RMW</button><button data-jump="herd">② 釋放瞬間 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= HERD ================= -->
+<div class="tab" id="tab-herd">
+  <h1>② 釋放瞬間 — TTAS 的殘留弱點</h1>
+  <div class="sub">等待期安靜了,但 unlock 那一刻還有一場驚群</div>
+
+  <section>
+    <p>C0 放鎖的那個 <code>store(false, Release)</code> 會把所有 spinner 的 S 副本作廢。接下來逐幀看會發生幾次 miss、幾次 RFO、幾個人搶到。</p>
+  </section>
+
+  <div class="stepper" id="stepper-herd">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <h2>升級路:各解什麼</h2>
+    <table>
+      <tr><th>方案</th><th>解掉什麼</th><th>沒解掉什麼 / 代價</th></tr>
+      <tr><td><b>exponential backoff</b>:搶輸就隨機退避漸長</td><td>把驚群<b>錯開</b>,RFO 波變稀</td><td>公平性更差(剛到的可能比等最久的先搶到);延遲抖動</td></tr>
+      <tr><td><b>ticket lock</b>:取號 <code>fetch_add</code>,等叫號</td><td><b>公平</b>(FIFO,不飢餓)</td><td>流量沒解——所有人 spin 同一個叫號器,釋放仍全體 miss</td></tr>
+      <tr><td><b>MCS / CLH</b>:排隊節點,<b>各自 spin 自己的 line</b></td><td>流量+公平都解:釋放只戳下一位的私有 line,O(1) 訊息</td><td>結構複雜、要傳 node;kernel 的 qspinlock 就是這家族</td></tr>
+      <tr><td><b>睡覺(futex / parking)</b></td><td>不燒 CPU;等待者無限多也沒流量</td><td>睡/醒是 syscall(µs 級)——臨界區奈秒級時反而比自旋貴,繞回 spin lock 的存在理由</td></tr>
+    </table>
+    <div class="callout info">
+      <span class="lbl">接回你的教材</span>
+      spin_lock 教材的〔Trade-offs〕說「不公平,升級路 = ticket lock」——現在你可以說得更準:ticket 買的是<b>公平</b>,買不到流量;要流量得上 MCS。面試被追問「TTAS 之後呢」,這張表就是答案的骨架。
+    </div>
+    <div class="navrow"><button data-jump="cost">◀ TAS vs TTAS</button><button data-jump="quiz">句庫 · 自測 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= QUIZ ================= -->
+<div class="tab" id="tab-quiz">
+  <h1>面試句庫 · 自測</h1>
+  <div class="sub">先出聲講,再展開對答案</div>
+
+  <section>
+    <h2>30 秒英文句庫</h2>
+    <ul>
+      <li>"A spinning atomic swap is a write — under MESI every attempt needs exclusive ownership of the cache line, so N spinners just ping-pong the line and saturate the interconnect. A plain load spins on a <b>Shared</b> copy in the local cache: zero coherence traffic while waiting."</li>
+      <li>"TTAS splits waiting from acquiring: <b>wait with reads, acquire with one RMW</b>. The residual cost is the thundering herd at release — everyone misses, re-fetches, and races one RFO each. Backoff spreads that burst out; a ticket lock adds fairness; MCS makes each waiter spin on its own line."</li>
+      <li>"CAS takes two orderings because it has two outcomes: success is a read-modify-write, failure is just a load — nothing to release. Use <code>_weak</code> inside retry loops, strong for one-shot attempts like try_lock."</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>自測(先答再翻)</h2>
+    <details><summary>1. E 態存在的意義是什麼?拿掉它(只剩 MSI)會多付什麼?</summary>
+      獨自持有且乾淨的線,想寫時可以<b>靜默升 M</b>,不用廣播。MSI 協定裡同樣情境要多付一次 invalidation 廣播——單執行緒反覆讀寫自己的資料就會白繳匯流排稅。</details>
+    <details><summary>2. 失敗的 CAS 有沒有流量成本?</summary>
+      有。要保證「比較+寫」原子,硬體得先拿獨占(或至少擁有權)才能裁決——所以連失敗的 CAS 都可能觸發 RFO、作廢別人的副本。這正是 TAS 迴圈貴的原因:<b>失敗的嘗試不是免費的</b>。</details>
+    <details><summary>3. TTAS 內圈看到 false 之後,為什麼還要回外圈重新 swap,不能直接進臨界區?</summary>
+      load 看到 false 只代表「剛剛」沒鎖——從 load 到你動作之間別人可能已搶走。裁決權在那次原子 swap;load 只是省 RMW 的提示。</details>
+    <details><summary>4. 釋放瞬間 N 個 spinner:幾次 miss、幾次 RFO、幾人得手?</summary>
+      unlock 的 store 作廢全部 S 副本 → N 次 miss 重抓 → 全看到 false 回外圈 → N 次 swap = N 次 RFO 串行化 → 恰一人得手,其餘 N−1 人看到 true 回內圈。一次釋放 ≈ 2N 條匯流排訊息——這就是 backoff/MCS 要解的帳。</details>
+    <details><summary>5. 為什麼 <code>Arc::clone</code> 的 fetch_add 用 Relaxed 就夠,drop 端卻要 Release?</summary>
+      clone 只需要「計數原子遞增」,不護送任何資料——所有權論證保證你手上本來就有合法引用。drop 是遺言:遞減前的所有使用必須對「最後一個遞減、負責釋放的人」可見,所以 Release(配 winner 的 Acquire fence)。RMW 的原子性(不掉計數)與 Ordering(可見性)是兩件獨立的事。</details>
+    <div class="navrow"><button data-jump="herd">◀ 釋放瞬間</button><span></span></div>
+  </section>
+</div>
+
+<footer>
+  MESI × Atomic RMW · SWMR 鐵律:一個寫者 XOR 多個讀者 · 等待用讀,出手才用寫<br>
+  姊妹頁:rmw-cas-atomics(CAS 迴圈與 ABA)· guard-design(RAII guard 設計學)· spin_lock 教材(reference/src/concurrency)
+</footer>
+
+</div><!-- /wrap -->
+
+<script>
+"use strict";
+
+/* ===== Tabs ===== */
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const btn = tabbar.querySelector('button[data-tab="' + j.dataset.jump + '"]');
+  if (btn) btn.click();
+});
+
+/* ===== Stepper scaffold ===== */
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.cnt = this.root.querySelector('.stepcount');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else if (b.dataset.a === 'reset') this.go(0);
+    });
+    this.go(0);
+  }
+  setSteps(steps){ this.steps = steps; this.go(0); }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.innerHTML = '<b>[' + (this.idx+1) + '/' + this.steps.length + ']</b> ' + s.narr;
+    this.cnt.textContent = 'step ' + (this.idx+1) + ' / ' + this.steps.length;
+  }
+}
+function el(tag, cls, html){
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+function quiz(stage, question, opts){
+  const q = el('div','quiz');
+  q.appendChild(el('p', null, '預測題:' + question));
+  const fb = el('div','fb');
+  opts.forEach(o => {
+    const b = el('button', null, o.label);
+    b.addEventListener('click', () => {
+      fb.style.display = 'block';
+      fb.style.color = o.correct ? 'var(--green)' : 'var(--red)';
+      fb.innerHTML = (o.correct ? '✓ ' : '✗ ') + o.fb;
+    });
+    q.appendChild(b);
+  });
+  q.appendChild(fb);
+  stage.appendChild(q);
+}
+
+/* 共用:畫核心列。cores = [{name, st, val, hot}] */
+function renderCores(stage, cores, memVal, busMsg, cnt){
+  const row = el('div','cores');
+  cores.forEach(c => {
+    const box = el('div','core' + (c.hot ? ' hot' : ''));
+    box.appendChild(el('h4', null, c.name));
+    const line = el('div','line');
+    line.appendChild(el('span','st ' + c.st, c.st));
+    line.appendChild(el('span','v' + (c.st === 'I' ? ' stale' : ''),
+      c.st === 'I' ? '—' : 'x=' + c.val));
+    box.appendChild(line);
+    if (c.note) box.appendChild(el('div','memrow', c.note));
+    row.appendChild(box);
+  });
+  stage.appendChild(row);
+  stage.appendChild(el('div','memrow', '記憶體:x=' + memVal));
+  if (busMsg) stage.appendChild(el('div','busmsg', '匯流排:' + busMsg));
+  if (cnt) stage.appendChild(el('div','buscnt',
+    'RFO 累計:<b>' + cnt.rfo + '</b>&nbsp;&nbsp;·&nbsp;&nbsp;miss 累計:<b>' + cnt.miss + '</b>'));
+}
+
+/* ===== S1: MESI 兩核 ===== */
+const MESI_FRAMES = [
+  { c0:{st:'I',val:0}, c1:{st:'I',val:0}, mem:0, bus:null,
+    narr:'初始:x=0 只在記憶體裡,兩核的副本都是 Invalid。任何一邊要用都得先 miss 一次去抓。' },
+  { c0:{st:'E',val:0,hot:true}, c1:{st:'I',val:0}, mem:0, bus:'C0 read miss → 從記憶體抓 x',
+    narr:'C0 load x:miss,從記憶體抓進來。匯流排上問了一圈,沒有別的核心持有 → C0 拿到 Exclusive。E 的意義:如果 C0 接下來想寫,可以靜默升 M,不用再廣播——反正沒別人。' },
+  { c0:{st:'S',val:0}, c1:{st:'S',val:0,hot:true}, mem:0, bus:'C1 read miss → C0 供給副本,雙方降/入 S',
+    narr:'C1 也 load x:miss,C0 有這條線 → 供給一份,兩邊一起進 Shared。注意:讀跟讀之間完全不打架,一百個核心一起 S 也沒問題。這就是 TTAS 內圈免費的原因。' },
+  { c0:{st:'S',val:0}, c1:{st:'S',val:0,hot:true}, mem:0, bus:null, quiz:{
+      q:'C1 現在要 store x=1。它可以直接寫自己 cache 裡的副本嗎?',
+      opts:[
+        {label:'可以,反正它有副本', correct:false,
+         fb:'不行。S 態是唯讀的——如果 C1 直接寫,C0 手上的副本就變成謊言(兩份不一致)。SWMR 鐵律:要寫必須先獨占。'},
+        {label:'不行,要先把 C0 的副本作廢(RFO)', correct:true,
+         fb:'正確。C1 廣播 RFO,C0 的副本變 I,C1 升 M 才能寫。這一來一回就是「寫的價格」。'}
+      ]},
+    narr:'停一下。C1 想寫入 x=1。先答預測題再按 next。' },
+  { c0:{st:'I',val:0}, c1:{st:'M',val:1,hot:true}, mem:0, bus:'C1 廣播 RFO → C0 副本作廢 → C1 升 M 寫入',
+    narr:'C1 執行 store:廣播 RFO(這就是那則「我要原稿」的訊息),C0 的副本變 Invalid,C1 升 Modified 後寫入 x=1。注意記憶體還是舊的 0——M 態是 dirty 的,最新值只在 C1 的 cache 裡。' },
+  { c0:{st:'S',val:1,hot:true}, c1:{st:'S',val:1}, mem:1, bus:'C0 read miss → C1 供給最新值(順手寫回記憶體)→ 雙方 S',
+    narr:'C0 再 load x:自己的副本是 I → miss。C1(M 態持有者)供給最新值 1、順手寫回記憶體,兩邊回到 S。C0 讀到的是 1,不是它 cache 裡躺過的舊 0——協定保證你永遠讀不到謊言,代價全記在「寫的那一方」帳上。' },
+];
+function buildMesi(){
+  return MESI_FRAMES.map(f => ({
+    narr: f.narr,
+    render(st){
+      renderCores(st, [
+        Object.assign({name:'C0'}, f.c0),
+        Object.assign({name:'C1'}, f.c1),
+      ], f.mem, f.bus);
+      if (f.quiz) quiz(st, f.quiz.q, f.quiz.opts);
+    }
+  }));
+}
+
+/* ===== S2: TAS vs TTAS ===== */
+/* lock line:值 = true(C0 持有)。C1/C2/C3 等待。逐幀 = 一輪等待。 */
+function buildCost(mode){
+  const frames = [];
+  let rfo = 0, miss = 0;
+  if (mode === 'tas'){
+    frames.push({ cores:[{name:'C0 持鎖',st:'S',val:'T'},{name:'C1',st:'I',val:'T'},{name:'C2',st:'I',val:'T'},{name:'C3',st:'I',val:'T'}],
+      bus:null, cnt:{rfo:0,miss:0},
+      narr:'TAS 模式:C0 在臨界區裡,C1/C2/C3 用 swap 迴圈等。每一幀 = 一輪。看 RFO 計數器。' });
+    for (let round = 1; round <= 3; round++){
+      ['C1','C2','C3'].forEach((who, i) => {
+        rfo++;
+        const cores = [{name:'C0 持鎖',st:'I',val:'T'},
+          {name:'C1',st: who==='C1'?'M':'I', val:'T', hot: who==='C1'},
+          {name:'C2',st: who==='C2'?'M':'I', val:'T', hot: who==='C2'},
+          {name:'C3',st: who==='C3'?'M':'I', val:'T', hot: who==='C3'}];
+        frames.push({ cores, bus: who + ' swap → RFO,作廢其他三核副本(寫回 true,沒搶到)',
+          cnt:{rfo, miss},
+          narr:'第 ' + round + ' 輪:' + who + ' 執行 swap(true)。就算寫進去的值跟原本一樣是 true,RMW 仍要獨占 → RFO 作廢所有人(包括持鎖的 C0!)。' + who + ' 讀到舊值 true = 沒搶到,下一位繼續。line 在等待者之間乒乓。' });
+      });
+    }
+    frames.push({ cores:[{name:'C0 持鎖',st:'I',val:'T'},{name:'C1',st:'M',val:'T'},{name:'C2',st:'I',val:'T'},{name:'C3',st:'I',val:'T'}],
+      bus:'C0 想放鎖:store(false) 也得先搶回獨占……', cnt:{rfo, miss},
+      narr:'三輪下來 RFO = ' + rfo + ',而且還在漲。最傷的一刀:C0 要放鎖時,它的 store 也得跟三個等待者搶同一條 line 的獨占——等的人越努力,放的人越慢。這是 TAS 的死刑判決。' });
+  } else {
+    frames.push({ cores:[{name:'C0 持鎖',st:'S',val:'T'},{name:'C1',st:'I',val:'T'},{name:'C2',st:'I',val:'T'},{name:'C3',st:'I',val:'T'}],
+      bus:null, cnt:{rfo:0,miss:0},
+      narr:'TTAS 模式:C1/C2/C3 先各 swap 一次搶輸(那三次 RFO 記在開場),之後全部掉進內圈純 load。' });
+    rfo = 3;
+    frames.push({ cores:[{name:'C0 持鎖',st:'S',val:'T'},{name:'C1',st:'S',val:'T',hot:true},{name:'C2',st:'S',val:'T',hot:true},{name:'C3',st:'S',val:'T',hot:true}],
+      bus:'三核各 miss 一次抓副本 → 全體 S', cnt:{rfo, miss:3},
+      narr:'內圈第一次 load:各 miss 一次把 line 抓進來,之後大家都停在 Shared——四份副本和平共存。' });
+    frames.push({ cores:[{name:'C0 持鎖',st:'S',val:'T'},{name:'C1',st:'S',val:'T'},{name:'C2',st:'S',val:'T'},{name:'C3',st:'S',val:'T'}],
+      bus:'(安靜)', cnt:{rfo, miss:3},
+      narr:'第 2 輪、第 3 輪、第 1000 輪……每個 spinner 的 load 都是本地 cache hit,匯流排一片安靜,RFO 計數凍結在 3。C0 在臨界區裡不受任何打擾,放鎖時也不用跟人搶。' });
+    frames.push({ cores:[{name:'C0 持鎖',st:'S',val:'T'},{name:'C1',st:'S',val:'T'},{name:'C2',st:'S',val:'T'},{name:'C3',st:'S',val:'T'}],
+      bus:'(仍然安靜)', cnt:{rfo, miss:3},
+      narr:'對比同時刻的 TAS:RFO 已經 9+ 且持續增長。TTAS 把「等待」的價格壓到零——剩下的帳單只有一筆:釋放瞬間(下一分頁)。' });
+  }
+  return frames.map(f => ({
+    narr: f.narr,
+    render(st){ renderCores(st, f.cores, 'lock=' + (f.cores[0].val === 'T' ? 'true' : 'false'), f.bus, f.cnt); }
+  }));
+}
+
+/* ===== S3: 釋放瞬間 ===== */
+const HERD_FRAMES = [
+  { cores:[{name:'C0 持鎖',st:'S',val:'T'},{name:'C1 spin',st:'S',val:'T'},{name:'C2 spin',st:'S',val:'T'},{name:'C3 spin',st:'S',val:'T'}],
+    bus:null, cnt:{rfo:0,miss:0},
+    narr:'TTAS 穩態:三個 spinner 都在內圈 S 態安靜地讀。C0 準備放鎖。' },
+  { cores:[{name:'C0',st:'M',val:'F',hot:true},{name:'C1 spin',st:'I',val:'T'},{name:'C2 spin',st:'I',val:'T'},{name:'C3 spin',st:'I',val:'T'}],
+    bus:'C0 store(false, Release) → RFO 作廢全部 S 副本', cnt:{rfo:1,miss:0},
+    narr:'C0 執行 store(false, Release):這是寫入 → 拿獨占 → 三個 spinner 的副本瞬間全部作廢。Release 保證臨界區的所有寫入都排在這個 store 之前。' },
+  { cores:[{name:'C0',st:'S',val:'F'},{name:'C1 spin',st:'S',val:'F',hot:true},{name:'C2 spin',st:'S',val:'F',hot:true},{name:'C3 spin',st:'S',val:'F',hot:true}],
+    bus:'三核同時 miss → 重抓 → 全看到 false', cnt:{rfo:1,miss:3},
+    narr:'三個 spinner 下一次 load 全部 miss(副本沒了),重抓後同時看到 false——三個人同時衝回外圈。這就是驚群(thundering herd)的起點。' },
+  { cores:[{name:'C0',st:'I',val:'F'},{name:'C1',st:'M',val:'T',hot:true},{name:'C2',st:'I',val:'F'},{name:'C3',st:'I',val:'F'}],
+    bus:'C1 的 swap 先到 → RFO → 讀到 false,搶到!', cnt:{rfo:2,miss:3},
+    narr:'三個 swap 在匯流排上串行化。C1 先到:RFO 拿獨占、讀到舊值 false → 搶到鎖,寫入 true。C2/C3 的副本再次被作廢。' },
+  { cores:[{name:'C0',st:'I',val:'F'},{name:'C1 持鎖',st:'I',val:'T'},{name:'C2',st:'M',val:'T',hot:true},{name:'C3',st:'I',val:'F'}],
+    bus:'C2 的 swap:RFO → 讀到 true,沒搶到', cnt:{rfo:3,miss:3},
+    narr:'C2 的 swap 第二個到:又一次 RFO,但讀到的舊值是 true——C1 已經捷足先登。C2 白付一次獨占,回內圈。' },
+  { cores:[{name:'C0',st:'I',val:'F'},{name:'C1 持鎖',st:'I',val:'T'},{name:'C2',st:'I',val:'T'},{name:'C3',st:'M',val:'T',hot:true}],
+    bus:'C3 的 swap:RFO → 讀到 true,沒搶到', cnt:{rfo:4,miss:3},
+    narr:'C3 同樣白跑一趟。結算這一次釋放:3 次 miss + 4 次 RFO(1 次放鎖 + 3 次搶),恰好一人得手。N 個等待者的通式:一次釋放 ≈ N 次 miss + (N+1) 次 RFO——流量跟等待人數成正比,這就是 TTAS 沒解掉的殘留弱點。' },
+  { cores:[{name:'C0',st:'I',val:'F'},{name:'C1 持鎖',st:'S',val:'T'},{name:'C2 spin',st:'S',val:'T'},{name:'C3 spin',st:'S',val:'T'}],
+    bus:'C2/C3 回內圈 → 重新 S 態安靜等待', cnt:{rfo:4,miss:5},
+    narr:'C2/C3 回到內圈,再各 miss 一次進 S,恢復安靜。升級路由此出發:backoff 把這波錯開、ticket 給公平、MCS 讓每人 spin 自己的 line(釋放只戳下一位,O(1) 訊息)——見下方表格。' },
+];
+function buildHerd(){
+  return HERD_FRAMES.map(f => ({
+    narr: f.narr,
+    render(st){ renderCores(st, f.cores, 'lock 最新值=' + (f.cores.some(c=>c.st==='M'&&c.val==='T')||f.cores.some(c=>c.name.includes('持鎖')&&c.val==='T') ? 'true' : 'false'), f.bus, f.cnt); }
+  }));
+}
+
+new Stepper('stepper-mesi', buildMesi());
+const costStepper = new Stepper('stepper-cost', buildCost('tas'));
+document.querySelector('#stepper-cost .ctrl').addEventListener('click', e => {
+  const b = e.target.closest('button[data-a^="mode-"]'); if (!b) return;
+  document.querySelectorAll('#stepper-cost .mode').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  costStepper.setSteps(buildCost(b.dataset.a === 'mode-tas' ? 'tas' : 'ttas'));
+});
+new Stepper('stepper-herd', buildHerd());
+</script>
+</body>
+</html>

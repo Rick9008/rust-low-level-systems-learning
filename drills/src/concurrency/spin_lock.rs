@@ -11,10 +11,23 @@
 //! 4. guard 為什麼不可以 `Send`?A 執行緒鎖、B 執行緒解,哪裡壞掉?
 //! 5. 臨界區 panic 時這把鎖發生什麼事?std `Mutex` 為什麼選了另一條路(poisoning)?
 
+// 1. because that we will lock the item, so we will not provide mutiple reference of the item, but
+//    we need to send this thing across the thread
+// 2. Drop's release, the data's modification can be seen in the acquire one
+// 3. Because swap need to boardcast Read For Ownership to take cache line ownership. Others trying
+//    swap -> this line ping pong between the cores, bus line will be filled with invalidation, the
+//    lock owner need to wait. But the load will make the cahce line shared state, so multiple core
+//    can take the value in the same time.
+//    so waiting use read, trying to take use swap(write).
+// 4. In the pthread mutex scenario, the one who unlock should be the same thread as the one who lock.
+//    And our Release Acquire Happens-Before builds on 2 thread scenario without third one. So we
+//    limit it into !Send. However when it comes to async, we might need to impl Send
+// 5.
+
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct SpinLock<T> {
     /// false = 沒人持有。true = 有人在臨界區內。
@@ -52,7 +65,15 @@ impl<T> SpinLock<T> {
     /// 3. 內圈看到 false 只代表「剛剛」沒鎖——回外圈重新 swap(可能又被搶走)。
     #[must_use = "guard 一落地鎖就放了——`let _g = lock.lock();` 才會護住臨界區"]
     pub fn lock(&self) -> SpinGuard<'_, T> {
-        todo!("spec: swap-Acquire 外圈 + Relaxed load 內圈 + spin_loop hint")
+        // todo!("spec: swap-Acquire 外圈 + Relaxed load 內圈 + spin_loop hint")
+        loop {
+            if !self.locked.swap(true, Ordering::Acquire) {
+                break self.guard();
+            }
+            while self.locked.load(Ordering::Relaxed) {
+                std::hint::spin_loop();
+            }
+        }
     }
 
     /// spec:試拿一次,不等;佔用中回 None。
@@ -60,7 +81,16 @@ impl<T> SpinLock<T> {
     /// 失敗側為什麼可以 Relaxed?(沒拿到鎖的人有臨界區嗎?)
     #[must_use]
     pub fn try_lock(&self) -> Option<SpinGuard<'_, T>> {
-        todo!("spec: 一次 CAS,成功 -> Some(self.guard())")
+        // todo!("spec: 一次 CAS,成功 -> Some(self.guard())")
+        if self
+            .locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            Some(self.guard())
+        } else {
+            None
+        }
     }
 
     /// 已給:`&mut self` 已向借用檢查器證明獨占——不需要碰 atomic。
@@ -95,7 +125,11 @@ impl<T> DerefMut for SpinGuard<'_, T> {
     /// spec:回 `&mut T`。unsafe 一行 + **SAFETY 註解自己寫**——
     /// 憑什麼可以發出 `&mut`?guard 存在保證了什麼?`&mut self` 又保證了什麼?
     fn deref_mut(&mut self) -> &mut T {
-        todo!("spec: unsafe {{ &mut *… }} + 自己寫 SAFETY 理由")
+        // todo!("spec: unsafe {{ &mut *… }} + 自己寫 SAFETY 理由")
+        // SAFETY: guard exists then this thread take the lock, our interface ensure that only
+        // one mutable reference for &mut self interface; the return &mut T tied on &mut self,
+        // when we drop the mutable reference or drop the lock, the borrow done.
+        unsafe { &mut *self.lock.data.get() }
     }
 }
 
@@ -103,7 +137,8 @@ impl<T> Drop for SpinGuard<'_, T> {
     /// spec:放鎖,一行 store。哪個 Ordering?
     /// 說得出「用 Relaxed 的話,下一個持鎖者會讀到什麼」才算會。
     fn drop(&mut self) {
-        todo!("spec: store(false, ?) —— 臨界區的寫入要推到這個 store 之前")
+        // todo!("spec: store(false, ?) —— 臨界區的寫入要推到這個 store 之前")
+        self.lock.locked.store(false, Ordering::Release);
     }
 }
 
@@ -116,7 +151,6 @@ mod tests {
     /// 手 trace:new(0) → lock(swap 得 false)→ *g+=41 → 持鎖中 try_lock=None
     /// → drop(store false, Release)→ try_lock=Some,讀到 41。
     #[test]
-    #[ignore = "drill:填完 lock/try_lock/DerefMut/Drop 後移除"]
     fn single_thread_roundtrip() {
         let lock = SpinLock::new(0_u64);
         let mut g = lock.lock();
@@ -129,7 +163,6 @@ mod tests {
 
     /// 互斥本體:2 執行緒 × 100k 遞增,一次不少。
     #[test]
-    #[ignore = "drill:填完後移除"]
     fn two_threads_increment() {
         const N: u64 = 100_000;
         let lock = SpinLock::new(0_u64);
@@ -147,7 +180,6 @@ mod tests {
 
     /// 臨界區 panic → unwind 跑 Drop → 鎖不壞死;資料停在 panic 前(不毒化)。
     #[test]
-    #[ignore = "drill:填完後移除"]
     fn panic_releases_instead_of_poisoning() {
         let lock = Arc::new(SpinLock::new(0_u64));
         let l = Arc::clone(&lock);

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAII Guard 設計學 — lifetime 綁定 · Send 裁決 · poisoning</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg0);color:var(--fg);font-family:var(--cjk);
+    line-height:1.65;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;
+    padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;
+    cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);border-color:var(--bg4)}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow)}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.94rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55;-webkit-text-size-adjust:100%}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .t{color:var(--blue)}
+  pre .s{color:var(--green)} pre .n{color:var(--purple)}
+  pre .bad{color:var(--red);font-weight:700}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0;font-size:.9rem}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .callout.info{border-color:var(--blue)}
+  .lbl{display:block;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gray);margin-bottom:4px}
+  .key{color:var(--orange);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);
+    vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  td.ok{color:var(--green)} td.no{color:var(--red)}
+
+  .inv{background:var(--bg2);border:1px dashed var(--yellow);border-radius:10px;
+    padding:12px 14px;margin:14px 0;font-family:var(--mono);font-size:.86rem;
+    color:var(--yellow);text-align:center}
+
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);
+    color:var(--fg);font-family:var(--mono);font-size:.8rem;padding:5px 14px;
+    border-radius:7px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .stage{min-height:150px}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+  .stepcount{color:var(--gray);font-family:var(--mono);font-size:.78rem;
+    align-self:center;margin-left:auto}
+
+  .tcols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:8px 0}
+  .tcol{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;padding:8px 10px}
+  .tcol h4{margin:0 0 6px;font-size:.8rem;color:var(--gray);font-family:var(--mono);
+    letter-spacing:.04em}
+  .tcol.A h4{color:var(--orange)} .tcol.B h4{color:var(--blue)} .tcol.C4 h4{color:var(--purple)}
+  .tline{font-family:var(--mono);font-size:.76rem;color:var(--gray);padding:1px 0}
+  .tline.act{color:var(--fg);background:var(--bg3);border-radius:4px;padding:1px 5px}
+  .tline.act.bad{color:var(--red)}
+  .tline.act.good{color:var(--green)}
+  @media (max-width:680px){ .tcols{grid-template-columns:1fr} }
+
+  .hbedge{font-family:var(--mono);font-size:.78rem;color:var(--aqua);margin-top:8px;
+    white-space:pre-wrap}
+  .statusrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .pill{font-family:var(--mono);font-size:.76rem;border:1px solid var(--bg4);
+    border-radius:999px;padding:2px 10px;color:var(--fg-dim)}
+  .pill.on{border-color:var(--green);color:var(--green)}
+  .pill.warn{border-color:var(--red);color:var(--red)}
+
+  .quiz{background:var(--bg1);border:1px solid var(--orange);border-radius:9px;
+    padding:10px 12px;margin:8px 0}
+  .quiz p{margin:0 0 8px;font-size:.86rem;color:var(--orange)}
+  .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.82rem;padding:5px 12px;border-radius:7px;
+    cursor:pointer;margin-right:6px}
+  .quiz .fb{margin-top:8px;font-size:.84rem;display:none}
+
+  details{background:var(--bg2);border:1px solid var(--bg4);border-radius:9px;
+    padding:10px 14px;margin:8px 0}
+  summary{cursor:pointer;color:var(--yellow);font-size:.9rem}
+  details[open] summary{margin-bottom:8px}
+
+  [data-jump]{color:var(--blue);text-decoration:underline dotted;cursor:pointer}
+  .navrow{display:flex;justify-content:space-between;margin:18px 0 0}
+  .navrow button{background:var(--bg2);border:1px solid var(--bg3);color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.82rem;padding:6px 14px;border-radius:8px;cursor:pointer}
+  footer{color:var(--gray);font-size:.78rem;text-align:center;margin-top:26px;
+    padding-top:14px;border-top:1px solid var(--bg2)}
+</style>
+</head>
+<body>
+
+<nav class="tabbar" id="tabbar">
+  <button data-tab="overview" class="active">總覽 · 三個決策</button>
+  <button data-tab="lifetime">① lifetime 綁定</button>
+  <button data-tab="send">② Send 裁決</button>
+  <button data-tab="poison">③ poisoning</button>
+  <button data-tab="quiz">句庫 · 自測</button>
+</nav>
+
+<div class="wrap">
+
+<!-- ================= OVERVIEW ================= -->
+<div class="tab active" id="tab-overview">
+  <h1>RAII Guard 設計學</h1>
+  <div class="sub">spin_lock 教材的型別層深讀 · lifetime 綁定 / Send 裁決 / poisoning · 2026-08-01</div>
+
+  <section>
+    <h2>一句話論綱</h2>
+    <p>RAII guard 的全部價值:<span class="key">把「鎖紀律」翻譯成型別系統能檢查的語言</span>。「存取必須在持鎖期間」「解鎖的人要是上鎖的人」「臨界區沒走完的資料不可信」——這三條紀律在 C 裡靠人肉遵守,在 Rust 裡分別對應三個型別層決策:</p>
+    <table>
+      <tr><th>#</th><th>紀律</th><th>型別層武器</th><th>分頁</th></tr>
+      <tr><td>1</td><td>所有存取發生在持鎖期間</td><td><code>Deref</code> 回傳的借用<b>綁在 guard 上</b>——借用活著,guard 就不准死</td><td><span data-jump="lifetime">①</span></td></tr>
+      <tr><td>2</td><td>臨界區屬於一條執行緒</td><td>guard <code>!Send</code>(<code>PhantomData&lt;*mut ()&gt;</code>)——A 鎖 B 解直接編譯不過</td><td><span data-jump="send">②</span></td></tr>
+      <tr><td>3</td><td>被 panic 腰斬的資料不可信</td><td>毒化旗標 + <code>thread::panicking()</code>——或誠實地選「不毒化,使用者自負」</td><td><span data-jump="poison">③</span></td></tr>
+    </table>
+    <div class="callout info">
+      <span class="lbl">前置閱讀</span>
+      本頁假設你已寫過 TTAS spin lock(<code>reference/src/concurrency/spin_lock.rs</code>)並讀過它的 <code>unsafe impl&lt;T: Send&gt; Sync for SpinLock&lt;T&gt;</code>——為什麼 bound 是 Send 不是 Sync:鎖保證 T 永不被兩執行緒<b>同時</b>觸碰,跨執行緒發生的是「獨占存取權接力」(= Send 的定義),不是「同時共享」(= Sync 的定義)。對照:<code>RwLock</code> 允許多讀者並存,所以那邊才需要 <code>T: Sync</code>。
+    </div>
+  </section>
+
+  <section>
+    <h2>guard 解剖</h2>
+    <pre><span class="k">pub struct</span> <span class="t">SpinGuard</span>&lt;<span class="n">'a</span>, T&gt; {
+    lock: &amp;<span class="n">'a</span> <span class="t">SpinLock</span>&lt;T&gt;,          <span class="c">// 憑證:我持有這把鎖</span>
+    _not_send: <span class="t">PhantomData</span>&lt;*<span class="k">mut</span> ()&gt;, <span class="c">// 決策 2:釘死在上鎖的執行緒</span>
+}
+<span class="c">// 活著 = 持鎖;離開作用域或 panic unwind = Drop 放鎖(決策 3 的舞台)</span>
+<span class="c">// Deref/DerefMut 發出的借用綁在 &amp;self/&amp;mut self 上(決策 1 的機關)</span></pre>
+    <div class="navrow"><span></span><button data-jump="lifetime">① lifetime 綁定 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= LIFETIME ================= -->
+<div class="tab" id="tab-lifetime">
+  <h1>① lifetime 綁定 — 裸指標沒有 lifetime,`&amp;*` 是重新發明一個</h1>
+  <div class="sub">為什麼綁 guard 而不是綁 lock,是安全的支點</div>
+
+  <section>
+    <h2>機制兩層</h2>
+    <p><b>第一層:裸指標抹掉 lifetime。</b><code>self.lock.data.get()</code> 回傳 <code>*mut T</code>——到這裡借用檢查器已經看不見它了。你寫 <code>&amp;*ptr</code> 時,編譯器要給這個新借用一個 lifetime,而它<b>純粹從上下文推</b>(通常就是函式簽名),完全不驗證合理性。這就是 unsafe 的責任邊界:<span class="key">lifetime 是你說了算,說錯不會有人攔</span>——SAFETY 註解必須替它作保。</p>
+    <p><b>第二層:簽名決定推出什麼。</b><code>Deref</code> 的簽名經過 lifetime elision:</p>
+    <pre><span class="k">fn</span> deref&lt;<span class="n">'s</span>&gt;(&amp;<span class="n">'s</span> <span class="k">self</span>) -&gt; &amp;<span class="n">'s</span> T
+<span class="c">//        ↑ 對 guard 的借用          ↑ 輸出綁它——不是綁 'a(對 lock 的借用)</span></pre>
+    <p>所以 <code>unsafe { &amp;*self.lock.data.get() }</code> 造出來的 <code>&amp;T</code> 活得跟<b>這次對 guard 的借用</b>一樣長。要 <code>drop(guard)</code>,borrow checker 會先要求所有從它 deref 出來的借用都死光——<b>「借用死在 guard 之前」= 「存取都發生在持鎖期間」</b>,鎖紀律變成編譯錯誤。</p>
+  </section>
+
+  <section>
+    <h2>Stepper:正確版 vs unsound 版</h2>
+    <p>同一段呼叫序列,左右兩個世界:綁 guard(正確)vs 手寫 <code>fn get(&amp;self) -&gt; &amp;'a T</code>(unsound API——裸指標讓它照樣編過)。</p>
+  </section>
+
+  <div class="stepper" id="stepper-lt">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">面試句</span>
+      "The reference conjured from the raw pointer gets whatever lifetime the signature demands. <code>Deref</code>'s elided signature ties it to the borrow of the guard — so the borrow checker enforces that every access dies before the guard does, which is exactly the lock discipline. Hand-rolling a method that returns <code>&amp;'a T</code> compiles fine and is the classic unsound API."
+    </div>
+    <div class="callout">
+      <span class="lbl">DerefMut 的加碼</span>
+      <code>fn deref_mut(&amp;mut self) -&gt; &amp;mut T</code>:除了同樣的 lifetime 綁定,<code>&amp;mut self</code> 還向借用檢查器要求<b>對 guard 的獨占借用</b>——同一個 guard 上不可能同時活著一個 <code>&amp;T</code> 和一個 <code>&amp;mut T</code>。跨執行緒的互斥由 lock 協定扛,<b>同執行緒的互斥由借用檢查器扛</b>,兩層各管一半。
+    </div>
+    <div class="navrow"><button data-jump="overview">◀ 總覽</button><button data-jump="send">② Send 裁決 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= SEND ================= -->
+<div class="tab" id="tab-send">
+  <h1>② Send 裁決 — guard 該不該釘在執行緒上</h1>
+  <div class="sub">!Send 是設計裁決還是 soundness 強制?兩種都存在,分清楚</div>
+
+  <section>
+    <h2>先分清楚兩種 !Send</h2>
+    <table>
+      <tr><th>鎖</th><th>guard !Send 的性質</th><th>理由</th></tr>
+      <tr><td>pthread mutex(舊 <code>std::Mutex</code> 後端)</td><td class="no"><b>強制</b></td><td>POSIX 規定必須由上鎖的執行緒解鎖,跨執行緒解是 <b>UB</b>——沒得商量</td></tr>
+      <tr><td>記 owner 的鎖(reentrant、debug 死鎖偵測)</td><td class="no"><b>強制</b></td><td>owner 身分是機制的一部分,guard 搬家機制就爛</td></tr>
+      <tr><td>純 atomic spin lock(你的教材)</td><td class="ok"><b>設計裁決</b></td><td>unlock 只是一個 atomic store,哪條執行緒做機器層都 sound;選 !Send 是保住推理 + 留 owner 類升級路</td></tr>
+      <tr><td>async mutex(<code>tokio::sync::Mutex</code>)</td><td class="ok">guard <b>必須 Send</b></td><td>task 會被 work-stealing 搬到別的 worker——「A 鎖 B 解」是常態不是 bug</td></tr>
+    </table>
+    <p>生態系把這個選擇編進型別:<code>lock_api::RawMutex</code> 的關聯型別 <code>GuardMarker</code> 由鎖的作者宣告 <code>GuardSend</code> 或 <code>GuardNoSend</code>,guard 的 Send 跟著它走。</p>
+  </section>
+
+  <section>
+    <h2>!Send 保住的推理:三位一體</h2>
+    <p>你對鎖的整條 happens-before 論證建立在「<span class="key">lock 的人 = 臨界區寫入的人 = unlock 的人</span>」上:配對就是兩方——前任 unlock 的 Release ↔ 下一任 lock 的 Acquire,一條邊講完全部故事。guard 一旦可搬家,故事變三方接力(下方 stepper),每一段都要重新論證——<b>不是變錯,是鎖失去了自己作證的能力</b>。</p>
+  </section>
+
+  <section>
+    <h2>Stepper:Send guard 的接力鏈</h2>
+    <p>如果簽下 <code>unsafe impl&lt;'a, T: Send&gt; Send for SpinGuard&lt;'a, T&gt;</code>(對純 atomic 鎖是 sound 的),「A 鎖 → guard 經 channel 到 B → B 寫 → B 放鎖」長這樣。看 happens-before 邊怎麼從一條變兩條。</p>
+  </section>
+
+  <div class="stepper" id="stepper-relay">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <h2>async 世界:為什麼 tokio 的 guard 必須 Send</h2>
+    <pre><span class="k">let</span> guard = mutex.lock().<span class="k">await</span>;
+do_io(&amp;<span class="k">mut</span> *guard).<span class="k">await</span>;   <span class="c">// ← future 在這裡讓出;task 可能被別的 worker 撿走</span>
+<span class="c">// guard 活在 future 的狀態機裡,future 搬到哪它跟到哪</span></pre>
+    <p>work-stealing 執行器下,「上鎖的執行緒」和「解鎖的執行緒」本來就可能不同。guard !Send ⇒ future !Send ⇒ <code>tokio::spawn</code> 直接拒收。所以 <code>tokio::sync::MutexGuard</code> 是 Send(當 <code>T: Send</code>),等待機制整個重造成 <b>waker 佇列</b>——unlock 從任何執行緒做都合法。「channel」在這裡就是執行器本身:run queue 的出入隊提供接力鏈的邊①。</p>
+    <div class="callout bad">
+      <span class="lbl">反向警告</span>
+      同步鎖(spin lock、<code>std::Mutex</code>)<b>不要跨 <code>.await</code> 持有</b>:task 抱著鎖讓出、同 worker 的另一個 task 開始等鎖 = 經典 async 死鎖。guard !Send 在這裡反而是保護網——很多這類錯誤直接編譯不過。
+    </div>
+    <div class="navrow"><button data-jump="lifetime">◀ lifetime</button><button data-jump="poison">③ poisoning ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= POISON ================= -->
+<div class="tab" id="tab-poison">
+  <h1>③ poisoning — 臨界區 panic 之後,資料還能信嗎</h1>
+  <div class="sub">鎖沒事,出事的是資料;兩條路:顯式化 vs 使用者自負</div>
+
+  <section>
+    <h2>事故現場</h2>
+    <p>臨界區 panic → unwind 照跑 guard 的 <code>Drop</code> → <b>鎖正常放開</b>。鎖本身沒壞——但資料可能<b>改到一半被腰斬</b>(len 加了、元素還沒放)。下一個執行緒拿到鎖,讀到半套資料,局部 bug 靜默擴散成資料腐敗。</p>
+    <table>
+      <tr><th>路線</th><th>做法</th><th>買到</th><th>付出</th></tr>
+      <tr><td><b>poisoning</b>(std <code>Mutex</code>)</td><td>panic 時標記;之後 <code>lock()</code> 回 <code>Err(PoisonError)</code></td><td>腐敗不靜默——呼叫者被逼親口承認「不變量可能破了」</td><td>每次 lock 多一層 Result 的人體工學稅</td></tr>
+      <tr><td><b>不毒化</b>(parking_lot / spin / 你的教材)</td><td>unwind 放鎖,僅此而已</td><td>API 乾淨</td><td>不變量由使用者自負;實務論點:panic 多半整個任務完蛋,稅不值得繳</td></tr>
+    </table>
+    <p>注意 <code>PoisonError</code> <b>裡面還是裝著 guard</b>:鎖照樣給你,毒化只是門上的封條,<code>into_inner()</code> 撕掉照拿。</p>
+  </section>
+
+  <section>
+    <h2>偵測機制:`thread::panicking()`</h2>
+    <p>guard 的 <code>Drop</code> 恰好會在 unwind 過程中被跑到——在 Drop 裡問一句 <code>std::thread::panicking()</code>(回報本執行緒是否正在 unwind),就知道自己是「正常走完」還是「被 panic 腰斬後的收屍」:</p>
+    <pre><span class="k">impl</span>&lt;T&gt; <span class="t">Drop</span> <span class="k">for</span> <span class="t">SpinGuard</span>&lt;<span class="n">'_</span>, T&gt; {
+    <span class="k">fn</span> drop(&amp;<span class="k">mut self</span>) {
+        <span class="k">if</span> std::thread::panicking() {
+            <span class="c">// 我是被 unwind 叫來收屍的 → 臨界區沒走完</span>
+            <span class="k">self</span>.lock.poisoned.store(<span class="k">true</span>, Relaxed);  <span class="c">// ①</span>
+        }
+        <span class="k">self</span>.lock.locked.store(<span class="k">false</span>, Release);      <span class="c">// ②</span>
+    }
+}</pre>
+    <h3>三個細節</h3>
+    <ul>
+      <li><b><code>panicking()</code> 的原理</b>:thread-local 計數器,panic 開始 +1、被 <code>catch_unwind</code> 接住 −1;<code>panicking()</code> = 計數器 &gt; 0。</li>
+      <li><b>std 多防的角落</b>:如果<b>上鎖時就已經在 panicking</b>(別的 unwind 的 Drop 裡又拿鎖),臨界區正常走完也會誤判。std 的 guard 在建立時先記 <code>was_panicking</code>,染毒條件是 <code>!was_panicking &amp;&amp; panicking()</code>——只有「panic <b>始於</b>臨界區之內」才算。</li>
+      <li><b>為什麼 ① 用 Relaxed 就夠</b>:它排在 ②(Release store)之前,下一任靠 <code>locked</code> 上的 Acquire/Release 邊就看得到它——<span class="key">搭同一班便車,不用自己買票</span>。std 也是 Relaxed。</li>
+    </ul>
+    <div class="callout info">
+      <span class="lbl">closure API 的另一條路</span>
+      如果 API 是 <code>with_lock(f)</code>(教材誠實邊界裡為 loom 提的形狀),就不用 Drop 偵測:<code>catch_unwind(AssertUnwindSafe(f))</code> 包住,Err 時設旗標再 <code>resume_unwind</code>。RAII guard 沒有 closure 邊界可包,才需要 <code>panicking()</code> 這招。
+    </div>
+  </section>
+
+  <section>
+    <h2>三不總表(教材的 Trade-offs 落位)</h2>
+    <table>
+      <tr><th>性質</th><th>後果</th><th>升級路</th></tr>
+      <tr><td><b>不重入</b></td><td>同執行緒二次 <code>lock()</code> = 把自己旋死</td><td>reentrant lock(記 owner + 計數)——但 guard 從此必須 !Send(強制級)</td></tr>
+      <tr><td><b>不公平</b></td><td>誰搶到誰贏,飢餓可能</td><td>ticket lock 給 FIFO;流量要再上 MCS(見 MESI 頁)</td></tr>
+      <tr><td><b>不毒化</b></td><td>panic 後資料半套、靜默</td><td>毒化旗標 + <code>panicking()</code>(本頁);或文件明說使用者自負</td></tr>
+    </table>
+    <div class="navrow"><button data-jump="send">◀ Send</button><button data-jump="quiz">句庫 · 自測 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= QUIZ ================= -->
+<div class="tab" id="tab-quiz">
+  <h1>面試句庫 · 自測</h1>
+  <div class="sub">先出聲講,再展開對答案</div>
+
+  <section>
+    <h2>30 秒英文句庫</h2>
+    <ul>
+      <li>"The guard is the lock discipline translated into the type system: the deref'd borrow is tied to the guard, so 'access only while holding the lock' becomes a borrow-check error instead of a code-review comment."</li>
+      <li>"Guards default to !Send because the reasoning — and for pthread, the correctness — is anchored on which thread owns the critical section. An async mutex inverts this: tasks migrate between workers, so the guard <b>must</b> be Send and the wait machinery becomes a waker queue."</li>
+      <li>"On panic the unwind still runs Drop, so the lock is released — the data is what's suspect. std poisons to make that explicit; parking_lot and spin skip it and document that invariants are the user's job."</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>自測(先答再翻)</h2>
+    <details><summary>1. <code>Deref</code> 回傳的 <code>&amp;T</code> 如果綁 <code>'a</code>(lock 的借用)而不是 <code>&amp;self</code>,寫出什麼程式會爆?</summary>
+      <code>let r = &amp;*guard; drop(guard); use_it(r);</code>——r 活過放鎖,別的執行緒此刻可拿 <code>&amp;mut T</code>,同時存在 <code>&amp;T</code>/<code>&amp;mut T</code> = data race/UB。綁 <code>&amp;self</code> 讓 <code>drop(guard)</code> 在 r 活著時直接編譯錯誤。</details>
+    <details><summary>2. 你的 spin lock 簽 <code>unsafe impl Send for SpinGuard</code> 是 sound 的嗎?條件是什麼?</summary>
+      Sound——前提兩條:unlock 只是 atomic store(任何執行緒做都合法,pthread 就不行);<code>T: Send</code>(<code>&amp;mut T</code> 的獨占存取權跟著 guard 搬家)。剩下的是設計問題:你放棄了 reentrant/owner-tracking 升級路,鎖也講不完整 happens-before 故事了(要靠搬運工具的同步邊)。</details>
+    <details><summary>3. Send guard 經 channel 從 A 到 B,B 放鎖後下一任 C 為什麼看得到 A 的寫入?</summary>
+      兩條邊接力:A 的寫入 →(channel send=Release / recv=Acquire)→ B →(B unlock Release / C lock Acquire)→ C。safe Rust 的跨執行緒搬運原語<b>都自帶同步邊</b>,這是 Send + safe 搬運 sound 的原因;用不帶同步的方式偷渡(裸指標、Relaxed AtomicPtr)邊①就消失 = UB。</details>
+    <details><summary>4. 毒化旗標為什麼 Relaxed 就夠?什麼情況下它會不夠?</summary>
+      它的 store 排在 <code>locked</code> 的 Release store 之前,下一任的 Acquire 邊順便把它護送過去。如果有人<b>不經過 lock 協定</b>直接讀旗標(例如監控執行緒裸讀 <code>poisoned</code>),沒有那條邊,Relaxed 讀到的值就沒有任何順序保證——便車只保「搭同一班車的人」。</details>
+    <details><summary>5. 為什麼 std 的染毒條件是 <code>!was_panicking &amp;&amp; panicking()</code> 而不是 <code>panicking()</code>?</summary>
+      在別的 unwind 的 Drop 裡拿鎖 → 臨界區正常走完 → guard Drop 時 <code>panicking()</code> 仍是 true(那個外層 panic 還在 unwind)→ 誤判染毒。記下「上鎖時是否已在 panicking」,只有 panic <b>始於臨界區之內</b>才染毒。</details>
+    <div class="navrow"><button data-jump="poison">◀ poisoning</button><span></span></div>
+  </section>
+</div>
+
+<footer>
+  RAII Guard 設計學 · 借用死在 guard 之前 = 存取都在持鎖期間 · !Send 分「強制」與「裁決」兩種<br>
+  姊妹頁:mesi-rmw-atomics(機器層帳單)· spin_lock 教材(reference/src/concurrency)· docs/concurrency/spin_lock.md
+</footer>
+
+</div><!-- /wrap -->
+
+<script>
+"use strict";
+
+/* ===== Tabs ===== */
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const btn = tabbar.querySelector('button[data-tab="' + j.dataset.jump + '"]');
+  if (btn) btn.click();
+});
+
+/* ===== Stepper scaffold ===== */
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.cnt = this.root.querySelector('.stepcount');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else this.go(0);
+    });
+    this.go(0);
+  }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.innerHTML = '<b>[' + (this.idx+1) + '/' + this.steps.length + ']</b> ' + s.narr;
+    this.cnt.textContent = 'step ' + (this.idx+1) + ' / ' + this.steps.length;
+  }
+}
+function el(tag, cls, html){
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+function quiz(stage, question, opts){
+  const q = el('div','quiz');
+  q.appendChild(el('p', null, '預測題:' + question));
+  const fb = el('div','fb');
+  opts.forEach(o => {
+    const b = el('button', null, o.label);
+    b.addEventListener('click', () => {
+      fb.style.display = 'block';
+      fb.style.color = o.correct ? 'var(--green)' : 'var(--red)';
+      fb.innerHTML = (o.correct ? '✓ ' : '✗ ') + o.fb;
+    });
+    q.appendChild(b);
+  });
+  q.appendChild(fb);
+  stage.appendChild(q);
+}
+
+/* 共用:三欄時間線 */
+function renderCols(stage, cols, pills, edge){
+  const wrapCols = el('div','tcols');
+  cols.forEach(c => {
+    const box = el('div','tcol ' + c.cls);
+    box.appendChild(el('h4', null, c.title));
+    c.lines.forEach(l => box.appendChild(
+      el('div', 'tline' + (l.on ? ' act' + (l.tone ? ' ' + l.tone : '') : ''), l.txt)));
+    wrapCols.appendChild(box);
+  });
+  stage.appendChild(wrapCols);
+  if (pills){
+    const row = el('div','statusrow');
+    pills.forEach(p => row.appendChild(el('span','pill' + (p.cls ? ' ' + p.cls : ''), p.txt)));
+    stage.appendChild(row);
+  }
+  if (edge) stage.appendChild(el('div','hbedge', edge));
+}
+
+/* ===== S1: lifetime 正確 vs unsound ===== */
+const LT_OK = [
+  'let g = lock.lock();',
+  'let r = &*g;        // 綁 &g',
+  'use_it(r);',
+  'drop(g);            // r 已死,合法',
+];
+const LT_BAD = [
+  'let g = lock.lock();',
+  "let r = g.get();    // &'a T,綁 lock",
+  'drop(g);            // 鎖放了,r 還活著',
+  'use_it(r);          // 💥 解鎖後仍在讀',
+];
+const LT_FRAMES = [
+  { ok:[0], bad:[0],
+    pills:[{txt:'lock: held', cls:'on'}],
+    narr:'兩個世界同時開場:上鎖,拿到 guard。左邊 = Deref 綁 &self(正確);右邊 = 手寫 fn get(&self) -> &\'a T(裸指標讓它照樣編過)。' },
+  { ok:[0,1], bad:[0,1],
+    pills:[{txt:'lock: held', cls:'on'},{txt:'r 活著'}],
+    narr:'各自取出 &T。左邊的 r 綁在「對 g 的借用」上;右邊的 r 綁在「對 lock 的借用」上——活得跟 lock 一樣久,跟 g 無關。此刻兩邊行為看起來一模一樣,毒就藏在 lifetime 裡。' },
+  { ok:[0,1,2], bad:[0,1,2],
+    pills:[{txt:'左:drop(g) 被擋', cls:'on'},{txt:'右:drop(g) 通過', cls:'warn'}],
+    narr:'關鍵分岔。左邊:想 drop(g)?borrow checker 說 r 還活著、g 正被借用中——編譯錯誤,鎖紀律守住。右邊:r 跟 g 無關,drop(g) 順利通過,鎖被放開,r 還活著。',
+    quiz:{ q:'右邊接下來 use_it(r) 會發生什麼?',
+      opts:[
+        {label:'沒事,r 指向的資料還在', correct:false,
+         fb:'資料還在,但保護不在了。鎖已放開,任何執行緒此刻都能 lock() 拿到 &mut T——你的 &T 和別人的 &mut T 同時活著,aliasing 規則被打破,這是 data race/UB,不是「碰巧沒事」。'},
+        {label:'UB:解鎖後的讀,可能與別人的 &mut T 並存', correct:true,
+         fb:'正確。而且編譯器完全不會警告——unsafe 裡造 lifetime 時你簽了保證書,簽錯就是 unsound API。這就是為什麼 Deref 的簽名(綁 &self)是安全的支點。'}
+      ]},
+  },
+  { ok:[0,1,2,3], bad:[0,1,2,3],
+    pills:[{txt:'左:全綠', cls:'on'},{txt:'右:UB 已發生', cls:'warn'}],
+    narr:'結局。左邊順序被迫是 use_it(r) → drop(g):所有存取都在持鎖期間,鎖紀律 = 借用規則。右邊已經是 UB——面試句:「the borrow must die before the guard does」,一句話講完 RAII guard 的安全論證。' },
+];
+function buildLt(){
+  return LT_FRAMES.map(f => ({
+    narr: f.narr,
+    render(st){
+      renderCols(st, [
+        {cls:'A', title:'✓ Deref 綁 &self', lines: LT_OK.map((t,i)=>({txt:t, on:f.ok.includes(i), tone: i===3?'good':null}))},
+        {cls:'B', title:"✗ get() 回 &'a T", lines: LT_BAD.map((t,i)=>({txt:t, on:f.bad.includes(i), tone: i===3?'bad':null}))},
+      ], f.pills, null);
+      if (f.quiz) quiz(st, f.quiz.q, f.quiz.opts);
+    }
+  }));
+}
+
+/* ===== S2: Send guard 接力鏈 ===== */
+const RA = ['g = lock.lock()  // Acquire', 'g.push(4)        // 臨界區寫入', 'tx.send(g)       // guard move 走'];
+const RB = ['g = rx.recv()    // 接手', 'g.push(5)        // 繼續寫', 'drop(g)          // store Release'];
+const RC = ['g2 = lock.lock() // Acquire', 'read: [1,2,3,4,5]'];
+const RELAY_FRAMES = [
+  { a:[0], b:[], c:[], pills:[{txt:'lock: A 持有', cls:'on'}], edge:null,
+    narr:'A 上鎖(swap Acquire)。注意:接下來整段過程,鎖只會被 lock 一次、unlock 一次——但中間換一次手。' },
+  { a:[0,1], b:[], c:[], pills:[{txt:'lock: A 持有', cls:'on'}], edge:null,
+    narr:'A 在臨界區寫入 push(4)。' },
+  { a:[0,1,2], b:[0], c:[], pills:[{txt:'lock: B 持有(換手)', cls:'on'}],
+    edge:'邊①:channel 的 send(Release)→ recv(Acquire)——A 的 push(4) 對 B 可見',
+    narr:'guard 整個 move 進 channel,B recv 接手。這條同步邊是 channel 提供的,不是鎖提供的——safe Rust 的跨執行緒搬運原語都自帶 Release/Acquire 邊,這是 Send + safe 搬運 sound 的原因。A 的手從此離開,借用檢查器保證它再也碰不到資料。' },
+  { a:[0,1,2], b:[0,1], c:[], pills:[{txt:'lock: B 持有', cls:'on'}],
+    edge:'邊①已成立',
+    narr:'B 繼續寫 push(5)。同一個臨界區,第二位寫手——「臨界區屬於一條執行緒」的三位一體在這裡正式解體,但每一步都是 safe 的。' },
+  { a:[0,1,2], b:[0,1,2], c:[], pills:[{txt:'lock: 空', }],
+    edge:'邊②:B 的 unlock(Release)——B 與 A 的寫入一起被發佈',
+    narr:'B drop guard:store(false, Release)。注意 Release 發佈的是「B 這條執行緒到此為止的所有可見寫入」——經由邊①,A 的 push(4) 也在其中。' },
+  { a:[0,1,2], b:[0,1,2], c:[0,1], pills:[{txt:'lock: C 持有', cls:'on'}],
+    edge:'完整鏈:A 寫入 →邊①→ B 寫入 →邊②→ C 全部看到 [1,2,3,4,5]',
+    narr:'下一任 C 上鎖(Acquire 配對 B 的 Release),看到 4 和 5。正確性沒破——但「lock 的 Acquire 配對前任 unlock 的 Release」這條單邊故事現在只覆蓋邊②;邊①是 channel 的功勞。鎖講不完整故事了,這就是教材選 !Send 的理由:不是怕錯,是要保住鎖自己作證的能力。' },
+];
+function buildRelay(){
+  return RELAY_FRAMES.map(f => ({
+    narr: f.narr,
+    render(st){
+      renderCols(st, [
+        {cls:'A', title:'THREAD A', lines: RA.map((t,i)=>({txt:t, on:f.a.includes(i)}))},
+        {cls:'B', title:'THREAD B', lines: RB.map((t,i)=>({txt:t, on:f.b.includes(i)}))},
+        {cls:'C4', title:'THREAD C(下一任)', lines: RC.map((t,i)=>({txt:t, on:f.c.includes(i), tone: i===1?'good':null}))},
+      ], f.pills, f.edge);
+    }
+  }));
+}
+
+new Stepper('stepper-lt', buildLt());
+new Stepper('stepper-relay', buildRelay());
+</script>
+</body>
+</html>

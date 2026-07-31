@@ -1,30 +1,29 @@
 # 學習進度(手動勾選,git 追蹤)
 
-~~面試日:**2026-07-28**~~ → **R1 ✅ 過(7/28)**;R2 onsite:**8/6、8/11 coding + 8/12 deep dive/culture fit,皆 09:15**。
+~~面試日:**2026-07-28**~~ → **R1 ✅ 過(7/28)**;R2 onsite(8/1 官方行程確認):**8/6 兩場 coding 同天連跑(09:15–10:00、10:15–11:00,休 15m)+ 8/10(一)10:00 deep dive + debrief;culture fit 無獨立場(散在各場 behavioral + debrief)**。
 R2 逐日計畫與材料:[docs/interviews/README.md](docs/interviews/README.md);R1 衝刺排程(已結案):[SCHEDULE.md](SCHEDULE.md)。
 三欄語意:讀 = reference 讀懂能講;drill = 填完轉綠;
 challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ring→a、pool→b、framer→c)。
 
-## R2 onsite(7/29 → 8/12)
+## R2 onsite(7/29 → 8/10)
 
 R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07-28-tps-round1-dma.md)。
 
 | 項 | 狀態 | 備註 |
 |---|---|---|
 | 讀 sol_sim_i_dma(三張表) | ☐ 排 7/29 | R1 洞的正解;Dry-Run 段紙上走一遍 |
-| sim i-lite(30m 修洞重做) | ☐ 排 7/30 | `rehearsals/src/sim_i_dma.rs` 填 `run()`,不看 sol |
-| sim j(ISR pipeline)全場 | ☐ 排 7/31 | + signal_pipeline 頁複讀 30m |
-| sim k(per-core fan-in)全場 | ☐ 排 8/1 | + 卡 FP |
-| sim l(MMIO doorbell)全場 | ☐ 排 8/2 | HW-L 卡當前導;oracle 抓漏 barrier |
-| sim m(watchdog)全場 | ☐ 排 8/8 | 吃 coding #2 暴露的方向 |
-| sim n(priority scheduler + DAG)全場 | ☐ 排 8/9 | 材料已備;8/6 後視情報換皮 |
-| 認題卡 ×7 | ☐ | SP 7/30|FP 8/1|FR/TA/TQ 8/3|HW×2 = l/m 前導 |
-| deep dive 英文稿(2–3 專案) | ☐ 起草 7/29 | 口述 7/31、8/2、8/7;全串 8/9;`docs/interviews/deep-dive-projects.md` |
-| culture fit 稿(題庫 11 題) | ☐ 起草 7/29 | 唸 8/1、8/5;全串 8/8;`docs/interviews/culture-fit-script.md` |
-| **coding #2** | ☐ 8/6(四)09:15 | 當晚:紀錄+洞清單入 docs/interviews/ |
-| **coding #3** | ☐ 8/11(二)09:15 | |
-| **deep dive + culture fit 場** | ☐ 8/12(三)09:15 | |
+| sim i-lite(30m 修洞重做) | ✅ 7/30 | drills 填空版 6/6 綠——R1 兩洞在 drill 層關掉;空白重寫層驗證由 m 全場扛 |
+| sim j(ISR pipeline)全場 | ✅ 7/31 | 16:39–17:24 錶內完成 P1+P2,oracle 2/2 綠,自抓自修 2 bug;signal_pipeline 頁複讀 ✓ |
+| sim k(per-core fan-in)**lite** | ☐ 排 8/1(7/31 改制降 lite) | + 卡 FP |
+| sim l(MMIO doorbell)**lite** | ☐ 排 8/2(7/31 改制降 lite) | HW-L 卡當前導 |
+| sim m(watchdog)**全場** | ☐ 排 8/2(自 8/8 前移) | R1 直系延伸、#2/#3 命中率最高;HW-M 卡當前導 |
+| sim n(priority scheduler + DAG)**lite** | ☐ 排 8/3(自 8/9 前移降 lite) | #2/#3 併 8/6,「8/6 後換皮」窗口不存在;8/3 開機 graph 一題當暖身 |
+| 認題卡 ×7 | ☐ 進行中 | SP ✅ 7/30(7/31 重做 19m 錶內)|FP 8/1|HW×2 = l/m 前導|FR/TA/TQ 原 8/3 槽被 n lite 取代,未再排 |
+| deep dive 英文稿(3 專案) | 稿 ✅(7/29 起草、7/31 口述化) | 口述練習壓 8/7–8/9(8/10 上午上場);`docs/interviews/deep-dive-projects.md` |
+| culture fit 稿 | 稿 ✅(7/31 ★ 五題全英文逐字化;★3 三細節待補真) | 無獨立場——散在各場 behavioral + debrief;唸稿壓 8/7–8/9;`docs/interviews/culture-fit-script.md` |
+| **coding ×2(併場)** | ☐ **8/6(四)09:15–10:00 Jan Lagarden、10:15–11:00 Jason Catlin**(休 15m,07:45 起) | 當晚:紀錄+兩場洞清單入 docs/interviews/ |
+| **deep dive + debrief** | ☐ **8/10(一)10:00–10:45 Ulysses Kao + 10:45–11:00 Molly Huang** | culture fit 散在各場,無獨立場;08:30 起即可 |
 
 ## 模組 × 三層
 

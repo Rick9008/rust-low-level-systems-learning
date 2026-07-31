@@ -1,7 +1,7 @@
 # SCHEDULE.md — Etched TPS 衝刺(7/16 → 7/28)
 
 > **2026-07-29 結案**:R1(7/28 TPS coding)✅ 過,feedback 正向(clarify 被點名稱讚;洞 = 時間不夠 code 有漏洞)。
-> **R2 onsite**:coding 8/6(四)+ 8/11(二)、deep dive + culture fit 8/12(三),皆 09:15 開場。
+> **R2 onsite(8/1 官方行程確認)**:兩場 coding 併 **8/6(四)同天連跑**(09:15–10:00、10:15–11:00,中間只休 15m);deep dive + recruiter debrief **8/10(一)10:00–11:00**(修正 7/31 記載的 8/11);culture fit 沒有獨立場(散在各場 behavioral 提問 + debrief)。
 > 新階段的逐日計畫、題本(sim i–m)、認題卡、句庫、稿件全在 **[docs/interviews/README.md](docs/interviews/README.md)**——本檔保留衝刺歷史,逐日表不再更新。
 > 7/29 = 休息日(輕活):讀 `rehearsals/examples/sol_sim_i_dma.rs` + deep dive / culture fit 英文稿起草。
 

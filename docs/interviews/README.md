@@ -10,7 +10,7 @@
 | coding #2 + #3 | **8/6(四)09:15–10:00、10:15–11:00**(中間休 15 分鐘) | — |
 | technical deep dive + culture fit 場 | **8/11(二)** | — |
 
-Onsite 結構(2026-07-31 確認):兩場 coding 併到 **8/6 同天連跑**(各 45m、中間只休 15m——連打的體力與切換是新變數,8/4 背靠背模擬對此),deep dive 場在 **8/11**;**culture fit 沒有獨立場**——散在各場 behavioral 提問 + debrief,culture fit 稿的用途 = 每場開頭自介 + debrief。**併場的兩個結論:六題攝取全部壓進 8/5 前;deep dive / culture fit 出聲練習整段後移 8/7–8/10(8/11 才上場,這週不碰)。**
+Onsite 結構(2026-08-01 官方行程信確認;**修正 7/31 記載的「deep dive 8/11」**):兩場 coding 併到 **8/6(四)同天連跑**(09:15–10:00 Jan Lagarden、10:15–11:00 Jason Catlin,中間只休 15m——連打的體力與切換是新變數,8/4 背靠背模擬對此);**deep dive 在 8/10(一)10:00–10:45(Ulysses Kao),緊接 recruiter debrief 10:45–11:00(Molly Huang)**;**culture fit 沒有獨立場**——散在各場 behavioral 提問 + debrief,culture fit 稿的用途 = 每場開頭自介 + debrief。**兩個結論:六題攝取全部壓進 8/5 前;deep dive / culture fit 出聲練習壓進 8/7–8/9 三天(8/10 上午即上場)。**
 
 R1 前的衝刺計畫在 `../../SCHEDULE.md`(7/16→7/28,已結案)。
 
@@ -50,7 +50,7 @@ code 走讀、陷阱清單;**每分頁掛同款防雷門**(i 已開,j–n 各自
 
 ## 逐日計畫(7/30 → 8/11;練習時間比衝刺期少,量已壓)
 
-原則:白天打字場 = 模擬題(clarify 打字來回不用出聲);**8/6 前晚上只留 coding 支援輕出聲(clarify 句庫/四形狀對白/30 秒定界),deep dive 口述 + culture fit 唸稿整段後移 8/7–8/10**,每晚至多一件出聲事,標「(選)」的累了就砍。signal pipeline 由 j 題 + 複讀覆蓋,不另開項目。時間資源(7/31 口報):週日 8/2 大塊,8/3–8/5 上班日也比平常多。
+原則:白天打字場 = 模擬題(clarify 打字來回不用出聲);**8/6 前晚上只留 coding 支援輕出聲(clarify 句庫/四形狀對白/30 秒定界),deep dive 口述 + culture fit 唸稿整段後移 8/7–8/9(8/10 10:00 上場)**,每晚至多一件出聲事,標「(選)」的累了就砍。signal pipeline 由 j 題 + 複讀覆蓋,不另開項目。時間資源(7/31 口報):週日 8/2 大塊,8/3–8/5 上班日也比平常多。
 
 | 日期 | 白天(公司,~90m 上限) | 晚上(出聲) |
 |---|---|---|
@@ -62,9 +62,9 @@ code 走讀、陷阱清單;**每分頁掛同款防雷門**(i 已開,j–n 各自
 | 8/3 一(大塊) | 開機:**drills graph 一題**(拓撲/indegree,20m——圖論興趣槽兼 n 的暖身)→ n **lite**(自 8/9 前移;認題輪取消,被 lite 覆蓋)+ i–k 洞複掃 + 骨架默寫抽查 15m | (選)clarify 句庫一類唸 3 遍 |
 | 8/4 二(大塊) | **背靠背模擬**:Claude 出全新題 ×2(禁區同 live sim 規:不碰 j–n hidden spec 域),各 25–30m 只跑到 state 表+骨架,**中間休 15 分鐘照 8/6 真實節奏**——兩場連打的體力與切換先試一次;**每題埋一個 sizing 小題,用量級五行頭(Given/Chain/Cross/Sanity/Verdict)作答**(7/31 reps v5 定案的結帳骨架) | **08:30 起(梯度開始;9:15 場只需 07:45 起,比 R1 的 8:45 場輕)** |
 | 8/5 三 | taper:不碰新題、檢查表 + 時間預算 + **六題 30 秒英文定界唸一輪**(sol 檔頭 + spec-cards-answers)+ **量級五行頭默寫 30 秒**(Given/Chain/Cross/Sanity/Verdict) | 08:00 起、00:30 熄燈 |
-| **8/6 四** | **coding #2 + #3(09:15–10:00、10:15–11:00)**,07:45 起 | 當天紀錄入庫 + 兩場洞清單 |
-| 8/7 五 – 8/10 一 | coding 歸零,白天+晚上全轉 deep dive / culture fit:口述 #1(專案二)→ #2(專案一)→ #3(專案三)、culture fit 唸 + 模擬追問、雙全串、8/10 taper;細排 8/6 收帳時定 | 8/10 早睡(整段維持 ≤08:30 起) |
-| **8/11 二** | **deep dive + culture fit(時段待確認)**,07:45 起 | 收帳:全程紀錄入庫 |
+| **8/6 四** | **coding ×2(09:15–10:00 Jan Lagarden、10:15–11:00 Jason Catlin)**,07:45 起 | 當天紀錄入庫 + 兩場洞清單;收帳時確認 8/7–8/9 細排 |
+| 8/7 五 – 8/9 日 | coding 歸零,全轉 deep dive / culture fit(只有三天,8/10 上午即上場):8/7 稿件補洞(★3 Moderation demo 三細節/conflict 人物場景/專案三最難 bug+如果重來)+ 晚口述 #1(專案二)→ 8/8 口述 #2+#3 + culture fit 全套唸(★1–★7)+ 模擬追問 → 8/9 雙全串 + taper、早睡;細排可在 8/6 收帳時再調 | 整段維持 ≤08:30 起 |
+| **8/10 一** | **deep dive 10:00–10:45(Ulysses Kao)+ recruiter debrief 10:45–11:00(Molly Huang)**;08:30 起即可(10:00 場比 09:15 輕) | 收帳:全程紀錄入庫;debrief 備妥想問的 3 個問題 + 結果時程問法 |
 
 culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict、failure、proudest project、想問他們的 3 個問題;底稿 = 7/26 的三條經驗故事。稿子檔案:`culture-fit-script.md`(寫完放本資料夾)。
 
