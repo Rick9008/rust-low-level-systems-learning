@@ -31,6 +31,9 @@ fn log(s: Sample);                        // slow; worker side only
 > 醒睡:recheck-before-sleep 補上(7/30 缺的半);wake 語意(sticky/合併)沒問——recheck 正確性懸在此。
 > ISR 細節:Err(Full) 重試兩次=中斷內空轉+FIFO 樣本擱淺沒入帳;正確=計數後繼續抽乾。
 > 下次釘子:③的變形要認得(任何「再加一層 buffer/thread/map」先問:spec 的有界性還在嗎)+ 喚醒語意進 clarify 必問清單。
+> 知識洞補記(賽後討論挖出):ISR≠thread,是「劫持一顆核」——單核時 ISR 執行期間全部 thread 凍結
+> (worker 零進度,retry 必敗);SMP 時才可能真並行,但 IRQ 可能剛好落在 worker 的核。
+> ISR 不能 sleep=沒有 task 身分可掛起;不能拿 thread 的鎖=單核必死鎖。try_push 的形狀是被這模型逼出來的。
 > 形狀 / try_push 去向)✓;靠腦內試寫抓到 API 缺 pop ✓——最好的找洞方式。
 > 三洞:① full policy 三度選 drop-oldest——ISR 側只有 try_push,這套 API **做不出**
 > drop-oldest,可實作政策 = drop-newest + dropped 計數;② 面試官口頭需求「丟要留帳」
