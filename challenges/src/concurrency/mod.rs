@@ -3,4 +3,5 @@
 pub mod mpmc_ring;
 pub mod sharded_map;
 pub mod signal_pipeline;
+pub mod spin_lock;
 pub mod spsc_ring;

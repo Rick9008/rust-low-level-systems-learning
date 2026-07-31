@@ -10,6 +10,9 @@ pub mod thread_pool;
 
 // stage 4:atomic / lock-free(loom 驗證見 tests/loom_*.rs)
 pub mod arena_lockfree;
+// 開胃菜:atomics 的最小完整應用——TTAS 自旋鎖 + RAII guard
+// (Drop/Deref/unsafe impl Sync 的教學模組;7/31 加,drills/challenges 有練習版)
+pub mod spin_lock;
 // JD 本尊圖:訊號源 → SPSC → spin-then-park 消費(掛牌握手 = SeqCst 的實戰位)
 pub mod signal_pipeline;
 pub mod spsc_ring;
