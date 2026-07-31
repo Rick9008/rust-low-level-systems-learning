@@ -56,6 +56,14 @@ CoderPad 做得了、面試會考。**這個編號清單就是建議閱讀順序
 12. `signal_pipeline`:JD 本尊圖——訊號源 → SPSC → spin-then-park 消費;
     掛牌握手是 SeqCst 的實戰位(練完 5 再來)★
 
+**7/31 新增(三層全有,依需求插隊,不佔用上方編號)**:
+- `spin_lock`:TTAS 自旋鎖 + RAII guard——`impl Drop`/`Deref`/`unsafe impl Sync` 的
+  最小完整應用;建議排在 5(`spsc_ring`)之前當 atomics 開胃菜
+  (設計文 `docs/concurrency/spin_lock.md`:TAS vs TTAS、三不、spin vs park 成本錨)
+- `conflation_slot`:per-key conflation,值層/通知層分離——`bounded_queue` 的政策續集
+  (過載時「該丟哪筆」的正確答案:同 key 舊值);invariant `queued ⟺ ∈ready`;
+  圖解與三個互動 stepper:`html_p/conflation-slot-stepper.html`
+
 次優先(CoderPad 做得了、一般面試常見,但非 TPS 核心考點,時間有限就往後排):
 `inplace_leetcode`(27/75/80/88/189 五道 in-place 題,`iter_mutate` 的實戰應用)、
 `graph`(BFS / DFS / Kahn's topo / Dijkstra)、`trie`、`tree`;
@@ -211,6 +219,7 @@ cargo run -p reference --example loom_vs_stress    # 見下節
 |---|---|
 | `bounded_queue` `thread_pool` `sharded_map` | concurrency 基礎:鎖、條件變數、shutdown 語意 |
 | `spsc_ring` `arena_lockfree` | concurrency 進階:memory ordering、lock-free、ABA |
+| `spin_lock` `conflation_slot` | concurrency 補充:RAII guard(Drop/Deref/unsafe Sync)、過載政策 keep-latest 與 lost-update 紀律 |
 | `executor` | async runtime internals:Waker、park/unpark |
 | `epoll_sys` `event_loop` `tcp_echo` | event loop:readiness model、LT/ET、backpressure |
 | `file_io_offload` | event loop 邊界:readiness vs completion(io_uring) |
