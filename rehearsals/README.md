@@ -31,7 +31,7 @@ Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → �
 | g | bounded_channel | 認題 Q6 | 4 todo!/2 自測 | recognition | |
 | h | timer_queue | 認題 Q7 | 6 todo!/1 自測 | recognition | |
 | sim i | sim_i_dma | R2 模擬(i-lite 30m) | 骨架 | 7/30(sol 已開) | |
-| sim j | sim_j_isr | R2 模擬全場 | 骨架 | 7/31 | |
+| sim j | sim_j_isr | R2 模擬全場 | ✅ 已作答(P1+P2 + 自測×2) | 7/31 ✅ 錶內,oracle 2/2 | |
 | sim k | sim_k_fanin | R2 模擬 **lite**(7/31 改制:改跑 drills 填空,本 harness 備而不用) | 骨架 | 8/1 | |
 | sim l | sim_l_mmio | R2 模擬 **lite**(同上) | 骨架 | 8/2 | |
 | sim m | sim_m_watchdog | R2 模擬全場(自 8/8 前移;認題輪取消) | 骨架 | 8/2 | |
@@ -46,7 +46,7 @@ reference 答案本一律場後才開。全場題(j/m)跑完後,複打走填空�
 | sim | reference(答案本)/ drills(填空)模組 | 開放時點 |
 |---|---|---|
 | i | `io/dma_dispatcher` | 已開(sol 7/29 已讀) |
-| j | `concurrency/isr_pipeline` | 7/31 場後 |
+| j | `concurrency/isr_pipeline` | ✅ 已開(7/31 場後;複打排 8/3 洞複掃) |
 | k | `concurrency/percpu_fanin` | drills=8/1 lite 場開跑即用;reference=場後 |
 | l | `io/mmio_cmdq` | drills=8/2 lite 場開跑即用;reference=場後 |
 | m | `io/engine_watchdog` | 8/2 場後(全場自 8/8 前移;認題輪取消) |
