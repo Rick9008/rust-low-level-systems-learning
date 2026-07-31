@@ -276,6 +276,35 @@ li{margin:5px 0;}
 <h2>結帳表(每題四項,三缺一重寫)</h2>
 <pre class="code"><b>算式</b>(帶單位的鏈)→ <b>數字</b>(收斂後的量)→ <b>荒謬檢查</b>(三招選一,寫出來)→ <b>一句裁決</b>(數字→設計動作)</pre>
 
+<h2>五行頭結帳骨架(7/31 reps v5 定案:動筆先寫行頭,五行不滿不准收筆)</h2>
+<p>同一張結帳表,釘成五個固定行頭。它用格式擋掉三個實錄病,不靠意志力:
+心算步驟不落紙(÷10s 在腦中做了、帳上消失)、數字一出就收筆(Sanity 連四輪缺席)、
+偷偷答自己覺得合理的題(題目給定的數字沒用完)。</p>
+
+<h3>骨架</h3>
+<pre class="code"><b>Given:</b>   抄下題目給的每個數字+單位——用一個劃一個,有剩 = 你在答別題
+<b>Chain:</b>   主計算,一行一步,每行單位要平衡
+<b>Cross:</b>   換一條路再算,殊途必須同歸(抓掉零的主保險)
+<b>Sanity:</b>  一行:這數字放進真實世界像話嗎(上面三招選一)
+<b>Verdict:</b> 一句裁決:配多大、什麼政策、何時啟動</pre>
+
+<h3>R1 metrics agent 滿分卷長相</h3>
+<pre class="code">Given:   2,000 counters / 10 s · 32 B each · batch 60 s · outage ≤ 5 min
+Chain:   2,000 × 32 B = 64 KB per snapshot
+         64 KB ÷ 10 s = 6.4 KB/s
+         6.4 KB/s × 300 s ≈ 1.9 MB
+Cross:   200 rec/s × 60 s = 12,000 rec × 32 B = 384 KB/batch, ×5 ≈ 1.9 MB ✓
+Sanity:  1.9 MB on a host agent — trivial, no alarm
+Verdict: 2 MB ring; zero loss within the 5-min spec. Beyond spec,
+         conflate to latest-per-counter (2,000 × 32 B = 64 KB floor), count drops.</pre>
+
+<div class="card info">
+  <span class="tag">用場</span>
+  <p>8/4 背靠背模擬:兩題各埋一個 sizing 小題,用這五行作答。8/5 taper:默寫行頭 30 秒。
+  面試場上被問 <span class="en">"how big should the buffer be?"</span> 時,這五行就是口頭版的順序——
+  唸 Given 就是複述題目確認、唸 Sanity 就是那句加分的常識錨。</p>
+</div>
+
 </section>
 
 <!-- ================= T3 ================= -->
