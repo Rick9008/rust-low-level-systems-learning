@@ -106,15 +106,21 @@ targets, and worker-pool size if a probe can hold a worker for 1s.
 
 Answer 7/31:
 
+Assume each round waits out the full 1s timeout before the next starts,
 max probe interval: 3T + 3 <= 20s, so we can pick T as 5 sec
 
 probes/s for 500 targets: 500 / 5 = 100 probe/s
 
 worker-pool we can use maybe 2 ~ 4 are enough, which is the regular rate \* probe time(maybe only 20 ms?) ~= 2 busy thread
-but when every probe try to connect in the same time, we need 100/s \* 1s = 100 workers
-100 \* 8 MB stack = 800 MB, too large. -> Because the probe operation is IO-bound, we can use async or stack.
+but when every probe try to connection holds full 1s timeout, we need 100/s \* 1s = 100 workers
+100 \* 8 MB stack = 800 MB, too large. -> Because the probe operation is IO-bound, we should go async.
 
-> **批改 2026-07-31(v5)——⚠ 差一句話收**
+> **批改 2026-07-31(v6)——✓ 收,全案收攤**
+>
+> - 假設句 ✓、風暴劇本(全部吃滿 1s timeout)✓、裁決 async ✓。
+> - 潤一句:async 之後補 "still sized for ~100 in-flight probes"——async 省的是 thread 成本,不是併發數。
+> - **三題結案(7/31)**:R1/R2/R3 全收。後續維護走五行頭骨架(capacity-four-shapes.html 分頁②),
+>   8/4 背靠背模擬埋 sizing 小題實戰、8/5 taper 默寫行頭;本檔不再開新題。
 >
 > - ✓ pool=100 主答案到了、800 MB → async 的 Sanity 到了,順序也對(平時 2–4 退居第二句)。
 > - ✗ 模型假設句**二連缺**:`3T+3` 前加 "Assuming each round waits out the full 1s timeout
