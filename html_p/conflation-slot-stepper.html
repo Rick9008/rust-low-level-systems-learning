@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Per-key Conflation Slot — 值層／通知層分離 · Stepper Handbook</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg0);color:var(--fg);font-family:var(--cjk);
+    line-height:1.65;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;
+    padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;
+    cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);border-color:var(--bg4)}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow)}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.94rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55;-webkit-text-size-adjust:100%}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .t{color:var(--blue)}
+  pre .s{color:var(--green)} pre .n{color:var(--purple)}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0;font-size:.9rem}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .callout.info{border-color:var(--blue)}
+  .lbl{display:block;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gray);margin-bottom:4px}
+  .key{color:var(--orange);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);
+    vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  td.ok{color:var(--green)} td.no{color:var(--red)}
+
+  .diagram{overflow-x:auto;margin:14px 0;-webkit-text-size-adjust:100%}
+  .diagram svg{display:block;min-width:660px}
+
+  .inv{background:var(--bg2);border:1px dashed var(--yellow);border-radius:10px;
+    padding:12px 14px;margin:14px 0;font-family:var(--mono);font-size:.86rem;
+    color:var(--yellow);text-align:center}
+
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);
+    color:var(--fg);font-family:var(--mono);font-size:.8rem;padding:5px 14px;
+    border-radius:7px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .stage{min-height:150px}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+  .stepcount{color:var(--gray);font-family:var(--mono);font-size:.78rem;
+    align-self:center;margin-left:auto}
+
+  .slotrow{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap}
+  .slotkey{font-family:var(--mono);font-size:.82rem;color:var(--purple);
+    min-width:26px}
+  .fld{font-family:var(--mono);font-size:.78rem;background:var(--bg1);
+    border:1px solid var(--bg4);border-radius:6px;padding:2px 8px;color:var(--fg-dim)}
+  .fld b{color:var(--fg)}
+  .fld.hit{background:var(--yellow);color:var(--bg0);border-color:var(--yellow)}
+  .fld.hit b{color:var(--bg0)}
+  .fld.warn{border-color:var(--red);color:var(--red)}
+  .fld.on{border-color:var(--green);color:var(--green)}
+  .chip{display:inline-flex;align-items:center;justify-content:center;min-width:30px;
+    height:28px;margin:2px;border:1px solid var(--bg4);border-radius:6px;
+    font-family:var(--mono);font-size:.8rem;background:var(--bg1);color:var(--fg)}
+  .chip.hot{background:var(--yellow);color:var(--bg0);font-weight:700}
+  .qempty{color:var(--gray);font-family:var(--mono);font-size:.8rem}
+  .lane{margin:8px 0}
+  .lanelbl{font-size:.75rem;color:var(--gray);letter-spacing:.05em;margin-bottom:2px}
+  .log{font-family:var(--mono);font-size:.78rem;color:var(--aqua);margin-top:6px;
+    white-space:pre-wrap}
+
+  .tcols{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+  .tcol{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;padding:8px 10px}
+  .tcol h4{margin:0 0 6px;font-size:.8rem;color:var(--gray);font-family:var(--mono);
+    letter-spacing:.04em}
+  .tcol.P h4{color:var(--orange)} .tcol.C h4{color:var(--blue)}
+  .tline{font-family:var(--mono);font-size:.76rem;color:var(--gray);padding:1px 0}
+  .tline.act{color:var(--fg);background:var(--bg3);border-radius:4px;padding:1px 5px}
+  .tline.act.bad{color:var(--red)}
+  @media (max-width:620px){ .tcols{grid-template-columns:1fr} }
+
+  .quiz{background:var(--bg1);border:1px solid var(--orange);border-radius:9px;
+    padding:10px 12px;margin:8px 0}
+  .quiz p{margin:0 0 8px;font-size:.86rem;color:var(--orange)}
+  .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.82rem;padding:5px 12px;border-radius:7px;
+    cursor:pointer;margin-right:6px}
+  .quiz .fb{margin-top:8px;font-size:.84rem;display:none}
+
+  [data-jump]{color:var(--blue);text-decoration:underline dotted;cursor:pointer}
+  .navrow{display:flex;justify-content:space-between;margin:18px 0 0}
+  .navrow button{background:var(--bg2);border:1px solid var(--bg3);color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.82rem;padding:6px 14px;border-radius:8px;cursor:pointer}
+  footer{color:var(--gray);font-size:.78rem;text-align:center;margin-top:26px;
+    padding-top:14px;border-top:1px solid var(--bg2)}
+</style>
+</head>
+<body>
+
+<nav class="tabbar" id="tabbar">
+  <button data-tab="overview" class="active">總覽 · 結構圖</button>
+  <button data-tab="ladder">階梯推導</button>
+  <button data-tab="s1">① 摺疊 stepper</button>
+  <button data-tab="s2">② lost update</button>
+  <button data-tab="s3">③ 通知順序</button>
+  <button data-tab="code">Code</button>
+  <button data-tab="followup">延伸</button>
+</nav>
+
+<div class="wrap">
+
+<!-- ================= OVERVIEW ================= -->
+<div class="tab active" id="tab-overview">
+  <h1>Per-key Conflation Slot</h1>
+  <div class="sub">值層／通知層分離 · 一條 invariant 解釋三種 bug · std-only Rust · 2026-07-30</div>
+
+  <section>
+    <h2>直覺一句話</h2>
+    <p>producer 產得比 consumer 吃得快時,<span class="key">同一個 key 的舊值對 consumer 是死重量</span>——它只想知道「現在」。所以每個 key 只留一格,新值直接就地蓋掉舊值;要另外記「哪些格子髒了」,consumer 才不用每次掃全表。</p>
+  </section>
+
+  <section>
+    <h2>核心結構圖 — 值走上面,通知走下面</h2>
+    <p class="sub" style="margin:0 0 10px">這張圖是全篇唯一需要背下來、能徒手重畫的東西。兩層各自的上界不同,是整個設計的價值來源。</p>
+    <div class="diagram">
+    <svg viewBox="0 0 720 372" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace">
+      <defs>
+        <marker id="ar-o" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#e78a4e"/></marker>
+        <marker id="ar-b" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#7daea3"/></marker>
+        <marker id="ar-g" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#928374"/></marker>
+      </defs>
+
+      <!-- producers -->
+      <rect x="12" y="132" width="96" height="72" rx="11" fill="#32302f" stroke="#e78a4e" stroke-width="1.5"/>
+      <text x="60" y="162" fill="#e78a4e" font-size="12.5" text-anchor="middle">producers</text>
+      <text x="60" y="180" fill="#928374" font-size="9.5" text-anchor="middle">高速率</text>
+      <text x="60" y="194" fill="#928374" font-size="9.5" text-anchor="middle">(key, seq, val)</text>
+
+      <!-- value layer -->
+      <rect x="176" y="26" width="336" height="140" rx="12" fill="#3c3836" stroke="#d8a657" stroke-width="1.5"/>
+      <text x="190" y="46" fill="#d8a657" font-size="11.5">值層 · slots: HashMap&lt;K, Slot&gt;</text>
+      <text x="502" y="46" fill="#928374" font-size="9.5" text-anchor="end">寫入 = 覆蓋</text>
+
+      <rect x="192" y="56" width="304" height="30" rx="7" fill="#32302f" stroke="#504945"/>
+      <text x="204" y="75" fill="#d3869b" font-size="11">A</text>
+      <text x="228" y="75" fill="#d4be98" font-size="10.5">val=312</text>
+      <text x="304" y="75" fill="#bdae93" font-size="10.5">seq=88</text>
+      <text x="374" y="75" fill="#bdae93" font-size="10.5">count=7</text>
+      <text x="448" y="75" fill="#a9b665" font-size="10.5">queued=T</text>
+
+      <rect x="192" y="90" width="304" height="30" rx="7" fill="#32302f" stroke="#504945"/>
+      <text x="204" y="109" fill="#d3869b" font-size="11">B</text>
+      <text x="228" y="109" fill="#d4be98" font-size="10.5">val=  9</text>
+      <text x="304" y="109" fill="#bdae93" font-size="10.5">seq=12</text>
+      <text x="374" y="109" fill="#bdae93" font-size="10.5">count=1</text>
+      <text x="448" y="109" fill="#a9b665" font-size="10.5">queued=T</text>
+
+      <rect x="192" y="124" width="304" height="30" rx="7" fill="#32302f" stroke="#504945"/>
+      <text x="204" y="143" fill="#d3869b" font-size="11">C</text>
+      <text x="228" y="143" fill="#d4be98" font-size="10.5">val=770</text>
+      <text x="304" y="143" fill="#bdae93" font-size="10.5">seq=41</text>
+      <text x="374" y="143" fill="#bdae93" font-size="10.5">count=0</text>
+      <text x="448" y="143" fill="#928374" font-size="10.5">queued=F</text>
+
+      <!-- notify layer -->
+      <rect x="176" y="196" width="336" height="82" rx="12" fill="#3c3836" stroke="#7daea3" stroke-width="1.5"/>
+      <text x="190" y="216" fill="#7daea3" font-size="11.5">通知層 · ready: VecDeque&lt;K&gt;(dirty set)</text>
+      <text x="502" y="216" fill="#928374" font-size="9.5" text-anchor="end">寫入 = 去重</text>
+      <rect x="198" y="228" width="42" height="30" rx="7" fill="#32302f" stroke="#7daea3"/>
+      <text x="219" y="248" fill="#d3869b" font-size="11.5" text-anchor="middle">A</text>
+      <rect x="246" y="228" width="42" height="30" rx="7" fill="#32302f" stroke="#7daea3"/>
+      <text x="267" y="248" fill="#d3869b" font-size="11.5" text-anchor="middle">B</text>
+      <rect x="294" y="228" width="42" height="30" rx="7" fill="#32302f" stroke="#504945" stroke-dasharray="3 3"/>
+      <text x="315" y="248" fill="#665c54" font-size="11.5" text-anchor="middle">∅</text>
+      <text x="352" y="248" fill="#928374" font-size="9.5">長度 ≤ K,同 key 絕不重複出現</text>
+
+      <!-- consumer -->
+      <rect x="580" y="132" width="98" height="72" rx="11" fill="#32302f" stroke="#7daea3" stroke-width="1.5"/>
+      <text x="629" y="162" fill="#7daea3" font-size="12.5" text-anchor="middle">consumer</text>
+      <text x="629" y="180" fill="#928374" font-size="9.5" text-anchor="middle">低速率</text>
+      <text x="629" y="194" fill="#928374" font-size="9.5" text-anchor="middle">只要最新值</text>
+
+      <!-- arrows in -->
+      <path d="M110,152 C142,152 148,96 174,96" fill="none" stroke="#e78a4e" stroke-width="1.6" marker-end="url(#ar-o)"/>
+      <text x="120" y="112" fill="#e78a4e" font-size="9.5">① 蓋值</text>
+      <path d="M110,186 C142,186 148,237 174,237" fill="none" stroke="#e78a4e" stroke-width="1.6" marker-end="url(#ar-o)"/>
+      <text x="112" y="228" fill="#e78a4e" font-size="9.5">② 不在 ready 才 push</text>
+
+      <!-- arrows out -->
+      <path d="M514,237 C546,237 552,186 578,186" fill="none" stroke="#7daea3" stroke-width="1.6" marker-end="url(#ar-b)"/>
+      <text x="524" y="228" fill="#7daea3" font-size="9.5">③ 取 key</text>
+      <path d="M514,96 C546,96 552,152 578,152" fill="none" stroke="#7daea3" stroke-width="1.6" marker-end="url(#ar-b)"/>
+      <text x="530" y="112" fill="#7daea3" font-size="9.5">④ 取值 + 清旗標</text>
+
+      <!-- bounds -->
+      <text x="176" y="300" fill="#d8a657" font-size="10.5">值層上界 = O(K),K = key 基數 —— 與 update 速率完全脫鉤</text>
+      <text x="176" y="318" fill="#7daea3" font-size="10.5">通知層上界 = O(K),靠 queued 旗標去重 —— 沒有旗標就會無界成長</text>
+      <line x1="176" y1="332" x2="700" y2="332" stroke="#504945" stroke-dasharray="4 4"/>
+      <text x="176" y="352" fill="#ea6962" font-size="10.5">③ 與 ④ 必須在同一個 critical section —— 拆開就是 lost update(tab ②)</text>
+    </svg>
+    </div>
+
+    <div class="inv">
+      唯一 invariant &nbsp;&nbsp;<b>slot.queued == true &nbsp;⟺&nbsp; key ∈ ready</b>
+    </div>
+    <div class="callout info">
+      <span class="lbl">為什麼只記這一條</span>
+      這條 invariant 是 <code>queued</code> 這個欄位存在的<b>唯一理由</b>,而三種經典 bug 都是它的三種破法:<br>
+      ・slot 的 queued 是 true,但 key 其實不在 ready 裡:producer 會誤以為 key 已經在 ready 裡,於是跳過通知 → <span data-jump="s2">lost update(tab ②)</span><br>
+      ・完全不設 queued 欄位:同一個 key 會被反覆排進 ready,ready 的長度變成 O(事件數),記憶體上界失效<br>
+      ・key 已經在 ready 裡,值卻還沒寫完:consumer 醒來會讀到舊值 → <span data-jump="s3">通知順序(tab ③)</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>路由:什麼時候能用</h2>
+    <table>
+      <tr><th>訊號</th><th>判定</th><th>理由</th></tr>
+      <tr><td>consumer 只在乎「現在的值」</td><td class="ok">✓ 用</td><td>舊值是死重量</td></tr>
+      <tr><td>payload 是絕對狀態快照</td><td class="ok">✓ 用</td><td>覆蓋即合法</td></tr>
+      <tr><td>payload 是 delta / increment</td><td class="no">✗ 需改 merge</td><td>只能用可結合運算摺疊(<code>+=</code> / max),不能覆蓋</td></tr>
+      <tr><td>需要完整事件序列(audit / replay / event sourcing)</td><td class="no">✗ 不合法</td><td>中間值被結構性丟棄,換 durable log</td></tr>
+      <tr><td>需要知道「發生幾次」</td><td class="ok">✓ 但要加 count</td><td>否則分不出安靜 key 與被摺掉十萬筆的 key</td></tr>
+      <tr><td>key 基數無界(per-connection / 使用者輸入決定)</td><td class="no">✗ 先加 TTL</td><td>O(K) 上界失效 → key 爆炸即 OOM 向量</td></tr>
+    </table>
+    <div class="callout">
+      <span class="lbl">同型結構(認出來就贏一半)</span>
+      epoll 的 level-triggered readiness、pending signal bitmask、GUI 的 dirty-rect repaint、CRDT 的 LWW-register、市場報價的 conflated feed —— 全都是 per-key conflation slot。這也解釋了為什麼 <b>signal 會合併</b>:pending 是一個 bit(一格 slot),不是計數器。
+    </div>
+    <div class="navrow"><span></span><button data-jump="ladder">階梯推導 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= LADDER ================= -->
+<div class="tab" id="tab-ladder">
+  <h1>naive → optimal 階梯</h1>
+  <div class="sub">每一階都由上一階的具體失效逼出來 · TC 與 SC 分開標</div>
+
+  <section>
+    <h3>tier 0 · naive:每筆 update 都入無界佇列</h3>
+    <p>最笨但正確:consumer 看得到每一筆歷史。</p>
+    <p><b>TC</b> push O(1) / pop O(1)。<b>SC</b> <span class="key">O(N)</span>,N = 累積事件數。</p>
+    <div class="callout bad"><span class="lbl">失效</span>producer 快於 consumer 時 N 單調成長 → OOM。這是背壓問題,不是效能問題。</div>
+  </section>
+
+  <section>
+    <h3>tier 1 · 有界 ring,drop-oldest</h3>
+    <p>把 SC 釘死在容量 C。丟棄策略:滿了就丟最舊的事件。</p>
+    <p><b>TC</b> O(1)。<b>SC</b> O(C),固定。</p>
+    <div class="callout bad">
+      <span class="lbl">失效(公平性軸)</span>
+      丟棄粒度是「<b>事件</b>」而非「key」。一個吵鬧 key 灌滿 ring,就把安靜 key 的事件擠出去了。安靜 key 的更新<b>永久消失</b>,而吵鬧 key 保留了一堆早就過期的中間值 —— 丟錯東西了。
+    </div>
+    <p>這一階迫使你回答 predicate:<span class="key">「該丟哪一筆?」</span>tier 1 的答案是「最舊的」,而它答錯了。</p>
+  </section>
+
+  <section>
+    <h3>tier 2 · observation → 換掉丟棄粒度</h3>
+    <div class="callout good">
+      <span class="lbl">關鍵觀察</span>
+      consumer 只需要每個 key 的最新值 → <b>同一 key 的舊事件,對 consumer 的價值是 0</b>;不同 key 的事件價值都是正的。所以該丟的是「同 key 的舊值」,不是「全局最舊的事件」。
+    </div>
+    <p>這個觀察直接指定資料結構:佇列(事件序列)換成 <code>HashMap&lt;K, V&gt;</code>(key → 最新值)。lever = <span class="key">用 key 索引取代時序排隊</span>。</p>
+    <p><b>TC</b> publish O(1) amortized。<b>SC</b> <span class="key">O(K)</span>,K = <b>不同 key 的數量</b>,與事件率脫鉤 —— 這就是全部的價值。</p>
+    <div class="callout bad">
+      <span class="lbl">新失效</span>
+      consumer 現在不知道「哪些 key 變了」。掃全 map = 每次 O(K),而且無法阻塞等待。
+    </div>
+  </section>
+
+  <section>
+    <h3>tier 3 · dirty set 逼出 <code>queued</code> 欄位</h3>
+    <p>加一條通知路徑:<code>ready: VecDeque&lt;K&gt;</code>,只放髒 key。</p>
+    <p>但 publish 若無條件 push,吵鬧 key 會被 push 一千次 → ready 長度回到 O(事件數),tier 2 的空間成果被通知層吃掉。<b>所以需要一個「我已經在 ready 裡了」的標記</b> —— 這才是 <code>queued</code> 出現的理由,它是去重需求逼出來的,不是憑空多一個欄位。</p>
+    <p><b>TC</b> publish O(1) / recv O(1)。<b>SC</b> O(K) 值層 + O(K) 通知層 = <span class="key">O(K)</span>。</p>
+    <div class="inv">slot.queued == true ⟺ key ∈ ready</div>
+    <p>可觀測性再補兩欄:<code>count</code>(這輪摺疊幾筆)與 <code>seq</code>(亂序保護)。<code>count</code> 讓 consumer 分辨「安靜」與「被摺爆」;<code>seq</code> 防遲到訊息蓋掉新值。</p>
+    <table>
+      <tr><th>tier</th><th>TC</th><th>SC</th><th>被什麼逼到下一階</th></tr>
+      <tr><td>0 無界佇列</td><td>O(1)</td><td>O(N) 事件數</td><td>OOM</td></tr>
+      <tr><td>1 有界 ring drop-oldest</td><td>O(1)</td><td>O(C)</td><td>丟棄粒度錯 → 公平性</td></tr>
+      <tr><td>2 per-key map</td><td>O(1)*</td><td>O(K)</td><td>consumer 不知誰髒了</td></tr>
+      <tr><td>3 map + dirty queue + queued</td><td>O(1)*</td><td>O(K)</td><td>—(終點)</td></tr>
+    </table>
+    <p class="sub" style="margin:6px 0 0">* amortized,HashMap 攤還。若 key 空間是小的密集整數(fd、slot id),改成固定陣列 → 真 O(1) worst case + cache locality,SC 變 O(K<sub>max</sub>) 預配。</p>
+    <div class="navrow"><button data-jump="overview">◀ 總覽</button><button data-jump="s1">① 摺疊 stepper ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= S1 ================= -->
+<div class="tab" id="tab-s1">
+  <h1>① 摺疊語意 stepper</h1>
+  <div class="sub">看兩件事:slot 就地覆蓋、ready 靠 queued 去重</div>
+
+  <section>
+    <p>操作序列:<code>pub(A,1,10) pub(B,1,70) pub(A,2,11) pub(A,3,12) recv() pub(B,2,71) recv() recv()</code></p>
+    <p><b>在按 next 之前先自己預測</b>:第一個 <code>recv()</code> 會拿到 A 的哪一個值?那時候 <code>count</code> 會是多少?而 ready 裡會有幾個元素?</p>
+  </section>
+
+  <div class="stepper" id="stepper-s1">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">要帶走的兩個數字</span>
+      1001 筆 update 進去,值層仍然只有 K 格,ready 仍然 ≤ K 個元素。<b>吵鬧的 key 只能佔 ready 裡的一格</b> —— 這就是 per-key 隔離,tier 1 的 ring 做不到。
+    </div>
+    <div class="navrow"><button data-jump="ladder">◀ 階梯</button><button data-jump="s2">② lost update ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= S2 ================= -->
+<div class="tab" id="tab-s2">
+  <h1>② lost update — 取值與清旗標必須原子</h1>
+  <div class="sub">確定性可重現的 bug,不需要 race 運氣</div>
+
+  <section>
+    <h2>錯誤實作</h2>
+    <p>把 recv 拆成三次上鎖(看起來很無害,每次都有鎖):</p>
+    <pre><span class="c">// ✗ BUG:三個 phase 各自上鎖</span>
+<span class="k">fn</span> recv_buggy(&amp;<span class="k">self</span>) -&gt; <span class="t">Option</span>&lt;(<span class="t">u32</span>, <span class="t">u64</span>)&gt; {
+    <span class="k">let</span> key = { <span class="k">let</span> <span class="k">mut</span> g = <span class="k">self</span>.inner.lock().unwrap(); g.ready.pop_front()? };
+    <span class="k">let</span> val = { <span class="k">let</span> g = <span class="k">self</span>.inner.lock().unwrap(); g.slots[&amp;key].val };
+    <span class="c">//                          ↑ 鎖放掉了。producer 可以插在這裡。</span>
+    { <span class="k">let</span> <span class="k">mut</span> g = <span class="k">self</span>.inner.lock().unwrap();
+      g.slots.get_mut(&amp;key).unwrap().queued = <span class="k">false</span>; }
+    <span class="t">Some</span>((key, val))
+}</pre>
+    <p>逐格追一遍。<b>第 4 格會問你一題,先答再看下一格。</b></p>
+  </section>
+
+  <div class="stepper" id="stepper-s2">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <h2>為什麼「同一個 critical section」是正確性條件,不是風格</h2>
+    <p>把 pop + 取值 + 清旗標合併後,producer 只可能落在 critical section 的外面,兩種情形窮舉:</p>
+    <table>
+      <tr><th>producer 相對位置</th><th>它看到的 queued</th><th>它的動作</th><th>200 有沒有被收到</th></tr>
+      <tr><td>在 recv 的鎖之前</td><td>true</td><td>只蓋值,不把 A 排進 ready</td><td class="ok">✓ recv 讀到的就是 200</td></tr>
+      <tr><td>在 recv 的鎖之後</td><td>false(已清)</td><td>蓋值,並把 A 重新排進 ready</td><td class="ok">✓ 下一輪 recv 拿到</td></tr>
+    </table>
+    <div class="callout good">
+      <span class="lbl">一般化的規則</span>
+      <b>狀態變更必須 gate 在「確認取出成功」上。</b>「我要來拿了」與「我拿走了」之間不能有可觀測的中間態 —— 有的話,別人就會根據那個中間態做出錯誤決定(這裡是 producer「決定不把 A 排進 ready」)。
+    </div>
+    <div class="callout bad">
+      <span class="lbl">測試上的陷阱</span>
+      這個 bug 用多執行緒隨機跑<b>抓不到</b>——它要求 producer 精準落在兩次上鎖之間。要嘛把 phase 拆成可呼叫的函式做確定性重現(Code tab 的第 5 段就是這樣寫的),要嘛用 loom 窮舉交錯。跑一萬次 fuzz 不是驗證。
+    </div>
+    <div class="navrow"><button data-jump="s1">◀ ① 摺疊</button><button data-jump="s3">③ 通知順序 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= S3 ================= -->
+<div class="tab" id="tab-s3">
+  <h1>③ 通知順序 — 無鎖版本的兩個順序決定</h1>
+  <div class="sub">publish 前後順序 + 清旗標與讀值的先後,兩個都會咬人</div>
+
+  <section>
+    <h2>把 slot 換成原子操作</h2>
+    <pre><span class="k">struct</span> <span class="t">Slot</span> { val: <span class="t">AtomicU64</span>, dirty: <span class="t">AtomicBool</span> }</pre>
+    <p>沒有鎖了,於是「先做哪一步」變成語意的一部分。兩個獨立的順序問題:</p>
+    <table>
+      <tr><th>#</th><th>問題</th><th>寫錯的後果</th></tr>
+      <tr><td>1</td><td>producer:先蓋值還是先 set dirty?</td><td>consumer 看到 dirty 卻讀到舊值,且 dirty 已被清 → 新值再也不通知</td></tr>
+      <tr><td>2</td><td>consumer:先清 dirty 還是先讀值?</td><td>與 tab ② 同型的 lost update</td></tr>
+    </table>
+    <p>逐格追,第 3 格與第 6 格各有一題。</p>
+  </section>
+
+  <div class="stepper" id="stepper-s3">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <h2>正確形狀</h2>
+    <pre><span class="c">// producer</span>
+slot.val.store(v, <span class="t">Relaxed</span>);
+slot.dirty.store(<span class="k">true</span>, <span class="t">Release</span>);   <span class="c">// Release:把上面那個 store 推到這之前</span>
+
+<span class="c">// consumer</span>
+<span class="k">if</span> slot.dirty.swap(<span class="k">false</span>, <span class="t">Acquire</span>) {  <span class="c">// 先清旗標</span>
+    <span class="k">let</span> v = slot.val.load(<span class="t">Relaxed</span>);   <span class="c">// 再讀值</span>
+    <span class="c">// 這之間 producer 若又寫入 → 它會看到 dirty==false → 重新 set dirty</span>
+    <span class="c">// → 我們下一輪再讀一次。多讀一次無害。</span>
+}</pre>
+    <div class="callout good">
+      <span class="lbl">貫穿全篇的不對稱原則</span>
+      <b>通知可以多,不可以少。</b>spurious wakeup 只是多跑一圈迴圈(對 conflation 而言是冪等的);lost wakeup 是資料永久遺失。所有順序決定都往「寧可多通知」那邊倒:先清旗標再讀值、值先可見再宣告髒、Drop 時先遞減再 notify 且 notify 時持鎖。
+    </div>
+    <div class="callout">
+      <span class="lbl">誠實邊界</span>
+      這個無鎖版只處理單一 slot 的 val/dirty 配對。<b>ready 佇列本身的無鎖化是另一個問題</b>(且會帶回 ABA / reclamation),真要做通常是 per-consumer 分片或退回一把小鎖只保護 ready。面試被追問時把這個界線先講出來,不要等對方指。
+    </div>
+    <div class="navrow"><button data-jump="s2">◀ ② lost update</button><button data-jump="code">Code ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= CODE ================= -->
+<div class="tab" id="tab-code">
+  <h1>Code Reference</h1>
+  <div class="sub">std only · 已編譯執行 · 含 brute-force 對照與 lost-update 確定性重現</div>
+
+  <section>
+    <div class="callout info">
+      <span class="lbl">驗證狀態(誠實標註)</span>
+      這份程式在 <b>rustc 1.75 / edition 2021</b> 編譯執行通過,五組 assert 全綠,並重跑 200 次無 flake。程式碼未使用 edition-2024 專屬特性,但<b>沒有在 1.92 / edition 2024 上實測過</b> —— 這是本容器內沒有該 toolchain 的限制,不是「應該沒問題」的推測。
+    </div>
+    <pre id="code-main">// per-key conflation slot — std only
+// 驗證用 edition 2021 / rustc 1.75(程式碼未用 edition-2024-only 特性)
+
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Condvar, Mutex};
+
+#[derive(Debug)]
+struct Slot {
+    val: u64,     // 最新快照值
+    seq: u64,     // 該 key 已接受的最大 seq(亂序保護)
+    count: u32,   // 自上次被取走後,被摺疊了幾筆
+    queued: bool, // 是否已在 ready 裡(去重)
+}
+
+struct Inner {
+    slots: HashMap&lt;u32, Slot&gt;,
+    ready: VecDeque&lt;u32&gt;,
+    closed: bool,
+    stale: u64, // 被亂序丟棄的筆數(可觀測性)
+}
+
+pub struct Conflator {
+    inner: Mutex&lt;Inner&gt;,
+    cv: Condvar,
+}
+
+/// 契約:
+/// - `val` 必須是「絕對狀態快照」,覆蓋才合法。delta 請改用 merge 版。
+/// - 同一 key 的 `seq` 必須單調不遞減。seq 相等視為重送並照樣套用
+///   (對快照 payload 是 idempotent);seq 較小則丟棄並計入 stale。
+/// - key 基數必須有界,否則需外加 TTL / eviction(見 follow-up)。
+impl Conflator {
+    pub fn new() -&gt; Self {
+        Conflator {
+            inner: Mutex::new(Inner {
+                slots: HashMap::new(),
+                ready: VecDeque::new(),
+                closed: false,
+                stale: 0,
+            }),
+            cv: Condvar::new(),
+        }
+    }
+
+    /// producer。時間 O(1) amortized,空間增量 O(1)/新 key。
+    pub fn publish(&amp;self, key: u32, seq: u64, val: u64) {
+        let mut g = self.inner.lock().unwrap();
+        if g.closed {
+            return;
+        }
+        let slot = g.slots.entry(key).or_insert(Slot {
+            val,
+            seq: 0,
+            count: 0,
+            queued: false,
+        });
+        if seq &lt; slot.seq {
+            g.stale += 1; // 亂序:舊的不許蓋掉新的
+            return;
+        }
+        slot.val = val;
+        slot.seq = seq;
+        slot.count = slot.count.saturating_add(1);
+        let need_enqueue = !slot.queued;
+        if need_enqueue {
+            slot.queued = true;
+            g.ready.push_back(key);
+        }
+        // notify 在持鎖狀態下發出:避免 store+notify 之間的 lost wakeup 視窗
+        if need_enqueue {
+            self.cv.notify_one();
+        }
+    }
+
+    /// consumer。回傳 (key, 最新值, 這輪摺疊掉幾筆)。
+    /// 關鍵:pop_front + 清 queued + 取值,全部在同一個 critical section。
+    pub fn recv(&amp;self) -&gt; Option&lt;(u32, u64, u32)&gt; {
+        let mut g = self.inner.lock().unwrap();
+        loop {
+            if let Some(key) = g.ready.pop_front() {
+                let slot = g.slots.get_mut(&amp;key).expect("ready 中的 key 必有 slot");
+                slot.queued = false;
+                let count = std::mem::replace(&amp;mut slot.count, 0);
+                return Some((key, slot.val, count));
+            }
+            if g.closed {
+                return None;
+            }
+            g = self.cv.wait(g).unwrap();
+        }
+    }
+
+    pub fn close(&amp;self) {
+        let mut g = self.inner.lock().unwrap();
+        g.closed = true;
+        self.cv.notify_all(); // 持鎖 notify
+        drop(g);
+    }
+
+    pub fn stale_count(&amp;self) -&gt; u64 {
+        self.inner.lock().unwrap().stale
+    }
+}
+
+// ===========================================================================
+// BUG 版:取值與清 queued 拆成兩次上鎖。三個 phase 分開暴露,讓交錯可被確定性重現。
+// ===========================================================================
+pub struct BuggyConflator {
+    inner: Mutex&lt;Inner&gt;,
+}
+
+impl BuggyConflator {
+    pub fn new() -&gt; Self {
+        BuggyConflator {
+            inner: Mutex::new(Inner {
+                slots: HashMap::new(),
+                ready: VecDeque::new(),
+                closed: false,
+                stale: 0,
+            }),
+        }
+    }
+    pub fn publish(&amp;self, key: u32, val: u64) {
+        let mut g = self.inner.lock().unwrap();
+        let slot = g.slots.entry(key).or_insert(Slot {
+            val,
+            seq: 0,
+            count: 0,
+            queued: false,
+        });
+        slot.val = val;
+        if !slot.queued {
+            slot.queued = true;
+            g.ready.push_back(key);
+        }
+    }
+    // phase 1:出列
+    pub fn p1_pop(&amp;self) -&gt; Option&lt;u32&gt; {
+        self.inner.lock().unwrap().ready.pop_front()
+    }
+    // phase 2:讀值(鎖已放掉)
+    pub fn p2_read(&amp;self, key: u32) -&gt; u64 {
+        self.inner.lock().unwrap().slots[&amp;key].val
+    }
+    // phase 3:清 flag(又一次上鎖)
+    pub fn p3_clear(&amp;self, key: u32) {
+        self.inner.lock().unwrap().slots.get_mut(&amp;key).unwrap().queued = false;
+    }
+    pub fn ready_len(&amp;self) -&gt; usize {
+        self.inner.lock().unwrap().ready.len()
+    }
+    pub fn peek_val(&amp;self, key: u32) -&gt; u64 {
+        self.inner.lock().unwrap().slots[&amp;key].val
+    }
+}
+
+fn main() {
+    // ---- 1. 摺疊語意:3 筆 update 只出 1 筆,count 記錄摺疊次數 ----
+    let c = Conflator::new();
+    c.publish(7, 1, 100);
+    c.publish(7, 2, 200);
+    c.publish(7, 3, 300);
+    assert_eq!(c.recv(), Some((7, 300, 3)), "只送最新值,並回報摺疊 3 筆");
+    // ready 已空,count 已歸零
+    c.publish(7, 4, 400);
+    assert_eq!(c.recv(), Some((7, 400, 1)));
+
+    // ---- 2. per-key 隔離:吵鬧的 key 不會擠掉安靜的 key ----
+    let c = Conflator::new();
+    c.publish(1, 1, 11); // 安靜 key
+    for s in 1..=1000 {
+        c.publish(2, s, s); // 吵鬧 key,1000 筆
+    }
+    assert_eq!(c.recv(), Some((1, 11, 1)), "安靜 key 仍然存活(FIFO 先出)");
+    assert_eq!(c.recv(), Some((2, 1000, 1000)), "吵鬧 key 摺成 1 筆");
+    // 記憶體上界 = key 基數 2,與 1001 筆 update 無關
+    assert_eq!(c.inner.lock().unwrap().slots.len(), 2);
+
+    // ---- 3. 亂序保護:seq 較小的不許覆蓋 ----
+    let c = Conflator::new();
+    c.publish(5, 10, 999);
+    c.publish(5, 3, 111); // 遲到的舊訊息
+    assert_eq!(c.recv(), Some((5, 999, 1)));
+    assert_eq!(c.stale_count(), 1);
+
+    // ---- 4. 多執行緒:assert 必須在 join 之後,否則 panic 會被吞掉 ----
+    let c = Arc::new(Conflator::new());
+    let p = {
+        let c = Arc::clone(&amp;c);
+        std::thread::spawn(move || {
+            for s in 1..=5000u64 {
+                c.publish((s % 4) as u32, s, s);
+            }
+            c.close();
+        })
+    };
+    let cc = Arc::clone(&amp;c);
+    let consumer = std::thread::spawn(move || {
+        let mut last: HashMap&lt;u32, u64&gt; = HashMap::new();
+        let mut got = 0u64;
+        while let Some((k, v, n)) = cc.recv() {
+            // 單調性:同一 key 收到的值必須嚴格遞增(摺疊不得回退)
+            if let Some(&amp;prev) = last.get(&amp;k) {
+                assert!(v &gt; prev, "key {k} 回退 {prev} -&gt; {v}");
+            }
+            last.insert(k, v);
+            got += n as u64;
+        }
+        (last, got)
+    });
+    p.join().unwrap();
+    let (last, got) = consumer.join().unwrap();
+    // 每個 key 的最終值必須是它最後一筆 publish(最終狀態保證送達)
+    for k in 0..4u32 {
+        let expect = (1..=5000u64).filter(|s| (s % 4) as u32 == k).last().unwrap();
+        assert_eq!(last[&amp;k], expect, "key {k} 最終狀態未送達");
+    }
+    assert!(got &lt;= 5000, "摺疊後總 count 不得超過 publish 數");
+
+    // ---- 5. BUG 版:確定性重現 lost update ----
+    let b = BuggyConflator::new();
+    b.publish(9, 100);
+    let key = b.p1_pop().unwrap(); // consumer phase 1
+    let v = b.p2_read(key); // consumer phase 2:讀到 100
+    b.publish(9, 200); // producer 插入!slot.queued 還是 true → 不入列
+    b.p3_clear(key); // consumer phase 3:清掉 flag
+    assert_eq!(v, 100);
+    assert_eq!(b.peek_val(9), 200, "200 確實寫進 slot 了");
+    assert_eq!(b.ready_len(), 0, "但 ready 是空的 → 沒人會來拿 200");
+    // ↑ 200 永久遺失。修法:phase 1+2+3 合成同一個 critical section。
+
+    println!("all conflation invariants ok");
+}
+</pre>
+  </section>
+
+  <section>
+    <h2>面試 trade-off 三拍</h2>
+    <p><b>① 報價:</b>publish O(1) amortized / recv O(1);記憶體 <b>O(K)</b>,K = 不同 key 數,<span class="key">與 update 速率無關</span>。每格常數空間(val + seq + count + queued)。</p>
+    <p><b>② 沒選的兩條路:</b></p>
+    <table>
+      <tr><th>方案</th><th>軸</th><th>為什麼不選</th></tr>
+      <tr><td>無界佇列</td><td>記憶體</td><td>SC O(事件數),背壓一來就 OOM</td></tr>
+      <tr><td>有界 ring drop-oldest</td><td>公平性</td><td>丟棄粒度是事件 → 吵鬧 key 擠掉安靜 key</td></tr>
+      <tr><td>取樣 / rate limit</td><td>正確性</td><td>可能漏掉最後一筆;conflation 保證最終狀態必達</td></tr>
+    </table>
+    <p><b>③ 有效範圍:</b>假設「payload 是絕對快照 + consumer 只要最新值 + key 基數有界」。任一條翻掉就要重寫 —— delta payload 要換可結合 merge,需要事件序列要換 durable log,key 無界要加 TTL/eviction。</p>
+    <div class="navrow"><button data-jump="s3">◀ ③ 通知順序</button><button data-jump="followup">延伸 ▶</button></div>
+  </section>
+</div>
+
+<!-- ================= FOLLOWUP ================= -->
+<div class="tab" id="tab-followup">
+  <h1>延伸 / 未解</h1>
+  <div class="sub">刻意留白的部分</div>
+
+  <section>
+    <h2>可以直接動手的變體</h2>
+    <ol>
+      <li><b>merge 版</b>:把 <code>slot.val = val</code> 換成 <code>slot.val = f(slot.val, val)</code>,payload 從快照放寬成半群。counter 用 <code>+</code>、latency 用 <code>max</code>、histogram 用桶相加。<b>問題:</b><code>f</code> 需要單位元嗎?第一筆進來時 <code>or_insert</code> 該塞什麼?</li>
+      <li><b>密集 key 改陣列</b>:key 是 fd / slot id 時,<code>HashMap</code> 換 <code>Vec&lt;Slot&gt;</code> + generation tag(你 e2 那個 fd_registry 的形狀)。<b>問題:</b>ready 裡的 stale key 遇到 slot 已被重用怎麼辦 —— 這正是 generation 存在的理由,兩道門都要驗。</li>
+      <li><b>公平性策略</b>:ready 是 FIFO,對 key 公平。若要 priority(某些 key 必須先送)→ 換 heap,但 heap 裡的去重比 <code>VecDeque</code> 麻煩。<b>問題:</b>priority 反轉會不會餓死低優先 key?</li>
+      <li><b>key eviction</b>:TTL 掃描 vs LRU。<b>問題:</b>一個 key 被 evict 但它還在 ready 裡 → invariant 怎麼維持?(和 #2 是同一個洞的兩種外觀)</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>沒解決的</h2>
+    <ul>
+      <li><b>多 consumer</b>:ready 是共享的,兩個 consumer 可能同時處理不同 key —— 但若需要「同一 key 永遠由同一 consumer 處理」(順序保證),就要 sharded ready,而 shard 之間的負載不均是新問題。</li>
+      <li><b>背壓向上傳遞</b>:conflation 讓 producer 永遠不阻塞,代價是 producer 完全感受不到 consumer 慢。要不要把 <code>count</code> 回吐給 producer 當訊號?這是設計選擇,不是技術問題。</li>
+      <li><b>loom 驗證</b>:上面的無鎖版沒有 loom 測過。<code>Release/Acquire</code> 的論證是紙上推理,不是機器窮舉 —— 標記為未驗證。</li>
+    </ul>
+    <div class="navrow"><button data-jump="code">◀ Code</button><button data-jump="overview">總覽 ▶</button></div>
+  </section>
+</div>
+
+<footer>
+  Per-key Conflation Slot · 值層／通知層分離 · invariant: queued ⟺ ∈ready<br>
+  同型結構:epoll LT readiness · pending signal bitmask · dirty-rect repaint · LWW register
+</footer>
+
+</div><!-- /wrap -->
+
+<script>
+"use strict";
+
+/* ===== Tab switching ===== */
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+
+/* ===== Delegated jump handler (never <a href="#id">) ===== */
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const id = j.dataset.jump;
+  const tabBtn = tabbar.querySelector('button[data-tab="' + id + '"]');
+  if (tabBtn) { tabBtn.click(); return; }
+  const el = document.getElementById(id);
+  if (!el) return;
+  const tab = el.closest('.tab');
+  if (tab && !tab.classList.contains('active')) {
+    const btn = tabbar.querySelector('button[data-tab="' + tab.id.replace('tab-','') + '"]');
+    if (btn) btn.click();
+  }
+  el.scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+/* ===== Stepper scaffold ===== */
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.cnt = this.root.querySelector('.stepcount');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else this.go(0);
+    });
+    this.go(0);
+  }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.innerHTML = '<b>[' + (this.idx+1) + '/' + this.steps.length + ']</b> ' + s.narr;
+    this.cnt.textContent = 'step ' + (this.idx+1) + ' / ' + this.steps.length;
+  }
+}
+
+/* ===== shared renderers ===== */
+function el(tag, cls, html){
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+function renderSlots(stage, slots, hotKey, opts){
+  opts = opts || {};
+  const lane = el('div','lane');
+  lane.appendChild(el('div','lanelbl','值層 · slots'));
+  const keys = Object.keys(slots).sort();
+  if (keys.length === 0) lane.appendChild(el('div','qempty','(空)'));
+  keys.forEach(k => {
+    const row = el('div','slotrow');
+    row.appendChild(el('span','slotkey', k));
+    const hot = (k === hotKey);
+    row.appendChild(el('span','fld' + (hot ? ' hit':''), 'val=<b>'+slots[k].val+'</b>'));
+    if (slots[k].seq !== undefined)
+      row.appendChild(el('span','fld','seq='+slots[k].seq));
+    row.appendChild(el('span','fld' + (hot ? ' hit':''), 'count=<b>'+slots[k].count+'</b>'));
+    const qcls = 'fld ' + (slots[k].queued
+        ? (opts.warnKey === k ? 'warn' : 'on') : '');
+    row.appendChild(el('span', qcls, 'queued='+(slots[k].queued?'T':'F')));
+    lane.appendChild(row);
+  });
+  stage.appendChild(lane);
+}
+function renderReady(stage, ready, hotKey, note){
+  const lane = el('div','lane');
+  lane.appendChild(el('div','lanelbl','通知層 · ready' + (note ? ' — ' + note : '')));
+  const box = el('div','');
+  if (ready.length === 0) box.appendChild(el('span','qempty','(空)'));
+  ready.forEach(k => box.appendChild(el('span','chip' + (k===hotKey?' hot':''), k)));
+  lane.appendChild(box);
+  stage.appendChild(lane);
+}
+function renderLog(stage, lines){
+  if (!lines.length) return;
+  stage.appendChild(el('div','log', 'consumer 收到:\n' + lines.join('\n')));
+}
+function quiz(stage, question, opts){
+  const q = el('div','quiz');
+  q.appendChild(el('p', null, '預測題:' + question));
+  const fb = el('div','fb');
+  opts.forEach(o => {
+    const b = el('button', null, o.label);
+    b.addEventListener('click', () => {
+      fb.style.display = 'block';
+      fb.style.color = o.correct ? 'var(--green)' : 'var(--red)';
+      fb.innerHTML = (o.correct ? '✓ ' : '✗ ') + o.fb;
+    });
+    q.appendChild(b);
+  });
+  q.appendChild(fb);
+  stage.appendChild(q);
+}
+
+/* ===== S1: 摺疊 ===== */
+const OPS = [
+  ['pub','A',1,10], ['pub','B',1,70], ['pub','A',2,11], ['pub','A',3,12],
+  ['recv'], ['pub','B',2,71], ['recv'], ['recv']
+];
+function buildS1(){
+  let slots = {}, ready = [], log = [];
+  let pubs = 0, notifies = 0;
+  const frames = [];
+  const snap = (extra) => {
+    const s = {}; for (const k in slots) s[k] = Object.assign({}, slots[k]);
+    return Object.assign({slots:s, ready:ready.slice(), log:log.slice()}, extra);
+  };
+  frames.push(snap({hot:null, narr:'一開始兩層都是空的。值層(slots)給每個 key 一格,永遠只存這個 key 的最新值;通知層(ready)是一個佇列,記錄哪些 key 有新值、consumer 還沒來拿。consumer 想拿資料的時候,先從 ready 取出一個 key,再到 slots 查這個 key 的值。'}));
+  for (const op of OPS){
+    if (op[0] === 'pub'){
+      const [,k,seq,v] = op;
+      pubs++;
+      const isNew = !(k in slots);
+      if (isNew) slots[k] = {val:v, seq:0, count:0, queued:false};
+      const stale = seq < slots[k].seq;
+      let narr;
+      if (stale){
+        narr = 'producer 送來 publish('+k+', seq='+seq+', '+v+'),但這個 seq 比 slot 上已經記錄的 '+slots[k].seq+' 還小,代表這是一筆遲到的舊訊息。publish 直接把它丟掉,slot 完全不動。';
+      } else {
+        const oldVal = isNew ? null : slots[k].val;
+        slots[k].val = v; slots[k].seq = seq; slots[k].count += 1;
+        const needEnq = !slots[k].queued;
+        if (needEnq){ slots[k].queued = true; ready.push(k); notifies++; }
+        if (isNew){
+          narr = 'producer 送來 '+k+' 的第一筆更新,值是 '+v+'。slots 裡還沒有 '+k+',所以 publish 開一格新的 slot,把 '+v+' 放進去,count 記成 1。接著 publish 檢查 queued:現在是 false,代表 '+k+' 不在 ready 裡,所以 publish 把 '+k+' 排進 ready、把 queued 改成 true,並發出一次 notify。';
+        } else if (needEnq){
+          narr = 'producer 又更新了 '+k+',新值是 '+v+'。slot 裡原本的 '+oldVal+' 被 '+v+' 蓋掉,count 從 '+(slots[k].count-1)+' 加到 '+slots[k].count+'。queued 目前是 false('+k+' 上一輪已經被 consumer 拿走了),所以 publish 把 '+k+' 重新排進 ready,並發出一次 notify。';
+        } else {
+          narr = 'producer 再次更新 '+k+',新值是 '+v+'。slot 裡原本的 '+oldVal+' 被 '+v+' 蓋掉,count 從 '+(slots[k].count-1)+' 加到 '+slots[k].count+'。接著 publish 檢查 queued:它已經是 true,代表 '+k+' 還在 ready 裡排隊,所以 publish 不會把 '+k+' 排進去第二次,也不發 notify。ready 的長度維持不變。';
+        }
+      }
+      frames.push(snap({hot:k, narr:narr}));
+    } else {
+      if (ready.length === 0){
+        frames.push(snap({hot:null, narr:'consumer 呼叫 recv(),但 ready 是空的,沒有任何 key 在等。consumer 於是在 condvar 上睡著,等下一次 publish 把它叫醒。這是正常的等待,不是錯誤。'}));
+      } else {
+        const k = ready.shift();
+        const s = slots[k];
+        s.queued = false;
+        const c = s.count; s.count = 0;
+        log.push('('+k+', val='+s.val+', 摺疊了 '+c+' 筆)');
+        const tail = c > 1
+          ? '中間那 '+(c-1)+' 筆舊值已經被蓋掉,consumer 永遠不會看到它們 —— 這正是 conflation 想要的效果。'
+          : '這一輪 '+k+' 只被更新過一次,所以沒有任何值被摺疊掉。';
+        frames.push(snap({hot:k, narr:'consumer 呼叫 recv()。它從 ready 的頭部取出 '+k+',然後在同一次上鎖裡做完三件事:把 '+k+' 的 queued 改回 false、讀出目前的值 '+s.val+'、把 count(現在是 '+c+')歸零。consumer 收到 ('+k+', '+s.val+', 摺疊了 '+c+' 筆)。'+tail}));
+      }
+    }
+  }
+  frames.push(snap({hot:null, narr:'整輪結束。producer 總共送了 '+pubs+' 筆 publish,但只發出了 '+notifies+' 次 notify;consumer 收到 '+log.length+' 筆結果,每一筆都是那個 key 當下的最新值。slots 從頭到尾只有 '+Object.keys(slots).length+' 格,ready 最長的時候也只有 2 個元素 —— 兩層的大小都被 key 的數量鎖住,跟 producer 送了幾筆完全無關。'}));
+  return frames.map(f => ({
+    narr: f.narr,
+    render(st){
+      renderSlots(st, f.slots, f.hot);
+      renderReady(st, f.ready, f.hot);
+      renderLog(st, f.log);
+    }
+  }));
+}
+
+/* ===== S2: lost update ===== */
+const S2 = [
+  { P:[], C:[], slots:{A:{val:100,count:1,queued:true}}, ready:['A'],
+    narr:'起始狀態:producer 已經完成了一次 publish(A, 100)。所以現在 slot A 的值是 100、queued 是 true,ready 裡排著一個 A。invariant 成立:queued 是 true,而 A 也確實在 ready 裡。' },
+  { P:[], C:[0], slots:{A:{val:100,count:1,queued:true}}, ready:[], warn:'A',
+    narr:'consumer 開始執行有 bug 的 recv。phase 1:consumer 上鎖、從 ready 取出 A、然後放掉鎖。看一下現在的狀態:A 已經不在 ready 裡了,可是 slot 上的 queued 還是 true。invariant 在這一刻已經被打破,而且因為鎖放掉了,其他執行緒都看得到這個被打破的中間狀態。' },
+  { P:[], C:[0,1], slots:{A:{val:100,count:1,queued:true}}, ready:[], warn:'A', read:100,
+    narr:'phase 2:consumer 再上鎖一次,讀出 slot A 的值 100,又放掉鎖。consumer 手上現在拿著 100。queued 仍然是 true —— consumer 還沒有走到清旗標的那一步。這裡就是整段程式裡最寬的危險窗口。' },
+  { P:[], C:[0,1], slots:{A:{val:100,count:1,queued:true}}, ready:[], warn:'A', read:100,
+    quiz:true,
+    narr:'先停在這裡。producer 這個時候剛好要執行 publish(A, 200)。按照協定,producer 會先把 200 蓋進 slot,再檢查 queued 來決定要不要把 A 排進 ready —— 而它會看到 queued 是 true。先回答下面的預測題,再按 next。' },
+  { P:[0], C:[0,1], slots:{A:{val:200,count:2,queued:true}}, ready:[], warn:'A', read:100,
+    narr:'producer 執行了。它把 slot A 的值從 100 蓋成 200,count 也從 1 加到 2。接著它檢查 queued,看到 true,於是判斷「A 已經在 ready 裡排隊了,不用再排一次」,然後直接返回。注意:producer 的每一步都完全遵守協定 —— 問題在於「queued 是 true」這件事已經是假的,而把它變假的人是 consumer(在 phase 1)。' },
+  { P:[0], C:[0,1,2], slots:{A:{val:200,count:2,queued:false}}, ready:[], read:100,
+    narr:'phase 3:consumer 最後一次上鎖,把 queued 清成 false,然後放鎖。看看現在的完整狀態:slot 裡躺著 200,queued 是 false,ready 是空的。200 確實被寫進來了,但已經沒有任何記號說它是新的。' },
+  { P:[0], C:[0,1,2], slots:{A:{val:200,count:2,queued:false}}, ready:[], read:100, dead:true,
+    narr:'結局:consumer 把手上的 100 回報出去,而 slot 裡的 200 永久遺失 —— 除非 A 之後剛好又被 publish 一次(到那個時候 queued 已經是 false,新的 publish 才會把 A 重新排進 ready)。這讓 bug 特別難抓:更新頻繁的 key 很快就會被下一筆 publish 救回來,只有安靜的 key 會把遺失暴露出來。測試環境流量大,所以看不到;生產環境一有安靜的 key,資料就悄悄不見。' },
+  { P:[], C:[], slots:{A:{val:200,count:2,queued:true}}, ready:['A'], fixed:true,
+    narr:'修法:把 phase 1、2、3 合併成同一次上鎖 —— consumer 在一個 critical section 裡做完「取出 A、讀值、清 queued」三件事。這樣 producer 不可能插進中間,它只能落在整個 critical section 之前或之後,而這兩種情況下 200 都收得到(下面的表格窮舉了這兩種情況)。' }
+];
+const S2_PLINES = ['publish(A, 200)  // 蓋值 → 檢查 queued'];
+const S2_CLINES = ['p1: key = ready.pop_front()', 'p2: val = slots[key].val   // 鎖已放掉',
+                   'p3: slots[key].queued = false'];
+function buildS2(){
+  return S2.map(f => ({
+    narr: f.narr,
+    render(st){
+      const cols = el('div','tcols');
+      const pc = el('div','tcol P'); pc.appendChild(el('h4','THREAD P (producer)'));
+      S2_PLINES.forEach((l,i) => pc.appendChild(
+        el('div','tline' + (f.P.includes(i) ? ' act' : ''), l)));
+      const cc = el('div','tcol C'); cc.appendChild(el('h4','THREAD C (consumer)'));
+      S2_CLINES.forEach((l,i) => cc.appendChild(
+        el('div','tline' + (f.C.includes(i) ? ' act' : ''), l)));
+      cols.appendChild(pc); cols.appendChild(cc);
+      st.appendChild(cols);
+      renderSlots(st, f.slots, null, {warnKey: f.warn});
+      renderReady(st, f.ready, null, f.warn ? 'A 已經不在這裡,但 slot 的 queued 還是 true' : null);
+      if (f.read !== undefined)
+        st.appendChild(el('div','log','consumer 手上拿著:' + f.read
+          + (f.dead ? '(它會回報這個值;slot 裡的 200 已經沒有人會來拿)' : '')));
+      if (f.fixed)
+        st.appendChild(el('div','log','invariant 恢復:producer 這次看到 queued 是 false,於是把 A 重新排進 ready,並把 queued 改回 true。'));
+      if (f.quiz) quiz(st, '這筆 200 最後會不會送到 consumer 手上?', [
+        {label:'會,下一輪 recv 就拿得到', correct:false,
+         fb:'拿不到。下一輪 recv 會發現 ready 是空的 —— A 從頭到尾沒有被重新排進 ready,因為 producer 檢查 queued 的時候看到的是 true。'},
+        {label:'不會,200 永久遺失', correct:true,
+         fb:'正確。producer 因為看到 queued 是 true,所以跳過了「把 A 排進 ready」這一步;consumer 接著把 queued 清成 false,卻沒有把 A 放回 ready。200 躺在 slot 裡,之後沒有任何路徑會再通知它。'}
+      ]);
+    }
+  }));
+}
+
+/* ===== S3: 通知順序 ===== */
+const S3 = [
+  { narr:'起始:這是無鎖版本,slot 只剩兩個原子欄位:val 是 100,dirty 是 false。因為沒有鎖了,producer 寫入時「先做哪一步」直接變成正確性的一部分。consumer 這邊正在等 dirty 變成 true。',
+    val:100, dirty:false, got:null },
+  { narr:'先看錯誤的 producer 順序:producer 想寫入 200,但它先執行了 dirty.store(true)。現在 dirty 已經是 true,可是 val 還是舊的 100 —— producer 還沒來得及把 200 寫進去。',
+    val:100, dirty:true, bad:true },
+  { narr:'停在這裡。consumer 剛好在這一瞬間醒來。它接下來會先執行 dirty.swap(false) 把旗標拿走,再去讀 val。先回答下面的預測題,再按 next。',
+    val:100, dirty:true, bad:true, quiz1:true },
+  { narr:'consumer 執行了:swap 回傳 true(旗標拿到了),dirty 被清成 false;接著 consumer 讀 val,讀到的是 100 —— 一個過期的舊值。consumer 帶著 100 離開了。',
+    val:100, dirty:false, got:100, bad:true },
+  { narr:'producer 這個時候才執行 val.store(200)。現在 slot 裡是 200,但 dirty 是 false,consumer 也已經走了 —— 200 從此沒有任何通知路徑,永久遺失。這跟 tab ② 的結局一樣,但原因不同:tab ② 是 invariant 出現了看得見的破窗;這裡是 producer「宣告有新值」的時間,早於「新值真的可見」的時間。',
+    val:200, dirty:false, got:100, bad:true, dead:true },
+  { narr:'修正 producer 的順序:先 val.store(200, Relaxed),再 dirty.store(true, Release)。Release 保證:任何一個用 Acquire 看到 dirty 是 true 的執行緒,也一定看得到在這之前寫入的 val=200。注意,光把兩行程式碼對調還不夠 —— 沒有 Release/Acquire 這對屏障,編譯器和 CPU 仍然可以把兩個 store 重排回去。',
+    val:200, dirty:true, fixed:true },
+  { narr:'producer 的順序修好了,換 consumer 這邊的順序問題:consumer 應該先清 dirty 再讀值,還是先讀值再清 dirty?假設 consumer 選了後者:它先讀 val 拿到 200,還沒清 dirty;就在這個空檔,producer 又寫入了 val=300,並把 dirty 設成 true(dirty 本來就是 true,所以這個 store 沒有改變任何東西)。先回答預測題。',
+    val:300, dirty:true, fixed:true, quiz2:true },
+  { narr:'如果 consumer 先讀後清:它讀到 200 之後把 dirty 清成 false,可是 300 的那一次 set-dirty 發生在這次清除之前,等於被一起清掉了 —— 之後沒有人會來拿 300。所以正確的順序是先清後讀:consumer 先把 dirty 清成 false,再去讀值。這樣一來,如果 producer 在清除之後才寫入,它會看到 dirty 是 false,於是重新把 dirty 設回 true,consumer 下一輪就一定會再來讀一次。最壞的代價只是同一個最新值被回報兩次,而 conflation 的語意本來就允許這件事。原則:通知可以多,不可以少。',
+    val:300, dirty:false, got:300, fixed:true, principle:true }
+];
+function buildS3(){
+  return S3.map(f => ({
+    narr: f.narr,
+    render(st){
+      const lane = el('div','lane');
+      lane.appendChild(el('div','lanelbl','無鎖 slot(單一 key)'));
+      const row = el('div','slotrow');
+      row.appendChild(el('span','fld' + (f.bad && f.dirty ? ' warn':''), 'val=<b>'+f.val+'</b>'));
+      row.appendChild(el('span','fld ' + (f.dirty ? (f.bad?'warn':'on') : ''),
+        'dirty=' + (f.dirty?'true':'false')));
+      lane.appendChild(row);
+      st.appendChild(lane);
+      if (f.got !== null && f.got !== undefined)
+        st.appendChild(el('div','log','consumer 讀到:' + f.got
+          + (f.dead ? '(這是過期值;slot 裡的 200 已經沒有通知路徑)' : '')));
+      if (f.quiz1) quiz(st, 'consumer 這一輪會讀到什麼?', [
+        {label:'讀到新值 200', correct:false,
+         fb:'讀不到。producer 還沒執行 val.store(200) —— 它先宣告了「有新值」,值本身卻還沒寫進 slot。'},
+        {label:'讀到過期的 100,而且之後的 200 也拿不到', correct:true,
+         fb:'正確。consumer 讀到過期的 100,同時把 dirty 清成了 false;producer 之後補寫 200 的時候不會再設一次 dirty(它已經設過了),所以 200 沒有通知路徑。'}
+      ]);
+      if (f.quiz2) quiz(st, '如果 consumer 的順序是「先讀值、後清 dirty」,那筆 300 會怎樣?', [
+        {label:'沒事,dirty 反正已經是 true', correct:false,
+         fb:'有事。consumer 讀到 200 之後才把 dirty 清成 false,而 300 的 set-dirty 發生在這次清除之前,等於被一起清掉了。之後沒有人會來拿 300。'},
+        {label:'300 會遺失,所以必須先清後讀', correct:true,
+         fb:'正確。先清後讀把危險窗口挪到「清除之後」:窗口裡的任何寫入都會看到 dirty 是 false,於是重新把 dirty 設回 true,consumer 下一輪就一定會再來。最壞情況只是多讀一次,不會少讀。'}
+      ]);
+      if (f.principle)
+        st.appendChild(el('div','log','原則:通知可以多,不可以少。'));
+    }
+  }));
+}
+
+new Stepper('stepper-s1', buildS1());
+new Stepper('stepper-s2', buildS2());
+new Stepper('stepper-s3', buildS3());
+</script>
+</body>
+</html>

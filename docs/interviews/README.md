@@ -29,6 +29,8 @@ R1 實測的題型:**長英文 spec(有洞)+ 一堆 provided API + 實作一個 
 ——六題各一分頁:provided API 逐函式解剖表、全景示意圖(資料流 + 區域著色 + 怎麼讀)、互動 stepper、
 code 走讀、陷阱清單;**每分頁掛同款防雷門**(i 已開,j–n 各自場次跑完才開;7/31 改制後 m/n 前移 8/2、8/3),賽前仍讀作戰本前導卡。
 
+**補充教材(7/31 收錄,使用者自製)**:`html_p/conflation-slot-stepper.html`——per-key conflation slot 圖解 + 三 stepper(值層/通知層分離、lost update 確定性重現、無鎖通知順序「通知可多不可少」)。卡 SP「freshness vs completeness」課的下半場;wake 合併/pending signal 是它的同型結構。index R2 區有卡,claude.ai 鏡像已發。
+
 **圖解作戰本**:`html_p/r2-onsite-visual-guide.html`(claude.ai 鏡像在 artifacts gallery,index 已收卡)——題型解剖(API 三堆分類法 + reactor 五步骨架)、sim i 三張表互動 stepper(pipeline 分水嶺劇本)、sim j–n 概念前導與 clarify 種子(刻意不含解法,跑題前讀是安全的)、英文對白道場五場景(雙語,R1 洞①的處方)。用法:各 sim 開跑前 10 分鐘讀對應前導卡;對白每晚出聲場挑一景唸 3 遍。
 
 候選模擬題(JD 軸:telemetry / 硬體訊號 / event loop / lockless):
