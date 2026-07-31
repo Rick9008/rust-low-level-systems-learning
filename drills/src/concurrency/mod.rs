@@ -1,6 +1,7 @@
 //! 執行緒、鎖、atomic / lock-free 的填空題(對應 `docs/concurrency/`)。
 
 pub mod bounded_queue;
+pub mod conflation_slot;
 pub mod sharded_map;
 pub mod thread_pool;
 

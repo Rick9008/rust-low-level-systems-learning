@@ -5,6 +5,8 @@
 
 // stage 2:mutex/condvar 基礎
 pub mod bounded_queue;
+// per-key conflation(值層/通知層分離;圖解與 stepper 在 html_p/conflation-slot-stepper.html)
+pub mod conflation_slot;
 pub mod sharded_map;
 pub mod thread_pool;
 

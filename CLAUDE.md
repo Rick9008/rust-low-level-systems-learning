@@ -40,7 +40,7 @@ cargo test -p challenges -- --include-ignored    # show which challenge tests ar
 Four workspace crates; the first three share module names, organized into four category submodules mirroring `docs/`'s four folders (`async` is a Rust keyword, so the source module is named `runtime`):
 
 - `ds/` — the six single-threaded data-structure modules (`dsu`, `graph`, `lru`, `ring_buffer`, `tree`, `trie`)
-- `concurrency/` — `bounded_queue`, `thread_pool`, `sharded_map`, `spin_lock`, `spsc_ring`, `mpmc_ring`, `mpsc_list`, `arena_lockfree`, `signal_pipeline`; reference-only: `mpsc_ring` (Vyukov degenerate), `mpmc_list` (Michael-Scott), `ws_deque` (Chase-Lev), `rcu_snapshot` (snapshot publication, no unsafe), and the locked/lock-free pairing layer `ds_sync`; R2 sim teaching layer (reference+drills only, no challenge): `isr_pipeline` (sim j), `percpu_fanin` (sim k), `job_scheduler` (sim n)
+- `concurrency/` — `bounded_queue`, `conflation_slot`, `thread_pool`, `sharded_map`, `spin_lock`, `spsc_ring`, `mpmc_ring`, `mpsc_list`, `arena_lockfree`, `signal_pipeline`; reference-only: `mpsc_ring` (Vyukov degenerate), `mpmc_list` (Michael-Scott), `ws_deque` (Chase-Lev), `rcu_snapshot` (snapshot publication, no unsafe), and the locked/lock-free pairing layer `ds_sync`; R2 sim teaching layer (reference+drills only, no challenge): `isr_pipeline` (sim j), `percpu_fanin` (sim k), `job_scheduler` (sim n)
 - `runtime/` (docs: `docs/async/`) — `executor`, `async_sync`, plus (reference-only) `mini_runtime`
 - `io/` — `epoll_sys`, `event_loop`, `fd_registry`, `file_io_offload`, `tcp_echo`, `hw_bridge`; R2 sim teaching layer (reference+drills only): `dma_dispatcher` (sim i), `mmio_cmdq` (sim l), `engine_watchdog` (sim m)
 
