@@ -8,7 +8,7 @@
 |---|---|---|
 | R1 coding(DMA dispatcher) | 2026-07-28 | ✅ 過,feedback 正向 → [紀錄](2026-07-28-tps-round1-dma.md) |
 | coding #2 + #3 | **8/6(四)09:15–10:00、10:15–11:00**(中間休 15 分鐘) | — |
-| technical deep dive + culture fit 場 | **8/11(二)** | — |
+| technical deep dive + recruiter debrief | **8/10(一)10:00–10:45(Ulysses Kao)+ 10:45–11:00(Molly Huang)** | — |
 
 Onsite 結構(2026-08-01 官方行程信確認;**修正 7/31 記載的「deep dive 8/11」**):兩場 coding 併到 **8/6(四)同天連跑**(09:15–10:00 Jan Lagarden、10:15–11:00 Jason Catlin,中間只休 15m——連打的體力與切換是新變數,8/4 背靠背模擬對此);**deep dive 在 8/10(一)10:00–10:45(Ulysses Kao),緊接 recruiter debrief 10:45–11:00(Molly Huang)**;**culture fit 沒有獨立場**——散在各場 behavioral 提問 + debrief,culture fit 稿的用途 = 每場開頭自介 + debrief。**兩個結論:六題攝取全部壓進 8/5 前;deep dive / culture fit 出聲練習壓進 8/7–8/9 三天(8/10 上午即上場)。**
 
@@ -48,7 +48,7 @@ code 走讀、陷阱清單;**每分頁掛同款防雷門**(i 已開,j–n 各自
 
 **廣度用認題卡補(15–20m/張,不寫完整 code)**:[spec-cards.md](spec-cards.md) 七張,每張=讀埋洞英文 spec → 寫 ≥3 clarify 問題 → 30 秒英文定界出聲 → state 表 → 開[答案鍵](spec-cards-answers.md)(含英文稿)。SP/FP/FR/TA/TQ 五張是複習卡(衝刺期已有 a–h 肌肉:signal_pipeline/c/e2/f/h);HW-L/HW-M 兩張當 l(lite)/m(全場)的 10 分鐘前導。
 
-## 逐日計畫(7/30 → 8/11;練習時間比衝刺期少,量已壓)
+## 逐日計畫(7/30 → 8/10;練習時間比衝刺期少,量已壓)
 
 原則:白天打字場 = 模擬題(clarify 打字來回不用出聲);**8/6 前晚上只留 coding 支援輕出聲(clarify 句庫/四形狀對白/30 秒定界),deep dive 口述 + culture fit 唸稿整段後移 8/7–8/9(8/10 10:00 上場)**,每晚至多一件出聲事,標「(選)」的累了就砍。signal pipeline 由 j 題 + 複讀覆蓋,不另開項目。時間資源(7/31 口報):週日 8/2 大塊,8/3–8/5 上班日也比平常多。
 
