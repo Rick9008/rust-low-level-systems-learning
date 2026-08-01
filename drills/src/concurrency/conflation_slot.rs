@@ -182,10 +182,7 @@ mod tests {
         p.join().unwrap();
         let last = consumer.join().unwrap();
         for k in 0..4_u32 {
-            let expect = (1..=5000_u64)
-                .filter(|s| (s % 4) as u32 == k)
-                .last()
-                .unwrap();
+            let expect = (1..=5000_u64).rfind(|s| (s % 4) as u32 == k).unwrap();
             assert_eq!(last[&k], expect, "key {k} 最終狀態未送達");
         }
     }
