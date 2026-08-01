@@ -15,11 +15,11 @@ R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07
 | 讀 sol_sim_i_dma(三張表) | ☐ 排 7/29 | R1 洞的正解;Dry-Run 段紙上走一遍 |
 | sim i-lite(30m 修洞重做) | ✅ 7/30 | drills 填空版 6/6 綠——R1 兩洞在 drill 層關掉;空白重寫層驗證由 m 全場扛 |
 | sim j(ISR pipeline)全場 | ✅ 7/31 | 16:39–17:24 錶內完成 P1+P2,oracle 2/2 綠,自抓自修 2 bug;signal_pipeline 頁複讀 ✓ |
-| sim k(per-core fan-in)**lite** | ☐ 排 8/1(7/31 改制降 lite) | + 卡 FP |
+| sim k(per-core fan-in)**lite** | ✅ 8/1 | 前導卡(題幹當卡,clarify 六問中五類、漏 shutdown+公平性兩類→lifecycle 三問入固定清單)+ drill 16m 填綠 4/4 + review 抓「先睡才查 stop」真洞(sticky flag 合併只夠醒一次)紅測先行修至 5/5(03d0284);欠帳三題:swap(0) ✓/清 bit 順序 ✓/sizing 首答 ✗ 重考過(兩數字沒比較+假 Cross;丟/摺/批門檻問題化);sol 對照 15m 滑 8/2 |
 | sim l(MMIO doorbell)**lite** | ☐ 排 8/2(7/31 改制降 lite) | HW-L 卡當前導 |
 | sim m(watchdog)**全場** | ☐ 排 8/2(自 8/8 前移) | R1 直系延伸、#2/#3 命中率最高;HW-M 卡當前導 |
 | sim n(priority scheduler + DAG)**lite** | ☐ 排 8/3(自 8/9 前移降 lite) | #2/#3 併 8/6,「8/6 後換皮」窗口不存在;8/3 開機 graph 一題當暖身 |
-| 認題卡 ×7 | ☐ 進行中 | SP ✅ 7/30(7/31 重做 19m 錶內)|FP 8/1|HW×2 = l/m 前導|FR/TA/TQ 原 8/3 槽被 n lite 取代,未再排 |
+| 認題卡 ×7 | ☐ 進行中 | SP ✅ 7/30(7/31 重做 19m 錶內)|FP **滑 8/2**(8/1 白天被 k 前導卡+欠帳三題吃掉,見 scratch/cards_2026-08-01.md)|HW×2 = l/m 前導|FR/TA/TQ 原 8/3 槽被 n lite 取代,未再排 |
 | deep dive 英文稿(3 專案) | 稿 ✅(7/29 起草、7/31 口述化) | 口述練習壓 8/7–8/9(8/10 上午上場);`docs/interviews/deep-dive-projects.md` |
 | culture fit 稿 | 稿 ✅(7/31 ★ 五題全英文逐字化;★3 三細節待補真) | 無獨立場——散在各場 behavioral + debrief;唸稿壓 8/7–8/9;`docs/interviews/culture-fit-script.md` |
 | **coding ×2(併場)** | ☐ **8/6(四)09:15–10:00 Jan Lagarden、10:15–11:00 Jason Catlin**(休 15m,07:45 起) | 當晚:紀錄+兩場洞清單入 docs/interviews/ |

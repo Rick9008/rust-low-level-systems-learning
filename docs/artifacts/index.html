@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    R2 onsite 備戰區(圖解作戰本 + sim 解剖室 + 量級手冊 + 稿件唸稿頁)、20 個互動模組、1 間 clarify 決策室、15 份深讀教材(html_p:追問鏈 + self-quiz)、12 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    R2 onsite 備戰區(圖解作戰本 + sim 解剖室 + 量級手冊 + 稿件唸稿頁)、20 個互動模組、1 間 clarify 決策室、16 份深讀教材(html_p:追問鏈 + self-quiz)、12 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -801,6 +801,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">🛡️ RAII Guard 設計學</span>
       <span class="hook">鎖紀律翻譯成型別系統的三個決策:Deref 借用綁 guard(unsound &amp;'a T 反例 stepper)、!Send 分「強制 vs 裁決」兩種(pthread UB / atomic 設計選擇 / tokio guard 必須 Send + 接力鏈 stepper)、poisoning 的 thread::panicking() 偵測與 Relaxed 便車。</span>
       <span class="hits">借用死在 guard 之前 · 同步鎖別跨 .await · 8/1 spin_lock drill 配套</span>
+    </a>
+    <a class="card" href="../../html_p/fanin-aggregator-bitmask.html">
+      <span class="name">🧲 Per-core Fan-in · aggregator 的存在理由</span>
+      <span class="hook">sim k 對話沉澱:fan-in 不是讓 log 變快,是把慢集中到一條執行緒(top-half/bottom-half 同形);佇列吸突發不造容量 → 超載三路丟/摺/批與三個門檻問題(swap(0) 收割 quiz);喚醒協定 stepper 重演「先睡才查 stop」睡死交錯;bitmask ready-set=土製 epoll,回本線 N≫活躍數 + 清 bit 順序雙模式 stepper。</span>
+      <span class="hits">掃描不是瓶頸 sink 才是 · 一條 flag 背兩件事只夠醒一次 · 8/1 percpu_fanin drill 配套</span>
     </a>
   </div>
 </section>

@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Per-core Fan-in — aggregator 的存在理由 × bitmask ready-set · Stepper Handbook</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%;background:var(--bg0)}
+  body{margin:0;color:var(--fg);font-family:var(--cjk);line-height:1.65;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);border-color:var(--bg4)}
+  .tabbar button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow);text-wrap:balance}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.94rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55;-webkit-text-size-adjust:100%}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .t{color:var(--blue)}
+  pre .s{color:var(--green)} pre .n{color:var(--purple)}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0;font-size:.9rem}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .callout.info{border-color:var(--blue)}
+  .lbl{display:block;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gray);margin-bottom:4px}
+  .key{color:var(--orange);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  td.ok{color:var(--green)} td.no{color:var(--red)}
+  .tblwrap{overflow-x:auto}
+
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 12px;border-radius:8px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .ctrl button.mode{border-color:var(--blue);color:var(--blue)}
+  .stepper .ctrl button.mode.on{background:var(--blue);color:var(--bg0);font-weight:700}
+  .stepper .ctrl .stepcount{color:var(--gray);font-size:.8rem;font-family:var(--mono)}
+  .stepper .stage{min-height:150px}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+
+  /* 板面:協定/位元圖共用 */
+  .board{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:.8rem}
+  .lane{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lane .who{width:86px;flex:none;color:var(--fg-dim);font-size:.76rem;text-align:right}
+  .box{border:1px solid var(--bg4);background:var(--bg1);border-radius:6px;
+    padding:2px 8px;min-width:34px;text-align:center}
+  .box.hot{border-color:var(--orange);color:var(--orange)}
+  .box.dead{border-color:var(--red);color:var(--red);font-weight:700}
+  .box.okk{border-color:var(--green);color:var(--green)}
+  .box.dim{color:var(--gray)}
+  .flagon{color:var(--yellow);font-weight:700}
+  .flagoff{color:var(--gray)}
+  .act{color:var(--purple)}
+  .bit{display:inline-block;width:26px;text-align:center;border:1px solid var(--bg4);
+    border-radius:5px;margin-right:3px;background:var(--bg1)}
+  .bit.on{border-color:var(--yellow);color:var(--yellow);font-weight:700}
+  .bit.wiped{border-color:var(--red);color:var(--red)}
+
+  .quiz{border:1px dashed var(--purple);border-radius:9px;padding:10px 12px;margin-top:10px}
+  .quiz p{margin:0 0 8px;font-size:.88rem}
+  .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 10px;border-radius:8px;
+    cursor:pointer;margin:0 6px 6px 0}
+  .quiz .fb{display:none;font-size:.86rem;margin-top:4px}
+
+  .navrow{display:flex;justify-content:space-between;margin:18px 0 6px}
+  .navrow button{background:var(--bg2);border:1px solid var(--bg4);color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.84rem;padding:6px 14px;border-radius:8px;cursor:pointer}
+  .navrow button:hover{color:var(--yellow)}
+
+  svg text{font-family:var(--mono);font-size:11px;fill:var(--fg)}
+  svg .dimtext{fill:var(--gray)}
+  .figwrap{overflow-x:auto}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+
+<div class="tabbar" id="tabbar">
+  <button data-tab="overview" class="active">總覽</button>
+  <button data-tab="capacity">消化不完?丟/摺/批</button>
+  <button data-tab="protocol">協定 Stepper</button>
+  <button data-tab="bitmask">bitmask ready-set</button>
+  <button data-tab="recap">句庫與判準</button>
+</div>
+
+<!-- ============ TAB: 總覽 ============ -->
+<div class="tab active" id="tab-overview"><div class="wrap">
+  <h1>Per-core Fan-in — aggregator 的存在理由</h1>
+  <p class="sub">sim k(per-core telemetry fan-in)對話沉澱 · 2026-08-01。姊妹頁:<code>mesi-rmw-atomics</code>(乒乓的機器層帳單)、<code>conflation-slot-stepper</code>(replace vs fold 的值層)、<code>capacity-four-shapes</code>(五行頭結帳)。</p>
+
+  <section>
+    <h2>題形</h2>
+    <p>N 顆 worker core 各自產 telemetry record,全部要送到<b>一條</b> aggregator 執行緒,由它呼叫很慢的 <code>write_out</code>。鐵則:<span class="key">producer 絕不 block</span>。</p>
+    <div class="figwrap">
+    <svg viewBox="0 0 720 240" width="720" height="240" role="img" aria-label="fan-in 拓撲圖">
+      <!-- cores -->
+      <g>
+        <rect x="10" y="14"  width="88" height="34" rx="7" fill="#32302f" stroke="#e78a4e"/>
+        <text x="54" y="35" text-anchor="middle">core 0</text>
+        <rect x="10" y="66"  width="88" height="34" rx="7" fill="#32302f" stroke="#e78a4e"/>
+        <text x="54" y="87" text-anchor="middle">core 1</text>
+        <rect x="10" y="118" width="88" height="34" rx="7" fill="#32302f" stroke="#e78a4e"/>
+        <text x="54" y="139" text-anchor="middle">core 2</text>
+        <rect x="10" y="170" width="88" height="34" rx="7" fill="#32302f" stroke="#e78a4e"/>
+        <text x="54" y="191" text-anchor="middle">core N-1</text>
+      </g>
+      <!-- channels -->
+      <g>
+        <rect x="150" y="18"  width="150" height="26" rx="5" fill="#32302f" stroke="#45403d"/>
+        <text x="225" y="35" text-anchor="middle" class="dimtext">SPSC ring(try 語意)</text>
+        <rect x="150" y="70"  width="150" height="26" rx="5" fill="#32302f" stroke="#45403d"/>
+        <text x="225" y="87" text-anchor="middle" class="dimtext">SPSC ring</text>
+        <rect x="150" y="122" width="150" height="26" rx="5" fill="#32302f" stroke="#45403d"/>
+        <text x="225" y="139" text-anchor="middle" class="dimtext">SPSC ring</text>
+        <rect x="150" y="174" width="150" height="26" rx="5" fill="#32302f" stroke="#45403d"/>
+        <text x="225" y="191" text-anchor="middle" class="dimtext">SPSC ring</text>
+      </g>
+      <g stroke="#928374" fill="none">
+        <line x1="98" y1="31"  x2="150" y2="31"/>
+        <line x1="98" y1="83"  x2="150" y2="83"/>
+        <line x1="98" y1="135" x2="150" y2="135"/>
+        <line x1="98" y1="187" x2="150" y2="187"/>
+        <line x1="300" y1="31"  x2="380" y2="100"/>
+        <line x1="300" y1="83"  x2="380" y2="105"/>
+        <line x1="300" y1="135" x2="380" y2="113"/>
+        <line x1="300" y1="187" x2="380" y2="120"/>
+      </g>
+      <!-- aggregator -->
+      <rect x="382" y="82" width="130" height="56" rx="9" fill="#32302f" stroke="#7daea3" stroke-width="1.5"/>
+      <text x="447" y="105" text-anchor="middle" fill="#7daea3">aggregator</text>
+      <text x="447" y="123" text-anchor="middle" class="dimtext">sweep + budget</text>
+      <!-- waker -->
+      <rect x="382" y="170" width="130" height="30" rx="7" fill="#32302f" stroke="#d8a657"/>
+      <text x="447" y="189" text-anchor="middle" fill="#d8a657">Waker(sticky flag)</text>
+      <line x1="447" y1="170" x2="447" y2="138" stroke="#d8a657" stroke-dasharray="3 3"/>
+      <!-- sink -->
+      <g stroke="#928374" fill="none"><line x1="512" y1="110" x2="576" y2="110"/></g>
+      <rect x="578" y="82" width="130" height="56" rx="9" fill="#32302f" stroke="#ea6962"/>
+      <text x="643" y="105" text-anchor="middle" fill="#ea6962">write_out</text>
+      <text x="643" y="123" text-anchor="middle" class="dimtext">20 µs/rec(慢)</text>
+    </svg>
+    </div>
+    <p class="sub">每核一條 SPSC = 每條 channel 恰好一個寫者一個讀者,「多執行緒爭搶」在設計層就被拆掉。</p>
+  </section>
+
+  <section>
+    <h2>aggregator 到底是幹嘛的</h2>
+    <p>直覺的誤解:「集中到一條執行緒,慢的 <code>write_out</code> 不就更塞了嗎?」——fan-in 的目的<b>從來不是讓 log 變快</b>,而是:</p>
+    <div class="callout">
+      <span class="lbl">存在理由</span>
+      <b>把「慢」從工作核上搬走,集中到一條專用執行緒。</b>worker core 的正職是它自己的工作;若每顆核自己呼叫 write_out,32 顆核就輪流卡在慢 I/O 上,還在 sink 上互相爭搶。集中之後,工作核只付一次 <code>try_push</code>(奈秒級)就脫身。
+    </div>
+    <div class="tblwrap"><table>
+      <tr><th>同一個形狀</th><th>不准慢的那側</th><th>慢活歸誰</th></tr>
+      <tr><td>sim j(ISR pipeline)</td><td>ISR top-half(不能 alloc/block)</td><td>bottom-half thread</td></tr>
+      <tr><td>sim k(本題)</td><td>producer hook(絕不 block)</td><td>aggregator</td></tr>
+      <tr><td><code>file_io_offload</code></td><td>event loop(不准卡 I/O)</td><td>offload worker</td></tr>
+    </table></div>
+    <div class="callout good">
+      <span class="lbl">帶走的一句</span>
+      掃描 N 條 channel 的頭只是幾十個 load——<b>掃描從來不是瓶頸,sink 才是</b>。sink 是瓶頸時怎麼辦,見下一分頁的丟/摺/批。
+    </div>
+    <div class="navrow"><span></span><button data-jump="capacity">消化不完?丟/摺/批 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: capacity ============ -->
+<div class="tab" id="tab-capacity"><div class="wrap">
+  <h1>消化不完怎麼辦 — 丟/摺/批</h1>
+  <p class="sub">「round-robin 一個一個掃,根本消化不完吧?」——這個擔心要用數字結案,不用直覺慌。</p>
+
+  <section>
+    <h2>佇列吸突發,不造容量</h2>
+    <p>比較兩側的<b>持續速率</b>(sizing 用五行頭,見 <code>capacity-four-shapes</code> 分頁②):</p>
+    <div class="tblwrap"><table>
+      <tr><th></th><th>算式</th><th>結果</th></tr>
+      <tr><td>供給(sink)</td><td>1 ÷ 20 µs</td><td>50k rec/s</td></tr>
+      <tr><td>需求 case 1</td><td>32 核 × 2,000</td><td>64k rec/s → <span class="key">1.28× 超載</span></td></tr>
+      <tr><td>需求 case 2</td><td>32 核 × 10,000</td><td>320k rec/s → <span class="key">6.4× 超載</span></td></tr>
+    </table></div>
+    <div class="callout bad">
+      <span class="lbl">結構性超載</span>
+      需求 &gt; 供給時,<b>任何大小的 ring 都救不了</b>——佇列的功用是吸收突發,不是創造容量。也<b>沒有任何掃法救得了</b>:瓶頸在 sink,不在掃描。出路只有三條。
+    </div>
+    <div class="callout info">
+      <span class="lbl">實錄傷疤(2026-08-01 sizing 首答 ✗)</span>
+      64k 和 50k 兩個數字都算對了,然後<b>沒有比較它們</b>,卷面寫著 "trivial, no alarm"。五行頭要擋的病原型:「數字一出就收筆」。兩個數字並排躺在 Chain 裡,比較那一步不准在腦中蒸發。
+    </div>
+  </section>
+
+  <section>
+    <h2>三條路:犧牲什麼,門檻是什麼</h2>
+    <div class="tblwrap"><table>
+      <tr><th>路</th><th>做法</th><th>犧牲</th><th>門檻問題(spec 沉默就問)</th></tr>
+      <tr><td><b class="key">丟 drop</b></td><td>超量直接扔 + <code>dropped</code> 計數</td><td>真相變抽樣(1.28×→丟 22%;6.4×→丟 84%=擺爛)</td><td>遙測丟失可接受嗎?完整性有 SLO 嗎?(產品要求)</td></tr>
+      <tr><td><b class="key">摺 fold</b></td><td>M 筆合成 1 筆再過瓶頸:per-core 累計槽,producer <code>fetch_add</code>、aggregator 週期 <code>swap(0)</code> 收割</td><td>失去單筆身分(seq、個別內容)</td><td>下游要每筆原文,還是統計量就夠?(資料語意)</td></tr>
+      <tr><td><b class="key">批 batch</b></td><td>攢 K 筆一次寫,攤薄 per-call 固定成本</td><td>延遲(等湊批)+ 記憶體</td><td>那 20 µs 是 per-call 開銷還是每筆內在成本?有批次 API 嗎?(sink 性質)</td></tr>
+    </table></div>
+    <div class="callout">
+      <span class="lbl">批的天花板要算出來</span>
+      批 K 筆成本 = 15 + 5K µs → 每筆 (15+5K)/K,K→∞ 收斂到 5 µs → <b>容量上限 200k rec/s</b>。case 1(64k):K=2 就回到水面,3.1× 餘裕。case 2(320k):<b>無限批仍超載 1.6×,這扇門單獨開不夠</b> → 逼你去問摺的門。
+    </div>
+    <div class="callout good">
+      <span class="lbl">選擇律(一句話)</span>
+      成本是 per-call 就<b>批</b>;下游只要摘要就<b>摺</b>;兩者都不成立而遙測可犧牲才<b>丟</b>——丟必計數。<b>裁決權不在你手上,在三個門檻問題的答案上。</b>沒得問就具名假設:"Assuming log semantics must survive, I'd batch."
+    </div>
+  </section>
+
+  <section>
+    <h2>摺的收割:為什麼必須 <code>swap(0)</code></h2>
+    <pre><span class="c">// producer 側(該核,每筆):</span>
+slot.<span class="n">fetch_add</span>(v, Relaxed);
+<span class="c">// aggregator 收割,兩種寫法:</span>
+<span class="k">let</span> total = slot.<span class="n">swap</span>(<span class="s">0</span>, ...);          <span class="c">// A:一發 RMW</span>
+<span class="k">let</span> total = slot.<span class="n">load</span>(...); slot.<span class="n">store</span>(<span class="s">0</span>, ...);  <span class="c">// B:兩步分開</span></pre>
+    <div class="quiz" id="quiz-swap">
+      <p><b>預測題:</b>寫法 B 會在哪個交錯下丟量?先在腦中排出 dry-run 再點。</p>
+      <button data-q="swap" data-c="1">load 和 store 之間的 fetch_add 被 store(0) 蓋掉</button>
+      <button data-q="swap" data-c="0">fetch_add 寫到一半被 load 撕裂</button>
+      <button data-q="swap" data-c="0">兩種寫法其實等價,單寫者不會丟</button>
+      <div class="fb"></div>
+    </div>
+    <div class="callout info">
+      <span class="lbl">Dry-run</span>
+      <code>slot=5</code> → A:<code>load</code>=5 → P:<code>fetch_add(3)</code>→8 → A:<code>store(0)</code> → <b>那 3 蒸發</b>。atomic 單發操作沒有「寫一半」;病在 aggregator 自己把「讀」和「歸零」拆成兩發,中間開了縫。<code>swap(0)</code> 把讀+歸零焊回一發。定律:<b>check-then-act 拆兩步就是 race</b>。
+    </div>
+    <div class="navrow"><button data-jump="overview">◀ 總覽</button><button data-jump="protocol">協定 Stepper ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: protocol ============ -->
+<div class="tab" id="tab-protocol"><div class="wrap">
+  <h1>喚醒協定 — 一條 flag 背兩件事的那天</h1>
+  <p class="sub">Waker 是 sticky flag:先 wake 後 sleep 不丟、<b>多次 wake 合併成一次</b>、可能 spurious。stepper 前半走正常流,後半重演 2026-08-01 drill review 抓到的真洞。</p>
+
+  <section>
+    <h2>對稱律</h2>
+    <div class="tblwrap"><table>
+      <tr><th>側</th><th>順序</th><th>破了會怎樣</th></tr>
+      <tr><td>producer</td><td><b>先值後訊號</b>:push → wake</td><td>先 wake:A 醒、掃空、睡回,record 躺到下次 wake</td></tr>
+      <tr><td>consumer</td><td><b>先銷訊號後取值</b>:消費 flag → 掃</td><td>訊號永遠不准指向還沒被處理的值</td></tr>
+      <tr><td>shutdown</td><td>先 flag 後 wake;<b>零收穫 → 查 stop → 才准睡</b></td><td>順序反了 → 見 stepper 第 7 幀起</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Stepper:正常流 → 睡死交錯 → 修法</h2>
+    <p>板面:P=producer、ch=channel 內容、flag=sticky flag、A=aggregator、stop。<b>第 9 幀有預測題,先答再 next。</b></p>
+  </section>
+
+  <div class="stepper" id="stepper-proto">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">帶走的一句</span>
+      sticky flag 是<b>合併</b>的——一個 flag 可能代表兩個事件,而你只睡得掉一次。所以「查 stop」必須發生在<b>每一次</b>零收穫與 sleep 之間;mock 的 1 秒 safety timeout 只是把吊死降級成卡秒,<b>保險絲擋住的 bug 還是 bug</b>。
+    </div>
+    <div class="navrow"><button data-jump="capacity">◀ 丟/摺/批</button><button data-jump="bitmask">bitmask ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: bitmask ============ -->
+<div class="tab" id="tab-bitmask"><div class="wrap">
+  <h1>bitmask ready-set — 土製 epoll 的回本線</h1>
+  <p class="sub">「用一個 word 標記哪些核有資料,醒來只掃亮著的」——這招用得了嗎?兩個帳:物理帳(乒乓)和協定帳(清 bit 順序)。</p>
+
+  <section>
+    <h2>物理帳:邏輯上無等待,物理上同一條 line</h2>
+    <p><code>mask.fetch_or(1 &lt;&lt; core, Release)</code> 是單發 RMW——不用 CAS loop、永遠一次成功,<b>沒有「等待」意義上的爭搶</b>。但所有核打的是同一條 cache line:每次 fetch_or 都要把 line 搶成 Exclusive/Modified,line 在核間乒乓(RFO 帳單見 <code>mesi-rmw-atomics</code>)。想拆乒乓就 per-core flag 各佔一條 padded line——但那等於回頭掃 N 個 flag,跟掃 N 條 channel 頭沒差多少,<b>優化蒸發</b>。</p>
+    <div class="tblwrap"><table>
+      <tr><th></th><th>每次醒來的讀成本</th><th>寫側成本</th><th>划算條件</th></tr>
+      <tr><td>全掃 N 條 channel</td><td>O(N) 個 load(N=核數時是幾十個)</td><td>零額外</td><td class="ok">N 小(本題:N=32)</td></tr>
+      <tr><td>bitmask ready-set</td><td>O(活躍數)</td><td>每筆一次共享 line RFO + 清 bit 協定</td><td class="no">N ≫ 同時活躍數才回本</td></tr>
+    </table></div>
+    <div class="callout info">
+      <span class="lbl">你早就認識這個結構</span>
+      select/poll = 每次醒來全掃 N 個 fd;epoll = kernel 幫你維護 ready list。<b>bitmask ready-set 就是土製 epoll</b>。fd 幾千、活躍幾十 → ready list 大賺;N=核數、掃描本來就便宜 → 純虧。面試把回本線講出來,比直接用或直接棄都值錢。
+    </div>
+  </section>
+
+  <section>
+    <h2>協定帳:清 bit 的順序(Stepper 雙模式)</h2>
+    <p>consumer 醒來處理某核:先清 bit 再 drain,還是先 drain 再清 bit?切模式對照走。<b>壞模式第 4 幀有預測題。</b></p>
+  </section>
+
+  <div class="stepper" id="stepper-bit">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <button class="mode" data-m="bad">先 drain 再清(壞)</button>
+      <button class="mode on" data-m="good">先清再 drain(好)</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">帶走的一句</span>
+      先清再 drain 的最壞情況只是<b>偶爾一次空掃</b>;先 drain 再清的最壞情況是<b>一筆 record 睡死</b>。錯要錯在便宜的那邊——這句就是 trade-off 收尾句。跟協定分頁的對稱律同族:consumer 先銷訊號、後取值。
+    </div>
+    <div class="navrow"><button data-jump="protocol">◀ 協定</button><button data-jump="recap">句庫與判準 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: recap ============ -->
+<div class="tab" id="tab-recap"><div class="wrap">
+  <h1>句庫與判準</h1>
+  <p class="sub">上場直接用的英文句 + 一頁判準。</p>
+
+  <section>
+    <h2>英文句庫</h2>
+    <div class="tblwrap"><table>
+      <tr><th>時機</th><th>句子</th></tr>
+      <tr><td>問公平性(budget)</td><td>"If one core is much hotter than the others, should I drain its channel completely before moving on, or cap how many records I take from a single channel per round so the cold cores don't starve?"</td></tr>
+      <tr><td>問 lifecycle(必問)</td><td>"How long does this loop run — how do we stop it, and who owns the records still in flight when we do?"</td></tr>
+      <tr><td>超載三路開場</td><td>"The right fix depends on three things I'd ask: is the cost per-call or per-record — if per-call, I batch. Does downstream need every record or just aggregates — if aggregates, I fold. If neither, I drop and count, and we agree that's acceptable."</td></tr>
+      <tr><td>換 conflation slot</td><td>"That changes the loss model: with a ring, loss is accidental and I count it; with a conflation slot, loss is by design."</td></tr>
+      <tr><td>摺的 Verdict 範本</td><td>"Fold unconditionally: per-core rate/error-count slots harvested once a second — 320k records/s collapses to 32 harvests/s. Forward a 1% sample to the debug trace, drop the rest by design, counted."</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>判準速查</h2>
+    <div class="tblwrap"><table>
+      <tr><th>問題</th><th>判準</th></tr>
+      <tr><td>conflation 丟不丟資料?</td><td>不是原語屬性,是操作屬性:<b>update 是 replace 就有損,是 merge/fold 就無損</b>(加法吸收歷史)。</td></tr>
+      <tr><td>ring 還是 conflation slot?</td><td>問資料語意:每筆都要(log)→ ring+dropped(丟失顯式可審計);只要最新(儀表)→ slot(丟失 by design)。<b>架構不動,換 per-core 那格就好</b>——fan-in + wakeup 是架構,per-core 格是 policy 插槽。</td></tr>
+      <tr><td>bitmask ready-set?</td><td>回本線 = <b>N ≫ 同時活躍數</b>。本題 N=核數 → 不回本;當 trade-off 講,別當 Phase 1 實作。</td></tr>
+      <tr><td>shutdown?</td><td>先 flag 後 wake;<b>每次</b>零收穫先查 stop 才准睡;stop 後 drain 每條 channel 才准退。</td></tr>
+      <tr><td>喚醒順序?</td><td>producer 先值後訊號;consumer 先銷訊號後取值。訊號永遠不指向未處理的值。</td></tr>
+    </table></div>
+    <div class="callout">
+      <span class="lbl">鄰頁</span>
+      機器層帳單:<code>html_p/mesi-rmw-atomics.html</code> · 值層協定:<code>html_p/conflation-slot-stepper.html</code> · 五行頭:<code>html_p/capacity-four-shapes.html</code> · 教學模組:<code>reference/src/concurrency/percpu_fanin.rs</code>(drill 已收工,可讀)
+    </div>
+    <div class="navrow"><button data-jump="bitmask">◀ bitmask</button><span></span></div>
+  </section>
+</div></div>
+
+<script>
+"use strict";
+
+/* ===== Tabs ===== */
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const btn = tabbar.querySelector('button[data-tab="' + j.dataset.jump + '"]');
+  if (btn) btn.click();
+});
+
+/* ===== 靜態 quiz(swap) ===== */
+document.querySelectorAll('.quiz button[data-q]').forEach(b => {
+  b.addEventListener('click', () => {
+    const fb = b.parentElement.querySelector('.fb');
+    const ok = b.dataset.c === '1';
+    fb.style.display = 'block';
+    fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+    fb.innerHTML = ok
+      ? '✓ slot=5 → A:load=5 → P:fetch_add(3)→8 → A:store(0) → 那 3 蒸發。丟的量 = load 與 store 縫間所有 fetch_add。'
+      : '✗ atomic 單發操作不可分割,沒有「寫一半」;單寫者也救不了 consumer 自己拆兩步開的縫。再排一次 dry-run。';
+  });
+});
+
+/* ===== Stepper scaffold(同 mesi 頁)===== */
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.cnt = this.root.querySelector('.stepcount');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else if (b.dataset.a === 'reset') this.go(0);
+    });
+    this.go(0);
+  }
+  setSteps(steps){ this.steps = steps; this.go(0); }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.innerHTML = '<b>[' + (this.idx+1) + '/' + this.steps.length + ']</b> ' + s.narr;
+    this.cnt.textContent = 'step ' + (this.idx+1) + ' / ' + this.steps.length;
+  }
+}
+function el(tag, cls, html){
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+function quiz(stage, question, opts){
+  const q = el('div','quiz');
+  q.appendChild(el('p', null, '<b>預測題:</b>' + question));
+  const fb = el('div','fb');
+  opts.forEach(o => {
+    const b = el('button', null, o.label);
+    b.addEventListener('click', () => {
+      fb.style.display = 'block';
+      fb.style.color = o.correct ? 'var(--green)' : 'var(--red)';
+      fb.innerHTML = (o.correct ? '✓ ' : '✗ ') + o.fb;
+    });
+    q.appendChild(b);
+  });
+  q.appendChild(fb);
+  stage.appendChild(q);
+}
+
+/* ===== 協定 stepper ===== */
+/* 狀態:ch=陣列, flag=bool, A=字串, out=陣列, stop=bool */
+function protoBoard(st){
+  const b = el('div','board');
+  const l1 = el('div','lane');
+  l1.appendChild(el('span','who','P(core 3)'));
+  l1.appendChild(el('span', st.pHot ? 'box hot' : 'box dim', st.pAct || 'idle'));
+  b.appendChild(l1);
+  const l2 = el('div','lane');
+  l2.appendChild(el('span','who','ch[3]'));
+  if (st.ch.length === 0) l2.appendChild(el('span','box dim','(空)'));
+  st.ch.forEach(r => l2.appendChild(el('span', r.dead ? 'box dead' : 'box', r.name)));
+  b.appendChild(l2);
+  const l3 = el('div','lane');
+  l3.appendChild(el('span','who','flag'));
+  l3.appendChild(el('span','box ' + (st.flag ? 'okk' : 'dim'),
+    st.flag ? '<span class="flagon">● true</span>' : '<span class="flagoff">○ false</span>'));
+  l3.appendChild(el('span','who','stop'));
+  l3.appendChild(el('span','box ' + (st.stop ? 'hot' : 'dim'), st.stop ? 'true' : 'false'));
+  b.appendChild(l3);
+  const l4 = el('div','lane');
+  l4.appendChild(el('span','who','A'));
+  l4.appendChild(el('span','box ' + (st.aDead ? 'dead' : ''), '<span class="act">' + st.a + '</span>'));
+  l4.appendChild(el('span','who','out'));
+  l4.appendChild(el('span','box ' + (st.out.length ? 'okk' : 'dim'),
+    st.out.length ? st.out.join(' ') : '(空)'));
+  b.appendChild(l4);
+  return b;
+}
+const PROTO = [
+  { narr:'初始:channel 空、flag=false、stop=false,A 掃了一輪零收穫、查 stop=false → 睡。',
+    st:{ch:[],flag:false,stop:false,a:'sleeping',out:[]} },
+  { narr:'P 產出 r1:<b>先值</b>——try_push(r1) 進 ch[3]。此刻還沒有任何通知。',
+    st:{ch:[{name:'r1'}],flag:false,stop:false,a:'sleeping',out:[],pHot:1,pAct:'push r1'} },
+  { narr:'P <b>後訊號</b>——wake():flag=true + notify。順序反過來(先 wake 後 push)A 會醒、掃空、睡回,r1 躺到下次 wake。',
+    st:{ch:[{name:'r1'}],flag:true,stop:false,a:'sleeping',out:[],pHot:1,pAct:'wake()'} },
+  { narr:'A 醒:sleep() 返回時<b>消費 flag → false</b>(consumer 先銷訊號)。接著掃全部 channel——不是只掃「有通知的」,因為 wake 是合併的、還可能 spurious。',
+    st:{ch:[{name:'r1'}],flag:false,stop:false,a:'醒,sweep 全部',out:[]} },
+  { narr:'A 收走 r1,write_out。單條一輪最多 budget 筆——熱核不能餓死冷核。',
+    st:{ch:[],flag:false,stop:false,a:'write_out(r1)',out:['r1']} },
+  { narr:'再掃一輪:零收穫 → <b>查 stop=false</b> → 睡。正常流閉環。以下重演 8/1 drill review 抓到的洞。',
+    st:{ch:[],flag:false,stop:false,a:'sleeping',out:['r1']} },
+  { narr:'<b>洞的序幕</b>:A 正在掃(這輪已掃過 ch[3],結果零收穫、還沒睡)。P 這時 push r2 + wake → flag=true。',
+    st:{ch:[{name:'r2'}],flag:true,stop:false,a:'sweep(零收穫)',out:['r1'],pHot:1,pAct:'push r2+wake'} },
+  { narr:'幾乎同時,main 執行 shutdown:stop=true + wake。<b>兩個 wake 合併成同一個 flag=true</b>——sticky flag 不計數。',
+    st:{ch:[{name:'r2'}],flag:true,stop:true,a:'sweep(零收穫)',out:['r1']} },
+  { narr:'壞版本(先睡才查 stop):A 零收穫 → 直接 sleep() → 消費掉<b>那唯一的</b> flag,立刻醒。接著補掃撿到 r2,write_out。',
+    st:{ch:[],flag:false,stop:true,a:'醒,撿 r2 寫出',out:['r1','r2']},
+    quiz:{ q:'A 接著再掃一輪零收穫。下一步它會 sleep——這次 sleep 會醒嗎?',
+      opts:[
+        {label:'不會——flag 已被消費,沒人再 wake,吊死', correct:true,
+         fb:'flag 已在上一幀被消費;stop-wake 和 r2-wake 是同一個 flag。mock 的 1 秒 safety timeout 把吊死降級成卡秒——保險絲擋住的 bug 還是 bug。'},
+        {label:'會——stop=true 會讓 sleep 直接返回', correct:false,
+         fb:'sleep 只看 flag,不看 stop——stop 是你的迴圈該查的,不是 Waker 的職責。'},
+        {label:'會——r2 的 wake 還排隊著', correct:false,
+         fb:'sticky flag 不計數:兩個 wake 合併成一個 true,已經被消費掉了。'}] } },
+  { narr:'<b>吊死</b>:A 再次 sleep,flag=false、無人 wake。真 Waker(無 timeout)= 永久睡死;mock = 1 秒後 timeout 才退。',
+    st:{ch:[],flag:false,stop:true,a:'sleeping(吊死)',aDead:1,out:['r1','r2']} },
+  { narr:'<b>修法</b>(spec 形狀):零收穫的那一刻<b>先查 stop</b>——true 就 return(殘貨剛清完),false 才 sleep。同一交錯重走:撿完 r2 → 零收穫 → stop=true → 直接退,不再碰 sleep。紅測:<code>shutdown_exits_promptly_without_pending_wake</code>(直接 try_push 不走 wake=模擬 flag 已消費態,斷言 &lt;200ms)。',
+    st:{ch:[],flag:false,stop:true,a:'return ✓',out:['r1','r2']} },
+];
+new Stepper('stepper-proto', PROTO.map(f => ({
+  narr: f.narr,
+  render(stage){
+    stage.appendChild(protoBoard(f.st));
+    if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts);
+  }
+})));
+
+/* ===== bitmask stepper(雙模式)===== */
+function bitBoard(st){
+  const b = el('div','board');
+  const l0 = el('div','lane');
+  l0.appendChild(el('span','who','mask'));
+  for (let i = 0; i < 4; i++){
+    const on = st.mask.includes(i);
+    l0.appendChild(el('span','bit' + (on ? ' on' : '') + (st.wiped === i ? ' wiped' : ''),
+      'b' + i + (on ? '=1' : '=0')));
+  }
+  b.appendChild(l0);
+  const l1 = el('div','lane');
+  l1.appendChild(el('span','who','ch[3]'));
+  if (st.ch.length === 0) l1.appendChild(el('span','box dim','(空)'));
+  st.ch.forEach(r => l1.appendChild(el('span', r.dead ? 'box dead' : 'box', r.name)));
+  b.appendChild(l1);
+  const l2 = el('div','lane');
+  l2.appendChild(el('span','who','P(core 3)'));
+  l2.appendChild(el('span', st.pAct ? 'box hot' : 'box dim', st.pAct || 'idle'));
+  l2.appendChild(el('span','who','A'));
+  l2.appendChild(el('span','box ' + (st.aDead ? 'dead' : ''), '<span class="act">' + st.a + '</span>'));
+  b.appendChild(l2);
+  return b;
+}
+const BIT_BAD = [
+  { narr:'P push r1 → fetch_or 設 b3 → wake。A 醒,看到 b3=1。',
+    st:{mask:[3],ch:[{name:'r1'}],a:'醒,看到 b3',pAct:'push r1+set b3'} },
+  { narr:'壞順序第一步:A <b>先 drain</b> ch[3] → 收走 r1。b3 還亮著。',
+    st:{mask:[3],ch:[],a:'drain → 收 r1'} },
+  { narr:'此刻 P 又 push r2。fetch_or 設 b3——但 b3 本來就 =1,<b>寫了等於沒寫</b>。',
+    st:{mask:[3],ch:[{name:'r2'}],a:'(還沒清 bit)',pAct:'push r2+set b3'} },
+  { narr:'A <b>後清 bit</b>:clear b3 → 0。r2 的通知被一起擦掉。',
+    st:{mask:[],wiped:3,ch:[{name:'r2'}],a:'clear b3'},
+    quiz:{ q:'r2 什麼時候會被送出去?',
+      opts:[
+        {label:'除非未來有 r3 進來重新點燈,否則睡死', correct:true,
+         fb:'b3=0,A 下輪只掃亮著的 bit → ch[3] 被跳過。r2 的命運掛在「未來剛好還有新資料」上——這不是保證,是賭。'},
+        {label:'下一輪掃描就會收到', correct:false,
+         fb:'下一輪 A 只掃 mask 裡亮著的 bit——b3 已經被擦掉了,ch[3] 不在掃描名單上。'},
+        {label:'clear 會失敗,因為 P 剛設過', correct:false,
+         fb:'fetch_and(!bit) 不會失敗——它就是把 bit 關掉,不管誰剛設過。RMW 永遠成功,錯的是協定順序。'}] } },
+  { narr:'<b>睡死</b>:A sleep。r2 躺在 ch[3],通知 bit 是暗的。這就是「訊號指向了還沒被處理的值、然後訊號被銷毀」。',
+    st:{mask:[],ch:[{name:'r2',dead:1}],a:'sleeping',aDead:1} },
+];
+const BIT_GOOD = [
+  { narr:'P push r1 → set b3 → wake。A 醒,看到 b3=1。',
+    st:{mask:[3],ch:[{name:'r1'}],a:'醒,看到 b3',pAct:'push r1+set b3'} },
+  { narr:'好順序第一步:A <b>先清 b3</b>(先銷訊號)。此刻 ch[3] 還沒動。',
+    st:{mask:[],ch:[{name:'r1'}],a:'clear b3'} },
+  { narr:'A <b>後 drain</b> ch[3] → 收走 r1。',
+    st:{mask:[],ch:[],a:'drain → 收 r1'} },
+  { narr:'race 重演:P 在 drain 之後 push r2 → fetch_or 設 b3——這次 b3 是暗的,<b>set 真的點亮了燈</b> → wake。',
+    st:{mask:[3],ch:[{name:'r2'}],a:'(已收完 r1)',pAct:'push r2+set b3'} },
+  { narr:'A 下輪看到 b3=1 → 清 bit → drain → 收 r2。<b>最壞情況</b>只是:r2 恰好在 clear 和 drain 之間到、被上一輪順手收走,下輪對著空 channel 空掃一次。偶爾空掃 ⇄ 永不遺漏——錯在便宜的那邊。',
+    st:{mask:[],ch:[],a:'收 r2 ✓',pAct:''} },
+];
+const bitStepper = new Stepper('stepper-bit', BIT_GOOD.map(f => ({
+  narr: f.narr,
+  render(stage){
+    stage.appendChild(bitBoard(f.st));
+    if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts);
+  }
+})));
+document.querySelector('#stepper-bit .ctrl').addEventListener('click', e => {
+  const m = e.target.closest('button.mode'); if (!m) return;
+  document.querySelectorAll('#stepper-bit .mode').forEach(x => x.classList.toggle('on', x === m));
+  const frames = (m.dataset.m === 'bad' ? BIT_BAD : BIT_GOOD).map(f => ({
+    narr: f.narr,
+    render(stage){
+      stage.appendChild(bitBoard(f.st));
+      if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts);
+    }
+  }));
+  bitStepper.setSteps(frames);
+});
+</script>
+</body>
+</html>
