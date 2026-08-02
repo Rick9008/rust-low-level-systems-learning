@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engine Watchdog — deadline 的住所 × 殭屍的生存證明 · Stepper Handbook</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%;background:var(--bg0)}
+  body{margin:0;color:var(--fg);font-family:var(--cjk);line-height:1.65;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);border-color:var(--bg4)}
+  .tabbar button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow);text-wrap:balance}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.94rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55;-webkit-text-size-adjust:100%}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .t{color:var(--blue)}
+  pre .s{color:var(--green)} pre .n{color:var(--purple)}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0;font-size:.9rem}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .callout.info{border-color:var(--blue)}
+  .lbl{display:block;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gray);margin-bottom:4px}
+  .key{color:var(--orange);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  td.ok{color:var(--green)} td.no{color:var(--red)}
+  .tblwrap{overflow-x:auto}
+
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 12px;border-radius:8px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .ctrl button.mode{border-color:var(--blue);color:var(--blue)}
+  .stepper .ctrl button.mode.on{background:var(--blue);color:var(--bg0);font-weight:700}
+  .stepper .ctrl .stepcount{color:var(--gray);font-size:.8rem;font-family:var(--mono)}
+  .stepper .stage{min-height:170px}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+
+  /* 板面:engine 格 / 堆 / 生命線共用 */
+  .board{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:.8rem}
+  .lane{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lane .who{width:96px;flex:none;color:var(--fg-dim);font-size:.76rem;text-align:right}
+  .box{border:1px solid var(--bg4);background:var(--bg1);border-radius:6px;
+    padding:2px 8px;min-width:34px;text-align:center}
+  .box.hot{border-color:var(--orange);color:var(--orange)}
+  .box.dead{border-color:var(--red);color:var(--red);font-weight:700}
+  .box.okk{border-color:var(--green);color:var(--green)}
+  .box.dim{color:var(--gray)}
+  .box.quar{border-color:var(--purple);color:var(--purple)}
+  .act{color:var(--purple)}
+  .clock{color:var(--yellow);font-weight:700}
+
+  /* 一生鏈 */
+  .life{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.85rem;margin:10px 0}
+  .life .ln{border:1px solid var(--bg4);background:var(--bg2);border-radius:8px;
+    padding:5px 10px}
+  .life .ln b{color:var(--yellow)}
+  .life .ar{color:var(--gray)}
+
+  .quiz{border:1px dashed var(--purple);border-radius:9px;padding:10px 12px;margin-top:10px}
+  .quiz p{margin:0 0 8px;font-size:.88rem}
+  .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 10px;border-radius:8px;
+    cursor:pointer;margin:0 6px 6px 0}
+  .quiz .fb{display:none;font-size:.86rem;margin-top:4px}
+
+  .navrow{display:flex;justify-content:space-between;margin:18px 0 6px}
+  .navrow button{background:var(--bg2);border:1px solid var(--bg4);color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.84rem;padding:6px 14px;border-radius:8px;cursor:pointer}
+  .navrow button:hover{color:var(--yellow)}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+
+<div class="tabbar" id="tabbar">
+  <button data-tab="overview" class="active">總覽</button>
+  <button data-tab="home" >deadline 的住所</button>
+  <button data-tab="stale">stale Stepper</button>
+  <button data-tab="zombie">殭屍與冷宮</button>
+  <button data-tab="ord">Ord 四件套</button>
+  <button data-tab="recap">句庫與判準</button>
+</div>
+
+<!-- ============ TAB: 總覽 ============ -->
+<div class="tab active" id="tab-overview"><div class="wrap">
+  <h1>Engine Watchdog — deadline 的住所 × 殭屍的生存證明</h1>
+  <p class="sub">sim m(engine watchdog)全場 + 場後修帳沉澱 · 2026-08-02。姊妹頁:<code>r2-sim-walkthroughs</code>(m 分頁 code 走讀)、<code>fanin-aggregator-bitmask</code>(喚醒協定)、<code>qa_timer_queue</code>(timer 服務本體)。</p>
+
+  <section>
+    <h2>題形</h2>
+    <p>R1 的 DMA dispatcher,加一個新事實:engine 偶爾會 <span class="key">hang——拿了 block 然後永遠沉默</span>。沒有 error 訊號、沒有 health API、沒有 reset 線。request 仍然必須完成。</p>
+    <div class="callout">
+      <span class="lbl">定理(說出口就是 senior 訊號)</span>
+      <b>「慢」和「死」從軟體內部無法區分</b>——這是所有 watchdog 的共同地基,跟分散式系統分不清「節點死了」和「網路斷了」是同一個不可能性。能給確定性的只有硬體幫忙(reset / fence / 撤走寫入權);平台不給,你就只能 <b>bound risk,不能 eliminate</b>。
+    </div>
+    <p>所以 timeout 不是「偵測死亡」,是「下注」。賭注大小要對著<b>誤判成本</b>選:</p>
+    <div class="callout good">
+      <span class="lbl">timeout 選值的那句話(數字不重要,理由才是分)</span>
+      "A false alarm here doesn't just waste work — it re-executes a <b>non-idempotent</b> operation while the original may still land. So I'll take several times the normal block latency — say 3× — and lean conservative."
+    </div>
+  </section>
+
+  <section>
+    <h2>一個 block 的一生(六問句)</h2>
+    <p>watchdog 題的 state 表和 code 檢查表是同一份——寫完六句問話,設計就完成了:</p>
+    <div class="life">
+      <span class="ln">派工<b>登記</b>了嗎?</span><span class="ar">→</span>
+      <span class="ln">done <b>銷帳</b>了嗎?</span><span class="ar">→</span>
+      <span class="ln">鬧鐘響先<b>查帳</b>了嗎?</span><span class="ar">→</span>
+      <span class="ln">真超時<b>三動作</b>齊了嗎?</span><span class="ar">→</span>
+      <span class="ln">3-strikes <b>清帳</b>了嗎?</span><span class="ar">→</span>
+      <span class="ln">殭屍<b>丟掉</b>了嗎?</span>
+    </div>
+    <div class="tblwrap"><table>
+      <tr><th>問句</th><th>對應 state</th><th>漏掉的下場(2026-08-02 實測全中)</th></tr>
+      <tr><td>派工登記</td><td>engine → (req, block) 綁定</td><td>done 只帶 engine id,無綁定 = 全盲,第一個 done 就 panic</td></tr>
+      <tr><td>done 銷帳</td><td>清綁定 + 清 deadline + engine 回池</td><td>漏清 deadline → stale 鬧鐘(見 stepper 分頁)</td></tr>
+      <tr><td>鬧鐘查帳</td><td>鬧鐘 vs 綁定對號</td><td>重派已完成塊 = 親手踩 non-idempotent 地雷</td></tr>
+      <tr><td>真超時三動作</td><td>隔離該台、strikes+1、換台重派掛新鐘</td><td>漏隔離 → 下一塊又餵給死引擎</td></tr>
+      <tr><td>3-strikes 清帳</td><td><code>submit_error</code> + 清 waiting/map 殘票</td><td>殘票後續派工 <code>.unwrap()</code> panic</td></tr>
+      <tr><td>殭屍丟掉</td><td>對不上號的 done 不記帳</td><td>雙記帳 → 提早謊報 request 完成</td></tr>
+    </table></div>
+    <div class="callout info">
+      <span class="lbl">實錄傷疤(sim m 全場,65m,8+2 洞)</span>
+      clarify 花半場確認「block 不可重做」,實作卻在兩處主動重派:stale 鬧鐘不查帳、首超時直接 error(把「error after <b>3</b> timeouts on the same block」聽成「超時就 error」)。<b>討論和 code 之間的斷線,才是 spec-heavy 題真正的失分點</b>——設計時 state 表跳過,洞就不是「忘記寫」,是「沒有位置放」。
+    </div>
+    <div class="navrow"><span></span><button data-jump="home">deadline 的住所 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: home ============ -->
+<div class="tab" id="tab-home"><div class="wrap">
+  <h1>deadline 住哪裡 — 一個決定,下游全變</h1>
+  <p class="sub">同一份需求(每個在飛 block 一顆鬧鐘),兩個家:全域鬧鐘堆,或 engine 的格子。這一步分岔之後,兩份實作幾乎沒有一行長得一樣。</p>
+
+  <section>
+    <h2>兩個家的帳</h2>
+    <div class="tblwrap"><table>
+      <tr><th></th><th>全域堆 <code>BinaryHeap&lt;Reverse&lt;Alarm&gt;&gt;</code></th><th>同居 <code>deadline[e]</code> + <code>owner[e]</code></th></tr>
+      <tr><td>鬧鐘是什麼</td><td>派工資訊的<b>副本</b>,和真相(綁定表)分居兩地</td><td>綁定的<b>一個欄位</b>,同一格</td></tr>
+      <tr><td>block 完成時</td><td>真相更新了,堆裡的副本還躺著 → <b>stale 鬧鐘誕生</b></td><td>一次清兩個欄位 → <span class="key">stale 這個狀態無法表示</span></td></tr>
+      <tr><td>需要的對帳碼</td><td class="no">pop 出來先比 (req, pos, engine) ≈ 10 行,漏了就是毀損</td><td class="ok">零——沒有副本就沒有漂移</td></tr>
+      <tr><td>找最近鬧鐘</td><td>O(log n) peek,n 可以百萬</td><td>O(N) 掃格,N=6 就是 6 個 load</td></tr>
+      <tr><td>回本條件</td><td class="ok">timer 數量大(萬條連線各掛 timeout、tokio timer wheel)</td><td class="ok">N 小且固定(本題:6 台 engine、每台至多一塊在飛)</td></tr>
+    </table></div>
+    <div class="callout good">
+      <span class="lbl">裱框句</span>
+      <b>與其寫程式碼調解兩份狀態的漂移,不如選一個讓漂移無法表示的狀態設計。</b>對帳碼不是「寫得夠不夠好」的問題——它的存在本身就是選錯家的稅單。
+    </div>
+    <div class="callout">
+      <span class="lbl">面試開場問法</span>
+      "How many engines are we talking about — fixed at 6? Then I'll keep a deadline <b>per engine</b> next to its current job; a heap is the general answer but overkill here." <b>先問 N,再選形狀</b>——這一問一答比任何一種實作都值錢。
+    </div>
+  </section>
+
+  <section>
+    <h2>同居版的核心(sol 形狀,簡化)</h2>
+    <pre><span class="c">// 每台 engine 一格:現在跑什麼、幾點該回來。兩欄同生共死。</span>
+owner:    [<span class="t">Option</span>&lt;(ReqId, Block)&gt;; <span class="s">6</span>],
+deadline: [<span class="t">Option</span>&lt;<span class="t">u64</span>&gt;; <span class="s">6</span>],
+
+<span class="k">fn</span> <span class="n">fire_timeouts</span>(&amp;<span class="k">mut</span> self, now: <span class="t">u64</span>) {
+    <span class="k">for</span> e <span class="k">in</span> <span class="s">0</span>..<span class="s">6</span> {
+        <span class="k">if</span> self.deadline[e].<span class="n">is_some_and</span>(|d| d &lt;= now) {
+            <span class="k">let</span> (rid, b) = self.owner[e].<span class="n">take</span>().<span class="n">unwrap</span>();  <span class="c">// 有錶必有 owner</span>
+            self.deadline[e] = <span class="t">None</span>;
+            <span class="c">// 注意:沒有 free.push_back(e) —— 隔離,不回池</span>
+            <span class="c">// strikes 記在 (rid, b) 上;&lt;3 重派、==3 整單報廢+清帳</span>
+        }
+    }
+}
+<span class="c">// 醒法也是設計:睡到最近的錶;.max(1) 防 deadline 貼線時 sleep(0) 空轉</span>
+<span class="k">fn</span> <span class="n">next_sleep_ms</span>(&amp;self, now: <span class="t">u64</span>) -&gt; <span class="t">u64</span> {
+    self.deadline.<span class="n">iter</span>().<span class="n">flatten</span>().<span class="n">min</span>()
+        .<span class="n">map_or</span>(BLOCK_MS, |&amp;dl| dl.<span class="n">saturating_sub</span>(now).<span class="n">max</span>(<span class="s">1</span>))
+}</pre>
+    <div class="callout info">
+      <span class="lbl">堆版不是錯的</span>
+      堆版是<b>通用解</b>——它多付的 stale 對帳稅,在 timer 數量大到掃不動時就回本了。真實 runtime(tokio)走的正是堆/timer-wheel 這條路。要帶走的不是「堆不好」,是<b>兩個家都會蓋、並且知道什麼時候住哪間</b>。
+    </div>
+    <div class="navrow"><button data-jump="overview">◀ 總覽</button><button data-jump="stale">stale Stepper ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: stale ============ -->
+<div class="tab" id="tab-stale"><div class="wrap">
+  <h1>stale 鬧鐘 — 過期的錶會咬人</h1>
+  <p class="sub">雙模式對照:堆版(鬧鐘與真相分居)vs 同居版。板面:E0/E1 是 engine 格(owner@deadline),heap 是全域鬧鐘堆(堆版才有)。<b>壞模式第 4 幀有預測題,先答再 next。</b></p>
+
+  <div class="stepper" id="stepper-stale">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <button class="mode on" data-m="bad">堆版・不查帳(壞)</button>
+      <button class="mode" data-m="good">同居版(好)</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">帶走的一句</span>
+      堆版要活命,pop 出來的<b>第一件事永遠是查帳</b>:「這顆鬧鐘指的 (engine, req, block) 還在飛嗎?」——對不上就丟,對上了才准動 state。同居版連這句都不用背,因為過期的錶<b>無處存在</b>。
+    </div>
+    <div class="callout bad">
+      <span class="lbl">實錄傷疤 ×2</span>
+      ① 修帳中途版在鬧鐘 pop 時<b>無條件</b> <code>engine_doing[e].take()</code>——stale 鬧鐘一響,把該台 engine <b>現在的</b>(別塊的)綁定拿掉,新塊的 done 反被當殭屍丟、engine 永不歸隊,連鎖污染。查帳必須在<b>任何</b> state 動作之前。② <code>pub const TIMEOUT = ENGINE_COUNT * 3</code>——拿「引擎台數」算毫秒,18ms 比自己拍板的 30ms 緊了快一半;const 抓錯鄰居是疲勞期的典型錯,寫完唸一次單位。
+    </div>
+    <div class="navrow"><button data-jump="home">◀ deadline 的住所</button><button data-jump="zombie">殭屍與冷宮 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: zombie ============ -->
+<div class="tab" id="tab-zombie"><div class="wrap">
+  <h1>殭屍與冷宮 — 遲到的 done 怎麼收</h1>
+  <p class="sub">被判超時的 engine 之後可能吐出當年欠的 done(zombie)。收錯一次,帳就謊了。</p>
+
+  <section>
+    <h2>冷宮是免費的</h2>
+    <p>engine 池用「done 才歸隊」的佇列寫法時,隔離的實作就是<b>不 push back</b>——超時判定成立那一刻清掉它的綁定、不把它放回 ready 佇列,一行都不用加。要加 <code>quarantined: HashSet</code> 也行,買到的是 debug assert 的清晰度,<b>正確性不靠它</b>。</p>
+    <div class="tblwrap"><table>
+      <tr><th>殭屍 done 到達時的三種收法</th><th>下場</th></tr>
+      <tr><td><code>assert!(owner[e].is_some())</code></td><td class="no">當場 panic——把「已預期的事件」寫成「不可能的事件」</td></tr>
+      <tr><td>無條件記帳 + engine 歸隊</td><td class="no">雙記帳(舊 done + 重派副本的 done 各算一次)→ 提早謊報 request 完成;死台復活繼續吃工作</td></tr>
+      <tr><td><b>查帳:對不上號 → 丟 done</b>;engine 去留另議</td><td class="ok">帳面永遠乾淨。丟完之後 engine 怎麼辦,是下一個問題 ↓</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>殭屍 = 生存證明(sol 的政策,比「冷宮到底」聰明一級)</h2>
+    <div class="callout good">
+      <span class="lbl">sol 原文註解</span>
+      <code>// zombie:只當生存證明,隔離台復活;帳一根指頭不碰</code>——遲到的 done 證明這台<b>是慢不是死</b>,而且它欠的帳已經吐完了。此刻讓它歸隊,不增加任何新風險,還把 1/6 的產能撿回來。
+    </div>
+    <div class="tblwrap"><table>
+      <tr><th>政策</th><th>產能</th><th>風險</th><th>什麼時候選</th></tr>
+      <tr><td>冷宮到底(永不回鍋)</td><td>每次誤判永久損失 1/6</td><td class="ok">最低,state 最簡</td><td>45 分鐘場的保守預設,先講出口再選</td></tr>
+      <tr><td><b>隔離至生存證明</b></td><td class="ok">殭屍 done 即贖身</td><td class="ok">同樣安全(帳不動,只還 engine)</td><td>多一個 if 的成本,debrief 加分答案</td></tr>
+      <tr><td>觀察期後自動回鍋</td><td>最高</td><td class="no">需要不存在的 health 訊號,探測=拿真 block 下注</td><td>本題不選;真系統要配 reset 線才走</td></tr>
+    </table></div>
+    <div class="quiz" id="quiz-zombie">
+      <p><b>預測題:</b>隔離中的 E1 吐出殭屍 done 的同一毫秒,它重派出去的副本也在 E2 完成了。兩個 done 都到,帳會怎樣?</p>
+      <button data-q="z" data-c="1">都查綁定表:E1 對不上號 → 丟;E2 對上 → 記一次。帳正確</button>
+      <button data-q="z" data-c="0">兩個都記,done 數 +2,反正 request 遲早完成</button>
+      <button data-q="z" data-c="0">先到的記帳,後到的丟——順序決定</button>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3-strikes 與清帳義務</h2>
+    <p>同一個 block 第 3 次超時 → 放棄<b>整個 request</b>:<code>submit_dma_request_error(request_id)</code>。這一步的另一半常被忘掉:</p>
+    <div class="callout bad">
+      <span class="lbl">清帳清單(漏一項就是一顆延遲引爆的 panic)</span>
+      進度表(map)移除 ✓ → waiting queue 裡的殘票(之後 pop 到要能安全跳過)✓ → 兄弟 block 還在別台飛,它們的 done 之後會到:查無此單 → <b>不記帳,但 engine 照樣歸隊</b> ✓。strikes 記在 <code>(req, block)</code> 上比隨票攜帶穩——票會丟,map 不會;成功路徑記得 <code>remove</code>,否則長跑系統無界慢漏(sol 的實刺,grep 驗證過)。
+    </div>
+    <div class="navrow"><button data-jump="stale">◀ stale Stepper</button><button data-jump="ord">Ord 四件套 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: ord ============ -->
+<div class="tab" id="tab-ord"><div class="wrap">
+  <h1>Ord 四件套 — BinaryHeap 收的入場費</h1>
+  <p class="sub">堆版鬧鐘要 <code>BinaryHeap&lt;Reverse&lt;Alarm&gt;&gt;</code>,Alarm 就得付 <code>Ord</code>。四個 derive 是一條繼承鏈,不是四張貼紙。</p>
+
+  <section>
+    <h2>繼承鏈,從弱到強</h2>
+    <div class="tblwrap"><table>
+      <tr><th>trait</th><th>給你什麼</th><th>關鍵語意</th></tr>
+      <tr><td><code>PartialEq</code></td><td><code>==</code> / <code>!=</code></td><td>允許「有值連自己都不等」的怪胎存在</td></tr>
+      <tr><td><code>Eq</code></td><td>零方法,純標記</td><td>承諾 <code>x == x</code> 恆真(HashMap key、Ord 都要這句話)</td></tr>
+      <tr><td><code>PartialOrd</code></td><td><code>partial_cmp → Option&lt;Ordering&gt;</code></td><td>那個 <code>Option</code> 保留「這兩個值<b>無法比較</b>」</td></tr>
+      <tr><td><code>Ord</code></td><td><code>cmp → Ordering</code>,不准不回答</td><td>全序。<code>BinaryHeap</code>/<code>BTreeMap</code>/<code>sort()</code> 排序時不接受「不知道」</td></tr>
+    </table></div>
+    <div class="callout info">
+      <span class="lbl">為什麼拆四層?一個字:NaN</span>
+      IEEE 754 規定 <code>NaN != NaN</code>、<code>NaN &lt; 1.0</code> 和 <code>NaN &gt;= 1.0</code> 都是 false——所以 <code>f64</code> 只拿得到 Partial 家族。這就是 <code>Vec&lt;u64&gt;</code> 能直接 <code>.sort()</code> 而 <code>Vec&lt;f64&gt;</code> 要 <code>sort_by</code> 的原因。整數欄位的 struct 四件齊發無障礙。
+    </div>
+  </section>
+
+  <section>
+    <h2>derive 的規則:欄位宣告順序 = 字典序</h2>
+    <pre><span class="c">// 心智模型 = tuple 比較:先比第一欄,Equal 才往下走</span>
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+<span class="k">struct</span> <span class="t">Alarm</span> {
+    deadline: <span class="t">u64</span>,   <span class="c">// ⚠ 必須第一欄——堆序全靠它</span>
+    strikes:  <span class="t">u8</span>,    <span class="c">// 之後的欄位只在 deadline 同刻時當平手決,無害</span>
+    req: <span class="t">u64</span>, block: <span class="t">u32</span>, pos: <span class="t">u64</span>, eng: <span class="t">u32</span>,
+}
+<span class="c">// BinaryHeap 是 max-heap → 要 Reverse 包成 min-heap</span></pre>
+    <div class="quiz" id="quiz-ord">
+      <p><b>預測題:</b>手滑把 <code>strikes</code> 宣告在第一欄。編譯器說什麼?執行期發生什麼?</p>
+      <button data-q="o" data-c="1">編譯器一個字都不說;堆改按 strikes 排,watchdog 失明</button>
+      <button data-q="o" data-c="0">編譯錯:Ord 要求指定排序鍵</button>
+      <button data-q="o" data-c="0">clippy 警告欄位順序可疑</button>
+      <div class="fb"></div>
+    </div>
+    <div class="callout">
+      <span class="lbl">手寫版鐵律:cmp 是唯一真相</span>
+      只想按 deadline 比(或欄位裡混進沒有 Ord 的型別)就手寫——<code>Ord::cmp</code> 寫比較邏輯,<code>partial_cmp = Some(self.cmp(other))</code>、<code>eq = self.cmp(other) == Equal</code> <b>全部委派</b>,<code>impl Eq {}</code> 空掛。四個 impl 各寫各的比較邏輯是經典事故;derive 一半手寫一半 clippy 會抓。代價:「相等」變成 deadline 相同——<b>BinaryHeap 無害(不去重),丟進 BTreeSet 會把不同鬧鐘當重複合併</b>。45 分鐘場首選仍是欄位排對 + 全 derive。
+    </div>
+    <div class="callout good">
+      <span class="lbl">同場加映的鐵律</span>
+      <b>tuple 超過 3 欄就升級具名 struct。</b>本場三個 bug(<code>.0</code> 的 deadline 當 request_id 上報、鬧鐘記到下一塊的 off-by-one、pos 重複加)全是「欄位沒有名字」的稅;改成 struct 之後,重派用 <code>Alarm { deadline: now + TIMEOUT, eng: new_e, ..alarm }</code>,其餘欄位<b>不可能</b>抄錯。
+    </div>
+    <div class="navrow"><button data-jump="zombie">◀ 殭屍與冷宮</button><button data-jump="recap">句庫與判準 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: recap ============ -->
+<div class="tab" id="tab-recap"><div class="wrap">
+  <h1>句庫與判準</h1>
+  <p class="sub">上場直接用的英文句 + 一頁判準 + 這場學費買到的三個聽力對策。</p>
+
+  <section>
+    <h2>英文句庫</h2>
+    <div class="tblwrap"><table>
+      <tr><th>時機</th><th>句子</th></tr>
+      <tr><td>開場問規模</td><td>"How many engines — fixed at 6? Then per-engine deadlines next to each engine's current job; a heap is the general answer but overkill here."</td></tr>
+      <tr><td>timeout 選值</td><td>"A false alarm re-executes a non-idempotent operation, so I'll lean conservative — several times the normal block latency, say 3×."</td></tr>
+      <tr><td>重派前必問</td><td>"Before I re-dispatch: is re-executing a block safe if the original engine turns out to be alive? Is there any way to fence or reset it?"</td></tr>
+      <tr><td>不可分定理</td><td>"I can't distinguish slow from dead from software; without a fencing mechanism I can only bound the risk, not eliminate it."</td></tr>
+      <tr><td>殭屍政策</td><td>"A late done from a quarantined engine is proof of life — I discard the completion (my re-issued copy owns that block now) but I can safely return the engine to the pool."</td></tr>
+      <tr><td>scope 宣告(開場,不是中途)</td><td>"Let me handle one request at a time first — the watchdog is the interesting part. Upgrading to pipelined requests is mechanical, and I'll do it if time allows."</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>失敗後路徑三問(固定 clarify 清單新條目)</h2>
+    <div class="callout">
+      clarify 別停在「怎麼偵測失敗」——事件驅動的問法到偵測就斷鏈。<b>生命週期驅動</b>要追完:①偵測到之後做什麼?(重派?給誰?安全嗎?)②重試幾次、誰決定?③放棄時通知誰、清哪些帳?與 lifecycle 三問(跑多久/怎麼停/在途算誰的)同族,一起背。
+    </div>
+    <h2>英文聽力三對策(spec 是用聽的,不是用讀的)</h2>
+    <div class="tblwrap"><table>
+      <tr><th>漏接型</th><th>實錄</th><th>對策</th></tr>
+      <tr><td>隱含補語蒸發</td><td>"error <b>after 3</b> timeouts" 聽成「超時就 error」——「前兩次要重派」靠推論,沒推</td><td><b>read back</b>:"So timeout 1 and 2 → redispatch, only the 3rd → error, correct?"</td></tr>
+      <tr><td>尾部條目蒸發</td><td>三條編號裁決只吸收了第一條,幾小時後問「有討論過嗎」</td><td>編號裁決 = spec,<b>當場抄紙</b>(≤5 字/條)再複誦</td></tr>
+      <tr><td>多問漏答</td><td>一則訊息三個問題,答了兩個,最關鍵的跳過</td><td><b>編號逐條回</b>,要跳過就明說 deferred</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>判準速查</h2>
+    <div class="tblwrap"><table>
+      <tr><th>問題</th><th>判準</th></tr>
+      <tr><td>deadline 放哪?</td><td>N 小且固定 → 跟 owner 同格(stale 不可表示);timer 海量 → 堆/wheel + pop 必查帳</td></tr>
+      <tr><td>timeout 幾倍?</td><td>誤判成本高(non-idempotent)→ 保守;講出成本不對稱那句話,數字隨便 3~5×</td></tr>
+      <tr><td>超時的 engine?</td><td>隔離=不回池(免費);殭屍 done=生存證明,可贖身;自動回鍋=需要不存在的訊號,不選</td></tr>
+      <tr><td>對不上號的 done?</td><td>一律丟。訊號永遠不指向不屬於它的帳——與 fan-in 頁「訊號不指向未處理的值」同一條定律</td></tr>
+      <tr><td>放棄一單?</td><td>error + 三處清帳(map / waiting 殘票 / 在飛兄弟塊的 done 要能安全落空)</td></tr>
+      <tr><td>tuple 還是 struct?</td><td>&gt;3 欄或要進堆 → 具名 struct + derive 四件套,排序鍵放第一欄</td></tr>
+    </table></div>
+    <div class="callout">
+      <span class="lbl">鄰頁</span>
+      code 走讀+陷阱:<code>html_p/r2-sim-walkthroughs.html</code>(m 分頁)· 喚醒協定:<code>html_p/fanin-aggregator-bitmask.html</code> · timer 本體:<code>docs/artifacts/qa_timer_queue.html</code> · 教學模組:<code>reference/src/io/engine_watchdog.rs</code>(已開)
+    </div>
+    <div class="navrow"><button data-jump="ord">◀ Ord 四件套</button><span></span></div>
+  </section>
+</div></div>
+
+<script>
+"use strict";
+
+/* ===== Tabs ===== */
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const btn = tabbar.querySelector('button[data-tab="' + j.dataset.jump + '"]');
+  if (btn) btn.click();
+});
+
+/* ===== 靜態 quiz(zombie / ord) ===== */
+const STATIC_FB = {
+  z: { ok:'✓ 兩個 done 都先過綁定表:E1 的綁定在超時那刻就清了 → 對不上 → 丟(engine 可當生存證明歸隊);E2 對上 → 銷帳一次。done 數恰好 +1,帳永遠乾淨——這就是「查帳在前」買到的東西。',
+       no:'✗ 帳的正確性不能靠運氣或順序。判準只有一個:done 對得上現在的綁定才記帳。重派那一刻起,這個 block 的帳就只屬於新副本。' },
+  o: { ok:'✓ 型別全對、語意全錯——derive 的 Ord 忠實地按宣告順序比,strikes 第一欄堆就按 strikes 排。這種「欄位順序是承重牆」的錯只有測試抓得到,也是 derive 的代價。',
+       no:'✗ 編譯器和 clippy 都不懂你的業務語意——它們只驗證「可以比較」,不驗證「比得對」。derive 忠實按欄位宣告順序字典序,僅此而已。' },
+};
+document.querySelectorAll('.quiz button[data-q]').forEach(b => {
+  b.addEventListener('click', () => {
+    const fb = b.parentElement.querySelector('.fb');
+    const ok = b.dataset.c === '1';
+    const m = STATIC_FB[b.dataset.q];
+    fb.style.display = 'block';
+    fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+    fb.innerHTML = ok ? m.ok : m.no;
+  });
+});
+
+/* ===== Stepper scaffold(同 fanin 頁)===== */
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.cnt = this.root.querySelector('.stepcount');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else if (b.dataset.a === 'reset') this.go(0);
+    });
+    this.go(0);
+  }
+  setSteps(steps){ this.steps = steps; this.go(0); }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.innerHTML = '<b>[' + (this.idx+1) + '/' + this.steps.length + ']</b> ' + s.narr;
+    this.cnt.textContent = 'step ' + (this.idx+1) + ' / ' + this.steps.length;
+  }
+}
+function el(tag, cls, html){
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+function quiz(stage, question, opts){
+  const q = el('div','quiz');
+  q.appendChild(el('p', null, '<b>預測題:</b>' + question));
+  const fb = el('div','fb');
+  opts.forEach(o => {
+    const b = el('button', null, o.label);
+    b.addEventListener('click', () => {
+      fb.style.display = 'block';
+      fb.style.color = o.correct ? 'var(--green)' : 'var(--red)';
+      fb.innerHTML = (o.correct ? '✓ ' : '✗ ') + o.fb;
+    });
+    q.appendChild(b);
+  });
+  q.appendChild(fb);
+  stage.appendChild(q);
+}
+
+/* ===== stale stepper(雙模式)=====
+   板面狀態:t=時刻, e0/e1 = {job:'X-a', dl:30, quar:bool} 或 null,
+   heap=['X-a@30',...](堆版才有), ev=事件字串, act=A 在幹嘛, boom=毀損旗 */
+function staleBoard(st){
+  const b = el('div','board');
+  const l0 = el('div','lane');
+  l0.appendChild(el('span','who','now'));
+  l0.appendChild(el('span','box','<span class="clock">t=' + st.t + 'ms</span>'));
+  if (st.ev){ l0.appendChild(el('span','who','事件')); l0.appendChild(el('span','box hot', st.ev)); }
+  b.appendChild(l0);
+  [['E0', st.e0], ['E1', st.e1]].forEach(([name, e]) => {
+    const l = el('div','lane');
+    l.appendChild(el('span','who', name));
+    if (!e) l.appendChild(el('span','box dim','idle'));
+    else {
+      let cls = 'box';
+      if (e.quar) cls += ' quar';
+      else if (e.boom) cls += ' dead';
+      else cls += ' okk';
+      l.appendChild(el('span', cls, (e.quar ? '⛔ ' : '') + e.job + (e.dl ? ' @' + e.dl : '')));
+    }
+    b.appendChild(l);
+  });
+  if (st.heap !== undefined){
+    const lh = el('div','lane');
+    lh.appendChild(el('span','who','heap'));
+    if (st.heap.length === 0) lh.appendChild(el('span','box dim','(空)'));
+    st.heap.forEach(h => lh.appendChild(el('span', 'box' + (h.startsWith('!') ? ' dead' : ''),
+      h.replace(/^!/,''))));
+    b.appendChild(lh);
+  }
+  const la = el('div','lane');
+  la.appendChild(el('span','who','A(dispatcher)'));
+  la.appendChild(el('span','box' + (st.boom ? ' dead' : ''), '<span class="act">' + st.act + '</span>'));
+  b.appendChild(la);
+  return b;
+}
+const STALE_BAD = [
+  { narr:'t=0:block a(單 X)派給 E0、block b 派給 E1。堆版:每次派工往<b>全域堆</b>丟一顆鬧鐘副本 (deadline, req, block, engine)。',
+    st:{t:0, e0:{job:'X-a', dl:30}, e1:{job:'X-b', dl:30}, heap:['X-a@30','X-b@30'], act:'dispatch ×2'} },
+  { narr:'t=5:E0 回報 done!銷帳、E0 清空回池。<b>但堆裡 a 的鬧鐘還躺著</b>——堆只能看頂,你挖不到中間那顆,只能等它自己浮上來(懶惰刪除)。真相已更新,副本還活著:stale 鬧鐘誕生。',
+    st:{t:5, e0:null, e1:{job:'X-b', dl:30}, heap:['!X-a@30','X-b@30'], ev:'done(E0)=a', act:'銷帳 a,E0 回池'} },
+  { narr:'t=8:新 block c 派給剛空出來的 E0,堆再進一顆 c@38。現在堆裡:<b>一顆過期的 a@30</b>、活的 b@30、活的 c@38。',
+    st:{t:8, e0:{job:'X-c', dl:38}, e1:{job:'X-b', dl:30}, heap:['!X-a@30','X-b@30','X-c@38'], act:'dispatch c → E0'} },
+  { narr:'t=30:堆頂 a@30 到期,pop。<b>不查帳的版本</b>把它直接當超時處理。',
+    st:{t:30, e0:{job:'X-c', dl:38}, e1:{job:'X-b', dl:30}, heap:['X-b@30','X-c@38'], ev:'pop a@30', act:'「a 超時了!」(?)'},
+    quiz:{ q:'接下來這行 code 會做什麼、造成什麼?(a 在 t=5 就完成了)',
+      opts:[
+        {label:'把 a 重派到別台 → 已完成的 block 被重做 → non-idempotent 毀損', correct:true,
+         fb:'clarify 花半場確認「block 不可重做」,然後 code 在這裡親手重做——這就是 2026-08-02 實錄的最重一洞。更狠的變體:pop 時無條件清 engine 綁定,把 E0 上無辜的 c 也拖下水(c 的 done 變殭屍、E0 永不歸隊)。'},
+        {label:'沒事,a 的 done 已經收過,重派會被去重', correct:false,
+         fb:'誰去重?done 只帶 engine id,而「去重」需要的正是你沒寫的那個查帳步驟。硬體那側更不會幫你——它只是又執行了一次不可重做的操作。'},
+        {label:'heap 會拒絕 pop 過期條目', correct:false,
+         fb:'堆不知道什麼叫「過期」——它只會按 deadline 排序。副本的語意由你負責,這就是分居的稅。'}] } },
+  { narr:'<b>毀損</b>:a 被重派(資料層風險),或 E0 的綁定被誤清(c 孤兒化)。修法:pop 出來<b>第一件事查帳</b>——(req, block, engine) 對不上現在的綁定 → 丟鬧鐘、什麼都不動。這 10 行就是堆版的活命對帳碼。切到「同居版」看另一個家怎麼讓這一切消失。',
+    st:{t:30, e0:{job:'X-c', dl:38, boom:1}, e1:{job:'X-b', dl:30}, heap:['X-b@30','X-c@38'], act:'重派 a?毀損', boom:1} },
+];
+const STALE_GOOD = [
+  { narr:'t=0:同一場景,換家——deadline 跟 owner <b>同居</b>在 engine 格裡:E0=[a@30]、E1=[b@30]。沒有全域堆。',
+    st:{t:0, e0:{job:'X-a', dl:30}, e1:{job:'X-b', dl:30}, act:'dispatch ×2'} },
+  { narr:'t=5:E0 done → <b>一次清兩個欄位</b>(owner=∅、deadline=∅)。鬧鐘跟著綁定一起死了——「過期鬧鐘」這個狀態從此無法表示。',
+    st:{t:5, e0:null, e1:{job:'X-b', dl:30}, ev:'done(E0)=a', act:'銷帳 a,格子歸零'} },
+  { narr:'t=8:c 派給 E0 → E0=[c@38]。格子裡只有現在,沒有歷史。',
+    st:{t:8, e0:{job:'X-c', dl:38}, e1:{job:'X-b', dl:30}, act:'dispatch c → E0'} },
+  { narr:'t=30:掃 6 格(N 小,O(N) 就是幾個 load):E0 的 38 未到;E1 的 30 到期<b>且格子裡真的還躺著 b</b>——「有錶必有 owner」,不用對帳,格子本身就是帳。真超時三動作:E1 隔離(⛔ 不回池)、b 換台重派、strikes+1。',
+    st:{t:30, e0:{job:'X-c', dl:38}, e1:{job:'X-b', dl:30, quar:1}, ev:'掃格:E1 到期', act:'隔離 E1,重派 b'} },
+  { narr:'t=30+:b 重派到剛空出的台、掛新錶;sleep = 各格 deadline 取 min − now,<b>.max(1)</b> 防貼線 sleep(0) 空轉。同居版全程<b>零對帳碼</b>——不是寫得更好,是錯誤無處發生。這就是「選一個讓漂移無法表示的狀態設計」。',
+    st:{t:30, e0:{job:'X-c', dl:38}, e1:{job:'X-b', dl:60, quar:0}, act:'sleep(min(dl)−now)'} },
+];
+const staleStepper = new Stepper('stepper-stale', STALE_BAD.map(f => ({
+  narr: f.narr,
+  render(stage){
+    stage.appendChild(staleBoard(f.st));
+    if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts);
+  }
+})));
+document.querySelector('#stepper-stale .ctrl').addEventListener('click', e => {
+  const m = e.target.closest('button.mode'); if (!m) return;
+  document.querySelectorAll('#stepper-stale .mode').forEach(x => x.classList.toggle('on', x === m));
+  const frames = (m.dataset.m === 'bad' ? STALE_BAD : STALE_GOOD).map(f => ({
+    narr: f.narr,
+    render(stage){
+      stage.appendChild(staleBoard(f.st));
+      if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts);
+    }
+  }));
+  staleStepper.setSteps(frames);
+});
+</script>
+</body>
+</html>

@@ -6,7 +6,8 @@
 //! 本檔自帶一份 SimBus(時間版):engine 可能 hang、可能吐 zombie done。
 //! clarify 可得的 spec:一塊正常 ~[`BLOCK_MS`] 毫秒完成;timeout 值由你自己定並講出理由。
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 
 // ===================== 題目給的介面(可讀)=====================
 
@@ -18,9 +19,9 @@ pub struct DmaRequest {
 }
 
 pub const ENGINE_COUNT: u32 = 6;
-
 /// Normal per-block processing time (ms).
 pub const BLOCK_MS: u64 = 10;
+pub const TIMEOUT: u64 = BLOCK_MS * 3;
 
 /// The R1 APIs with `wait_event` upgraded to a timeout variant, plus a clock
 /// and an error path.
@@ -43,12 +44,140 @@ pub trait DmaBus {
 
 // ===================== 作答區 =====================
 
+struct DmaReqTrack {
+    pub request_id: u64,
+    pub block_nums: u32,
+    pub block_start_pos: u64,
+    pub send: u32,
+    pub done: u32,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct Alarm {
+    deadline: u64,
+    strikes: u8,
+    req: u64,
+    block: u32,
+    pos: u64,
+    eng: u32,
+}
+
 /// The R1 dispatcher plus a watchdog: a hung engine must not stall a request
 /// forever. You need a third kind of state — a deadline per in-flight block.
 /// A zombie done (late completion from a quarantined engine) must not corrupt
 /// your bookkeeping.
 pub fn run(bus: &mut impl DmaBus) {
-    todo!("彩排時實作")
+    // todo!("彩排時實作")
+    // we use a queue for ready engine
+    let mut ready_engine = (0..ENGINE_COUNT).collect::<VecDeque<_>>();
+    // and a priority queue for dead request detection
+    let mut deadline_retry = BinaryHeap::<Reverse<Alarm>>::new();
+    let mut waiting_queue = VecDeque::new();
+    let mut retry_queue = VecDeque::new();
+    let mut map: HashMap<u64, DmaReqTrack> = HashMap::new();
+    // (req_id, block_pos)
+    let mut engine_doing: [Option<(u64, u64)>; ENGINE_COUNT as usize] =
+        [None; ENGINE_COUNT as usize];
+    while !bus.drained() || !map.is_empty() {
+        if let Some(req) = bus.get_dma_request() {
+            waiting_queue.push_back(req.request_id);
+            map.insert(
+                req.request_id,
+                DmaReqTrack {
+                    request_id: req.request_id,
+                    block_nums: req.block_nums,
+                    block_start_pos: req.block_start_pos,
+                    send: 0,
+                    done: 0,
+                },
+            );
+        }
+
+        while let Some(dead_req) = deadline_retry.peek()
+            && dead_req.0.deadline <= bus.now_ms()
+        {
+            let Reverse(mut dead_req) = deadline_retry.pop().unwrap();
+            let engine = dead_req.eng as usize;
+            if engine_doing[engine].is_none() {
+                continue;
+            }
+            let (req_id, block_pos) = engine_doing[engine].unwrap();
+            if req_id != dead_req.req || block_pos != dead_req.pos {
+                continue;
+            }
+            dead_req.strikes += 1;
+            engine_doing[dead_req.eng as usize].take();
+            if dead_req.strikes == 3 {
+                map.remove(&dead_req.req);
+                bus.submit_dma_request_error(dead_req.req);
+                continue;
+            }
+            retry_queue.push_back(dead_req);
+        }
+
+        while let Some(done) = bus.get_dma_result_done() {
+            if engine_doing[done as usize].is_none() {
+                continue;
+            }
+            let (req_id, _block_pos) = engine_doing[done as usize].take().unwrap();
+            if map.contains_key(&req_id) {
+                let req_entry = map.get_mut(&req_id).unwrap();
+                req_entry.done += 1;
+                if req_entry.done == req_entry.block_nums {
+                    bus.submit_dma_request_result_done(req_id);
+                    map.remove(&req_id);
+                }
+            }
+            ready_engine.push_back(done);
+        }
+
+        while !ready_engine.is_empty() {
+            let send_id = ready_engine.pop_front().unwrap();
+            if let Some(req) = waiting_queue.pop_front()
+                && let Some(req_entry) = map.get_mut(&req)
+            {
+                bus.send_dma_request_to_engine(
+                    send_id,
+                    req_entry.send,
+                    req_entry.block_start_pos + req_entry.send as u64,
+                );
+                deadline_retry.push(Reverse(Alarm {
+                    deadline: bus.now_ms() + TIMEOUT,
+                    strikes: 0,
+                    req,
+                    block: req_entry.send,
+                    pos: req_entry.block_start_pos + req_entry.send as u64,
+                    eng: send_id,
+                }));
+                engine_doing[send_id as usize] =
+                    Some((req, req_entry.block_start_pos + req_entry.send as u64));
+                req_entry.send += 1;
+                if req_entry.send != req_entry.block_nums {
+                    waiting_queue.push_back(req);
+                }
+                continue;
+            }
+            if let Some(alarm) = retry_queue.pop_front() {
+                bus.send_dma_request_to_engine(send_id, alarm.block, alarm.pos);
+                deadline_retry.push(Reverse(Alarm {
+                    deadline: bus.now_ms() + TIMEOUT,
+                    eng: send_id,
+                    ..alarm
+                }));
+                engine_doing[send_id as usize] = Some((alarm.req, alarm.pos));
+                continue;
+            }
+            ready_engine.push_back(send_id);
+            break;
+        }
+
+        bus.wait_event_timeout(
+            deadline_retry
+                .peek()
+                .map_or(BLOCK_MS, |req| req.0.deadline.saturating_sub(bus.now_ms()))
+                .max(1),
+        );
+    }
 }
 
 // ============ SimBus(模擬硬體;⚠ 跑題前不准細讀)============

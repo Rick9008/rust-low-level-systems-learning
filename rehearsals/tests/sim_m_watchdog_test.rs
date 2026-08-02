@@ -10,7 +10,6 @@ use rehearsals::sim_m_watchdog::{SimBus, run};
 /// 單次 hang:block 0 第一次派工就 hang(永不完成)→ 必須 timeout 後重派到別台,
 /// request 照樣完成。sent_log 裡 (rid=1, block=0) 應出現兩筆。
 #[test]
-#[ignore = "sim 參考測試:跑完彩排才開"]
 fn redispatch_on_single_hang() {
     let mut bus = SimBus::new()
         .request_at_ms(0, 1, 2, 0)
@@ -28,7 +27,6 @@ fn redispatch_on_single_hang() {
 /// zombie done:hang 的塊在 500ms 後仍吐出 done——那時你早已重派並 submit。
 /// zombie 不准弄髒帳:不能重複 submit、不能 panic、後續 request 照常。
 #[test]
-#[ignore = "sim 參考測試:跑完彩排才開"]
 fn zombie_done_is_harmless() {
     let mut bus = SimBus::new()
         .request_at_ms(0, 1, 2, 0)
@@ -42,7 +40,6 @@ fn zombie_done_is_harmless() {
 /// retry budget:block 0 每次派工都 hang → 3 次 timeout 後放棄,
 /// 走 error 路徑回報整張 request,不准無限重試。
 #[test]
-#[ignore = "sim 參考測試:跑完彩排才開"]
 fn retry_budget_reports_error() {
     let mut bus = SimBus::new().request_at_ms(0, 1, 2, 0).hang_always(1, 0);
     run(&mut bus);

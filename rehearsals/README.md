@@ -33,8 +33,8 @@ Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → �
 | sim i | sim_i_dma | R2 模擬(i-lite 30m) | 骨架 | 7/30(sol 已開) | |
 | sim j | sim_j_isr | R2 模擬全場 | ✅ 已作答(P1+P2 + 自測×2) | 7/31 ✅ 錶內,oracle 2/2 | |
 | sim k | sim_k_fanin | R2 模擬 **lite**(7/31 改制:改跑 drills 填空,本 harness 備而不用) | 骨架 | 8/1 | |
-| sim l | sim_l_mmio | R2 模擬 **lite**(同上) | 骨架 | 8/2 | |
-| sim m | sim_m_watchdog | R2 模擬全場(自 8/8 前移;認題輪取消) | 骨架 | 8/2 | |
+| sim l | sim_l_mmio | R2 模擬 **lite**(同上) | 骨架 | 8/3(自 8/2 滑) | |
+| sim m | sim_m_watchdog | R2 模擬全場(自 8/8 前移;認題輪取消) | ✅ 已作答(場後修帳+Alarm struct 重構;自測 0=已記洞) | 8/2 ✅ 65m(+20),場後修至參考測試 3/3 綠 | |
 | sim n | sim_n_scheduler | R2 模擬 **lite**(改跑 drills 填空;自 8/9 前移) | 骨架 | 8/3 | |
 
 「檔內現況」照掃描時點(重打後自行更新);「已跑」出自衝刺期紀錄(`../SCHEDULE.md`,已結案)。
@@ -48,8 +48,8 @@ reference 答案本一律場後才開。全場題(j/m)跑完後,複打走填空�
 | i | `io/dma_dispatcher` | 已開(sol 7/29 已讀) |
 | j | `concurrency/isr_pipeline` | ✅ 已開(7/31 場後;複打排 8/3 洞複掃) |
 | k | `concurrency/percpu_fanin` | drills=8/1 lite 場開跑即用;reference=場後 |
-| l | `io/mmio_cmdq` | drills=8/2 lite 場開跑即用;reference=場後 |
-| m | `io/engine_watchdog` | 8/2 場後(全場自 8/8 前移;認題輪取消) |
+| l | `io/mmio_cmdq` | drills=8/3 lite 場開跑即用(自 8/2 滑);reference=場後 |
+| m | `io/engine_watchdog` | ✅ 已開(8/2 場後) |
 | n | `concurrency/job_scheduler` | drills=8/3 lite 場開跑即用;reference=場後 |
 
 複打流程:`cargo test -p drills <模組名> -- --include-ignored` 看紅 → 讀函式上的 spec
