@@ -33,9 +33,10 @@ Q4–Q7**,預設做 recognition 練習——讀題 → 30 秒定界宣言 → �
 | sim i | sim_i_dma | R2 模擬(i-lite 30m) | 骨架 | 7/30(sol 已開) | |
 | sim j | sim_j_isr | R2 模擬全場 | ✅ 已作答(P1+P2 + 自測×2) | 7/31 ✅ 錶內,oracle 2/2 | |
 | sim k | sim_k_fanin | R2 模擬 **lite**(7/31 改制:改跑 drills 填空,本 harness 備而不用) | 骨架 | 8/1 | |
-| sim l | sim_l_mmio | R2 模擬 **lite**(同上) | 骨架 | 8/3(自 8/2 滑) | |
+| sim l | sim_l_mmio | R2 模擬 **lite**(同上;實跑走 drills 填空,本 harness 備而不用) | 骨架 | 8/2 ✅ 深夜 lite,drill 4/4 綠 | |
 | sim m | sim_m_watchdog | R2 模擬全場(自 8/8 前移;認題輪取消) | ✅ 已作答(場後修帳+Alarm struct 重構;自測 0=已記洞) | 8/2 ✅ 65m(+20),場後修至參考測試 3/3 綠 | |
 | sim n | sim_n_scheduler | R2 模擬 **lite**(改跑 drills 填空;自 8/9 前移) | 骨架 | 8/3 | |
+| sim o | (無 harness;走 `drills/src/ds/boot_planner.rs` 填空) | algo 系首發(8/2 深夜新增):Kahn 分層+DAG 最長路徑+環回報 | drill 骨架 | 8/3 開機槽 | |
 
 「檔內現況」照掃描時點(重打後自行更新);「已跑」出自衝刺期紀錄(`../SCHEDULE.md`,已結案)。
 sim 排程對照 [`docs/interviews/README.md`](../docs/interviews/README.md) 的逐日計畫。
@@ -51,6 +52,7 @@ reference 答案本一律場後才開。全場題(j/m)跑完後,複打走填空�
 | l | `io/mmio_cmdq` | drills=8/3 lite 場開跑即用(自 8/2 滑);reference=場後 |
 | m | `io/engine_watchdog` | ✅ 已開(8/2 場後) |
 | n | `concurrency/job_scheduler` | drills=8/3 lite 場開跑即用;reference=場後 |
+| o | `ds/boot_planner` | drills=8/3 開機槽即用;reference=場後(algo 系,無 sim harness/防雷分頁) |
 
 複打流程:`cargo test -p drills <模組名> -- --include-ignored` 看紅 → 讀函式上的 spec
 註解填 `todo!()` → 拔 `#[ignore]` 轉綠;卡住才 diff `reference` 同名模組

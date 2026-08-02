@@ -16,9 +16,10 @@ R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07
 | sim i-lite(30m 修洞重做) | ✅ 7/30 | drills 填空版 6/6 綠——R1 兩洞在 drill 層關掉;空白重寫層驗證由 m 全場扛 |
 | sim j(ISR pipeline)全場 | ✅ 7/31 | 16:39–17:24 錶內完成 P1+P2,oracle 2/2 綠,自抓自修 2 bug;signal_pipeline 頁複讀 ✓ |
 | sim k(per-core fan-in)**lite** | ✅ 8/1 | 前導卡(題幹當卡,clarify 六問中五類、漏 shutdown+公平性兩類→lifecycle 三問入固定清單)+ drill 16m 填綠 4/4 + review 抓「先睡才查 stop」真洞(sticky flag 合併只夠醒一次)紅測先行修至 5/5(03d0284);欠帳三題:swap(0) ✓/清 bit 順序 ✓/sizing 首答 ✗ 重考過(兩數字沒比較+假 Cross;丟/摺/批門檻問題化);sol 對照 ✓ 8/2(m 全場前暖身) |
-| sim l(MMIO doorbell)**lite** | ☐ 排 8/3(自 8/2 滑;m 全場+修帳吃掉全日) | HW-L 卡當前導 |
+| sim l(MMIO doorbell)**lite** | ✅ 8/2 深夜(00:50–01:45) | HW-L 卡 + clarify(暫存器所有權/滿判定/cmd 內容全問到)→ drills 填空 **4/4 綠**(backpressure/亂序 tag 路由/wrap);真洞一枚自修:滿判定誤用 comp_head(兩 ring 混帳)→ 改讀 SubmitHead;中途開錯檔(rehearsals 空白版)霧 20m → 積木圖鑑+入門頁的催生案;賽後 Q&A:barrier=store-release 硬體版 |
 | sim m(watchdog)**全場** | ✅ 8/2 | 14:50–15:55(65m,**+20**;規:記洞不記違規)——clarify 命中 hang/zombie/3-strikes+「slow≠dead 無 fence 只能 bound risk」senior 句,但 idempotency 靠釣兩竿、自寫測試 0(sim j 第三課復發);review 八洞(最重:stale 鬧鐘不查帳就重派=討論→落地斷線)→ **場後不開錶自主修帳全關(+修出又收掉 2 洞),參考測試 3/3 綠**;晚間 Alarm 具名 struct 重構(Ord 四件套課)+ sol 對照三課(deadline 與 owner 同居/先問 N 再選形狀/殭屍=生存證明)+ 挑出 sol 刺(tries 只進不出)。帳:`scratch/cards_2026-08-02.md` |
-| sim n(priority scheduler + DAG)**lite** | ☐ 排 8/3(自 8/9 前移降 lite) | #2/#3 併 8/6,「8/6 後換皮」窗口不存在;8/3 開機 graph 一題當暖身 |
+| sim n(priority scheduler + DAG)**lite** | ☐ 排 8/3(自 8/9 前移降 lite) | #2/#3 併 8/6,「8/6 後換皮」窗口不存在;8/3 開機槽=sim o 當暖身 |
+| sim o(boot planner,**algo 系**)**lite** | ☐ 排 8/3 開機槽(8/2 深夜新增) | 「演算法穿硬體皮」對策首發(PDF 三支柱):Kahn 波次/DAG 最長路徑/環回報/blast radius;`drills/src/ds/boot_planner.rs` 填空,reference 6/6 綠;配套認題卡 AG-R(widest path)/AG-T(聚合樹修復)排 8/4 |
 | 認題卡 ×7 | ☐ 進行中 | SP ✅ 7/30(7/31 重做 19m 錶內)|HW-M ✅ 8/2 當 m 前導|HW-L = l 前導|**復活輪(8/2 晚定,用戶點名收尾):FP+TQ 排 8/3、FR+TA 排 8/4**,白天上班空檔各 15–20m——8/1 的 FP 滑帳與 7/31 改制砍掉的 8/3 槽(FR/TA/TQ)就此全數收回,七卡 8/4 前結清|FR/TA/TQ 原 8/3 槽被 n lite 取代,未再排 |
 | deep dive 英文稿(3 專案) | 稿 ✅(7/29 起草、7/31 口述化) | 口述練習壓 8/7–8/9(8/10 上午上場);`docs/interviews/deep-dive-projects.md` |
 | culture fit 稿 | 稿 ✅(7/31 ★ 五題全英文逐字化;★3 三細節待補真) | 無獨立場——散在各場 behavioral + debrief;唸稿壓 8/7–8/9;`docs/interviews/culture-fit-script.md` |

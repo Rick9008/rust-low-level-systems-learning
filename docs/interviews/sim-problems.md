@@ -108,3 +108,23 @@
 > ```
 >
 > Extend your dispatcher so a hung engine cannot stall a request forever. Ask any questions you need.
+
+## Sim o — Boot-order planner(algo 系;7 題制首發,8/2 深夜新增)
+
+**形式註記**:本題走 drills 填空(`drills/src/ds/boot_planner.rs`),無 rehearsal harness;考的是「演算法穿硬體皮」——Etched PDF 明講不考腦筋急轉彎,但 Big-O 與圖論直覺要在硬體場景裡拿得出來。
+
+**Phase 1:**
+
+> You are writing the provisioning planner for a rack: `n` nodes must boot, and dependencies say "a must be fully up before b starts" (the BMC before its host, storage before the scheduler). Booting node `v` takes `boot_ms[v]`. Compute a boot plan:
+>
+> ```rust
+> struct BootPlan { waves: Vec<Vec<u32>>, makespan_ms: u64, critical_path: Vec<u32> }
+> fn plan_boot(n: usize, deps: &[(u32, u32)], boot_ms: &[u64]) -> Result<BootPlan, Cycle>;
+> ```
+>
+> `waves[i]` = nodes that may boot simultaneously in round `i`. If the dependency graph has a cycle, **report the nodes on it** — ops needs to know *which* machines are waiting on each other, not just a boolean. Ask any questions you need.
+
+**Phase 2:**
+
+> Mid-rollout, node `f` dies. Which nodes can no longer boot?
+> `fn blast_radius(n: usize, deps: &[(u32, u32)], failed: u32) -> Vec<u32>`

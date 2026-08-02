@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    R2 onsite 備戰區(圖解作戰本 + sim 解剖室 + 量級手冊 + 稿件唸稿頁)、20 個互動模組、1 間 clarify 決策室、17 份深讀教材(html_p:追問鏈 + self-quiz)、12 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    R2 onsite 備戰區(圖解作戰本 + sim 解剖室 + 量級手冊 + 稿件唸稿頁)、20 個互動模組、1 間 clarify 決策室、18 份深讀教材(html_p:追問鏈 + self-quiz)、12 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -549,7 +549,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <div class="cards">
     <a class="card" href="../../html_p/r2-onsite-visual-guide.html">
       <span class="name">R2 圖解作戰本 · 六模擬各配 stepper</span>
-      <span class="hook">spec-heavy 題型解剖(API 三堆分類法 + reactor 五步 + 時間預算 bar)、sim i–n 每題一個互動 stepper(DMA 三張表/ISR burst/三核扇入/doorbell 鐵律/watchdog 殭屍防重/雙閘 DAG)、英文對白道場六場景 + 六題 30 秒定界模板,全雙語。</span>
+      <span class="hook">spec-heavy 題型解剖(API 三堆分類法 + reactor 五步 + 時間預算 bar)、硬體積木圖鑑速查節(8/3 增,完整版另立 🏗️ 深讀頁)、sim i–n 每題一個互動 stepper(DMA 三張表/ISR burst/三核扇入/doorbell 鐵律/watchdog 殭屍防重/雙閘 DAG)、英文對白道場六場景 + 六題 30 秒定界模板,全雙語。</span>
       <span class="hits">7/29–8/10 逐日時間軸(8/1 官方行程版) · 各 sim 開跑前 10 分鐘讀對應前導</span>
     </a>
     <a class="card" href="../../html_p/r2-interview-scripts.html">
@@ -811,6 +811,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">🐕 Engine Watchdog · deadline 的住所</span>
       <span class="hook">sim m 全場沉澱:「慢和死無法區分」→ timeout 是下注,賭注對著誤判成本選(non-idempotent → 保守 3×);deadline 與 owner 同居讓 stale 鬧鐘在型別上無法存在(vs 全域堆的對帳稅——雙模式 stepper 重演「重派已完成塊」的毀損);殭屍 done=生存證明、隔離台可贖身;Ord 四件套繼承鏈與「欄位順序是承重牆」quiz;失敗後路徑三問 + 英文聽力三對策(read back/抄紙/編號逐答)。</span>
       <span class="hits">先問 N 再選形狀 · 漂移無法表示勝過對帳碼 · 8/2 sim m 全場配套</span>
+    </a>
+    <a class="card" href="../../html_p/hw-blocks-primer.html">
+      <span class="name">🏗️ 硬體積木入門 · 給軟體人的 device 世界觀</span>
+      <span class="hook">零硬體背景讀者基準,每顆零件配 SVG 圖解與反例:CPU/RAM/device 三角色全景(device 看得見記憶體、看不見你的程式序)、MMIO 地址空間與信箱方向性、ring=硬體只會數數、doorbell 一石二鳥、barrier 雙郵路時序圖(有牆/沒牆對照)、DMA=貧瘠通知逼你記帳、IRQ=插隊電話三禁、watchdog=時間是第三種事件;收尾一句:通知越貧瘠,state 表越重要。</span>
+      <span class="hits">sim i–o 積木總表 · 8/2 深夜 l lite 之霧的正式解藥 · 作戰本圖鑑的完整版</span>
     </a>
   </div>
 </section>

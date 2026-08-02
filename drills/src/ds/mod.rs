@@ -3,6 +3,7 @@
 //! 與 `reference::ds` 同樹:六個模組皆為單執行緒、std-only、index-based 優先。
 //! 挖空的位置與使用法見 crate root doc;卡住時 diff `reference/src/ds/` 同名檔。
 
+pub mod boot_planner;
 pub mod dsu;
 pub mod graph;
 pub mod lru;

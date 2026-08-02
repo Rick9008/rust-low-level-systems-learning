@@ -51,3 +51,9 @@ Claude(或任何 session)當面試官時照此運作:只回答被問到的 clari
 **Phase 2**:"A quarantined engine may later emit the done it owed — make sure a zombie done can't corrupt your state or complete the wrong block. Then add a retry budget: after 3 timeouts on the same block, fail the whole request upstream via `submit_dma_request_error(request_id)`."
 
 **看點**:第三種 state(engine→deadline)+ `wait_event_timeout(最近 deadline − now)`;zombie done 的解 = 佔用表帶 generation/epoch(e2 同款);idempotency 問題不問就直接重派 = 扣大分,guide 提醒面試官當場追問「re-execute 安全嗎?」。
+
+## Sim o — Boot-order planner(algo 系)
+
+**隱藏 spec(被問才答)**:重複邊合法(indeg 按邊數對稱加減就自然正確);無依賴節點全進波 0;makespan 假設波內完全平行——「同時最多 K 台」被問到就答「好問題,K 上限讓它變 list scheduling(NP-hard 家族),今天聲明 K=∞,講得出『波內切 K 批 = makespan 上界』就滿分」;環回報只要**一個**環,不用全列;critical_path 多解任一條。
+
+**看點**:一趟 Kahn 做三件事(分層/最長路徑 DP/環偵測);**「DAG 上最長路徑是 P、一般圖 NP-hard——因為無環才敢沿 topo 序 DP」這句話**;blast_radius 不含 failed 自身;波內排序=決定性輸出。扣分雷:對每節點跑 DFS 找最深鏈(O(V·(V+E)));cycle 只回 bool。

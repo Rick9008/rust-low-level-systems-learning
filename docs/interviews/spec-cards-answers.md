@@ -89,3 +89,27 @@
 **30-sec framing**:"The dispatcher already tracks two kinds of state — per-request progress and engine occupancy; the watchdog adds a third: a deadline per dispatched block. The event loop waits with a timeout equal to the nearest deadline. On expiry I re-dispatch the block to a healthy engine and quarantine the suspect. The question that decides everything: is a DMA block idempotent? If re-executing can corrupt, I need completion-side dedup by request-id before I'm allowed to retry at all."
 
 **Trade-off 收尾**:"A short timeout recovers fast but misfires on slow engines, causing duplicate work; I'd start conservative — several times the p99 block latency — and count timeouts per engine to separate slow from dead."
+
+## AG-R — Interconnect route planner
+
+**埋的洞**:目標函數不是最短路!題面「usable bandwidth = min along path」已暗示 **widest path(max-min)**——認題關鍵。其他洞:有向還是無向?平行邊有沒有?同瓶頸頻寬時 tie-break(hop 數)?既有傳輸要不要扣容量(reservation)?找不到路回什麼?
+
+**期望 clarify ≥3**:目標函數確認("shortest by hops, lowest latency, or widest by bottleneck bandwidth?")/ 並發傳輸的容量語意(獨佔 or 共享)/ tie-break 與 no-path 行為。
+
+**State 表**:`bott[v]` = 到 v 的最佳瓶頸頻寬(初始 0、源點 ∞)、`parent[]` 回溯路徑、`BinaryHeap`(**max-heap,這次不用 Reverse——方向跟 Dijkstra 反**)。轉移:`cand = min(bott[u], w(u,v))`,`cand > bott[v]` 才更新。
+
+**30-sec framing**:"This is widest path, not shortest — Dijkstra's skeleton with two swaps: relax with `min(bottleneck, link)` instead of `+`, and pop the **largest** bottleneck first. The greedy argument still holds because the bottleneck is monotone non-increasing as a path grows. O((V+E) log E) with lazy deletion, same as the repo's Dijkstra."
+
+**Trade-off 收尾**:"If several transfers share the fabric this becomes a flow/reservation problem — max-flow territory — which I'd scope out today and handle by subtracting reserved bandwidth per link."
+
+## AG-T — Telemetry aggregation tree
+
+**埋的洞**:最小化什麼(搬動數?深度增長?負載均衡?)——spec 沒說,必問;slack 保證夠嗎(Σ(F−fan_in) ≥ 孤兒數,不夠回 Err?);深度可以變深嗎;死的是 root 怎麼辦;孤兒是**整棵子樹**搬、不拆(題面有寫,漏讀就慘)。
+
+**期望 clarify ≥3**:目標函數 / slack 不足的行為 / root 死亡特例。
+
+**State 表**:孤兒清單 = `children(dead)`;倖存者的 `slack = F − fan_in`(dead 的 parent 空出 1 格!);策略 = 由淺到深 BFS 收集有 slack 的節點,**大子樹優先塞最淺的位子**(greedy;完美最小化是 bin-packing 家族,聲明不做)。
+
+**30-sec framing**:"Orphans are whole subtrees, so the tree structure below them is untouched — I only choose new parents. I'll BFS the surviving tree collecting slack slots shallow-first, then place orphans largest-subtree-first to keep depth growth small. That's a greedy; optimal placement is bin-packing-flavored, which I'd flag and skip in 45 minutes."
+
+**Trade-off 收尾**:"Shallow-first placement bounds depth growth but can concentrate load; balance-first spreads load but deepens paths — which matters more depends on whether the aggregation is latency- or throughput-sensitive."

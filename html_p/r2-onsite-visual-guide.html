@@ -376,6 +376,75 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
 
 <p>這一頁只給<b>概念地形</b>:每題的場景、硬約束、和上場前值得問的 clarify 種子。<span class="hl-org">刻意不給解法</span>——解法要在計時場上自己長出來,寫完再開 <code>sol_sim_*.rs</code> 對答案。五題共用同一個 reactor 骨架(Tab 1),差別全在「事件源是誰、硬約束是什麼」。</p>
 
+<!-- ═══ 硬體積木圖鑑(8/3 增:8/2 深夜 l lite 的霧催生——名詞背後的物理圖像)═══ -->
+<div class="simcard">
+  <div class="head"><span class="sid">積木圖鑑</span><span class="nm">五題共用的硬體零件——每顆是什麼、為什麼存在、你的 code 怎麼碰它</span><span class="date">先讀這節再進各題(8/3 增訂)</span></div>
+  <div class="body">
+    <p>寫服務端軟體的人第一次碰硬體題,霧的來源通常不是演算法,是<b>名詞背後沒有物理圖像</b>。這節把五題的零件一顆一顆放上桌。</p>
+
+    <h4>0. 全景:桌上其實只有三個東西</h4>
+    <div class="flow">
+      <div class="fnode wk"><div class="t">你的 code(CPU)</div><div class="s">跑在處理器上的軟體;會被 cache、store buffer「代理」記憶體動作</div></div>
+      <div class="farrow">⟷</div>
+      <div class="fnode buf"><div class="t">共享記憶體(RAM)</div><div class="s">雙方都摸得到的桌面;ring 就放這裡</div></div>
+      <div class="farrow">⟷</div>
+      <div class="fnode hw"><div class="t">device(小電腦)</div><div class="s">有自己的邏輯、自己的節奏;<b>看得見記憶體,看不見你的程式序</b></div></div>
+    </div>
+    <p>所有硬體題的共同世界觀:<b>device 是「另一個讀者/寫者」,而且不歸 Rust 記憶體模型管</b>。你們唯一的溝通方式是這張桌面(共享記憶體)加上幾個裝在它身上的信箱(暫存器)。五題全部都是「跟一個看不見你程式序的同事協作」的故事。</p>
+
+    <h4>1. MMIO 暫存器——裝在 device 身上的信箱</h4>
+    <p><b>是什麼</b>:一些「地址長得像記憶體、背後其實是硬體零件」的格子。你 <code>mmio_read</code>/<code>mmio_write</code> 的時候不是在讀寫 RAM,是在<b>撥動 device 身上的開關 / 看它掛出來的牌子</b>。<b>為什麼存在</b>:device 內部的狀態你摸不到,它只把「你需要知道的」用暫存器掛出來、把「你可以命令的」做成可寫的格子。<b>兩個物理事實</b>:每個暫存器有方向性——唯讀的是<b>進度牌</b>(<code>SubmitHead</code>、<code>CompTail</code>),唯寫的是<b>按鈕</b>(<code>Doorbell</code>);MMIO 是 uncached 的慢路(百 ns 到 µs 級),所以真驅動能批次就批次,不每筆都按鈴。</p>
+
+    <h4>2. ring(格子架)+ descriptor(工單)——為什麼硬體世界什麼都是環</h4>
+    <p><b>descriptor</b> = 固定格式的小工單(這裡是 <code>tag + payload</code>):tag 是你寫的單號、之後認領完成用;payload 是工作內容,你不解釋、只搬運。<b>ring</b> = 一排固定數量的格子,用<b>單調遞增序號</b>取格:<code>slot = seq % cap</code>。為什麼是環不是鏈表:<b>硬體只會數數,不會追指標</b>——它能做「從 head 號拿到 doorbell 號」這種算術,做不了 <code>malloc</code> 和 pointer chasing。ring 放在普通共享記憶體上,所以你寫格子就是普通的記憶體寫(<code>slot_write</code>),不走 MMIO。</p>
+
+    <h4>3. doorbell(門鈴)——為什麼放了貨還要按鈴</h4>
+    <p>因為 <b>device 不會盯著你的記憶體看</b>——要它輪詢你的 RAM 太貴也太蠢。你把工單放好之後,寫一次 <code>Doorbell</code> 暫存器告訴它「我的 tail 現在到 N 了」。注意寫進去的值就是<b>你的新 tail</b>:門鈴同時是「有事了」的訊號和「到幾號」的公告,一石二鳥。</p>
+
+    <h4>4. barrier(牆)——兩條郵路的問題</h4>
+    <div class="flow">
+      <div class="fnode wk"><div class="t">① slot_write</div><div class="s">普通記憶體寫:走 cache/store buffer,<b>可能在路上排隊</b></div></div>
+      <div class="farrow">vs</div>
+      <div class="fnode hw"><div class="t">② doorbell</div><div class="s">MMIO 寫:uncached 直達</div></div>
+    </div>
+    <p>兩種寫走<b>不同的郵路</b>,抵達順序不保證跟你的程式碼順序一樣——對你自己永遠看不出差別,但 device 是另一個觀察者:沒有牆,<b>鈴聲可能比貨先到</b>,它開格子讀到半張工單。<code>barrier()</code> 的合約一句話:「我之前的所有寫入,先讓所有觀察者看得見,才准放行之後的寫入」。這就是「先值後訊號」定理的硬體版(fanin 的 push→wake、waker 的 set-result→wake、spin_lock 的 Release,同一個瓤)——只是對面是矽,語言層的 <code>Ordering</code> 管不到它,得用顯式柵欄。</p>
+
+    <h4>5. completion ring——同一套零件反著轉</h4>
+    <p>device 做完工,把成品(帶著你的 tag)寫進另一條 ring、推進它的 <code>CompTail</code> 進度牌。你收貨的鐵律跟出貨對稱:<b>先讀進度牌(CompTail),再碰牌子以前的格子</b>——acquire 方向。成品自帶 tag,所以就算 device 亂序完成,你也不用猜是哪筆:tag 自己認路。</p>
+
+    <h4>6. 六個數字的所有權(8/2 深夜的霧,一張表收乾)</h4>
+    <table class="mini">
+      <tr><th>ring</th><th>數字</th><th>住哪</th><th>意思</th></tr>
+      <tr><td rowspan="3">出單(你→device)</td><td><code>tail</code></td><td>你的 driver</td><td>我放單到幾號——你的私人真相</td></tr>
+      <tr><td><code>Doorbell</code></td><td>device 暫存器</td><td>你最後一次公告的 tail(按鈴時更新)</td></tr>
+      <tr><td><code>SubmitHead</code></td><td>device 暫存器(你唯讀)</td><td>它拿單到幾號——滿判定用它:<code>tail − head == cap</code></td></tr>
+      <tr><td rowspan="2">成品(device→你)</td><td><code>CompTail</code></td><td>device 暫存器(你唯讀)</td><td>它出貨到幾號</td></tr>
+      <tr><td><code>comp_head</code></td><td>你的 driver</td><td>我收貨到幾號——你的私人真相</td></tr>
+    </table>
+    <p>規律:<b>自己的游標自己存,對方的游標當場讀,永遠不要抄一份別人的進度</b>(抄了就會過期——sim m 的 stale 鬧鐘就是這麼死的)。而「driver」這個詞聽起來嚇人,其實就是<b>這幾個計數器 + 兩三個函式</b>:一本記事本,不是執行緒、不會自己跑。</p>
+
+    <h4>7. DMA engine(搬運工)——sim i / m 的主角</h4>
+    <p><b>是什麼</b>:會自己動的搬運零件。你給它「從哪搬、搬多少」(一個 block 的位址與長度),它就<b>不經過 CPU</b> 自己把資料搬完,然後回報一聲 done。<b>為什麼存在</b>:不然 CPU 要一個 byte 一個 byte 端盤子,什麼正事都別做了。<b>它的殘酷面</b>:done 訊號通常<b>只告訴你「幾號搬運工完工」,不附工單</b>——誰派給它什麼,得靠你自己的綁定表記得(sim i 的 owner 表、sim m 的整套 watchdog 都長在這件事上)。</p>
+
+    <h4>8. IRQ / ISR(插隊電話)——sim j 的主角</h4>
+    <p><b>IRQ</b> = device 打給 CPU 的插隊電話:「我有事,現在」。CPU 接起來跑的那段短程式叫 <b>ISR</b>(中斷服務程式)——它是<b>劫持了某顆核當下的執行</b>,不是一條執行緒,所以三禁:不能配置記憶體、不能阻塞、不能做慢事。跟 polling 的對照:polling 是你一直打去問「好了沒」,IRQ 是它好了打給你——低負載時 IRQ 省電省 CPU,高負載時電話響不停反而不如你定期去問(NAPI 就是兩者的混血)。</p>
+
+    <h4>9. watchdog / timeout——當硬體沉默(sim m 的主角)</h4>
+    <p>硬體會壞、會 hang,而且<b>壞的時候通常一聲不吭</b>。沒有 health API、沒有 error 訊號時,你唯一的觀察手段是<b>時間</b>:「正常 10ms 會回來的東西,30ms 沒回來就當它死了」。這是一場賭——「慢」和「死」從軟體內部無法區分(能給確定性的只有 reset/fence 這類硬體幫忙)——所以 timeout 值要對著<b>誤判成本</b>選,而 deadline 是事件迴圈的第三種事件:前兩種(新請求、完成)是別人推給你的,這種是你自己排的。</p>
+
+    <h4>10. 每題用到哪些積木</h4>
+    <table class="mini">
+      <tr><th>題</th><th>積木</th><th>一句話</th></tr>
+      <tr><td>sim i(DMA dispatcher)</td><td>DMA engine ×6、綁定表</td><td>派工單給搬運工,done 只報工號,帳自己記</td></tr>
+      <tr><td>sim j(ISR pipeline)</td><td>HW FIFO、IRQ/ISR、SPSC ring</td><td>插隊電話裡只准搬進 ring,慢活交給樓下</td></tr>
+      <tr><td>sim k(fan-in)</td><td>SPSC ring ×N(純軟體)</td><td>硬體零件最少的一題:N 個生產者、一個收銀台</td></tr>
+      <tr><td>sim l(MMIO cmdq)</td><td>MMIO 暫存器、雙 ring、doorbell、barrier</td><td>零件全家福:上架→牆→按鈴,反向先看牌再拿貨</td></tr>
+      <tr><td>sim m(watchdog)</td><td>DMA engine + 時鐘</td><td>i 的世界加一個事實:搬運工會無聲失蹤</td></tr>
+      <tr><td>sim n(scheduler)</td><td>(無硬體)worker slots</td><td>純軟體排程:兩道閘,先依賴後優先權</td></tr>
+    </table>
+  </div>
+</div>
+
 <!-- sim j -->
 <div class="simcard">
   <div class="head"><span class="sid">sim j</span><span class="nm">Sensor interrupt pipeline(ISR → bottom-half)</span><span class="date">7/31 五・計時 45m</span></div>

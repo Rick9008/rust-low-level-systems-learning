@@ -7,6 +7,7 @@
 //! 並發資料結構(`spsc_ring`、`arena_lockfree`)刻意不收進來:
 //! 它們的重點是 memory ordering 與 loom 驗證,留在 crate 根與 stage 4 對應。
 
+pub mod boot_planner;
 pub mod dsu;
 pub mod graph;
 pub mod lru;

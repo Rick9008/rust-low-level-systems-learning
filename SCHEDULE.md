@@ -2,8 +2,9 @@
 
 > **2026-07-29 結案**:R1(7/28 TPS coding)✅ 過,feedback 正向(clarify 被點名稱讚;洞 = 時間不夠 code 有漏洞)。
 > **R2 onsite(8/1 官方行程確認)**:兩場 coding 併 **8/6(四)同天連跑**(09:15–10:00、10:15–11:00,中間只休 15m);deep dive + recruiter debrief **8/10(一)10:00–11:00**(修正 7/31 記載的 8/11);culture fit 沒有獨立場(散在各場 behavioral 提問 + debrief)。
-> 新階段的逐日計畫、題本(sim i–m)、認題卡、句庫、稿件全在 **[docs/interviews/README.md](docs/interviews/README.md)**——本檔保留衝刺歷史,逐日表不再更新。
+> 新階段的逐日計畫、題本(sim i–o)、認題卡、句庫、稿件全在 **[docs/interviews/README.md](docs/interviews/README.md)**——本檔保留衝刺歷史,逐日表不再更新。
 > 7/29 = 休息日(輕活):讀 `rehearsals/examples/sol_sim_i_dma.rs` + deep dive / culture fit 英文稿起草。
+> **R2 攝取進度(8/3 凌晨快照)**:i-lite ✅ 7/30|j 全場 ✅ 7/31 錶內|k lite ✅ 8/1|m 全場 ✅ 8/2(65m+20,場後修帳 3/3 綠)|l lite ✅ 8/2 深夜(4/4)|**剩 n lite + sim o(8/2 深夜新增的 algo 系:boot_planner)= 8/3**|8/4 背靠背全新題 ×2 + 認題卡 FR/AG-R/TA/AG-T|8/5 taper(a–n 翻閱 30m)|輕敘事日誌重啟:[journal.md](journal.md)。
 
 容量(7/22 v9 修正):平日 = 白天公司「打字場」淨 4h+(實排 3h 留正職突發)+ 晚上在家「出聲場」23:30–02:00(實排 2h);週末在家 8h。總量與舊「平日 5h」近似,但**場地決定內容**:出聲類(彩排 narrate/口述/錄音/卡片口述版)只能晚上或週末;打字類(drill/challenge/空白/修洞/dry-run/日讀/卡片筆寫)白天優先。
 

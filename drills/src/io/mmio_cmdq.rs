@@ -40,14 +40,33 @@ impl Driver {
 /// → `slot_write(tail % cap, ..)` → `barrier()` → `tail += 1` → 敲 `Doorbell`(寫新 tail)。
 /// 順序錯一步,oracle 就 panic。
 pub fn submit(dev: &mut Device, drv: &mut Driver, tag: u32, payload: u64) -> Result<(), Full> {
-    todo!("spec: 滿判定(序號差)→ 填 slot → barrier → 敲 doorbell")
+    // todo!("spec: 滿判定(序號差)→ 填 slot → barrier → 敲 doorbell")
+    let head = dev.mmio_read(Reg::SubmitHead);
+    if drv.tail.wrapping_sub(head) == drv.cap {
+        return Err(Full);
+    }
+    dev.slot_write(
+        drv.tail as usize % drv.cap as usize,
+        Descriptor { tag, payload },
+    );
+    dev.barrier();
+    drv.tail = drv.tail.wrapping_add(1);
+    dev.mmio_write(Reg::Doorbell, drv.tail);
+    Ok(())
 }
 
 /// spec:收完成。先讀 `CompTail`(device 寫到哪)→ `comp_head` 追到 tail 為止,
 /// 逐 slot `comp_slot_read(comp_head % cap)` → `on_done(tag, payload)`。
 /// 亂序(Phase 2)不用改碼——tag 在 descriptor 裡,天生路由。
 pub fn poll_completions(dev: &mut Device, drv: &mut Driver, on_done: &mut dyn FnMut(u32, u64)) {
-    todo!("spec: 先讀 CompTail 再收 slot;comp_head 單調前進")
+    // todo!("spec: 先讀 CompTail 再收 slot;comp_head 單調前進")
+    let tail = dev.mmio_read(Reg::CompTail);
+    while drv.comp_head != tail {
+        let Descriptor { tag, payload } =
+            dev.comp_slot_read(drv.comp_head as usize % drv.cap as usize);
+        on_done(tag, payload);
+        drv.comp_head = drv.comp_head.wrapping_add(1);
+    }
 }
 
 #[cfg(test)]
@@ -56,7 +75,6 @@ mod tests {
 
     /// in-order 基本流:3 筆依序提交、device 跑完、poll 依序收回。
     #[test]
-    #[ignore = "drill:填完 submit/poll_completions 後拔掉"]
     fn in_order_submit_and_complete() {
         let mut dev = Device::new(8);
         let mut drv = Driver::new(8);
@@ -71,7 +89,6 @@ mod tests {
 
     /// 滿載 backpressure + wrap 重用(cap=2):Err(Full) 不動 state,重試要成功。
     #[test]
-    #[ignore = "drill:填完後拔掉"]
     fn full_then_backpressure_then_reuse() {
         let mut dev = Device::new(2);
         let mut drv = Driver::new(2);
@@ -91,7 +108,6 @@ mod tests {
 
     /// Phase 2 亂序 completion(lifo):(tag, payload) 配對仍正確,順序不是 contract。
     #[test]
-    #[ignore = "drill:填完後拔掉"]
     fn out_of_order_completions_route_by_tag() {
         let mut dev = Device::new(8).lifo();
         let mut drv = Driver::new(8);
@@ -109,7 +125,6 @@ mod tests {
 
     /// 連續 wrap(cap=2,5 輪):序號單調、slot 反覆重用、doorbell 只前進。
     #[test]
-    #[ignore = "drill:填完後拔掉"]
     fn sustained_wrap_around() {
         let mut dev = Device::new(2);
         let mut drv = Driver::new(2);

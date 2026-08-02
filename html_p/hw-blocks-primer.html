@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>硬體積木入門 — 給軟體人的 device 世界觀(MMIO/ring/doorbell/DMA/IRQ)</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%;background:var(--bg0)}
+  body{margin:0;color:var(--fg);font-family:var(--cjk);line-height:1.7;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);border-color:var(--bg4)}
+  .tabbar button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow);text-wrap:balance}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.94rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .n{color:var(--purple)}
+  pre .s{color:var(--green)}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0;font-size:.9rem}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .callout.info{border-color:var(--blue)}
+  .lbl{display:block;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gray);margin-bottom:4px}
+  .key{color:var(--orange);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  td.ok{color:var(--green)} td.no{color:var(--red)}
+  .tblwrap{overflow-x:auto}
+
+  .quiz{border:1px dashed var(--purple);border-radius:9px;padding:10px 12px;margin-top:10px}
+  .quiz p{margin:0 0 8px;font-size:.88rem}
+  .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 10px;border-radius:8px;
+    cursor:pointer;margin:0 6px 6px 0}
+  .quiz .fb{display:none;font-size:.86rem;margin-top:4px}
+
+  .navrow{display:flex;justify-content:space-between;margin:18px 0 6px}
+  .navrow button{background:var(--bg2);border:1px solid var(--bg4);color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.84rem;padding:6px 14px;border-radius:8px;cursor:pointer}
+  .navrow button:hover{color:var(--yellow)}
+
+  svg text{font-family:var(--mono);font-size:11px;fill:var(--fg)}
+  svg .dim{fill:var(--gray)}
+  svg .em{fill:var(--yellow);font-weight:700}
+  .figwrap{overflow-x:auto;margin:10px 0}
+  .figcap{color:var(--gray);font-size:.82rem;margin:4px 0 0}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+
+<div class="tabbar" id="tabbar">
+  <button data-tab="world" class="active">全景與信箱</button>
+  <button data-tab="ring">ring 與工單</button>
+  <button data-tab="bell">門鈴與牆</button>
+  <button data-tab="dma">搬運工與電話</button>
+  <button data-tab="dog">看門狗與總表</button>
+</div>
+
+<!-- ============ TAB: world ============ -->
+<div class="tab active" id="tab-world"><div class="wrap">
+  <h1>硬體積木入門 — 給軟體人的 device 世界觀</h1>
+  <p class="sub">寫服務端的人第一次碰硬體題,霧的來源不是演算法,是名詞背後沒有物理圖像。這頁把 sim i–o 用到的每顆零件配圖講到底。姊妹頁:<code>r2-onsite-visual-guide</code>(作戰本,積木速查版)、<code>watchdog-deadline-design</code>(sim m 沉澱)、<code>fanin-aggregator-bitmask</code>(sim k 沉澱)。</p>
+
+  <section>
+    <h2>0. 全景:桌上只有三個東西</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 880 250" width="880" height="250" role="img" aria-label="CPU、RAM、device 三角色圖">
+      <!-- CPU box -->
+      <rect x="20" y="30" width="230" height="180" rx="10" fill="#32302f" stroke="#89b482" stroke-width="1.5"/>
+      <text x="135" y="55" text-anchor="middle" fill="#89b482">CPU(跑你的 code)</text>
+      <rect x="40" y="75" width="190" height="34" rx="6" fill="#3c3836" stroke="#45403d"/>
+      <text x="135" y="96" text-anchor="middle">你的程式:一行一行執行</text>
+      <rect x="40" y="120" width="190" height="34" rx="6" fill="#3c3836" stroke="#d8a657"/>
+      <text x="135" y="141" text-anchor="middle" fill="#d8a657">cache / store buffer</text>
+      <text x="135" y="175" text-anchor="middle" class="dim">↑ 你的記憶體動作先經過這裡</text>
+      <text x="135" y="192" text-anchor="middle" class="dim">(它會排隊、會延後、會合併)</text>
+      <!-- RAM box -->
+      <rect x="330" y="55" width="200" height="130" rx="10" fill="#32302f" stroke="#d3869b" stroke-width="1.5"/>
+      <text x="430" y="80" text-anchor="middle" fill="#d3869b">共享記憶體(RAM)</text>
+      <rect x="350" y="95" width="160" height="30" rx="6" fill="#3c3836" stroke="#45403d"/>
+      <text x="430" y="114" text-anchor="middle">SUBMIT_RING(格子架)</text>
+      <rect x="350" y="135" width="160" height="30" rx="6" fill="#3c3836" stroke="#45403d"/>
+      <text x="430" y="154" text-anchor="middle">COMPLETION_RING</text>
+      <!-- device box -->
+      <rect x="610" y="30" width="250" height="180" rx="10" fill="#32302f" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="735" y="55" text-anchor="middle" fill="#ea6962">device(一台小電腦)</text>
+      <rect x="630" y="75" width="210" height="30" rx="6" fill="#3c3836" stroke="#45403d"/>
+      <text x="735" y="94" text-anchor="middle">自己的邏輯、自己的節奏</text>
+      <rect x="630" y="115" width="100" height="34" rx="6" fill="#3c3836" stroke="#7daea3"/>
+      <text x="680" y="130" text-anchor="middle" fill="#7daea3" font-size="10">SubmitHead</text>
+      <text x="680" y="143" text-anchor="middle" class="dim" font-size="9">進度牌(你唯讀)</text>
+      <rect x="740" y="115" width="100" height="34" rx="6" fill="#3c3836" stroke="#e78a4e"/>
+      <text x="790" y="130" text-anchor="middle" fill="#e78a4e" font-size="10">Doorbell</text>
+      <text x="790" y="143" text-anchor="middle" class="dim" font-size="9">按鈕(你唯寫)</text>
+      <text x="735" y="175" text-anchor="middle" class="dim">↑ 暫存器:掛在它身上的信箱</text>
+      <text x="735" y="192" text-anchor="middle" class="dim">(mmio_read / mmio_write 碰的就是這排)</text>
+      <!-- arrows -->
+      <g stroke="#928374" fill="none">
+        <line x1="250" y1="120" x2="330" y2="120"/>
+        <line x1="530" y1="120" x2="610" y2="120"/>
+      </g>
+      <text x="290" y="112" text-anchor="middle" class="dim">讀寫</text>
+      <text x="570" y="112" text-anchor="middle" class="dim">讀寫</text>
+      <text x="440" y="235" text-anchor="middle" class="em">兩邊都摸得到中間這張桌面——這是你們唯一的共用空間</text>
+    </svg>
+    </div>
+    <p><b>你的 code 跑在 CPU 上;device 是插在機器裡的另一台小電腦</b>(網卡、SSD、GPU、DMA 引擎都是)。它有自己的處理器、自己的韌體、自己的節奏——你不能叫它「執行你的函式」,只能透過兩個管道跟它協作:<b>共享記憶體</b>(雙方都能讀寫的桌面)和<b>它身上的暫存器</b>(下一節)。</p>
+    <div class="callout">
+      <span class="lbl">全頁最重要的一句</span>
+      <b>device 看得見記憶體,看不見你的程式碼。</b>它不知道你哪一行先寫、哪一行後寫——它只看到記憶體流量抵達的順序。而你的寫入會先經過 cache / store buffer 排隊,<span class="key">抵達順序 ≠ 程式碼順序</span>。這一句是 barrier(門鈴與牆分頁)存在的全部理由,也是所有硬體題的共同世界觀。
+    </div>
+  </section>
+
+  <section>
+    <h2>1. MMIO 暫存器:裝在 device 身上的信箱</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 880 190" width="880" height="190" role="img" aria-label="地址空間圖:一段是 RAM,一段被 device 佔走">
+      <text x="20" y="24" class="dim">CPU 眼中的「地址空間」(一條大尺):</text>
+      <rect x="20" y="40" width="560" height="46" rx="6" fill="#32302f" stroke="#d3869b"/>
+      <text x="300" y="68" text-anchor="middle" fill="#d3869b">0x0000_0000 … 普通 RAM(讀寫的是記憶體,會被 cache)</text>
+      <rect x="580" y="40" width="280" height="46" rx="6" fill="#3c3836" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="720" y="60" text-anchor="middle" fill="#ea6962">0xFEE0_0000 … MMIO 區</text>
+      <text x="720" y="76" text-anchor="middle" class="dim" font-size="10">地址長得像記憶體,背後是 device 的零件</text>
+      <g stroke="#928374" fill="none">
+        <line x1="640" y1="86" x2="640" y2="120"/>
+        <line x1="720" y1="86" x2="720" y2="120"/>
+        <line x1="800" y1="86" x2="800" y2="120"/>
+      </g>
+      <rect x="600" y="120" width="80" height="34" rx="6" fill="#32302f" stroke="#7daea3"/>
+      <text x="640" y="141" text-anchor="middle" fill="#7daea3" font-size="10">SubmitHead</text>
+      <rect x="690" y="120" width="70" height="34" rx="6" fill="#32302f" stroke="#e78a4e"/>
+      <text x="725" y="141" text-anchor="middle" fill="#e78a4e" font-size="10">Doorbell</text>
+      <rect x="770" y="120" width="70" height="34" rx="6" fill="#32302f" stroke="#7daea3"/>
+      <text x="805" y="141" text-anchor="middle" fill="#7daea3" font-size="10">CompTail</text>
+      <text x="440" y="178" text-anchor="middle" class="dim">寫 0xFEE0_0008 不是「把值存進記憶體」——是「按下 device 上的一顆按鈕」</text>
+    </svg>
+    </div>
+    <p><b>是什麼</b>:MMIO(memory-mapped I/O)= 把 device 的零件「掛」在地址空間的某一段上。你用普通的讀寫指令去碰那些地址,實際發生的卻是:<b>讀 = 看 device 掛出來的牌子,寫 = 撥它身上的開關</b>。harness 裡的 <code>mmio_read</code>/<code>mmio_write</code> 模擬的就是這件事。</p>
+    <p><b>為什麼存在</b>:device 內部的狀態你摸不到(它是另一台電腦!),所以它只把「你需要知道的」做成唯讀牌子(<code>SubmitHead</code>、<code>CompTail</code>)、把「你可以命令的」做成可寫按鈕(<code>Doorbell</code>)。<b>方向性是查表就知道的事:每個暫存器要嘛是牌子、要嘛是按鈕,幾乎不會兩者都是。</b></p>
+    <div class="callout info">
+      <span class="lbl">兩個物理事實(面試講出來就是分)</span>
+      ① MMIO 讀寫是 <b>uncached 慢路</b>——每次都真的跑到 device 那裡,百 ns 到 µs 級(普通 RAM 命中 cache 是 1ns 級)。所以真驅動能批次就批次:填一批 descriptor、按一次鈴。② MMIO 寫跟普通記憶體寫<b>走不同的路</b>——這是「牆」分頁的伏筆。
+    </div>
+    <div class="navrow"><span></span><button data-jump="ring">ring 與工單 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: ring ============ -->
+<div class="tab" id="tab-ring"><div class="wrap">
+  <h1>ring 與工單 — 為什麼硬體世界什麼都是環</h1>
+  <p class="sub">descriptor(工單)放進 ring(環形格子架),用單調序號取格。這一套是 NVMe、網卡、GPU 命令佇列的共同骨架。</p>
+
+  <section>
+    <h2>2. descriptor:固定格式的小工單</h2>
+    <p>你要 device 做的一件事,壓成一張<b>固定大小</b>的表格——這裡是 <code>{ tag: u32, payload: u64 }</code>:<b>tag 是你寫的單號</b>(之後 device 拿它回報「幾號單做完了」),payload 是工作內容(你不解釋、只搬運;真硬體裡是位址+長度+旗標)。<b>為什麼固定大小</b>:格子架的每一格要一樣大,硬體才能用「序號 × 格寬」直接算出位址——它不會追指標。</p>
+
+    <h2>3. ring:一排格子 + 單調序號</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 880 210" width="880" height="210" role="img" aria-label="環形格子架與單調序號">
+      <text x="20" y="24" class="dim">cap = 8 的 ring(畫成直的比較好懂;「環」只是 % cap 的意思):</text>
+      <g>
+        <rect x="20"  y="40" width="90" height="52" rx="6" fill="#32302f" stroke="#928374"/>
+        <rect x="120" y="40" width="90" height="52" rx="6" fill="#32302f" stroke="#928374"/>
+        <rect x="220" y="40" width="90" height="52" rx="6" fill="#3c3836" stroke="#a9b665" stroke-width="1.5"/>
+        <rect x="320" y="40" width="90" height="52" rx="6" fill="#3c3836" stroke="#a9b665" stroke-width="1.5"/>
+        <rect x="420" y="40" width="90" height="52" rx="6" fill="#3c3836" stroke="#a9b665" stroke-width="1.5"/>
+        <rect x="520" y="40" width="90" height="52" rx="6" fill="#32302f" stroke="#928374"/>
+        <rect x="620" y="40" width="90" height="52" rx="6" fill="#32302f" stroke="#928374"/>
+        <rect x="720" y="40" width="90" height="52" rx="6" fill="#32302f" stroke="#928374"/>
+      </g>
+      <text x="65"  y="62" text-anchor="middle" class="dim">slot 0</text><text x="65"  y="80" text-anchor="middle" class="dim">(已消費)</text>
+      <text x="165" y="62" text-anchor="middle" class="dim">slot 1</text><text x="165" y="80" text-anchor="middle" class="dim">(已消費)</text>
+      <text x="265" y="62" text-anchor="middle" fill="#a9b665">slot 2</text><text x="265" y="80" text-anchor="middle">單 #10</text>
+      <text x="365" y="62" text-anchor="middle" fill="#a9b665">slot 3</text><text x="365" y="80" text-anchor="middle">單 #11</text>
+      <text x="465" y="62" text-anchor="middle" fill="#a9b665">slot 4</text><text x="465" y="80" text-anchor="middle">單 #12</text>
+      <text x="565" y="62" text-anchor="middle" class="dim">slot 5</text><text x="565" y="80" text-anchor="middle" class="dim">(空)</text>
+      <text x="665" y="62" text-anchor="middle" class="dim">slot 6</text><text x="665" y="80" text-anchor="middle" class="dim">(空)</text>
+      <text x="765" y="62" text-anchor="middle" class="dim">slot 7</text><text x="765" y="80" text-anchor="middle" class="dim">(空)</text>
+      <!-- pointers -->
+      <g stroke="#7daea3" fill="none"><line x1="265" y1="120" x2="265" y2="96"/></g>
+      <text x="265" y="140" text-anchor="middle" fill="#7daea3">head = 10(device 拿單到這)</text>
+      <g stroke="#e78a4e" fill="none"><line x1="565" y1="120" x2="565" y2="96"/></g>
+      <text x="565" y="140" text-anchor="middle" fill="#e78a4e">tail = 13(你放單到這)</text>
+      <text x="440" y="175" text-anchor="middle" class="em">序號一輩子只加不減;碰格子那一刻才 % cap(slot = seq % 8)</text>
+      <text x="440" y="196" text-anchor="middle" class="dim">在飛量 = tail − head = 3;滿 ⇔ tail − head == cap(序號差判滿,不用 % 比較——spsc_ring 的老朋友)</text>
+    </svg>
+    </div>
+    <div class="callout good">
+      <span class="lbl">為什麼是環,不是 Vec 或鏈表</span>
+      硬體<b>只會數數</b>:給它一個起點序號和一個終點序號,它會自己把中間的格子一格格吃掉。它不會 <code>malloc</code>、不會追指標、不會處理變長結構。固定格子 + 單調序號 = 硬體唯一讀得懂的資料結構。這也是為什麼你在 spsc_ring、mpmc_ring 練的序號算術,到硬體題一行都沒浪費。
+    </div>
+    <div class="navrow"><button data-jump="world">◀ 全景與信箱</button><button data-jump="bell">門鈴與牆 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: bell ============ -->
+<div class="tab" id="tab-bell"><div class="wrap">
+  <h1>門鈴與牆 — 放了貨為什麼要按鈴,按鈴前為什麼要砌牆</h1>
+  <p class="sub">sim l 的核心,也是 8/2 深夜之霧的震央。兩張時序圖,一好一壞。</p>
+
+  <section>
+    <h2>4. doorbell:為什麼放了貨還要按鈴</h2>
+    <p>因為 <b>device 不會盯著你的記憶體看</b>——要它輪詢你的 RAM,又貴又蠢。你把工單放進格子後,寫一次 <code>Doorbell</code> 暫存器,做兩件事:<b>「有事了」的訊號 + 「我放到 N 號了」的公告</b>(寫進去的值就是你的新 tail)。device 聽到鈴,把 <code>head..doorbell</code> 之間的單子整批吃掉。</p>
+
+    <h2>5. barrier:兩條郵路,先貨後鈴</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 880 300" width="880" height="300" role="img" aria-label="正確順序與亂序反例的雙時序圖">
+      <!-- good -->
+      <text x="20" y="24" fill="#a9b665">✓ 有牆:slot_write → barrier → doorbell</text>
+      <line x1="20" y1="40" x2="860" y2="40" stroke="#45403d"/>
+      <rect x="30"  y="52" width="150" height="30" rx="6" fill="#32302f" stroke="#89b482"/>
+      <text x="105" y="71" text-anchor="middle" fill="#89b482" font-size="10">① 寫 slot(走 cache 路)</text>
+      <rect x="200" y="52" width="180" height="30" rx="6" fill="#3c3836" stroke="#d8a657" stroke-width="1.5"/>
+      <text x="290" y="71" text-anchor="middle" fill="#d8a657" font-size="10">② barrier():等①真的落地</text>
+      <rect x="400" y="52" width="150" height="30" rx="6" fill="#32302f" stroke="#e78a4e"/>
+      <text x="475" y="71" text-anchor="middle" fill="#e78a4e" font-size="10">③ 寫 Doorbell(直達路)</text>
+      <rect x="600" y="52" width="230" height="30" rx="6" fill="#32302f" stroke="#7daea3"/>
+      <text x="715" y="71" text-anchor="middle" fill="#7daea3" font-size="10">device:聽到鈴 → 讀 slot → 完整工單 ✓</text>
+      <!-- bad -->
+      <text x="20" y="130" fill="#ea6962">✗ 沒牆:兩條郵路各走各的,鈴聲先到</text>
+      <line x1="20" y1="146" x2="860" y2="146" stroke="#45403d"/>
+      <rect x="30" y="158" width="150" height="30" rx="6" fill="#32302f" stroke="#89b482"/>
+      <text x="105" y="177" text-anchor="middle" fill="#89b482" font-size="10">① 寫 slot …排隊中</text>
+      <rect x="200" y="158" width="150" height="30" rx="6" fill="#32302f" stroke="#e78a4e"/>
+      <text x="275" y="177" text-anchor="middle" fill="#e78a4e" font-size="10">② 寫 Doorbell(直達!)</text>
+      <rect x="400" y="158" width="230" height="30" rx="6" fill="#3c3836" stroke="#ea6962" stroke-width="1.5"/>
+      <text x="515" y="177" text-anchor="middle" fill="#ea6962" font-size="10">device:聽到鈴 → 讀 slot → 半張工單 💥</text>
+      <rect x="660" y="158" width="170" height="30" rx="6" fill="#32302f" stroke="#89b482"/>
+      <text x="745" y="177" text-anchor="middle" class="dim" font-size="10">①的資料現在才到(太遲)</text>
+      <text x="440" y="230" text-anchor="middle" class="em">你的程式碼順序是 ①→②,但抵達順序是 ②→①——對你自己永遠看不出差別,</text>
+      <text x="440" y="250" text-anchor="middle" class="em">因為 CPU 保證「你自己讀自己」的一致;device 是另一個觀察者,它只看抵達順序。</text>
+      <text x="440" y="282" text-anchor="middle" class="dim">barrier() 的合約:「我之前的所有寫入,先讓所有觀察者看得見,才准放行之後的寫入」= store-release 的硬體版</text>
+    </svg>
+    </div>
+    <div class="callout">
+      <span class="lbl">你早就會這個定理</span>
+      <b>先值後訊號</b>,第四次現身:fanin 的 push→wake、waker 的 set-result→wake、spin_lock 解鎖的 Release、這裡的 descriptor→barrier→doorbell。四個皮,一個瓤。唯一的新知識:對面是矽,Rust 的 <code>Ordering</code> 管不到它,所以要顯式柵欄(真驅動用 <code>wmb()</code>/<code>dma_wmb()</code>)。
+    </div>
+    <div class="quiz" id="quiz-bell">
+      <p><b>預測題:</b>為什麼收 completion 那側的鐵律是「先讀 CompTail、再碰牌子以前的 slot」,而不是反過來?</p>
+      <button data-q="b" data-c="1">同一條定理的 acquire 方向:先拿訊號,才准信任訊號指到的資料</button>
+      <button data-q="b" data-c="0">因為 CompTail 比 slot 便宜,先讀省時間</button>
+      <button data-q="b" data-c="0">順序無所謂,反正 device 已經寫完了</button>
+      <div class="fb"></div>
+    </div>
+    <div class="navrow"><button data-jump="ring">◀ ring 與工單</button><button data-jump="dma">搬運工與電話 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: dma ============ -->
+<div class="tab" id="tab-dma"><div class="wrap">
+  <h1>搬運工與電話 — DMA engine 和 IRQ/ISR</h1>
+  <p class="sub">sim i/m 的主角(搬運工)和 sim j 的主角(插隊電話)。</p>
+
+  <section>
+    <h2>6. DMA engine:會自己動的搬運工</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 880 210" width="880" height="210" role="img" aria-label="DMA 搬運工圖">
+      <rect x="20" y="30" width="180" height="60" rx="8" fill="#32302f" stroke="#89b482" stroke-width="1.5"/>
+      <text x="110" y="55" text-anchor="middle" fill="#89b482">CPU(你)</text>
+      <text x="110" y="75" text-anchor="middle" class="dim" font-size="10">發工單:「從 X 搬 N 個 block」</text>
+      <g stroke="#928374" fill="none"><line x1="200" y1="60" x2="290" y2="60"/></g>
+      <text x="245" y="52" text-anchor="middle" class="dim" font-size="10">派工</text>
+      <rect x="290" y="30" width="200" height="60" rx="8" fill="#32302f" stroke="#e78a4e" stroke-width="1.5"/>
+      <text x="390" y="55" text-anchor="middle" fill="#e78a4e">DMA engine ×6</text>
+      <text x="390" y="75" text-anchor="middle" class="dim" font-size="10">不經過 CPU,自己搬</text>
+      <g stroke="#928374" fill="none">
+        <line x1="490" y1="45" x2="580" y2="45"/>
+        <line x1="580" y1="75" x2="490" y2="75"/>
+      </g>
+      <text x="535" y="37" text-anchor="middle" class="dim" font-size="10">搬資料</text>
+      <text x="535" y="93" text-anchor="middle" class="dim" font-size="10">done(只報工號!)</text>
+      <rect x="580" y="30" width="280" height="60" rx="8" fill="#32302f" stroke="#d3869b"/>
+      <text x="720" y="55" text-anchor="middle" fill="#d3869b">記憶體 / 匯流排彼端</text>
+      <text x="720" y="75" text-anchor="middle" class="dim" font-size="10">CPU 這段時間去做正事</text>
+      <text x="440" y="135" text-anchor="middle" class="em">殘酷面:done 訊號只告訴你「幾號搬運工完工」,不附工單——</text>
+      <text x="440" y="155" text-anchor="middle" class="em">誰派給它什麼,你自己的綁定表要記得(owner[engine] = (request, block))。</text>
+      <text x="440" y="185" text-anchor="middle" class="dim">sim i 的 owner 表、sim m 的整套 watchdog(deadline 與 owner 同居),全長在這件事上。</text>
+    </svg>
+    </div>
+    <p><b>為什麼存在</b>:沒有它,CPU 要一個 byte 一個 byte 端盤子,什麼正事都別做了。你付出的代價是<b>非同步</b>:派工和完工之間隔著未知的時間,而完工通知資訊量極少——於是「記帳」成了 driver 的主要工作,這正是 sim i/m 整個題系的考點。</p>
+
+    <h2>7. IRQ / ISR:插隊電話</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 880 190" width="880" height="190" role="img" aria-label="IRQ 打斷 CPU 的時間線">
+      <text x="20" y="24" class="dim">某顆 CPU 核的時間線:</text>
+      <rect x="20"  y="40" width="260" height="36" rx="6" fill="#32302f" stroke="#89b482"/>
+      <text x="150" y="62" text-anchor="middle" fill="#89b482" font-size="11">正常工作(跑某個程式)</text>
+      <rect x="290" y="40" width="220" height="36" rx="6" fill="#3c3836" stroke="#e78a4e" stroke-width="1.5"/>
+      <text x="400" y="55" text-anchor="middle" fill="#e78a4e" font-size="11">ISR(劫持這顆核!)</text>
+      <text x="400" y="70" text-anchor="middle" class="dim" font-size="9">read_fifo → try_push → wake,越短越好</text>
+      <rect x="520" y="40" width="340" height="36" rx="6" fill="#32302f" stroke="#89b482"/>
+      <text x="690" y="62" text-anchor="middle" fill="#89b482" font-size="11">恢復剛剛的工作(它毫不知情)</text>
+      <g stroke="#ea6962" fill="none"><line x1="290" y1="110" x2="290" y2="80"/></g>
+      <text x="290" y="130" text-anchor="middle" fill="#ea6962">⚡IRQ:device 打來的插隊電話</text>
+      <text x="440" y="165" text-anchor="middle" class="em">ISR 不是執行緒——它是「劫持了某顆核的當下」。所以三禁:不配置記憶體、不阻塞、不做慢事。</text>
+    </svg>
+    </div>
+    <div class="callout info">
+      <span class="lbl">IRQ vs polling(面試常考的對照)</span>
+      polling = 你一直打去問「好了沒」(浪費 CPU,但延遲穩定);IRQ = 它好了打給你(省 CPU,但高負載時電話響不停,接電話本身淹死你)。真實系統混用:低負載走 IRQ、高負載切 polling(網卡的 NAPI)。sim j 的「ISR 只准搬進 ring、慢活給 worker」= top-half/bottom-half,就是把「接電話」壓到最短的紀律。
+    </div>
+    <div class="navrow"><button data-jump="bell">◀ 門鈴與牆</button><button data-jump="dog">看門狗與總表 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: dog ============ -->
+<div class="tab" id="tab-dog"><div class="wrap">
+  <h1>看門狗與總表</h1>
+  <p class="sub">最後一顆積木,然後一張表把 sim i–o 全部對上。</p>
+
+  <section>
+    <h2>8. watchdog / timeout:當硬體沉默</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 880 170" width="880" height="170" role="img" aria-label="正常完成與超時的對照時間線">
+      <text x="20" y="24" class="dim">派工後的兩種未來:</text>
+      <line x1="60" y1="60" x2="820" y2="60" stroke="#45403d"/>
+      <circle cx="80" cy="60" r="5" fill="#89b482"/>
+      <text x="80" y="46" text-anchor="middle" font-size="10">派工 t=0</text>
+      <circle cx="280" cy="60" r="5" fill="#a9b665"/>
+      <text x="280" y="46" text-anchor="middle" fill="#a9b665" font-size="10">done ~10ms ✓</text>
+      <circle cx="680" cy="60" r="6" fill="#ea6962"/>
+      <text x="680" y="46" text-anchor="middle" fill="#ea6962" font-size="10">deadline 30ms:還沒回來</text>
+      <text x="680" y="86" text-anchor="middle" class="dim" font-size="10">= 死了?還是只是慢?</text>
+      <text x="440" y="120" text-anchor="middle" class="em">「慢」和「死」從軟體內部無法區分——沒有 fence/reset 就只能 bound risk,不能 eliminate。</text>
+      <text x="440" y="145" text-anchor="middle" class="dim">timeout 是下注,賭注對著誤判成本選(重派 non-idempotent 操作很貴 → 往保守押,3× 正常時長起跳)</text>
+    </svg>
+    </div>
+    <p>硬體會壞,而且<b>壞的時候通常一聲不吭</b>——沒有 exception、沒有 error code。你唯一的觀察手段是時間:deadline 是事件迴圈的<b>第三種事件</b>(前兩種「新請求」「完成」是別人推給你的,這種是你自己排的)。完整設計課在 <code>watchdog-deadline-design</code> 頁(deadline 與 owner 同居、殭屍=生存證明)。</p>
+  </section>
+
+  <section>
+    <h2>9. 總表:每題用到哪些積木</h2>
+    <div class="tblwrap"><table>
+      <tr><th>題</th><th>積木</th><th>一句話</th></tr>
+      <tr><td>sim i(DMA dispatcher)</td><td>DMA engine ×6、綁定表</td><td>派工單給搬運工;done 只報工號,帳自己記</td></tr>
+      <tr><td>sim j(ISR pipeline)</td><td>HW FIFO、IRQ/ISR、SPSC ring</td><td>插隊電話裡只准搬進 ring,慢活交給樓下</td></tr>
+      <tr><td>sim k(fan-in)</td><td>SPSC ring ×N(純軟體)</td><td>硬體零件最少的一題:N 個生產者、一個收銀台</td></tr>
+      <tr><td>sim l(MMIO cmdq)</td><td>MMIO 暫存器、雙 ring、doorbell、barrier</td><td>零件全家福:上架→牆→按鈴;反向先看牌再拿貨</td></tr>
+      <tr><td>sim m(watchdog)</td><td>DMA engine + 時鐘</td><td>i 的世界加一個事實:搬運工會無聲失蹤</td></tr>
+      <tr><td>sim n(scheduler)</td><td>(無硬體)worker slots</td><td>純軟體排程:兩道閘,先依賴後優先權</td></tr>
+      <tr><td>sim o(boot planner)</td><td>(無硬體)依賴 DAG</td><td>演算法穿硬體皮:開機前的靜態分析(Kahn 波次+關鍵路徑)</td></tr>
+    </table></div>
+    <div class="quiz" id="quiz-final">
+      <p><b>收尾預測題:</b>done 事件「只帶 engine id、不帶工單內容」,和 completion entry「自帶 tag」,是兩種不同的硬體介面設計。哪一種逼你在 driver 裡維護綁定表?</p>
+      <button data-q="f" data-c="1">只帶 engine id 的(sim i/m)——資訊不足,帳要自己記;自帶 tag 的(sim l)訊息自己認路</button>
+      <button data-q="f" data-c="0">自帶 tag 的——tag 要查表翻譯</button>
+      <button data-q="f" data-c="0">兩種都要,綁定表是硬體題標配</button>
+      <div class="fb"></div>
+    </div>
+    <div class="callout good">
+      <span class="lbl">帶走的一句</span>
+      硬體題的難度幾乎都不在演算法,在<b>「通知的資訊量」和「你的帳」之間的差距</b>:通知越貧瘠(只報工號、只響一聲鈴),你的 state 表就越重要。clarify 的第一要務就是量出這個差距——「When X notifies me, what exactly does it carry?」
+    </div>
+    <div class="callout">
+      <span class="lbl">鄰頁</span>
+      作戰本速查版:<code>html_p/r2-onsite-visual-guide.html</code>(積木圖鑑節)· watchdog 設計課:<code>html_p/watchdog-deadline-design.html</code> · fan-in 協定:<code>html_p/fanin-aggregator-bitmask.html</code> · MMIO 教學模組:<code>reference/src/io/mmio_cmdq.rs</code>
+    </div>
+    <div class="navrow"><button data-jump="dma">◀ 搬運工與電話</button><span></span></div>
+  </section>
+</div></div>
+
+<script>
+"use strict";
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const btn = tabbar.querySelector('button[data-tab="' + j.dataset.jump + '"]');
+  if (btn) btn.click();
+});
+const FB = {
+  b: { ok:'✓ 對稱律的另一半:producer 先值後訊號(release),consumer 先訊號後值(acquire)。CompTail 是 device 的「我寫到這了」公告——沒先讀它就去碰 slot,你可能讀到它寫一半的成品,跟沒牆的 doorbell 是同一種事故的鏡像。',
+       no:'✗ 這不是效能或禮貌問題,是正確性:訊號(CompTail)是資料(slot 內容)的發佈邊界。順序反了 = 在對方公告之前偷看,可能讀到半成品。' },
+  f: { ok:'✓ 通知資訊量決定帳的重量:done 只報工號 → 你必須記 owner[engine]=(req, block) 才能路由;completion 自帶 tag → 訊息自己認路,driver 幾乎不用記派工帳(sol_sim_l 連 in-flight 表都不用)。',
+       no:'✗ 反了/太寬。tag 自帶身分,不用翻譯就能路由;真正逼你記帳的是「貧瘠通知」——只報工號的 done。' },
+};
+document.querySelectorAll('.quiz button[data-q]').forEach(b => {
+  b.addEventListener('click', () => {
+    const fb = b.parentElement.querySelector('.fb');
+    const ok = b.dataset.c === '1';
+    const m = FB[b.dataset.q];
+    fb.style.display = 'block';
+    fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+    fb.innerHTML = ok ? m.ok : m.no;
+  });
+});
+</script>
+</body>
+</html>

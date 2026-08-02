@@ -105,3 +105,23 @@ fn mmio_read(reg: Reg) -> u64;
 **Context.** Extend the R1 DMA dispatcher: engines occasionally hang and never report done. Requests must still complete. Implement timeout handling.
 
 **Provided API:** R1 的六個 API + `fn now() -> u64;`(`wait_event()` 改為 `wait_event_timeout(ms)`)
+
+## Card AG-R — Interconnect route planner(algo 系)
+
+**Context.** A rack's accelerators are wired through switches — a weighted graph. Each link has a bandwidth (GB/s). Plan a route for a large tensor transfer from chip `a` to chip `b`: the route's usable bandwidth is the **minimum** link bandwidth along the path. Implement `route(a, b) -> Vec<NodeId>`.
+
+**Provided API:**
+```rust
+fn neighbors(node: u32) -> &[(u32, u64)];   // (peer, bandwidth_gbps)
+```
+
+## Card AG-T — Telemetry aggregation tree(algo 系)
+
+**Context.** Sensors report into leaf collectors; collectors forward up a tree to the root. Every collector has a max fan-in `F`. Collector `d` just died. Re-home its children (whole subtrees, do not split them) onto surviving collectors without exceeding any fan-in. Implement `rehome(dead) -> Vec<(child, new_parent)>`.
+
+**Provided API:**
+```rust
+fn children(c: u32) -> &[u32];
+fn parent(c: u32) -> Option<u32>;
+fn fan_in(c: u32) -> usize;      // current, < F means slack
+```
