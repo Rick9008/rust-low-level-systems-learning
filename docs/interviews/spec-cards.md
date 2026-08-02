@@ -4,7 +4,7 @@ R1 題型的 15–20m 縮版,練「長英文 spec → clarify → state 表」�
 
 **流程(每張)**:讀 Context(spec 故意有洞)→ 寫下你要問的 **≥3 個 clarify 問題** → **30 秒英文定界出聲** → 紙上畫 **state 表**(誰持有什麼 state、事件怎麼路由)→ 開 [spec-cards-answers.md](spec-cards-answers.md) 對答案。⚠ 沒講完不准開答案鍵。
 
-對應肌肉:SP=signal_pipeline|FP=c(framer)|FR=e2(fd_registry)|TA=f(aggregator)|TQ=h(timer)|HW-L=l|HW-M=m。
+對應肌肉:SP=signal_pipeline|FP=c(framer)|FR=e2(fd_registry)|TA=f(aggregator)|TQ=h(timer)|HW-L=l|HW-M=m|AG-R=`ds/route_planner`、AG-T=`ds/aggregation_tree`(8/3 凌晨增:兩卡兼 drill 前導,教材=algo-hardware-skin 頁 🛤️)。
 
 ---
 

@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>演算法穿硬體皮 — boot planner × widest path × 聚合樹修復 · Stepper Handbook</title>
+<style>
+  :root{
+    --bg0:#282828; --bg1:#32302f; --bg2:#3c3836; --bg3:#45403d; --bg4:#504945;
+    --fg:#d4be98; --fg-dim:#bdae93; --gray:#928374;
+    --red:#ea6962; --green:#a9b665; --yellow:#d8a657; --blue:#7daea3;
+    --purple:#d3869b; --aqua:#89b482; --orange:#e78a4e;
+    --mono:'JetBrains Mono','DejaVu Sans Mono',Consolas,monospace;
+    --cjk:'Noto Sans CJK TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{-webkit-text-size-adjust:100%;background:var(--bg0)}
+  body{margin:0;color:var(--fg);font-family:var(--cjk);line-height:1.65;padding:0 0 60px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
+
+  .tabbar{position:sticky;top:0;z-index:10;background:var(--bg1);
+    border-bottom:1px solid var(--bg3);display:flex;flex-wrap:wrap;gap:2px;padding:8px 12px}
+  .tabbar button{background:transparent;border:1px solid transparent;color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.85rem;padding:6px 12px;border-radius:8px;cursor:pointer}
+  .tabbar button.active{background:var(--bg3);color:var(--yellow);border-color:var(--bg4)}
+  .tabbar button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+  .tab{display:none}
+  .tab.active{display:block}
+
+  h1{font-size:1.35rem;margin:22px 0 4px;color:var(--yellow);text-wrap:balance}
+  h2{font-size:1.05rem;margin:20px 0 8px;color:var(--blue)}
+  h3{font-size:.94rem;margin:16px 0 6px;color:var(--aqua)}
+  .sub{color:var(--gray);font-size:.88rem;margin-bottom:18px}
+
+  section{background:var(--bg1);border:1px solid var(--bg3);border-radius:12px;
+    padding:16px 20px;margin:14px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg2);
+    padding:1px 5px;border-radius:5px;color:var(--aqua)}
+  pre{background:var(--bg1);border:1px solid var(--bg3);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.55}
+  pre .c{color:var(--gray)} pre .k{color:var(--red)} pre .t{color:var(--blue)}
+  pre .s{color:var(--green)} pre .n{color:var(--purple)}
+
+  .callout{border-left:3px solid var(--yellow);padding:10px 14px;
+    background:var(--bg2);border-radius:0 8px 8px 0;margin:12px 0;font-size:.9rem}
+  .callout.bad{border-color:var(--red)} .callout.good{border-color:var(--green)}
+  .callout.info{border-color:var(--blue)}
+  .lbl{display:block;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gray);margin-bottom:4px}
+  .key{color:var(--orange);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bg3);vertical-align:top}
+  th{color:var(--fg-dim);font-weight:600}
+  td.ok{color:var(--green)} td.no{color:var(--red)}
+  .tblwrap{overflow-x:auto}
+
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 12px;border-radius:8px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .ctrl button.mode{border-color:var(--blue);color:var(--blue)}
+  .stepper .ctrl button.mode.on{background:var(--blue);color:var(--bg0);font-weight:700}
+  .stepper .ctrl .stepcount{color:var(--gray);font-size:.8rem;font-family:var(--mono)}
+  .stepper .stage{min-height:150px}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+
+  .board{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:.8rem}
+  .lane{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lane .who{width:96px;flex:none;color:var(--fg-dim);font-size:.76rem;text-align:right}
+  .box{border:1px solid var(--bg4);background:var(--bg1);border-radius:6px;
+    padding:2px 8px;min-width:34px;text-align:center}
+  .box.hot{border-color:var(--orange);color:var(--orange)}
+  .box.dead{border-color:var(--red);color:var(--red);font-weight:700}
+  .box.okk{border-color:var(--green);color:var(--green)}
+  .box.dim{color:var(--gray)}
+  .box.cur{border-color:var(--yellow);color:var(--yellow);font-weight:700}
+  .act{color:var(--purple)}
+
+  .quiz{border:1px dashed var(--purple);border-radius:9px;padding:10px 12px;margin-top:10px}
+  .quiz p{margin:0 0 8px;font-size:.88rem}
+  .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 10px;border-radius:8px;
+    cursor:pointer;margin:0 6px 6px 0}
+  .quiz .fb{display:none;font-size:.86rem;margin-top:4px}
+
+  .navrow{display:flex;justify-content:space-between;margin:18px 0 6px}
+  .navrow button{background:var(--bg2);border:1px solid var(--bg4);color:var(--fg-dim);
+    font-family:var(--cjk);font-size:.84rem;padding:6px 14px;border-radius:8px;cursor:pointer}
+  .navrow button:hover{color:var(--yellow)}
+
+  svg text{font-family:var(--mono);font-size:11px;fill:var(--fg)}
+  svg .dim{fill:var(--gray)}
+  .figwrap{overflow-x:auto;margin:10px 0}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+
+<div class="tabbar" id="tabbar">
+  <button data-tab="over" class="active">總綱</button>
+  <button data-tab="boot">boot planner(o)</button>
+  <button data-tab="wide">widest path(AG-R)</button>
+  <button data-tab="tree">聚合樹修復(AG-T)</button>
+  <button data-tab="recap">句庫與判準</button>
+</div>
+
+<!-- ============ TAB: over ============ -->
+<div class="tab active" id="tab-over"><div class="wrap">
+  <h1>演算法穿硬體皮 — algo 系三題</h1>
+  <p class="sub">8/2 深夜開張的 algo 系(sim o + 認題卡 AG-R/AG-T)配套教材。Etched PDF 明講不考 LeetCode 腦筋急轉彎,但要求 Big-O 直覺與 systems-level 資料結構——結論:<b>題面是 rack/interconnect/telemetry,骨頭是 graph/tree</b>。這頁教你認骨。</p>
+
+  <section>
+    <h2>三題一張表:皮 → 骨 → 45 分鐘契約</h2>
+    <div class="tblwrap"><table>
+      <tr><th>題</th><th>皮(硬體場景)</th><th>骨(演算法)</th><th>45 分鐘做到哪</th></tr>
+      <tr><td><b>sim o</b> boot planner</td><td>Zero-Touch provisioning:誰先開機、開多久、壞一台影響誰</td><td>Kahn 波次分層 + DAG 最長路徑 DP + 環回報 + 前向可達</td><td>全部——一趟 Kahn 做三件事,O(V+E)</td></tr>
+      <tr><td><b>AG-R</b> route planner</td><td>NVLink/PCIe fabric 選路,路的頻寬 = 沿途最小 link</td><td><b>widest path</b>:Dijkstra 兩處變形(+ → min、min-heap → max-heap)</td><td>全部;多傳輸容量預留聲明成 flow 題不做</td></tr>
+      <tr><td><b>AG-T</b> aggregation tree</td><td>telemetry 聚合樹,collector 死了孤兒子樹要安置</td><td>樹遍歷 + slack 記帳 + greedy(淺優先、大子樹先)</td><td>greedy 全部;最優解聲明 bin-packing 不做</td></tr>
+    </table></div>
+    <div class="callout">
+      <span class="lbl">認題訊號表(讀 spec 時掃這些詞)</span>
+      "must be fully up <b>before</b>" → 依賴 DAG、topo|"the <b>minimum</b> along the path" → widest path(不是最短路!)|"max <b>fan-in</b>" / "without exceeding" → 容量樹|"which nodes can no longer…" → 可達性 BFS|"report <b>which</b> machines are waiting on each other" → 環要抓出環員,不是回 bool。
+    </div>
+    <div class="callout good">
+      <span class="lbl">與 sim n 的關係</span>
+      sim n(scheduler)考「執行時」的 DAG——indegree 是入場閘,邊跑邊解鎖;sim o 考「執行前」的 DAG——整張圖靜態分析。<b>同一張圖,兩個時態</b>;n 的 Kahn 肌肉在 o 直接複用,再加最長路徑 DP 一層。
+    </div>
+    <div class="navrow"><span></span><button data-jump="boot">boot planner ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: boot ============ -->
+<div class="tab" id="tab-boot"><div class="wrap">
+  <h1>boot planner — 一趟 Kahn 做三件事</h1>
+  <p class="sub">drill:<code>drills/src/ds/boot_planner.rs</code>(8/3 開機槽)。波次分層、最長路徑 DP、環偵測,全在同一個迴圈裡。</p>
+
+  <section>
+    <h2>題目的圖(stepper 用同一張)</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 620 150" width="620" height="150" role="img" aria-label="菱形依賴圖">
+      <g stroke="#928374" fill="none">
+        <line x1="110" y1="75" x2="240" y2="35"/><line x1="110" y1="75" x2="240" y2="115"/>
+        <line x1="360" y1="35" x2="490" y2="75"/><line x1="360" y1="115" x2="490" y2="75"/>
+      </g>
+      <rect x="40" y="55" width="70" height="40" rx="8" fill="#32302f" stroke="#89b482"/>
+      <text x="75" y="72" text-anchor="middle">n0</text><text x="75" y="88" text-anchor="middle" class="dim">5ms</text>
+      <rect x="240" y="15" width="120" height="40" rx="8" fill="#32302f" stroke="#7daea3"/>
+      <text x="300" y="32" text-anchor="middle">n1(BMC)</text><text x="300" y="48" text-anchor="middle" class="dim">10ms</text>
+      <rect x="240" y="95" width="120" height="40" rx="8" fill="#32302f" stroke="#7daea3"/>
+      <text x="300" y="112" text-anchor="middle">n2(storage)</text><text x="300" y="128" text-anchor="middle" class="dim">20ms</text>
+      <rect x="490" y="55" width="110" height="40" rx="8" fill="#32302f" stroke="#d3869b"/>
+      <text x="545" y="72" text-anchor="middle">n3(sched)</text><text x="545" y="88" text-anchor="middle" class="dim">1ms</text>
+      <text x="175" y="40" class="dim">0→1</text><text x="175" y="120" class="dim">0→2</text>
+      <text x="430" y="40" class="dim">1→3</text><text x="430" y="120" class="dim">2→3</text>
+    </svg>
+    </div>
+    <p>「a 必須先開完,b 才能開始」= 有向邊 a→b。要回答三個運維問題:<b>哪些可以同時開</b>(波次)、<b>整機最快幾 ms 全亮</b>(makespan)、<b>催哪條鏈最有效</b>(關鍵路徑)。</p>
+  </section>
+
+  <section>
+    <h2>Stepper:正常模式(波次+DP)⇄ 有環模式(pred-walk 抓環)</h2>
+  </section>
+  <div class="stepper" id="st-boot">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <button class="mode on" data-m="ok">DAG(正常)</button>
+      <button class="mode" data-m="cyc">有環(抓環員)</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">金句(面試講出來就是分)</span>
+      <b>「一般圖的最長路徑是 NP-hard,DAG 上是 P——因為無環,沿 topo 序每個節點定案後就不會再變,DP 一遍就對。」</b>這句話同時解釋了你為什麼敢做、以及為什麼要先跑拓撲。
+    </div>
+    <div class="callout info">
+      <span class="lbl">環回報:為什麼 pred-walk 一定找得到</span>
+      Kahn 收不完 ⇒ 殘餘節點的 indeg 都 &gt; 0 ⇒ <b>每個殘餘節點都至少有一個殘餘前驅</b>(已處理的前驅早就把它的 indeg 減掉了)。沿前驅走,有限節點必重訪,重訪點就在環上。比 DFS 三色標記少一整套狀態機。
+    </div>
+    <div class="navrow"><button data-jump="over">◀ 總綱</button><button data-jump="wide">widest path ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: wide ============ -->
+<div class="tab" id="tab-wide"><div class="wrap">
+  <h1>widest path — Dijkstra 的鏡像雙胞胎</h1>
+  <p class="sub">drill:<code>drills/src/ds/route_planner.rs</code>。認題關鍵在題面那句 "the <b>minimum</b> link bandwidth along the path"——這不是最短路。</p>
+
+  <section>
+    <h2>反例圖(短窄 vs 長寬)</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 620 160" width="620" height="160" role="img" aria-label="widest path 反例:短窄路 vs 長寬路">
+      <g stroke="#ea6962" fill="none" stroke-width="1.5">
+        <line x1="110" y1="70" x2="240" y2="35"/><line x1="360" y1="35" x2="490" y2="70"/>
+      </g>
+      <g stroke="#a9b665" fill="none" stroke-width="2.5">
+        <line x1="110" y1="90" x2="240" y2="125"/><line x1="360" y1="125" x2="490" y2="90"/>
+      </g>
+      <rect x="40" y="60" width="70" height="40" rx="8" fill="#32302f" stroke="#d8a657"/>
+      <text x="75" y="85" text-anchor="middle">GPU a</text>
+      <rect x="240" y="15" width="120" height="40" rx="8" fill="#32302f" stroke="#ea6962"/>
+      <text x="300" y="40" text-anchor="middle">switch 1</text>
+      <rect x="240" y="105" width="120" height="40" rx="8" fill="#32302f" stroke="#a9b665"/>
+      <text x="300" y="130" text-anchor="middle">switch 2</text>
+      <rect x="490" y="60" width="90" height="40" rx="8" fill="#32302f" stroke="#d8a657"/>
+      <text x="535" y="85" text-anchor="middle">GPU b</text>
+      <text x="165" y="38" fill="#ea6962">bw 2</text><text x="435" y="38" fill="#ea6962">bw 9</text>
+      <text x="165" y="130" fill="#a9b665">bw 7</text><text x="435" y="130" fill="#a9b665">bw 5</text>
+      <text x="310" y="78" text-anchor="middle" class="dim">上路瓶頸 = min(2,9) = 2|下路瓶頸 = min(7,5) = 5 ✓</text>
+    </svg>
+    </div>
+    <div class="tblwrap"><table>
+      <tr><th></th><th>最短路(Dijkstra)</th><th>widest path(本題)</th></tr>
+      <tr><td>優化目標</td><td>路徑<b>和</b>最小</td><td>路徑<b>最小值</b>最大</td></tr>
+      <tr><td>鬆弛</td><td><code>cand = dist[u] + w</code></td><td><code class="key">cand = min(bott[u], w)</code></td></tr>
+      <tr><td>堆</td><td>min-heap(<code>Reverse</code>)</td><td><b class="key">max-heap(std 原生,不包 Reverse)</b></td></tr>
+      <tr><td>貪婪為什麼成立</td><td>距離沿路徑單調不減</td><td>瓶頸沿路徑單調不增(min 只會變小)</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Stepper:兩處變形逐幀走</h2>
+  </section>
+  <div class="stepper" id="st-wide">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">帶走的一句</span>
+      "This is widest path, not shortest — same Dijkstra skeleton, two swaps: <b>min instead of plus, max-heap instead of min-heap</b>. The greedy argument survives because the bottleneck is monotone non-increasing as a path grows." 講完這句,實作只是抄你自己 repo 的 Dijkstra 改兩行。
+    </div>
+    <div class="navrow"><button data-jump="boot">◀ boot planner</button><button data-jump="tree">聚合樹修復 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: tree ============ -->
+<div class="tab" id="tab-tree"><div class="wrap">
+  <h1>聚合樹修復 — 孤兒是整棵子樹</h1>
+  <p class="sub">drill:<code>drills/src/ds/aggregation_tree.rs</code>。目標函數 spec 故意沉默——「最小化什麼」是必問的 clarify。</p>
+
+  <section>
+    <h2>場景圖(stepper 用同一棵)</h2>
+    <div class="figwrap">
+    <svg viewBox="0 0 620 190" width="620" height="190" role="img" aria-label="聚合樹與死亡的 collector">
+      <g stroke="#928374" fill="none">
+        <line x1="310" y1="45" x2="180" y2="80"/><line x1="310" y1="45" x2="440" y2="80"/>
+        <line x1="180" y1="115" x2="110" y2="145"/><line x1="180" y1="115" x2="250" y2="145"/>
+        <line x1="110" y1="178" x2="80" y2="178"/>
+      </g>
+      <rect x="260" y="15" width="100" height="34" rx="8" fill="#32302f" stroke="#d8a657"/>
+      <text x="310" y="37" text-anchor="middle">0(root)</text>
+      <rect x="130" y="82" width="100" height="34" rx="8" fill="#3c3836" stroke="#ea6962" stroke-width="1.8"/>
+      <text x="180" y="104" text-anchor="middle" fill="#ea6962">1 ☠ dead</text>
+      <rect x="390" y="82" width="100" height="34" rx="8" fill="#32302f" stroke="#89b482"/>
+      <text x="440" y="104" text-anchor="middle">2(有 slack)</text>
+      <rect x="60" y="145" width="100" height="34" rx="8" fill="#32302f" stroke="#d3869b"/>
+      <text x="110" y="167" text-anchor="middle">3(子樹 ×3)</text>
+      <rect x="200" y="145" width="100" height="34" rx="8" fill="#32302f" stroke="#d3869b"/>
+      <text x="250" y="167" text-anchor="middle">4(葉)</text>
+      <text x="310" y="186" text-anchor="middle" class="dim">F = 2;孤兒 = {3 的整棵子樹, 4}——子樹內部結構不動,只選新 parent</text>
+    </svg>
+    </div>
+    <div class="callout bad">
+      <span class="lbl">兩個藏起來的陷阱</span>
+      ① 安置目標<b>不得在孤兒子樹內部</b>——把 3 掛到自己的子孫底下 = 環,樹解體。排除整片孤兒區最乾淨。② <b>dead 的 parent 因為 dead 離隊,自動多出一格 slack</b>——把 dead 和孤兒區一起標 banned 再數「未 banned 孩子」,這格不用特判就自己浮出來。
+    </div>
+  </section>
+
+  <section>
+    <h2>Stepper:slack 掃描 → 大子樹先入座</h2>
+  </section>
+  <div class="stepper" id="st-tree">
+    <div class="ctrl">
+      <button data-a="prev">◀ prev</button>
+      <button data-a="next">next ▶</button>
+      <button data-a="reset">reset</button>
+      <span class="stepcount"></span>
+    </div>
+    <div class="stage"></div>
+    <div class="narr"></div>
+  </div>
+
+  <section>
+    <div class="callout good">
+      <span class="lbl">收尾句(trade-off 三拍)</span>
+      "Shallow-first placement bounds depth growth — good for aggregation latency — but can concentrate load; balance-first spreads load but deepens paths. Optimal placement is bin-packing-flavored, so in 45 minutes I take the greedy and state the bound."
+    </div>
+    <div class="navrow"><button data-jump="wide">◀ widest path</button><button data-jump="recap">句庫與判準 ▶</button></div>
+  </section>
+</div></div>
+
+<!-- ============ TAB: recap ============ -->
+<div class="tab" id="tab-recap"><div class="wrap">
+  <h1>句庫與判準</h1>
+  <p class="sub">algo 穿皮題的英文定界句 + Big-O 表 + 判準速查。</p>
+
+  <section>
+    <h2>30 秒英文定界(每題一句)</h2>
+    <div class="tblwrap"><table>
+      <tr><th>題</th><th>句子</th></tr>
+      <tr><td>boot planner</td><td>"This is a DAG problem in provisioning clothes: Kahn's toposort gives me the waves for free, the longest path — which is polynomial exactly because the graph is acyclic — gives the makespan and critical path, and if Kahn can't finish, the leftover nodes contain the cycle, which I extract by walking predecessors."</td></tr>
+      <tr><td>widest path</td><td>"The route's bandwidth is the minimum along the path, so this is widest path, not shortest: Dijkstra with min instead of plus, and a max-heap instead of a min-heap. Same greedy proof, mirrored."</td></tr>
+      <tr><td>tree rehome</td><td>"Orphans are whole subtrees, so I only choose new parents. I sweep the surviving tree shallow-first collecting slack — the dead node's parent frees one slot automatically — and place the largest subtree first. Optimal is bin-packing; I'll take the greedy and say why."</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Big-O 表(講得出來的那種)</h2>
+    <div class="tblwrap"><table>
+      <tr><th>題</th><th>時間</th><th>一句話理由</th></tr>
+      <tr><td>boot planner</td><td>O(V + E)(+每波排序)</td><td>每節點進出 frontier 一次、每邊鬆弛一次</td></tr>
+      <tr><td>widest path</td><td>O((V+E) log E)</td><td>懶刪除 ⇒ 堆內最多 E 條目,同你 repo 的 Dijkstra</td></tr>
+      <tr><td>tree rehome</td><td>O(V + k log k)</td><td>一趟 BFS 收位、k 個孤兒排序</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>判準速查</h2>
+    <div class="tblwrap"><table>
+      <tr><th>看到</th><th>想到</th></tr>
+      <tr><td>"before" 依賴語言</td><td>DAG + Kahn;「回報環員」比「偵測有環」多一步 pred-walk</td></tr>
+      <tr><td>"minimum along the path"</td><td>widest path,Dijkstra 鏡像;千萬別寫成最短路</td></tr>
+      <tr><td>"max fan-in" / 容量</td><td>slack 記帳 + greedy;最優 = bin-packing,聲明不做</td></tr>
+      <tr><td>"which nodes are affected"</td><td>前向/反向可達 BFS;方向想清楚(影響誰 vs 被誰影響)</td></tr>
+      <tr><td>波次/「可以同時」</td><td>Kahn frontier 整批 = 一波;波內排序=決定性輸出</td></tr>
+    </table></div>
+    <div class="callout">
+      <span class="lbl">鄰頁</span>
+      積木入門:<code>html_p/hw-blocks-primer.html</code> · 圖論四件套:<code>reference/src/ds/graph.rs</code> · 題本:<code>docs/interviews/sim-problems.md</code>(Sim o)· 認題卡:<code>docs/interviews/spec-cards.md</code>(AG-R/AG-T)
+    </div>
+    <div class="navrow"><button data-jump="tree">◀ 聚合樹修復</button><span></span></div>
+  </section>
+</div></div>
+
+<script>
+"use strict";
+
+/* ===== Tabs ===== */
+const tabbar = document.getElementById('tabbar');
+tabbar.addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  tabbar.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
+  window.scrollTo(0, 0);
+});
+document.addEventListener('click', e => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  const btn = tabbar.querySelector('button[data-tab="' + j.dataset.jump + '"]');
+  if (btn) btn.click();
+});
+
+/* ===== Stepper scaffold(同 watchdog/fanin 頁)===== */
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.cnt = this.root.querySelector('.stepcount');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else if (b.dataset.a === 'reset') this.go(0);
+    });
+    this.go(0);
+  }
+  setSteps(steps){ this.steps = steps; this.go(0); }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.innerHTML = '<b>[' + (this.idx+1) + '/' + this.steps.length + ']</b> ' + s.narr;
+    this.cnt.textContent = 'step ' + (this.idx+1) + ' / ' + this.steps.length;
+  }
+}
+function el(tag, cls, html){
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+function quiz(stage, question, opts){
+  const q = el('div','quiz');
+  q.appendChild(el('p', null, '<b>預測題:</b>' + question));
+  const fb = el('div','fb');
+  opts.forEach(o => {
+    const b = el('button', null, o.label);
+    b.addEventListener('click', () => {
+      fb.style.display = 'block';
+      fb.style.color = o.correct ? 'var(--green)' : 'var(--red)';
+      fb.innerHTML = (o.correct ? '✓ ' : '✗ ') + o.fb;
+    });
+    q.appendChild(b);
+  });
+  q.appendChild(fb);
+  stage.appendChild(q);
+}
+
+/* ===== boot stepper =====
+   st: nodes=[{id,ms,indeg,dist,par,state}], waves=[[..]], act, extra lane */
+function bootBoard(st){
+  const b = el('div','board');
+  const l0 = el('div','lane');
+  l0.appendChild(el('span','who','節點'));
+  st.nodes.forEach(nd => {
+    let cls = 'box';
+    if (nd.state === 'cur') cls += ' cur';
+    else if (nd.state === 'done') cls += ' okk';
+    else if (nd.state === 'stuck') cls += ' dead';
+    else cls += ' dim';
+    l0.appendChild(el('span', cls,
+      'n' + nd.id + ' <span class="dim">in=' + nd.indeg + ' d=' + nd.dist +
+      (nd.par !== undefined && nd.par !== null ? ' p=' + nd.par : '') + '</span>'));
+  });
+  b.appendChild(l0);
+  const l1 = el('div','lane');
+  l1.appendChild(el('span','who','waves'));
+  if (!st.waves.length) l1.appendChild(el('span','box dim','(尚無)'));
+  st.waves.forEach((w,i) => l1.appendChild(el('span','box okk','波' + i + ':[' + w.join(',') + ']')));
+  b.appendChild(l1);
+  if (st.extra){
+    const l2 = el('div','lane');
+    l2.appendChild(el('span','who', st.extra.who));
+    l2.appendChild(el('span','box ' + (st.extra.bad ? 'dead' : 'hot'), st.extra.val));
+    b.appendChild(l2);
+  }
+  const l3 = el('div','lane');
+  l3.appendChild(el('span','who','動作'));
+  l3.appendChild(el('span','box','<span class="act">' + st.act + '</span>'));
+  b.appendChild(l3);
+  return b;
+}
+const BOOT_OK = [
+  { narr:'建圖:indeg=[0,1,1,2];dist 初始化成各自的 boot_ms=[5,10,20,1](「以我收尾的最長鏈」至少含我自己)。frontier = indeg 為 0 者 = [n0]。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'cur'},{id:1,ms:10,indeg:1,dist:10},{id:2,ms:20,indeg:1,dist:20},{id:3,ms:1,indeg:2,dist:1}],waves:[],act:'init'} },
+  { narr:'波 0 處理 n0:鬆弛 0→1(5+10=15>10 → dist[1]=15, p=0)、0→2(5+20=25>20 → dist[2]=25, p=0);兩者 indeg 歸零 → 下一波 [1,2]。<b>waves.push([0])</b>。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:0,dist:15,par:0,state:'cur'},{id:2,ms:20,indeg:0,dist:25,par:0,state:'cur'},{id:3,ms:1,indeg:2,dist:1}],waves:[[0]],act:'wave 0:process n0'} },
+  { narr:'波 1 處理 n1:鬆弛 1→3(15+1=16>1 → dist[3]=16, p=1);indeg[3] 2→1,還不能進場。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:0,dist:15,par:0,state:'done'},{id:2,ms:20,indeg:0,dist:25,par:0,state:'cur'},{id:3,ms:1,indeg:1,dist:16,par:1}],waves:[[0],[1,2]],act:'relax 1→3'},
+    quiz:{ q:'接著處理 n2 鬆弛 2→3:25+1=26 > 16,dist[3] 要改嗎?p 呢?',
+      opts:[
+        {label:'改:dist[3]=26、p 改掛 2——關鍵路徑要跟最慢的前驅走', correct:true,
+         fb:'最長路徑 DP 取 max:到 3 的最長鏈must經過最慢的臂(n2 的 25)。p 跟著改,回溯才會走 [0,2,3]。'},
+        {label:'不改:16 先到先贏', correct:false,
+         fb:'那是最短路的直覺。這裡求「最晚就緒時間」——所有前驅裡最慢的那條決定你何時能開始。'},
+        {label:'改 dist 但 p 不用動', correct:false,
+         fb:'p 不改,回溯就走 [0,1,3],makespan 對但關鍵路徑錯——運維會去催錯鏈。'}] } },
+  { narr:'處理 n2:dist[3]=26、p=2;indeg[3] 歸零 → 波 2 = [3]。<b>因為沿 topo 序,n3 的所有前驅都已定案,它的 dist 從此不會再變——這就是「無環才敢 DP」。</b>',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:0,dist:15,par:0,state:'done'},{id:2,ms:20,indeg:0,dist:25,par:0,state:'done'},{id:3,ms:1,indeg:0,dist:26,par:2,state:'cur'}],waves:[[0],[1,2]],act:'relax 2→3:26>16 改'} },
+  { narr:'波 2 處理 n3,processed=4=n ✓。makespan = max(dist) = 26;end=n3,parent 鏈 3→2→0 反轉 = <b>critical_path [0,2,3]</b>——催 storage 那條臂才有用,催 BMC 沒用。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:0,dist:15,par:0,state:'done'},{id:2,ms:20,indeg:0,dist:25,par:0,state:'done'},{id:3,ms:1,indeg:0,dist:26,par:2,state:'done'}],waves:[[0],[1,2],[3]],extra:{who:'答案',val:'makespan=26,path=[0,2,3]'},act:'done ✓'} },
+];
+const BOOT_CYC = [
+  { narr:'換一張圖:0→1、1→2、<b>2→1</b>(1 和 2 互等)、1→3。indeg=[0,2,1,1],frontier=[n0]。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'cur'},{id:1,ms:10,indeg:2,dist:10},{id:2,ms:20,indeg:1,dist:20},{id:3,ms:1,indeg:1,dist:1}],waves:[],act:'init(有環版)'} },
+  { narr:'波 0 處理 n0:indeg[1] 2→1。frontier 空了——<b>沒有任何節點 indeg 歸零</b>。Kahn 卡死,processed=1 < 4。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:1,dist:15,par:0,state:'stuck'},{id:2,ms:20,indeg:1,dist:20,state:'stuck'},{id:3,ms:1,indeg:1,dist:1,state:'stuck'}],waves:[[0]],act:'frontier 空,卡死'} },
+  { narr:'殘餘 = {1,2,3}(indeg 都 >0)。在殘餘節點間建 pred:pred[1]=2(邊 2→1)、pred[2]=1、pred[3]=1。<b>注意 n3 不在環上,但它也殘餘</b>——被環堵死的下游。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:1,dist:15,state:'stuck'},{id:2,ms:20,indeg:1,dist:20,state:'stuck'},{id:3,ms:1,indeg:1,dist:1,state:'stuck'}],waves:[[0]],extra:{who:'pred',val:'1←2, 2←1, 3←1'},act:'建殘餘 pred'} },
+  { narr:'從任一殘餘節點(n1)沿 pred 走:1 → 2 → 1 <b>重訪!</b>重訪點在環上。沿 pred 收集到回到自己:[1,2] → 反轉成依賴方向。就算起步點是 n3(不在環上),走兩步也會落進環——有限節點必重訪。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:1,dist:15,state:'cur'},{id:2,ms:20,indeg:1,dist:20,state:'cur'},{id:3,ms:1,indeg:1,dist:1,state:'stuck'}],waves:[[0]],extra:{who:'walk',val:'1 → 2 → 1(重訪)'},act:'pred-walk'} },
+  { narr:'回報 <b>Err(Cycle([1,2]))</b>——運維看到的是「BMC 和 storage 互相等」,不是一個乾巴巴的 bool。這就是題面 "report which machines are waiting on each other" 那句話的分。',
+    st:{nodes:[{id:0,ms:5,indeg:0,dist:5,state:'done'},{id:1,ms:10,indeg:1,dist:15,state:'cur'},{id:2,ms:20,indeg:1,dist:20,state:'cur'},{id:3,ms:1,indeg:1,dist:1,state:'stuck'}],waves:[[0]],extra:{who:'答案',val:'Err(Cycle([1,2]))',bad:1},act:'回報環員 ✓'} },
+];
+const bootStepper = new Stepper('st-boot', BOOT_OK.map(f => ({
+  narr: f.narr,
+  render(stage){ stage.appendChild(bootBoard(f.st)); if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts); }
+})));
+document.querySelector('#st-boot .ctrl').addEventListener('click', e => {
+  const m = e.target.closest('button.mode'); if (!m) return;
+  document.querySelectorAll('#st-boot .mode').forEach(x => x.classList.toggle('on', x === m));
+  bootStepper.setSteps((m.dataset.m === 'cyc' ? BOOT_CYC : BOOT_OK).map(f => ({
+    narr: f.narr,
+    render(stage){ stage.appendChild(bootBoard(f.st)); if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts); }
+  })));
+});
+
+/* ===== widest stepper =====
+   st: bott=[..], heap=[[b,node]..], act, path */
+function wideBoard(st){
+  const b = el('div','board');
+  const l0 = el('div','lane');
+  l0.appendChild(el('span','who','bott[]'));
+  st.bott.forEach((v,i) => {
+    let cls = 'box' + (st.hot === i ? ' cur' : (v === 0 ? ' dim' : ' okk'));
+    l0.appendChild(el('span', cls, 'n' + i + '=' + (v === -1 ? '∞' : v) +
+      (st.par && st.par[i] !== undefined ? ' <span class="dim">p=' + st.par[i] + '</span>' : '')));
+  });
+  b.appendChild(l0);
+  const l1 = el('div','lane');
+  l1.appendChild(el('span','who','max-heap'));
+  if (!st.heap.length) l1.appendChild(el('span','box dim','(空)'));
+  st.heap.forEach(h => l1.appendChild(el('span','box' + (h[2] ? ' dead' : ' hot'),
+    '(' + (h[0] === -1 ? '∞' : h[0]) + ', n' + h[1] + ')')));
+  b.appendChild(l1);
+  const l2 = el('div','lane');
+  l2.appendChild(el('span','who','動作'));
+  l2.appendChild(el('span','box','<span class="act">' + st.act + '</span>'));
+  if (st.ans){ l2.appendChild(el('span','who','答案')); l2.appendChild(el('span','box okk', st.ans)); }
+  b.appendChild(l2);
+  return b;
+}
+const WIDE = [
+  { narr:'初始:bott[0]=∞(起點不經過任何邊)、其餘 0(=還沒路);堆放 (∞, n0)。<b>堆不包 Reverse——std BinaryHeap 原生就是 max-heap,這題剛好要大的先出。</b>',
+    st:{bott:[-1,0,0,0],heap:[[-1,0]],act:'init',hot:0} },
+  { narr:'pop (∞, n0):鬆弛 0→1:cand=min(∞,2)=2 > 0 → bott[1]=2 入堆;0→2:cand=min(∞,7)=7 → bott[2]=7 入堆。<b>鬆弛是 min 不是 +</b>——變形之一。',
+    st:{bott:[-1,2,7,0],par:{1:0,2:0},heap:[[7,2],[2,1]],act:'relax n0 的兩條邊'} },
+  { narr:'pop <b>(7, n2)</b>——max-heap 讓「目前最寬」先出(變形之二)。鬆弛 2→3:cand=min(7,5)=5 > 0 → bott[3]=5,p=2。',
+    st:{bott:[-1,2,7,5],par:{1:0,2:0,3:2},heap:[[5,3],[2,1]],act:'pop 大的先:n2',hot:2} },
+  { narr:'pop (5, n3):n3 就是目標 → <b>break,定案</b>。',
+    st:{bott:[-1,2,7,5],par:{1:0,2:0,3:2},heap:[[2,1,1]],act:'pop n3 == to → break',hot:3},
+    quiz:{ q:'(2, n1) 還躺在堆裡沒處理——為什麼敢直接 break?',
+      opts:[
+        {label:'貪婪:max-heap 之後 pop 出的瓶頸只會 ≤ 5,經由 n1 的任何路都不可能給 n3 更寬的答案', correct:true,
+         fb:'瓶頸沿路徑單調不增(min 只會變小)。n1 自己的瓶頸才 2,它延伸出去的路瓶頸 ≤ 2 < 5。這跟 Dijkstra「pop 到就定案」是同一個論證,鏡像方向。'},
+        {label:'不敢,應該把堆清空才算對', correct:false,
+         fb:'清空也對但浪費——貪婪論證保證 pop 到目標那一刻答案已定。這正是 Dijkstra 家族的靈魂。'},
+        {label:'因為 n1 的邊都處理過了', correct:false,
+         fb:'n1 還沒被 pop、它的邊(1→3, bw 9)根本沒鬆弛過——敢 break 靠的是單調性論證,不是「處理完了」。'}] } },
+  { narr:'答案:<b>(5, [0,2,3])</b>——長而寬的下路贏。若誤認成最短路(hop 數),答案會是 [0,1,3],瓶頸只有 2:<b>傳輸速度差 2.5 倍,這就是認錯題型的代價。</b>',
+    st:{bott:[-1,2,7,5],par:{1:0,2:0,3:2},heap:[[2,1,1]],act:'回溯 parent 鏈',ans:'(5, [0,2,3])'} },
+];
+new Stepper('st-wide', WIDE.map(f => ({
+  narr: f.narr,
+  render(stage){ stage.appendChild(wideBoard(f.st)); if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts); }
+})));
+
+/* ===== tree stepper =====
+   st: rows=[{who, boxes:[{t,cls}]}], act */
+function treeBoard(st){
+  const b = el('div','board');
+  st.rows.forEach(r => {
+    const l = el('div','lane');
+    l.appendChild(el('span','who', r.who));
+    r.boxes.forEach(x => l.appendChild(el('span','box ' + (x.cls || ''), x.t)));
+    b.appendChild(l);
+  });
+  const l = el('div','lane');
+  l.appendChild(el('span','who','動作'));
+  l.appendChild(el('span','box','<span class="act">' + st.act + '</span>'));
+  b.appendChild(l);
+  return b;
+}
+const TREE = [
+  { narr:'原樹(F=2):0 的孩子 {1,2};1 的孩子 {3,4};3 的孩子 {5,6}。<b>collector 1 死亡。</b>',
+    st:{rows:[
+      {who:'depth 0',boxes:[{t:'0(root)',cls:'okk'}]},
+      {who:'depth 1',boxes:[{t:'1 ☠',cls:'dead'},{t:'2',cls:'okk'}]},
+      {who:'depth 2',boxes:[{t:'3',cls:''},{t:'4',cls:''}]},
+      {who:'depth 3',boxes:[{t:'5',cls:'dim'},{t:'6',cls:'dim'}]},
+    ],act:'collector 1 dies'} },
+  { narr:'圈出孤兒與 banned 區:孤兒 = 1 的孩子 {3, 4};banned = {1} ∪ 3 的子樹 {3,5,6} ∪ {4}。<b>子樹大小:size(3)=3、size(4)=1</b>——3 帶著 5、6 整棵搬,內部結構不動。',
+    st:{rows:[
+      {who:'孤兒',boxes:[{t:'3(size 3:帶 5,6)',cls:'hot'},{t:'4(size 1)',cls:'hot'}]},
+      {who:'banned',boxes:[{t:'1',cls:'dead'},{t:'3',cls:'dim'},{t:'4',cls:'dim'},{t:'5',cls:'dim'},{t:'6',cls:'dim'}]},
+      {who:'倖存樹',boxes:[{t:'0',cls:'okk'},{t:'2',cls:'okk'}]},
+    ],act:'標 banned + 算 size'} },
+  { narr:'空位掃描(倖存樹 BFS,淺→深):n0 的未 banned 孩子 = {2} → 1 格空(<b>1 離隊自動讓出來的,不用特判</b>);n2 沒孩子 → 2 格空。slots = [0, 2, 2]。',
+    st:{rows:[
+      {who:'slack',boxes:[{t:'n0:1 格',cls:'okk'},{t:'n2:2 格',cls:'okk'}]},
+      {who:'slots(淺→深)',boxes:[{t:'0',cls:'hot'},{t:'2',cls:'hot'},{t:'2',cls:'hot'}]},
+    ],act:'BFS 收空位'},
+    quiz:{ q:'孤兒 3(size 3)和 4(size 1),誰先挑位?為什麼?',
+      opts:[
+        {label:'3 先——大子樹拿最淺的位,整體深度增長的上界最小', correct:true,
+         fb:'3 底下還掛著兩層(5、6);把它放深一格,它整棵子樹都跟著深一格。最重的行李放最順手的位子。'},
+        {label:'4 先——小的好塞,先塞小的', correct:false,
+         fb:'先塞小的會把淺位浪費在輕孤兒上,重子樹被擠去深位,全樹深度增長更大——bin-packing 的 first-fit-decreasing 直覺:大的先。'},
+        {label:'順序無所謂,反正都塞得下', correct:false,
+         fb:'塞得下 ≠ 塞得好。目標函數(壓深度增長)決定順序;這正是 clarify 要問「最小化什麼」的原因。'}] } },
+  { narr:'大子樹先:3(帶著 5、6 整棵)→ 掛到 n0 的空位。',
+    st:{rows:[
+      {who:'安置',boxes:[{t:'3 → 0 ✓',cls:'okk'},{t:'4 → ?',cls:'dim'}]},
+      {who:'slots 剩',boxes:[{t:'2',cls:'hot'},{t:'2',cls:'hot'}]},
+    ],act:'largest first'} },
+  { narr:'4 → n2。回傳 <b>[(3,0), (4,2)]</b>。終樹:0 的孩子 {2,3}、2 的孩子 {4}、3 的孩子 {5,6}——沒有任何節點超過 F=2,孤兒子樹內部原封不動。若 slots 不夠 → <code>Err(NoCapacity)</code>,一開始就回報,不做半套安置。',
+    st:{rows:[
+      {who:'depth 0',boxes:[{t:'0',cls:'okk'}]},
+      {who:'depth 1',boxes:[{t:'2',cls:'okk'},{t:'3',cls:'okk'}]},
+      {who:'depth 2',boxes:[{t:'4',cls:'okk'},{t:'5',cls:'okk'},{t:'6',cls:'okk'}]},
+      {who:'答案',boxes:[{t:'[(3,0), (4,2)]',cls:'okk'}]},
+    ],act:'done ✓'} },
+];
+new Stepper('st-tree', TREE.map(f => ({
+  narr: f.narr,
+  render(stage){ stage.appendChild(treeBoard(f.st)); if (f.quiz) quiz(stage, f.quiz.q, f.quiz.opts); }
+})));
+</script>
+</body>
+</html>

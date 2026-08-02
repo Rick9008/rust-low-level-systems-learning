@@ -578,6 +578,31 @@ footer.foot{margin-top:46px; border-top:1px solid var(--bg3); padding-top:14px; 
   </div>
 </div>
 
+<!-- sim o(8/3 凌晨新增,algo 系) -->
+<div class="simcard">
+  <div class="head"><span class="sid">sim o</span><span class="nm">Boot-order planner(algo 系:演算法穿硬體皮)</span><span class="date">8/3 一・lite(drills 填空,開機槽;8/2 深夜新增)</span></div>
+  <div class="body">
+    <div class="flow">
+      <div class="fnode isr"><div class="t">依賴宣告</div><div class="s">a 開完 b 才能開</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode buf"><div class="t">Kahn 波次</div><div class="s">frontier 整批 = 一波</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode wk"><div class="t">最長路徑 DP</div><div class="s">makespan + 關鍵路徑</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode hw"><div class="t">環回報</div><div class="s">pred-walk 抓環員</div></div>
+    </div>
+    <p>PDF 三支柱的「演算法穿硬體皮」對策首題:表面是 Zero-Touch provisioning,骨頭是 DAG 三件套。<b>一趟 Kahn 同時做分層、最長路徑 DP、環偵測</b>,O(V+E)。金句:「一般圖最長路徑 NP-hard、DAG 上是 P——因為無環才敢沿 topo 序 DP」。與 sim n 同一張圖、兩個時態(n=執行時、o=執行前)。互動 stepper 與完整推導:<code>algo-hardware-skin</code> 頁(🛤️)。</p>
+    <div class="clarify-seed">
+      <div class="en">"If the dependencies have a cycle, do you want a boolean, or the actual machines that are waiting on each other?"</div>
+      <div class="zh">環要回報到什麼粒度?——「回 bool」和「抓出環員」差一個 pred-walk,題面那句 report which machines 就是分。</div>
+    </div>
+    <div class="clarify-seed">
+      <div class="en">"Is the wave allowed to boot everything in parallel, or is there a power-domain cap on simultaneous boots?"</div>
+      <div class="zh">波內全平行還是有 K 上限?——K 上限讓它變 list scheduling(NP-hard 家族),講出「波內切 K 批=makespan 上界」就滿分。</div>
+    </div>
+  </div>
+</div>
+
 <div class="card info">
   <h4>五題一句話總綱</h4>
   <p style="margin:4px 0">全部都是 Tab 1 那個 reactor 骨架,變的只有:<b>j</b> 把事件源搬進中斷 context(push 端 wait-free)、<b>k</b> 把事件源複製 N 份(掃描 + 叫醒)、<b>l</b> 把「通知」變成對硬體的 doorbell(barrier 鐵律)、<b>m</b> 加入第三種事件「時間」(deadline 記帳)、<b>n</b> 把「誰先跑」變成兩道閘(依賴 → 優先權)。</p>

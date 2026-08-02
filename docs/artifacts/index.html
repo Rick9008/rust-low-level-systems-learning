@@ -496,7 +496,7 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
   <p class="eyebrow">rust-low-level-systems-learning</p>
   <h1>互動教材</h1>
   <p class="lede">
-    R2 onsite 備戰區(圖解作戰本 + sim 解剖室 + 量級手冊 + 稿件唸稿頁)、20 個互動模組、1 間 clarify 決策室、18 份深讀教材(html_p:追問鏈 + self-quiz)、12 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
+    R2 onsite 備戰區(圖解作戰本 + sim 解剖室 + 量級手冊 + 稿件唸稿頁)、20 個互動模組、1 間 clarify 決策室、19 份深讀教材(html_p:追問鏈 + self-quiz)、12 頁問答圖解、4 頁彩排題教學(Q4–Q7),加 9 題計時彩排。測試證明程式碼是對的,卻建立不了直覺、也建立不了臨場反射——
     互動頁讓你<strong>親手把機制弄壞</strong>再看它為什麼壞;彩排讓你在 <strong>45 分鐘</strong>裡把它重演一次。
   </p>
 </header>
@@ -816,6 +816,11 @@ td.talk { color: var(--consumer); font-weight: 600; white-space: nowrap; }
       <span class="name">🏗️ 硬體積木入門 · 給軟體人的 device 世界觀</span>
       <span class="hook">零硬體背景讀者基準,每顆零件配 SVG 圖解與反例:CPU/RAM/device 三角色全景(device 看得見記憶體、看不見你的程式序)、MMIO 地址空間與信箱方向性、ring=硬體只會數數、doorbell 一石二鳥、barrier 雙郵路時序圖(有牆/沒牆對照)、DMA=貧瘠通知逼你記帳、IRQ=插隊電話三禁、watchdog=時間是第三種事件;收尾一句:通知越貧瘠,state 表越重要。</span>
       <span class="hits">sim i–o 積木總表 · 8/2 深夜 l lite 之霧的正式解藥 · 作戰本圖鑑的完整版</span>
+    </a>
+    <a class="card" href="../../html_p/algo-hardware-skin.html">
+      <span class="name">🛤️ 演算法穿硬體皮 · algo 系三題</span>
+      <span class="hook">sim o + 認題卡 AG-R/AG-T 配套:皮→骨→45 分鐘契約表與認題訊號表("minimum along the path"→widest path、"before"→DAG);三個互動 stepper——boot planner 雙模式(Kahn 波次+最長路徑 DP / 有環 pred-walk 抓環員)、widest path(Dijkstra 兩處變形逐幀,max-heap 不包 Reverse)、聚合樹修復(slack 掃描+大子樹先入座);金句:一般圖最長路徑 NP-hard、DAG 上是 P。</span>
+      <span class="hits">drills:boot_planner/route_planner/aggregation_tree · PDF 三支柱對策 · 8/3 開機槽配套</span>
     </a>
   </div>
 </section>

@@ -56,6 +56,26 @@
   td.ok{color:var(--green)} td.no{color:var(--red)}
   .tblwrap{overflow-x:auto}
 
+  .stepper{background:var(--bg2);border:1px solid var(--bg4);border-radius:12px;
+    padding:14px 16px;margin:14px 0}
+  .stepper .ctrl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+  .stepper .ctrl button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
+    font-family:var(--cjk);font-size:.84rem;padding:5px 12px;border-radius:8px;cursor:pointer}
+  .stepper .ctrl button:hover{background:var(--bg4)}
+  .stepper .ctrl .stepcount{color:var(--gray);font-size:.8rem;font-family:var(--mono)}
+  .stepper .stage{min-height:140px}
+  .stepper .narr{color:var(--fg-dim);font-size:.88rem;margin-top:10px;
+    border-top:1px dashed var(--bg4);padding-top:8px}
+  .board{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:.8rem}
+  .lane{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lane .who{width:110px;flex:none;color:var(--fg-dim);font-size:.76rem;text-align:right}
+  .bx{border:1px solid var(--bg4);background:var(--bg1);border-radius:6px;
+    padding:2px 8px;min-width:34px;text-align:center}
+  .bx.mine{border-color:var(--aqua);color:var(--aqua)}
+  .bx.theirs{border-color:var(--blue);color:var(--blue)}
+  .bx.board2{border-color:var(--orange);color:var(--orange)}
+  .bx.chg{border-color:var(--yellow);color:var(--yellow);font-weight:700}
+  .bx.dimm{color:var(--gray)}
   .quiz{border:1px dashed var(--purple);border-radius:9px;padding:10px 12px;margin-top:10px}
   .quiz p{margin:0 0 8px;font-size:.88rem}
   .quiz button{background:var(--bg3);border:1px solid var(--bg4);color:var(--fg);
@@ -218,6 +238,19 @@
     <div class="callout good">
       <span class="lbl">為什麼是環,不是 Vec 或鏈表</span>
       硬體<b>只會數數</b>:給它一個起點序號和一個終點序號,它會自己把中間的格子一格格吃掉。它不會 <code>malloc</code>、不會追指標、不會處理變長結構。固定格子 + 單調序號 = 硬體唯一讀得懂的資料結構。這也是為什麼你在 spsc_ring、mpmc_ring 練的序號算術,到硬體題一行都沒浪費。
+    </div>
+
+    <h2>互動 Stepper:六個數字的一生(cap = 4)</h2>
+    <p>兩條 ring、六個計數器,一筆命令從出生到收貨走一遍。看每一步<b>誰動了哪個數字</b>——你只動你的兩個,對方的兩個用讀的,公告欄自動更新。</p>
+    <div class="stepper" id="st-counters">
+      <div class="ctrl">
+        <button data-a="prev">◀ prev</button>
+        <button data-a="next">next ▶</button>
+        <button data-a="reset">reset</button>
+        <span class="stepcount"></span>
+      </div>
+      <div class="stage"></div>
+      <div class="narr"></div>
     </div>
     <div class="navrow"><button data-jump="world">◀ 全景與信箱</button><button data-jump="bell">門鈴與牆 ▶</button></div>
   </section>
@@ -423,6 +456,81 @@ document.querySelectorAll('.quiz button[data-q]').forEach(b => {
     fb.innerHTML = ok ? m.ok : m.no;
   });
 });
+
+/* ===== 六個數字的一生 stepper ===== */
+function el(tag, cls, html){
+  const d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+class Stepper {
+  constructor(rootId, steps){
+    this.root = document.getElementById(rootId);
+    this.steps = steps; this.idx = 0;
+    this.stage = this.root.querySelector('.stage');
+    this.narrEl = this.root.querySelector('.narr');
+    this.cnt = this.root.querySelector('.stepcount');
+    this.root.querySelector('.ctrl').addEventListener('click', e => {
+      const b = e.target.closest('button[data-a]'); if (!b) return;
+      if (b.dataset.a === 'next') this.go(this.idx + 1);
+      else if (b.dataset.a === 'prev') this.go(this.idx - 1);
+      else if (b.dataset.a === 'reset') this.go(0);
+    });
+    this.go(0);
+  }
+  go(i){
+    this.idx = Math.max(0, Math.min(this.steps.length - 1, i));
+    const s = this.steps[this.idx];
+    this.stage.innerHTML = '';
+    s.render(this.stage);
+    this.narrEl.innerHTML = '<b>[' + (this.idx+1) + '/' + this.steps.length + ']</b> ' + s.narr;
+    this.cnt.textContent = 'step ' + (this.idx+1) + ' / ' + this.steps.length;
+  }
+}
+/* st = {tail, bell, shead, ctail, chead, chg:[鍵...], act} */
+function cBoard(st){
+  const rows = [
+    ['你的 tail(記事本)', 'tail', 'mine', '我放單到幾號'],
+    ['Doorbell(公告欄)', 'bell', 'board2', '我最後一次按鈴公告的 tail'],
+    ['SubmitHead(它的牌)', 'shead', 'theirs', '它拿單到幾號'],
+    ['CompTail(它的牌)', 'ctail', 'theirs', '它出貨到幾號'],
+    ['你的 comp_head', 'chead', 'mine', '我收貨到幾號'],
+  ];
+  const b = el('div','board');
+  rows.forEach(([who, key, cls, note]) => {
+    const l = el('div','lane');
+    l.appendChild(el('span','who', who));
+    l.appendChild(el('span','bx ' + cls + (st.chg.includes(key) ? ' chg' : ''), String(st[key])));
+    l.appendChild(el('span','bx dimm', note));
+    b.appendChild(l);
+  });
+  const l = el('div','lane');
+  l.appendChild(el('span','who','動作'));
+  l.appendChild(el('span','bx', st.act));
+  b.appendChild(l);
+  return b;
+}
+const CSTEPS = [
+  { narr:'初始:六個數字全 0(cap=4)。顏色:<span style="color:var(--aqua)">青=你存的</span>、<span style="color:var(--blue)">藍=它掛的牌(你用讀的)</span>、<span style="color:var(--orange)">橘=公告欄</span>。',
+    st:{tail:0,bell:0,shead:0,ctail:0,chead:0,chg:[],act:'init'} },
+  { narr:'submit 命令 A:滿判定 tail(0)−SubmitHead(0)=0 &lt; 4 ✓ → 寫 slot 0 → <b>barrier</b> → tail=1 → 按鈴(Doorbell=1)。動的只有你的 tail 和公告欄。',
+    st:{tail:1,bell:1,shead:0,ctail:0,chead:0,chg:['tail','bell'],act:'submit A(slot 0)'} },
+  { narr:'submit 命令 B:同一套 → slot 1、tail=2、Doorbell=2。在飛量 = tail − SubmitHead = 2。',
+    st:{tail:2,bell:2,shead:0,ctail:0,chead:0,chg:['tail','bell'],act:'submit B(slot 1)'} },
+  { narr:'device 聽到鈴,把 head..doorbell 的單整批拿走:<b>SubmitHead 0→2</b>(它自己的牌它自己推)。此刻出單 ring 的格子全空了——你再 submit 就有位子。',
+    st:{tail:2,bell:2,shead:2,ctail:0,chead:0,chg:['shead'],act:'device 拿單 ×2,開工'} },
+  { narr:'device 做完 A:把成品(帶 tag)寫進 completion ring slot 0、<b>它自己先 barrier</b>、再推 CompTail=1——它那側也守「先值後訊號」。',
+    st:{tail:2,bell:2,shead:2,ctail:1,chead:0,chg:['ctail'],act:'device 完工 A'} },
+  { narr:'你 poll:讀 CompTail=1 &gt; comp_head=0 → 讀成品格 0、回呼 on_done(tag_A) → <b>comp_head=1</b>。B 還在做,下次 poll 再收。',
+    st:{tail:2,bell:2,shead:2,ctail:1,chead:1,chg:['chead'],act:'poll:收 A ✓'} },
+  { narr:'總結規律:<b>自己的游標自己存(tail、comp_head),對方的游標當場讀(SubmitHead、CompTail),永遠不要抄一份別人的進度</b>——抄了就會過期,sim m 的 stale 鬧鐘就是這麼死的。滿判定永遠是序號差:tail − SubmitHead == cap。',
+    st:{tail:2,bell:2,shead:2,ctail:1,chead:1,chg:[],act:'(規律)'} },
+];
+new Stepper('st-counters', CSTEPS.map(f => ({
+  narr: f.narr,
+  render(stage){ stage.appendChild(cBoard(f.st)); }
+})));
 </script>
 </body>
 </html>
