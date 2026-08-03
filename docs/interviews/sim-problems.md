@@ -111,7 +111,7 @@
 
 ## Sim o — Boot-order planner(algo 系;7 題制首發,8/2 深夜新增)
 
-**形式註記**:本題走 drills 填空(`drills/src/ds/boot_planner.rs`),無 rehearsal harness;考的是「演算法穿硬體皮」——Etched PDF 明講不考腦筋急轉彎,但 Big-O 與圖論直覺要在硬體場景裡拿得出來。
+**形式註記**:本題走 drills 填空(`drills/src/ds/boot_planner.rs`),無 rehearsal harness;考的是「演算法穿硬體皮」——但 Big-O 與圖論直覺要在硬體場景裡拿得出來。
 
 **Phase 1:**
 
