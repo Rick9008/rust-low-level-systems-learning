@@ -69,20 +69,70 @@ impl Scheduler {
     /// 數量(查 `completed`);未完成的每個 dep 都要登記反向邊 `dependents[dep]`。
     /// missing == 0 → 進 `ready`(帶 priority 與 Reverse(seq));否則掛 `waiting`。
     pub fn register(&mut self, j: Job) {
-        todo!("spec: 發 seq;數未完成相依;0 → ready,>0 → waiting + 反向邊")
+        // todo!("spec: 發 seq;數未完成相依;0 → ready,>0 → waiting + 反向邊")
+        let Job {
+            job_id: jid,
+            priority: p,
+            mut deps,
+        } = j;
+        let seq = self.seq;
+        self.seq += 1;
+        deps.retain(|dep| !self.completed.contains(dep));
+        if deps.is_empty() {
+            self.ready.push((p, Reverse(seq), jid));
+            return;
+        }
+        for dep in &deps {
+            self.dependents.entry(*dep).or_default().push(jid);
+        }
+        self.waiting.insert(
+            jid,
+            Waiting {
+                priority: p,
+                seq,
+                missing: deps.len(),
+            },
+        );
     }
 
     /// spec:派工。有空 worker 且 ready 非空就 pop(heap 序自動給出「大 pri 先、
     /// 同 pri 早到先」)→ `assign_job_to_worker` → 記 `owner[w]`。
     pub fn dispatch(&mut self, bus: &mut impl JobBus) {
-        todo!("spec: 有空有 ready 就派;owner 當下記")
+        // todo!("spec: 有空有 ready 就派;owner 當下記")
+        loop {
+            if self.free.is_empty() || self.ready.is_empty() {
+                return;
+            }
+            let free_wid = self.free.pop_front().unwrap();
+            assert!((free_wid as usize) < self.owner.len());
+            let (p, Reverse(seq), jid) = self.ready.pop().unwrap();
+            bus.assign_job_to_worker(free_wid, jid);
+            self.owner[free_wid as usize] = Some(jid);
+        }
     }
 
     /// spec:收工。`owner[w].take()` 路由回 job → 還 worker → `submit_job_done`
     /// → 記 `completed` → 完成事件推 DAG:`dependents.remove(&id)` 的每個等待者
     /// missing 減一,**歸零的移出 waiting、帶原到達序進 ready**。
     pub fn on_done(&mut self, bus: &mut impl JobBus, w: u32) {
-        todo!("spec: owner 路由;submit;completed;推 DAG 放行歸零者")
+        // todo!("spec: owner 路由;submit;completed;推 DAG 放行歸零者")
+        assert!(self.owner[w as usize].is_some());
+        let jid = self.owner[w as usize].take().unwrap();
+        if let Some(childs) = self.dependents.remove(&jid) {
+            for child in childs {
+                // Invariant, in register it must register the jid into waiting.
+                let wait_job = self.waiting.get_mut(&child).unwrap();
+                wait_job.missing -= 1;
+                if wait_job.missing == 0 {
+                    self.ready
+                        .push((wait_job.priority, Reverse(wait_job.seq), child));
+                    self.waiting.remove(&child);
+                }
+            }
+        }
+        self.free.push_back(w);
+        self.completed.insert(jid);
+        bus.submit_job_done(jid);
     }
 }
 
@@ -116,7 +166,6 @@ mod tests {
 
     /// 5 job 同時到、4 台 worker:派工序 [2, 4, 3, 5, 1](pri 9,9,5,3,1;同 pri 早到先)。
     #[test]
-    #[ignore = "drill:填完 register/dispatch 後拔掉"]
     fn priority_waves_tie_broken_by_arrival() {
         let mut bus = MockBus::new()
             .job_at(0, 1, 1, &[])
@@ -131,7 +180,6 @@ mod tests {
 
     /// 同權全 FIFO:6 個 pri7,派工序 == 到達序(heap 少了 Reverse(seq) 就會亂)。
     #[test]
-    #[ignore = "drill:填完後拔掉"]
     fn equal_priority_is_fifo() {
         let mut bus = MockBus::new()
             .job_at(0, 10, 7, &[])
@@ -147,7 +195,6 @@ mod tests {
 
     /// DAG 入場閘:pri9 等 pri5 的相依——priority 不能穿越 DAG,完成序 [1,2,3,4]。
     #[test]
-    #[ignore = "drill:填完 on_done 的 DAG 推進後拔掉"]
     fn dag_gates_priority() {
         let mut bus = MockBus::new()
             .job_at(0, 1, 5, &[])
@@ -160,7 +207,6 @@ mod tests {
 
     /// 後到而相依早已完成:completed 集合秒判、立刻可派。
     #[test]
-    #[ignore = "drill:填完 register 的 completed 查核後拔掉"]
     fn late_arrival_with_completed_dep_dispatches_immediately() {
         let mut bus = MockBus::new().job_at(0, 1, 5, &[]).job_at(5, 2, 5, &[1]);
         run(&mut bus);
@@ -169,7 +215,6 @@ mod tests {
 
     /// 循環相依(2↔3):不派工、不 submit、不 hang;其餘照常。
     #[test]
-    #[ignore = "drill:填完後拔掉"]
     fn dependency_cycle_stalls_only_the_cycle() {
         let mut bus = MockBus::new()
             .job_at(0, 1, 5, &[])

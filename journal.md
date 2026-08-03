@@ -24,6 +24,10 @@ sim o 本體三輪拉鋸:v1 Dijkstra 慣性走火(OR 閘入場,cycle 測試吊�
 
 傍晚狀態回升,晚場自排(在家):sim o 複讀(stepper 這時才解鎖,正確的打開時機)→ n lite(招牌考點 indegree 入場閘,下午用真 bug 踩過,算複驗)→ 舊 code 複習+口說。i–k 複掃/骨架默寫/卡 FP/TQ → 8/4 空檔。
 
-本日檔案:`drills/src/ds/boot_planner.rs`(填空+自寫紅測×2)|sol 刺三檔(7bce2f0)|`scratch/cards_2026-08-03.md`|README/PROGRESS/rehearsals 對照表同步。
+晚場帳(寫於 8/4 凌晨):n lite 照我臨場的要求改了制——不用前導卡,直接讀 harness 上半的英文 spec、打字 clarify,像真面試那樣。三個問題全問在刀口上:id 唯一性(追問出「唯一但不保證單調」,自己推出要發 seq)、wait_event 是不是 epoll 形狀、相依會不會指向已完成的 job——最後一問直接問進 Phase 2 的主雷,考官的評語是「你用 clarify 走進了陷阱的解法而不是陷阱」。state 表漏了整個 worker 側,被一句「walk me through: worker 2 done」補回來。drill 三十分鐘加十分鐘延長全綠;真洞一枚:waiting.remove 放在歸零判斷外面——「銷帳早於放行」,跟下午 sim o 的「鬆弛/入隊分家」是同一族,一天踩同族兩次。review 再抓兩洞:dispatch 一次只派一個(四台 worker 被串行化,而 submitted 順序這個 oracle 對平行度全盲)、dependents 只進不出(早上才結案的 sim m 刺當天回鍋)。
+
+收尾默 async 兩皮,結果比想像慘也比想像值:首默 7 錯——tokio 的 use 路徑全忘、bind 的 `.await?` 被點名三次才加上、park/unpark 整組掉、future 被我 drop 掉重建(它本身就是那台狀態機)。兩輪自己修到 0,rustc 親驗。附帶收穫兩條記法:tokio 模組樹是 std 的鏡像(永遠不用背)、AsyncReadExt/WriteExt 是唯一死記(async 方法住在 Ext 上)。7 這個數字是今晚最值錢的產出——它出現在 8/3 半夜,就不會出現在 8/6 早上 09:15。
+
+本日檔案:`drills/src/ds/boot_planner.rs`(填空+自寫紅測×2)|sol 刺三檔(7bce2f0)|`drills/src/concurrency/job_scheduler.rs`(n lite 5/5 綠)|`scratch/tcp_server.rs`+`scratch/executor.rs`(async 默寫底稿)|`scratch/cards_2026-08-03.md`|README/PROGRESS/rehearsals 對照表/SCHEDULE 同步。
 
 （詳帳:`scratch/cards_2026-08-03.md`）
