@@ -76,14 +76,16 @@ impl Dispatcher {
     /// spec:收工。`owner[eid].take()`:
     /// - `None` → **zombie**:帳一個都不碰,engine push 回 `free`(生存證明),return;
     /// - `Some((rid, b))` → 清錶、還 engine;`reqs` 查不到(已 error)就 return;
-    ///   否則 `done += 1`,`done == total` → submit + 移出 `reqs`。
+    ///   否則 `done += 1`,`done == total` → submit + 移出 `reqs`
+    ///   **並清掉 `tries` 裡這張單的所有鍵**(side table 插入點欠刪除點,漏了是慢漏)。
     pub fn on_done(&mut self, bus: &mut impl DmaBus, eid: u32) {
         todo!("spec: zombie 免疫一行;正常路徑計數歸零才 submit")
     }
 
     /// spec:收錶。掃 6 台:`deadline[e] <= now` 的——`owner[e].take()` 拿回 (rid, b)、
-    /// 清錶、**不還 free**(隔離);`tries` +1:達 [`MAX_TRIES`] → `reqs.remove` 成功
-    /// 才 `submit_dma_request_error`(整張放棄);否則塊 push 回 `work` 重派。
+    /// 清錶、**不還 free**(隔離);rid 已不在 `reqs`(死單)→ 塊作廢,不記 `tries`;
+    /// 否則 `tries` +1:達 [`MAX_TRIES`] → `reqs.remove` + **清掉 `tries` 這張單的鍵**
+    /// 再 `submit_dma_request_error`(整張放棄);否則塊 push 回 `work` 重派。
     /// 回傳這輪有沒有錶響(讓 run 決定要不要睡)。
     pub fn fire_timeouts(&mut self, bus: &mut impl DmaBus, now: u64) -> bool {
         todo!("spec: 到期→隔離+重派;第 MAX_TRIES 次→error;回傳有無動作")

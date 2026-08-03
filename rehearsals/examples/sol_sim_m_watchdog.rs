@@ -91,6 +91,8 @@ impl Dispatcher {
         if st.done == st.total {
             bus.submit_dma_request_result_done(rid);
             self.reqs.remove(&rid);
+            // 單退場,retry 帳跟著清——side table 每個插入點都欠一個刪除點。
+            self.tries.retain(|&(r, _), _| r != rid);
         }
     }
 
@@ -102,12 +104,15 @@ impl Dispatcher {
                 let (rid, b) = self.owner[e].take().expect("有錶必有 owner");
                 self.deadline[e] = None;
                 fired = true;
+                if !self.reqs.contains_key(&rid) {
+                    continue; // 單已退場:塊作廢(同 dispatch),死單不准再進 tries
+                }
                 let t = self.tries.entry((rid, b)).or_insert(0);
                 *t += 1;
                 if *t >= MAX_TRIES {
-                    if self.reqs.remove(&rid).is_some() {
-                        bus.submit_dma_request_error(rid); // 放棄整張,往上報
-                    }
+                    self.reqs.remove(&rid);
+                    self.tries.retain(|&(r, _), _| r != rid); // 放棄同樣要清帳
+                    bus.submit_dma_request_error(rid); // 放棄整張,往上報
                 } else {
                     self.work.push_back((rid, b)); // 重派(隔離舊台 ⇒ 同塊單一在飛)
                 }

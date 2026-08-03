@@ -96,6 +96,10 @@ pub struct Dispatcher {
     reqs: HashMap<u64, ReqState>,
     /// 待派的 (request, block)——首派與重派走同一條隊,dispatch 不用分知道。
     work: VecDeque<(u64, u32)>,
+    /// retry 帳(side table)。插入點在 [`Self::fire_timeouts`];刪除點在單退場的
+    /// 兩條路(完成、放棄)——side table 每個插入點都欠一個刪除點,漏了就是
+    /// 無界慢漏。要讓「忘記清」結構上不可能,就把計數搬進 `ReqState` 同居
+    /// (`reqs.remove` 順手帶走);此處保留 side table 是為了與 drills 骨架同構。
     tries: HashMap<(u64, u32), u32>,
 }
 
@@ -172,6 +176,8 @@ impl Dispatcher {
         if st.done == st.total {
             bus.submit_dma_request_result_done(rid);
             self.reqs.remove(&rid);
+            // 單退場,retry 帳跟著清。retain 是 O(表大小),但表裡只有超時過的塊。
+            self.tries.retain(|&(r, _), _| r != rid);
         }
     }
 
@@ -184,12 +190,15 @@ impl Dispatcher {
                 let (rid, b) = self.owner[e].take().expect("有錶必有 owner");
                 self.deadline[e] = None;
                 fired = true;
+                if !self.reqs.contains_key(&rid) {
+                    continue; // 單已退場:塊作廢(同 dispatch),死單不准再進 tries
+                }
                 let t = self.tries.entry((rid, b)).or_insert(0);
                 *t += 1;
                 if *t >= MAX_TRIES {
-                    if self.reqs.remove(&rid).is_some() {
-                        bus.submit_dma_request_error(rid);
-                    }
+                    self.reqs.remove(&rid);
+                    self.tries.retain(|&(r, _), _| r != rid); // 放棄同樣要清帳
+                    bus.submit_dma_request_error(rid);
                 } else {
                     self.work.push_back((rid, b)); // 隔離舊台 ⇒ 同塊單一在飛,重派合法
                 }
@@ -215,7 +224,11 @@ impl Dispatcher {
 /// event loop:三種事件源(request、done、錶到期)。
 /// 睡的長度 = 到最近的錶,**不是睡到天亮**——watchdog 的醒法是設計的一部分。
 pub fn run(bus: &mut impl DmaBus) {
-    let mut d = Dispatcher::new();
+    run_core(bus, &mut Dispatcher::new());
+}
+
+/// run 的本體,Dispatcher 由外面借入——測試得以在跑完後驗內帳(例:tries 清空)。
+fn run_core(bus: &mut impl DmaBus, d: &mut Dispatcher) {
     loop {
         while let Some(r) = bus.get_dma_request() {
             d.register(bus, r);
@@ -550,5 +563,27 @@ mod tests {
         run(&mut bus);
         assert_eq!(bus.submitted, vec![7]);
         assert!(bus.sent_log.is_empty());
+    }
+
+    /// side table 的鐵律:每個插入點欠一個刪除點。手跡:
+    /// 完成路徑——塊 0 首派 hang → 錶響 `tries[(1,0)] = 1` → 重派完成 →
+    /// `done == total` → submit、`reqs.remove`,此刻 tries 的帳必須跟著走;
+    /// 放棄路徑——塊 0 每派必 hang → 第 3 響 `tries[(1,0)] = 3` → 整張走 error,
+    /// 同樣不准留帳。留了就是長跑服務的無界慢漏。
+    #[test]
+    fn tries_table_cleared_after_request_exit() {
+        let mut bus = MockBus::new()
+            .request_at_ms(0, 1, 2, 0)
+            .hang_once(1, 0, None);
+        let mut d = Dispatcher::new();
+        run_core(&mut bus, &mut d);
+        assert_eq!(bus.submitted, vec![1]);
+        assert!(d.tries.is_empty(), "完成的單在 tries 留了帳");
+
+        let mut bus = MockBus::new().request_at_ms(0, 1, 2, 0).hang_always(1, 0);
+        let mut d = Dispatcher::new();
+        run_core(&mut bus, &mut d);
+        assert_eq!(bus.errors, vec![1]);
+        assert!(d.tries.is_empty(), "放棄的單在 tries 留了帳");
     }
 }
