@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8/5 Taper Kit — 填空複習包</title>
+</head>
+<body>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --ink: #16181d;
+    --ink-2: #4b5160;
+    --line: #dde0e6;
+    --accent: #0f766e;
+    --accent-soft: #0f766e1a;
+    --reveal: #15803d;
+    --reveal-bg: #15803d14;
+    --trap: #b45309;
+    --trap-bg: #b453090f;
+    --code-bg: #eceef2;
+    --chip-bg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --surface: #1c1f26;
+      --ink: #e8eaee;
+      --ink-2: #a3aab8;
+      --line: #2c313b;
+      --accent: #2fbfae;
+      --accent-soft: #2fbfae22;
+      --reveal: #4ade80;
+      --reveal-bg: #4ade8018;
+      --trap: #f0a441;
+      --trap-bg: #f0a44114;
+      --code-bg: #262a33;
+      --chip-bg: #1c1f26;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7f9; --surface: #ffffff; --ink: #16181d; --ink-2: #4b5160;
+    --line: #dde0e6; --accent: #0f766e; --accent-soft: #0f766e1a;
+    --reveal: #15803d; --reveal-bg: #15803d14; --trap: #b45309; --trap-bg: #b453090f;
+    --code-bg: #eceef2; --chip-bg: #ffffff;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --surface: #1c1f26; --ink: #e8eaee; --ink-2: #a3aab8;
+    --line: #2c313b; --accent: #2fbfae; --accent-soft: #2fbfae22;
+    --reveal: #4ade80; --reveal-bg: #4ade8018; --trap: #f0a441; --trap-bg: #f0a44114;
+    --code-bg: #262a33; --chip-bg: #1c1f26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.75 -apple-system, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 24px 20px 96px; }
+  header.masthead { max-width: 880px; margin: 0 auto; padding: 40px 20px 8px; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700;
+  }
+  h1 { font-size: 30px; line-height: 1.25; margin: 6px 0 10px; text-wrap: balance; }
+  .lede { color: var(--ink-2); margin: 0 0 12px; max-width: 68ch; }
+  .rules {
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    border-radius: 6px; padding: 12px 16px; margin: 12px 0 0; font-size: 14.5px; color: var(--ink-2);
+  }
+  .rules b { color: var(--ink); }
+  nav.chips {
+    position: sticky; top: 0; z-index: 9; background: var(--bg);
+    padding: 10px 20px; margin: 0 auto; max-width: 880px;
+    display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--line);
+  }
+  nav.chips a {
+    text-decoration: none; color: var(--ink); background: var(--chip-bg);
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px;
+    font-size: 13.5px; font-weight: 600;
+  }
+  nav.chips a:hover, nav.chips a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+  section { margin-top: 44px; }
+  h2 { font-size: 21px; margin: 0 0 4px; scroll-margin-top: 64px; }
+  h2 .sec { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin-right: 8px; }
+  .secnote { color: var(--ink-2); font-size: 14px; margin: 0 0 16px; max-width: 70ch; }
+  h3 { font-size: 16.5px; margin: 26px 0 8px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.6; }
+  th, td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th { border-top: none; background: var(--accent-soft); font-size: 12.5px; letter-spacing: .06em; }
+  td:first-child, th:first-child { white-space: nowrap; font-weight: 700; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .88em; background: var(--code-bg); border-radius: 4px; padding: 1px 5px;
+  }
+  .en { font-family: Georgia, "Times New Roman", serif; font-style: italic; }
+  .trap { color: var(--trap); }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 18px; margin: 12px 0;
+  }
+  /* 填空 */
+  .q { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 10px 0; font-size: 15px; }
+  .q .qid { font-weight: 800; color: var(--accent); margin-right: 6px; }
+  .blank {
+    display: inline-block; min-width: 2.2em; text-align: center; cursor: pointer;
+    border-bottom: 2px solid var(--accent); color: var(--accent);
+    font-weight: 700; padding: 0 4px; border-radius: 3px 3px 0 0; user-select: none;
+  }
+  .blank:hover, .blank:focus-visible { background: var(--accent-soft); outline: none; }
+  .blank.on {
+    color: var(--reveal); border-bottom-color: var(--reveal); background: var(--reveal-bg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em;
+  }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin: 14px 0 4px; flex-wrap: wrap; }
+  .toolbar button {
+    font: 600 13.5px/1 inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; cursor: pointer;
+  }
+  .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .counter { font-size: 13.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  /* 口說 */
+  .say { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 10px 0; }
+  .say input { margin-top: 7px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; cursor: pointer; }
+  .say .ctx { font-size: 12.5px; color: var(--ink-2); display: block; }
+  .say.done { border-color: var(--reveal); background: var(--reveal-bg); }
+  /* 裁決句庫 */
+  .verdict-block { margin: 14px 0; }
+  .verdict-block h3 { margin: 0 0 6px; color: var(--accent); }
+  .verdict-block p { margin: 0; font-size: 14.5px; color: var(--ink); }
+  .verdict-block p .sep { color: var(--ink-2); padding: 0 6px; }
+  ul { padding-left: 22px; }
+  li { margin: 4px 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    .blank { transition: background .15s ease; }
+  }
+</style>
+
+<header class="masthead">
+  <div class="eyebrow">TAPER · 8/5 · 8/6 09:15 上場前的最後一輪</div>
+  <h1>Taper Kit——填空複習包</h1>
+  <p class="lede">認題定界 × 決策點填空 × 英文口說 × 裁決句庫 × 帶進場檢查表。純默寫已退役:每個空都是決策點,樣板送分。</p>
+  <div class="rules"><b>鐵律</b>:不碰新題、記洞不修洞、不開實作碼。<b>填空規則</b>:先想,再點空格翻答案;翻完自評 ✓/⚠/✗,✗ 寫進 §E 帶進場。<b>名字洞 = 形狀對 + 回收句 = PASS。</b></div>
+</header>
+
+<nav class="chips">
+  <a href="#secA">A 認題定界</a>
+  <a href="#secB">B 填空暖手</a>
+  <a href="#secC">C 英文口說</a>
+  <a href="#secD">D 裁決句庫</a>
+  <a href="#secE">E 檢查表</a>
+  <a href="#secF">F 修 code</a>
+</nav>
+
+<main>
+
+<section id="secA">
+  <h2><span class="sec">§A</span>認題定界輪</h2>
+  <p class="secnote">卡片對應肌肉:SP=signal_pipeline|FP=c|FR=e2|TA=f|TQ=h|HW-L=l|HW-M=m|AG-R=route_planner|AG-T=aggregation_tree。</p>
+
+  <h3>a–h(+e2)九題型</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>題</th><th>認題訊號</th><th>一句定界</th><th class="trap">首要陷阱</th></tr></thead>
+    <tbody>
+      <tr><td>a ring</td><td>"continuous stream" / "most recent N"</td><td>固定容量 ring + drop-oldest;canonical=<code>head+len</code> 索引算術,不是 VecDeque</td><td class="trap">滿了=寫在 head 再推 head(淘汰+收貨同一步);dropped 計數別忘 ++</td></tr>
+      <tr><td>b pool</td><td>"concurrently" / "no external libraries"</td><td>固定 worker pool,重點是 shutdown 合約(收到的必跑完、二次呼叫安全)</td><td class="trap">兩條件句(§C-5);執行 job 前一定放鎖;drain-then-exit</td></tr>
+      <tr><td>c framer</td><td>"byte stream" / "frames"</td><td>增量 framer:緩衝+迴圈切完整幀;len==0=heartbeat 同路徑掉出</td><td class="trap">第一問永遠是「len 含不含 header」;cursor 攤銷 O(n),drain 每幀是 O(n²)</td></tr>
+      <tr><td>d tokio srv</td><td>tokio / "many devices" / idle</td><td>task-per-connection:accept loop + spawn,每 task 重用 c 的 framer</td><td class="trap"><code>timeout(idle, read)</code> 即 idle timer——任何 bytes 含 heartbeat 都重置</td></tr>
+      <tr><td>e registry</td><td>"event id" / "handlers"</td><td>dispatch 表:id→有序 handlers,跑完投票 Keep/Remove</td><td class="trap">retain_mut 一趟跑+刪;dense→Vec 直索引、sparse→HashMap(第一問)</td></tr>
+      <tr><td>e2 fd ⭐JD</td><td>fd recycling / stale events / u64</td><td>generational slot map:token=<code>(gen&lt;&lt;32)|fd</code>,slot 記當前 gen,對不上=None</td><td class="trap"><code>wrapping_add</code> 防 gen 繞回;JD 句見 §C-6</td></tr>
+      <tr><td>f aggregator</td><td>"can't store them all" / "windows"</td><td>固定 W 桶 ring:記憶體 O(windows),與樣本數無關(這句=整個設計)</td><td class="trap">slot 另存自己的 window_num 防上一圈殘影;空窗回 None 不回 0</td></tr>
+      <tr><td>g channel</td><td>"producers block when full"</td><td>bounded MPSC:Mutex&lt;VecDeque&gt; + 兩顆 condvar(not_full / not_empty)</td><td class="trap">掉線的一方必須 notify 對面,否則永眠;predicate loop 不是 if</td></tr>
+      <tr><td>h timer</td><td>"periodic" / "what runs next"</td><td>min-heap:<code>BinaryHeap&lt;Reverse&lt;(deadline,id,interval)&gt;&gt;</code>;peek=park 目標</td><td class="trap">reschedule 從舊 deadline 起算;大 N 逃生門=hashed timer wheel</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>i–o(R2 sim 系)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>題</th><th>一句定界</th><th class="trap">首要陷阱</th></tr></thead>
+    <tbody>
+      <tr><td>i DMA</td><td>三表 free/owner/reqs;完成判定=per-request <code>done==blocks_total</code></td><td class="trap">engine 閒 ≠ request 完(R1 洞);cancel=惰性收尾;FIFO 餓小單→RR</td></tr>
+      <tr><td>j ISR</td><td>ISR=劫持一顆核:只搬+計數+叫醒,O(1);滿→drop-newest+計數(有帳)</td><td class="trap">shutdown=先 flag 後 wake;sticky flag 只夠醒一次;wake=hint 睡前必 re-check</td></tr>
+      <tr><td>k fan-in</td><td>N 條 SPSC → 一個 aggregator;producer 永不阻塞(try_push 失敗→dropped++)</td><td class="trap">全零掃描才准睡(flag 蓋掃描→睡的縫);per-ring budget 防熱核餓冷核</td></tr>
+      <tr><td>l MMIO</td><td>「這是一條 SPSC ring,只是消費者是矽」</td><td class="trap">fill → barrier() → doorbell 順序即法律;滿判定用自由跑計數器;completion 亂序靠 tag 路由</td></tr>
+      <tr><td>m watchdog</td><td>sim i 三表 + 第三種 state:時間(per-engine deadline)</td><td class="trap">slow≠dead 只能 bound risk;超時 engine 隔離不回池;殭屍 done=生存證明→復活但帳不碰;3-strikes 後 fail 整單+清帳</td></tr>
+      <tr><td>n scheduler</td><td>兩層閘:DAG 入場閘(indegree)→ priority 閘(heap + seq 破平手)</td><td class="trap">seq 到站蓋章不是入場蓋章;completed 集合必備(deps 過去式);表只進不出=刺</td></tr>
+      <tr><td>o boot planner</td><td>Kahn 一趟三答案:波次 / makespan(DAG 最長路徑)/ 環回報</td><td class="trap">「等全部」=AND=indeg 歸零才入隊;環要報實際環;找環用邊的存在性,不能用執行痕跡</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>AG 兩卡(algo 系)</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>卡</th><th>認題訊號</th><th>定界</th><th class="trap">陷阱</th></tr></thead>
+    <tbody>
+      <tr><td>AG-R</td><td>"minimum along the path"</td><td>瓶頸最寬路:Dijkstra 兩處變形——鬆弛 <code>min(bott[u],w)</code>、heap 換 max-heap</td><td class="trap">不是最短路;no decrease-key→lazy deletion;max-flow/ECMP 宣告 out of scope</td></tr>
+      <tr><td>AG-T</td><td>collector 死了、子樹 rehome、fan-in 上限</td><td>剝掉樹皮=容量受限指派(bin packing 貪心殼),不是樹 DP</td><td class="trap">必問「最小化什麼」;禁區=孤兒自己的子樹(防成環);容量帳算連線數不算載重</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>async 兩皮定界(8/5 指定項)</h3>
+  <div class="card">
+    <p><b>tokio 三句(d 題)</b>:<span class="en">"Task-per-connection with tokio: an accept loop, <code>tokio::spawn</code> per connection, each task reuses the framer on its own buffer. Idle handling: wrap the read in <code>tokio::time::timeout</code> — any bytes, including heartbeats, reset it by construction. Tasks are KBs, not MBs — that's why this scales where thread-per-connection dies."</span></p>
+    <p><b>純 std block_on / poll 合約兩句</b>:<span class="en">"async/await is pure composition — the compiler-generated state machine only forwards poll; exactly two places touch the Waker: the executor that creates it and the leaf future that stashes it."</span> <span class="en">"A wake is only a hint that re-polling is worth it — poll is the single source of truth; it's the condvar predicate-wait contract, one level up."</span></p>
+  </div>
+
+  <h3>四主題家族判準:timer wheel / conflation / aggregation window</h3>
+  <p class="secnote"><b>判準句:同 key 的舊資料被結構性覆蓋/合併、且這是刻意語意——才算 conflation 家族。</b></p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>結構</th><th>算 conflation 嗎</th><th>為什麼</th></tr></thead>
+    <tbody>
+      <tr><td>timer wheel(time slot)</td><td>✗</td><td>slot 是「桶」:按到期時間索引,timer 全收不丟、一個都要 fire。解的是按時間查找,不是過載保最新——形狀像(固定格+索引),語意不同</td></tr>
+      <tr><td>aggregation window</td><td>半個(表親)</td><td>per-key 摺疊 ✓,但摺疊函數是可結合 merge(sum/max=保留全部事件的統計);觸發也不同:關窗即吐 vs consumer 拉</td></tr>
+      <tr><td>conflation slot</td><td>✓ 本尊</td><td>merge 退化成 <code>f(old,new)=new</code> 的特例;能用的三條件:consumer 只要現在值 + payload 是絕對快照 + key 基數有界</td></tr>
+      <tr><td>sticky wake token(sim j)</td><td>✓ 退化版</td><td>單 key、payload=unit:N 次 wake 摺成一個 token;epoll LT、dirty-rect、LWW register 同族</td></tr>
+    </tbody>
+  </table></div>
+  <div class="card"><p>conflation 認題一句(出聲):<span class="en">"Do you need <b>every</b> record, or only the <b>latest</b> per key? That changes the loss model: with a ring, loss is accidental and I count it; with a conflation slot, loss is by design."</span></p></div>
+</section>
+
+<section id="secB">
+  <h2><span class="sec">§B</span>填空暖手(18 題,決策點填空)</h2>
+  <p class="secnote">先想,再點空格翻答案。翻完自評;✗ 的寫進 §E 帶進場。</p>
+  <div class="toolbar">
+    <button id="resetB" type="button">重置全部空格</button>
+    <span class="counter" id="counterB">已翻 0 格</span>
+  </div>
+
+  <h3>圖論皮</h3>
+  <div class="q"><span class="qid">B1</span>Kahn(sim o):入隊條件 <code>indegree ==</code> <span class="blank" data-a="0" tabindex="0">①</span>;「等全部」= <span class="blank" data-a="AND" tabindex="0">②</span> 閘;環偵測:收尾時 <code>processed</code> <span class="blank" data-a="&lt; n" tabindex="0">③</span> ⇒ 有環;波次 = 同一輪 frontier <span class="blank" data-a="整批彈出" tabindex="0">④</span>。</div>
+  <div class="q"><span class="qid">B2</span>DAG 最長路徑:沿 topo 序 <code>dist[v] = max(dist[v], dist[u] +</code> <span class="blank" data-a="w(邊權)" tabindex="0">①</span><code>)</code>;一般圖不行的面試句:「環逼子問題<span class="blank" data-a="記歷史(有環→NP-hard)" tabindex="0">②</span>,DAG 讓它免記」。</div>
+  <div class="q"><span class="qid">B3</span>AG-R widest path:鬆弛式 <code>cand =</code> <span class="blank" data-a="min(bott[u], w)" tabindex="0">①</span>;heap 用 <span class="blank" data-a="max-heap(no Reverse)" tabindex="0">②</span>;認題訊號:題面出現 "<span class="blank" data-a="minimum" tabindex="0">③</span> along the path"。</div>
+  <div class="q"><span class="qid">B4</span>AG-T:本體是「<span class="blank" data-a="容量受限指派(bin packing 貪心殼)" tabindex="0">①</span>」(不是樹 DP);樹只貢獻:孤兒名單、<span class="blank" data-a="禁區(孤兒自己的子樹)" tabindex="0">②</span>、空位表;容量帳算 <span class="blank" data-a="連線數" tabindex="0">③</span> 不算載重。</div>
+
+  <h3>Condvar 系</h3>
+  <div class="q"><span class="qid">B5</span><span class="en">A worker <b>exits</b> only when</span> <span class="blank" data-a="shutdown" tabindex="0">①</span> <code>&amp;&amp;</code> <span class="blank" data-a="queue is empty" tabindex="0">②</span>;<span class="en">it <b>sleeps</b> only when</span> <span class="blank" data-a="queue is empty" tabindex="0">③</span> <code>&amp;&amp;</code> <span class="blank" data-a="not shutdown" tabindex="0">④</span>。</div>
+  <div class="q"><span class="qid">B6</span>8/4 admission gate:等待條件 = <code>running &gt;= N</code> <span class="blank" data-a="OR(||)" tabindex="0">①</span> <code>tenant_cnt &gt;= M</code>;處方:先寫 <span class="blank" data-a="進場條件(running<N && tenant<M)" tabindex="0">②</span>,再 <span class="blank" data-a="De Morgan 取反" tabindex="0">③</span>。</div>
+  <div class="q"><span class="qid">B7</span>shutdown 協定:先 <span class="blank" data-a="flag" tabindex="0">①</span> 後 <span class="blank" data-a="notify_all" tabindex="0">②</span>;被喚醒第一件事查 <span class="blank" data-a="shutdown 旗" tabindex="0">③</span>;bounded_channel 加一條:最後一個 Sender drop 時必須 <span class="blank" data-a="notify 睡著的 consumer" tabindex="0">④</span>。</div>
+  <div class="q"><span class="qid">B8</span>conflation 兩紀律:recv 的「pop+讀值+清旗標」必須 <span class="blank" data-a="同一個 critical section" tabindex="0">①</span>,拆開就是 <span class="blank" data-a="lost update" tabindex="0">②</span>;通知可以 <span class="blank" data-a="多(spurious 冪等)" tabindex="0">③</span>、不可以 <span class="blank" data-a="少(lost wakeup)" tabindex="0">④</span>。</div>
+
+  <h3>Lock-free 序</h3>
+  <div class="q"><span class="qid">B9</span>spsc 四格:producer 寫槽後存 tail 用 <span class="blank" data-a="Release" tabindex="0">①</span>;consumer 讀 tail 用 <span class="blank" data-a="Acquire" tabindex="0">②</span>;consumer 讀完槽存 head 用 <span class="blank" data-a="Release" tabindex="0">③</span>;producer 讀 head 用 <span class="blank" data-a="Acquire" tabindex="0">④</span>。</div>
+  <div class="q"><span class="qid">B10</span>對稱律:producer 先 <span class="blank" data-a="值(寫槽/push)" tabindex="0">①</span> 後 <span class="blank" data-a="訊號(存 tail/wake)" tabindex="0">②</span>;consumer 先 <span class="blank" data-a="銷訊號(推 head/清旗標)" tabindex="0">③</span> 後 <span class="blank" data-a="取值" tabindex="0">④</span>。</div>
+  <div class="q"><span class="qid">B11</span>tokio broadcast 內臟(8/4 課):receiver 靠 slot 上蓋的 <span class="blank" data-a="絕對序號(slot.pos==next)" tabindex="0">①</span> 偵測 Lagged;值的釋放 = min(<span class="blank" data-a="最慢讀者讀完(rem→0 即 drop)" tabindex="0">②</span>, <span class="blank" data-a="被新訊息覆寫" tabindex="0">③</span>);「sender 永不阻塞」的代價 = <span class="blank" data-a="感受不到 consumer 慢;backpressure 要另外走" tabindex="0">④</span>。</div>
+
+  <h3>async 兩皮</h3>
+  <div class="q"><span class="qid">B12</span>block_on:<code>Poll::Pending</code> 臂做 <span class="blank" data-a="park" tabindex="0">①</span>(絕不准 <span class="blank" data-a="drop" tabindex="0">②</span> future——進度歸零);每輪 poll 的永遠是 <span class="blank" data-a="同一顆 pinned future(as_mut())" tabindex="0">③</span>;Waker 來源:<code>impl</code> <span class="blank" data-a="Wake" tabindex="0">④</span> <code>for T</code>(self 形狀 = <span class="blank" data-a="Arc&lt;Self&gt;" tabindex="0">⑤</span>)再 <code>Waker::from(</code><span class="blank" data-a="Arc&lt;T&gt;" tabindex="0">⑥</span><code>)</code>。</div>
+  <div class="q"><span class="qid">B13</span>tokio 三處:async read/write 方法住在 <span class="blank" data-a="Ext trait(AsyncReadExt / AsyncWriteExt)" tabindex="0">①</span> 上(唯一死記);<code>accept()</code> 回 <code>Result&lt;(</code><span class="blank" data-a="TcpStream" tabindex="0">②</span>, <span class="blank" data-a="SocketAddr" tabindex="0">③</span><code>)&gt;</code>,配 <span class="blank" data-a="loop" tabindex="0">④</span> 迴圈;<code>bind(...)</code> 後面接 <span class="blank" data-a=".await?" tabindex="0">⑤</span>。</div>
+
+  <h3>協定 / 時間結構</h3>
+  <div class="q"><span class="qid">B14</span>length-prefix 三動作:<span class="blank" data-a="checked_add(4)?" tabindex="0">①</span> → <span class="blank" data-a="buf.get(ptr..end)?" tabindex="0">②</span> → <span class="blank" data-a="u32::from_be_bytes(….try_into().ok()?)" tabindex="0">③</span>;口訣:wire 上是什麼就用什麼解(<span class="blank" data-a="u32" tabindex="0">④</span>),再 <code>as</code> 到 <span class="blank" data-a="usize" tabindex="0">⑤</span>。</div>
+  <div class="q"><span class="qid">B15</span>timer_queue:heap 元素 <code>Reverse&lt;(</code><span class="blank" data-a="deadline" tabindex="0">①</span>, <span class="blank" data-a="id" tabindex="0">②</span>, <span class="blank" data-a="interval" tabindex="0">③</span><code>)&gt;</code>;reschedule 從 <span class="blank" data-a="舊 deadline" tabindex="0">④</span> 起算(否則 <span class="blank" data-a="每次 firing 飄移" tabindex="0">⑤</span>);大 N 逃生門:<span class="blank" data-a="hashed timer wheel" tabindex="0">⑥</span>,拿 <span class="blank" data-a="精度" tabindex="0">⑦</span> 換 throughput。</div>
+  <div class="q"><span class="qid">B16</span>家族判準:timer wheel 的 slot 是「<span class="blank" data-a="桶(按到期時間索引,全收不丟)" tabindex="0">①</span>」;conflation = merge 退化成 <code>f(old,new)=</code><span class="blank" data-a="new" tabindex="0">②</span>;aggregation window 的摺疊函數要求 <span class="blank" data-a="可結合(associative merge)" tabindex="0">③</span>;TA 的 slot 另存 <span class="blank" data-a="自己的 window_num(epoch)" tabindex="0">④</span> 防殘影;空窗回 <span class="blank" data-a="None" tabindex="0">⑤</span> 不回 0。</div>
+  <div class="q"><span class="qid">B17</span>fd_registry:token = <code>(</code><span class="blank" data-a="generation" tabindex="0">①</span> <code>&lt;&lt; 32) |</code> <span class="blank" data-a="fd(slot index)" tabindex="0">②</span>;stale 判定:slot 的 gen <span class="blank" data-a="!=(mismatch)" tabindex="0">③</span> token 的 gen → None;gen 遞增用 <span class="blank" data-a="wrapping_add" tabindex="0">④</span> 防繞回。</div>
+
+  <h3>單線 DS</h3>
+  <div class="q"><span class="qid">B18</span>DSU:find 路徑壓縮一行 <code>parent[x] =</code> <span class="blank" data-a="find(parent[x])" tabindex="0">①</span>;union by <span class="blank" data-a="rank / size" tabindex="0">②</span>;LRU:unlink 之後要 <span class="blank" data-a="兩側鄰居雙向重接" tabindex="0">③</span>;淘汰+插入是 <span class="blank" data-a="同一筆交易(寫完立刻 get 新 key 自驗)" tabindex="0">④</span>。</div>
+</section>
+
+<section id="secC">
+  <h2><span class="sec">§C</span>英文口說指定句</h2>
+  <p class="secnote">晚上出聲場:每晚一組、每句 3 遍,第 3 遍不看稿。唸完打勾(存在本機)。</p>
+
+  <h3>第一組:開場與定界</h3>
+  <div class="say"><input type="checkbox" id="c1"><label for="c1"><span class="ctx">restate 開場</span><span class="en">"Let me restate to make sure I've got it: we need a ___ that ___. Before I start, let me make sure I understand the constraints."</span></label></div>
+  <div class="say"><input type="checkbox" id="c2"><label for="c2"><span class="ctx">宣告流程</span><span class="en">"I'll ask a few questions first, then walk you through my plan before writing code."</span></label></div>
+  <div class="say"><input type="checkbox" id="c3"><label for="c3"><span class="ctx">逼二選一(最好用)</span><span class="en">"When you say ___, do you mean A or B?"</span></label></div>
+  <div class="say"><input type="checkbox" id="c4"><label for="c4"><span class="ctx">lifecycle 三問</span><span class="en">"Three lifecycle questions: how long does this run, how do we stop it cleanly, and who owns the in-flight data at shutdown?"</span></label></div>
+
+  <h3>第二組:招牌句(講出來就是分)</h3>
+  <div class="say"><input type="checkbox" id="c5"><label for="c5"><span class="ctx">b 題兩條件句</span><span class="en">"A worker exits only when shutdown is set and the queue is empty; it sleeps only when the queue is empty and we're not shutting down. Those two predicates are the whole problem."</span></label></div>
+  <div class="say"><input type="checkbox" id="c6"><label for="c6"><span class="ctx">e2 JD 句(背到逐字)</span><span class="en">"An O(1) generational slot map beats an O(n) scan on every event, and it rejects stale tokens for free — the generation check is one compare."</span></label></div>
+  <div class="say"><input type="checkbox" id="c7"><label for="c7"><span class="ctx">wake 三問</span><span class="en">"Is a wake latched if nobody's sleeping? Do wakes coalesce? Any spurious wakeups?"</span></label></div>
+  <div class="say"><input type="checkbox" id="c8"><label for="c8"><span class="ctx">sim m 最高分句</span><span class="en">"Slow and dead are indistinguishable — without a fence or reset I can only bound the risk, not eliminate it."</span></label></div>
+
+  <h3>第三組:救場與裁決(8/4 新句入列)</h3>
+  <div class="say"><input type="checkbox" id="c9"><label for="c9"><span class="ctx">名字洞回收句範本</span><span class="en">"It's the trait in std::task where self is Arc&lt;Self&gt; — I forget the exact name, mind if I check?"</span></label></div>
+  <div class="say"><input type="checkbox" id="c10"><label for="c10"><span class="ctx">Part B 基準不一致(8/4 洞的解藥)</span><span class="en">"The stated assumption is ___ — my design doesn't work that way. Want me to size the stated version, mine, or both?"</span></label></div>
+  <div class="say"><input type="checkbox" id="c11"><label for="c11"><span class="ctx">timeout 裁決</span><span class="en">"Timeout to kick is fine; timeout to retry is not — TCP already owns retransmission, and a half-done write_all would tear the frame."</span></label></div>
+  <div class="say"><input type="checkbox" id="c12"><label for="c12"><span class="ctx">收尾兩句</span><span class="en">"I'll keep this inline for time; extracting on_done would be my first cleanup." / "I'm running short on time, so let me describe what's left and where the holes are."</span></label></div>
+
+  <div class="card"><p><b>加映(隨手可插)</b>:<span class="en">"I'll let the compiler remind me of the exact import."</span> ・ <span class="en">"At huge N I'd move to a hashed timer wheel — amortized O(1), trading precision for throughput."</span> ・ <span class="en">"I've been bitten by ___, so I ___."</span>(傷疤句型=finding-your-own-bug 的口述版)</p></div>
+</section>
+
+<section id="secD">
+  <h2><span class="sec">§D</span>裁決句庫(掃讀 60 秒/塊)</h2>
+  <div class="verdict-block card"><h3>shutdown / wake 合約</h3><p>先 flag 後 wake(=先值後訊號同一條定律)<span class="sep">|</span>醒來=hint 不是保證,睡前必 re-check<span class="sep">|</span>sticky flag 是合併的,只夠醒一次<span class="sep">|</span>對稱律:producer 先值後訊號、consumer 先銷訊號後取值<span class="sep">|</span>通知可以多、不可以少(spurious 冪等;lost wakeup=資料永久遺失)</p></div>
+  <div class="verdict-block card"><h3>超載三路</h3><p>只有三路:丟(counted drop)/ 摺(fold,M 筆變 1)/ 批<span class="sep">|</span>三選一的裁決權在三個門檻問題:sink 成本結構 / 資料語意 / SLO——spec 沉默就問,沒得問就具名假設<span class="sep">|</span>update 是 replace 就有損、是 merge/fold 就無損<span class="sep">|</span>無界暫存=把有界管線悄悄改無界:過載走向 OOM(隱形),不是受控丟棄(有帳)</p></div>
+  <div class="verdict-block card"><h3>狀態設計</h3><p>與其寫 code 調解兩份狀態的漂移,不如選一個讓漂移不可表示的狀態設計<span class="sep">|</span>tuple&gt;3 欄→具名 struct(消滅整類 bug)<span class="sep">|</span>state ≤3 件 flat 合法、≥4 件 struct 先立;抽 fn 是 refactor 不是前置投資<span class="sep">|</span>表要「只進」也要「有出」:完成/放棄兩個刪除點(sim m tries、n dependents、8/4 tenant_running×2=同根刺四現)<span class="sep">|</span>通知越貧瘠,state 表越重要</p></div>
+  <div class="verdict-block card"><h3>時間與 timeout</h3><p>timeout=數倍 p99;數字不重要,理由那句話才是分<span class="sep">|</span>pop 出來第一件事永遠是「還在飛嗎」(stale 鬧鐘)<span class="sep">|</span>殭屍=生存證明:隔離到 proof-of-life,帳一根指頭不碰<span class="sep">|</span>reschedule 從舊 deadline 起算<span class="sep">|</span>「fail 整單」的另一半是清帳</p></div>
+  <div class="verdict-block card"><h3>測試</h3><p>黑箱三律:觀察輸出面、poll with deadline、斷言不變量;永遠不要斷言「它何時睡」<span class="sep">|</span>沒有比較的賦值=「誰後到誰贏」紅旗——故意把錯的候選人排最後餵它<span class="sep">|</span><span class="en">"my tests verify ordering; utilization needs a different probe"</span><span class="sep">|</span>樣本守恆:read 出的每筆=pushed+dropped,帳永遠平</p></div>
+  <div class="verdict-block card"><h3>量級(五行頭配套)</h3><p>單位跟著每一步(裸數字=病根)<span class="sep">|</span>掉零是主敵——荒謬檢查抓不到掉零,逐步帶單位的帳本才是主保險<span class="sep">|</span>兩位有效數字,免費<span class="sep">|</span>kernel per-socket buffer 是事實不是假設(收/送各一份,全忙翻倍;ss -m 驗證)<span class="sep">|</span>Little's law:pool = rate × 佔用<span class="sep">|</span>async 省的是 thread 成本,不是併發數</p></div>
+  <div class="verdict-block card"><h3>8/4 新增</h3><p>異質 predicate → notify_all(有人卡 N、有人卡 M,notify_one 會叫錯人)<span class="sep">|</span>AND/OR 閘處方:先寫進場條件,De Morgan 取反成等待條件<span class="sep">|</span>讀 predicate 禁 entry().or_default()(看一眼就插 0 條目)——讀用 get().copied().unwrap_or(0),entry 留給入場後 +1<span class="sep">|</span>broadcast:per-slot 絕對序號=Vyukov 同族;釋放=min(最慢讀者 rem→0, 被覆寫);subscribe() 游標生在當前 tail=join 語意的實作位置</p></div>
+</section>
+
+<section id="secE">
+  <h2><span class="sec">§E</span>帶進場檢查表(8/6 晨讀本體)</h2>
+  <div class="card">
+    <p><b>開場動線(45m 的前 10m)</b></p>
+    <ul>
+      <li>① restate 一句 → ② clarify:名詞圈選 → <b>lifecycle 三問</b>(跑多久/怎麼停/停時在途資料算誰的)→ <b>失敗後路徑三問</b>(偵測到做什麼/重試幾次誰決定/放棄時通知誰、清哪些帳)→ 單位掃(bytes or blocks?)→「當 X 你是指 A 還是 B?」</li>
+      <li>③ 宣告假設:<span class="en">"I'll assume ___ unless you tell me otherwise."</span> → ④ <b>state 表</b>(紙上;≥4 件→struct 謄寫)→ ⑤ 骨架 + todo!()</li>
+    </ul>
+    <p><b>英文三對策</b>:裁決<b>當場</b>抄紙(≤5 字/條,抄完複誦)|規則 read back(<span class="en">"So timeout 1 and 2 → redispatch, only the 3rd → error, correct?"</span>)|多問訊息<b>編號逐條回</b>,跳過就明說 deferred。</p>
+    <p><b>量級五行頭</b>:Given(重述全部參數;數字用一個劃一個,有剩=你在答別題;<b>跟你設計矛盾的假設在這行現形</b>)→ Chain(每步帶單位)→ Cross(兩路殊途必同歸)→ Sanity(荒謬檢查,沒有不收筆)→ Verdict(policy+何時啟動+代價)。</p>
+    <p><b>骨架抽查殘項(8/5 豁免項,填空版在 §B)</b>:B5 pool 兩條件、B12 block_on(③ assisted 重驗)、B13 tokio 三處(Ext 二連)、B14 length-prefix。</p>
+    <p><b>心理帳</b>:首打超時是預期結果,不是能力判決|拿到陌生 spec 立刻做具體小事(clarify 五問/state 表/30 秒定界)——定界句的本質=把面試官的散文翻成自己的題面(LC 翻譯)|<b>7 錯出現在 8/3 半夜,就不會出現在 8/6 09:15。</b></p>
+  </div>
+</section>
+
+<section id="secF">
+  <h2><span class="sec">§F</span>修 code 段(動手,~20m)</h2>
+  <div class="card">
+    <p>檔案:<code>rehearsals/examples/bughunt_0805.rs</code>——兩題各埋 <b>2 個 bug</b>,全在邏輯層,編譯全綠、跑起來會炸。</p>
+    <ul>
+      <li>① <b>先只用眼睛讀</b>,把 4 個 bug 圈出來(這就是面試的 review 肌肉)</li>
+      <li>② 改碼 → <code>cargo run -p rehearsals --example bughunt_0805</code> → 直到印出「全綠」</li>
+      <li>③ 答案鍵在 <code>scratch/taper_0805.md</code> §F′——圈完/修完才准開</li>
+    </ul>
+    <p class="secnote">練習 1 = a 題(ring drop-oldest)、練習 2 = sim o(Kahn 波次)——都是舊識,抓的是換皮復發。</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+(function () {
+  // §B 填空:點空格翻答案
+  var blanks = Array.prototype.slice.call(document.querySelectorAll('.blank'));
+  var counter = document.getElementById('counterB');
+  function updateCounter() {
+    var n = blanks.filter(function (b) { return b.classList.contains('on'); }).length;
+    counter.textContent = '已翻 ' + n + ' / ' + blanks.length + ' 格';
+  }
+  blanks.forEach(function (b) {
+    b.dataset.ph = b.textContent;
+    function toggle() {
+      if (b.classList.contains('on')) {
+        b.classList.remove('on');
+        b.textContent = b.dataset.ph;
+      } else {
+        b.classList.add('on');
+        b.textContent = b.dataset.a;
+      }
+      updateCounter();
+    }
+    b.addEventListener('click', toggle);
+    b.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+  document.getElementById('resetB').addEventListener('click', function () {
+    blanks.forEach(function (b) { b.classList.remove('on'); b.textContent = b.dataset.ph; });
+    updateCounter();
+  });
+  updateCounter();
+
+  // §C 口說:打勾存本機
+  var KEY = 'taper0805-spoken';
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  Array.prototype.slice.call(document.querySelectorAll('.say input')).forEach(function (cb) {
+    if (saved[cb.id]) { cb.checked = true; cb.closest('.say').classList.add('done'); }
+    cb.addEventListener('change', function () {
+      cb.closest('.say').classList.toggle('done', cb.checked);
+      saved[cb.id] = cb.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+})();
+</script>
+</body>
+</html>
