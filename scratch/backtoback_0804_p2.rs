@@ -23,6 +23,12 @@
 // (a) steady-state memory of the gate itself, and (b) — the one I
 // actually care about — the worst-case number of handler threads parked
 // inside your gate, and what that costs the system.
+// Given:   40000 tenants, 800 handler threads, N = 64, M = 4.
+// Chain:   40000 * (arc = 4 bytes) ~= 160 KB, 796 thread park at most(same tenants has 800 jobs)
+// Cross:   找不到啦 能算好就很好了==
+// Sanity:  160 KB acceptable, but too much thread park
+// Verdict: we can use hash map to record all the jobs, but the same tenants blust jobs cannot be
+// controlled by us.
 //
 //
 //
@@ -93,7 +99,7 @@ impl Gate {
         // get the state
         // check can we run or wait
         // wait_while inner_state.running >= n or
-        // inner_state.tenant_running.entry(tenant_id).or_default() >= m
+        // inner_state.tenant_running.get(&tenant_id).copied().unwrap_or(0) >= m
         // add 1 in both running and tenant running
 
         let item = job();
@@ -140,4 +146,31 @@ fn main() {
 // Cross:   (換一條獨立的軸驗算,不是同一條鏈換寫法)
 // Sanity:  (跟這台機器的規格比量級,像不像話)
 // Verdict: (數字 + 比較 + 行動;(b) 是考官真正在乎的)
+// ═══════════════════════════════════════════════════════════════════
+//
+// ═══ Part B 批改 + 終裁(Claude,8/5 凌晨;作答在題面正下方)═══
+//
+// (b) ✓ 主菜一次站對:796 = 單租戶 flood(800−M),比全域帽情境(800−64=736)
+//     更壞的對抗性場景,直接選對。
+// (a) 模型層:remove-at-zero ⇒ map entries ≤ running ≤ N=64 ⇒ ~3 KB;
+//     40k/day 是流量計數不是 state。用戶反駁「上界蓋得住」→ 終裁:
+//     **結論(non-issue)對、worst case 對、差一個假設聲明**——160 KB 要成為
+//     bound 需要「tenant 母體穩定」這個沒講出來的假設;若 id 流動且無
+//     eviction,是每天 +160KB 的 leak 不是 bound。remove-at-zero 的價值
+//     = 讓這個假設根本不用問(≤64 對任何母體成立)。
+// Cross 課:Cross 不只有重算軸,**設計不變量給的上界也是一條獨立軸**
+//     (每個 entry ⇐ ≥1 running job ⇒ ≤N)——這題 Cross 的價值就是讓 (a)
+//     的模型錯活不到 Verdict。
+// (b) 的行動層(考官埋的真問題):gate 管住了「跑」沒管住「等」——
+//     waiters 佔的是 handler thread 共享池,M=4 保了下游、等待餓死全場
+//     (796/800 = 99.5% capacity hostage)。修法三刻度:per-tenant wait cap /
+//     fail-fast try_run / wait_timeout。上場句:
+//     "The gate bounds running but not waiting — waiters hold handler
+//      threads, so one tenant can still starve the pool. I'd add a
+//      per-tenant wait cap or fail-fast path."
+//
+// 配比終裁(用戶 8/5 凌晨點名,此後生效):sizing 降級為配菜——被問到才
+// 給一句「數字+比較+行動」;五行頭表格可以留,但 **Claude 直算或引導,
+// 不叫用戶手算**;本場記洞取消、不留作業。H/SH 計分核心回歸:狀態分析
+// + trade-off 出口 + code 綠。
 // ═══════════════════════════════════════════════════════════════════
