@@ -27,6 +27,38 @@
 
 不主動講的隱藏事實(等 clarify;問到 = 加分):見 §2。
 
+**§1.5 開場貼給 candidate 的 starter**(只含 Part A 簽名,Part B 到時口頭補一行;
+內部結構故意全空——設計訊號都在 private 區,不能餵):
+
+```cpp
+#include <cstdint>
+#include <functional>
+#include <vector>
+
+class JobScheduler {
+public:
+    using JobId = std::uint64_t;
+
+    explicit JobScheduler(std::size_t n_workers);
+    JobId submit(std::function<void()> fn);
+    // shutdown(): everything submitted so far must finish; then workers stop.
+    // Submitting after shutdown is an error.
+    void shutdown();
+    ~JobScheduler();
+
+private:
+    // your data structures here
+};
+
+int main() {
+    // write a small smoke test here as you go
+    return 0;
+}
+```
+
+取捨講明:給 starter 會少掉「candidate 主動問 API 長相」這個訊號——但本題的 clarify
+訊號全在語意層(環?late dep?drain?),不在簽名層,所以給了不虧,還省 5 分鐘打字。
+
 ---
 
 ## §2 Clarify 答案鍵(好 candidate 該問的,和你的標準答)
