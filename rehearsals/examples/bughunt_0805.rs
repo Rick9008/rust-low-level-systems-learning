@@ -29,7 +29,10 @@ impl Ring {
         let cap = self.buf.len();
         if self.len == cap {
             // 滿:淘汰一筆、收下新值
-            let tail = (self.head + self.len - 1) % cap;
+            // head didn't move
+            let tail = (self.head + self.len) % cap;
+            self.dropped += 1;
+            self.head = (self.head + 1) % cap;
             self.buf[tail] = v;
             return;
         }
@@ -62,17 +65,25 @@ fn kahn_waves(n: usize, edges: &[(usize, usize)]) -> Result<Vec<Vec<usize>>, Cyc
     }
     let mut frontier: Vec<usize> = (0..n).filter(|&i| indeg[i] == 0).collect();
     let mut waves = Vec::new();
+    let mut cnt = 0;
     while !frontier.is_empty() {
         frontier.sort_unstable();
         let mut next = Vec::new();
         for &u in &frontier {
+            cnt += 1;
             for &v in &adj[u] {
                 indeg[v] -= 1;
-                next.push(v);
+                // it should check the indeg, only 0 indeg can be pushed
+                if indeg[v] == 0 {
+                    next.push(v);
+                }
             }
         }
         waves.push(frontier);
         frontier = next;
+    }
+    if cnt != n {
+        return Err(CycleError);
     }
     Ok(waves)
 }

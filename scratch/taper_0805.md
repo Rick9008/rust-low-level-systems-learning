@@ -172,9 +172,16 @@ conflation 認題一句(出聲):_"Do you need **every** record, or only the **la
 
 **英文三對策(8/2 定,8/4 實測仍要催)**:裁決**當場**抄紙(≤5 字/條,抄完複誦)|規則 read back("So timeout 1 and 2 → redispatch, only the 3rd → error, correct?")|多問訊息**編號逐條回**,跳過就明說 deferred。
 
-**量級五行頭**:Given(重述全部參數;數字用一個劃一個,有剩=你在答別題;**跟你設計矛盾的假設在這行現形**)→ Chain(每步帶單位)→ Cross(兩路殊途必同歸)→ Sanity(荒謬檢查一行,沒有不收筆)→ Verdict(policy+何時啟動+代價)。
+**sizing 被問才答**(8/5 配比終裁):一句「數字+比較+行動」收工;帳的骨架 Claude 代算,不進晨讀。
 
 **骨架抽查殘項(8/5 豁免項,填空版見 §B)**:B5 pool 兩條件、B12 block_on(③assisted 重驗)、B13 tokio 三處(Ext 二連)、B14 length-prefix。
+
+**8/5 當日記洞(§A 翻閱中收,晨讀掃這裡)**:
+- c framer:drain 的成本=**剩下的**不是移走的(Vec 頭刪整批後搬)→ cursor 掃完一批一次 drain,攤銷 O(n)。
+- AG-R:**內 min 外 max**——鬆弛式取 min(算瓶頸)、heap 取 max(挑最寬路);`BinaryHeap` 預設 max,**不包 Reverse**(和 h 題手感相反)。
+- B2 句歸位:「環逼子問題記歷史,DAG 讓它免記」=最長路 DP 為何限 DAG 的**理由**(一般圖要記已訪集合→NP-hard),**不是**環偵測;偵測環=B1 Kahn 收尾 `processed < n`。
+- h timer_queue:週期 reschedule = `old_deadline + T`(釘格線,遲到不累積);直覺的 `now + T` 會把每輪遲到疊進節拍=飄移。長停頓醒來問一句:catch-up or skip(`while next <= now { next += T }`)。
+- 兩皮串味(Round 1 實測,連錯兩次=進場前必掃):std `incoming()` 只回 `io::Result<TcpStream>`,**沒有** `(stream, addr)` tuple——那是 tokio `accept()` 的形狀。std=iterator 逐個解 Result;tokio=loop+accept 解 tuple。另:`for` 模式必須不可反駁——`for stream in`,**下一行**才解 Result(`for Ok(x) in` = E0005)。
 
 **心理帳**:首打超時是預期結果,不是能力判決|拿到陌生 spec 立刻做具體小事(clarify 五問/state 表/30 秒定界)——定界句的本質=把面試官的散文翻成自己的題面(LC 翻譯)|7 錯出現在 8/3 半夜,就不會出現在 8/6 09:15。
 
