@@ -24,7 +24,7 @@ R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07
 | 認題卡 ×7 | ☐ 進行中 | SP ✅ 7/30(7/31 重做 19m 錶內)|HW-M ✅ 8/2 當 m 前導|HW-L = l 前導|**復活輪(8/2 晚定,用戶點名收尾):FP+TQ 排 8/3、FR+TA 排 8/4**,白天上班空檔各 15–20m——8/1 的 FP 滑帳與 7/31 改制砍掉的 8/3 槽(FR/TA/TQ)就此全數收回,七卡 8/4 前結清|FR/TA/TQ 原 8/3 槽被 n lite 取代,未再排|**8/4 白天被默寫改制+背靠背吃滿,FR/AG-R/TA/AG-T 滑今晚隨體力(砍序:TQ→FP→AG-T→TA;FR=JD sleeper 最後砍)** |
 | deep dive 英文稿(3 專案) | 稿 ✅(7/29 起草、7/31 口述化) | 口述練習壓 8/7–8/9(8/10 上午上場);`docs/interviews/deep-dive-projects.md` |
 | culture fit 稿 | 稿 ✅(7/31 ★ 五題全英文逐字化;★3 三細節待補真) | 無獨立場——散在各場 behavioral + debrief;唸稿壓 8/7–8/9;`docs/interviews/culture-fit-script.md` |
-| **coding #2(Jason Catlin)** | ✅ **8/6 10:15 考完** | dma_copy over segments,題偏簡單;follow-up 答 retry+backoff+上限+升級;洞清單三條(idempotency 沒點名為首)→ [紀錄](docs/interviews/2026-08-06-r2-coding-jason-dma-copy.md) |
+| **coding #2(Jason Catlin)** | ✅ **8/6 10:15 考完** | dma_copy over segments,題偏簡單;follow-up 答 retry+backoff+上限+升級;洞清單三條(idempotency 沒點名為首)→ [紀錄](docs/interviews/2026-08-06-r2-coding-jason-dma-copy.md);**Reply All + NDA 當天辦完 ✅**,晚休整 |
 | **coding #3(Jan Lagarden,自 8/6 改期)** | ☐ **8/11(二)09:15–10:00**(CoderPad 9FF772PP;07:45 起) | 前晚(8/10)輕 taper ≤1h:taper §E+§B 殘項+8/6 洞清單;當天晨間動線照 recall_checklist §0 |
 | **deep dive** | ☐ **8/10(一)10:00–10:45 Ulysses Kao**(meet kbq-myia-tvk) | 口述練習 8/7–8/9;08:30 起即可 |
 | **recruiter debrief(隨 Jan 場移)** | ☐ **8/11(二)10:00–10:15 Molly Huang** | 備妥想問的 3 個問題 + 結果時程問法 |
