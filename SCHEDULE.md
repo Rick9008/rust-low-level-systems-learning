@@ -1,7 +1,7 @@
 # SCHEDULE.md — Etched TPS 衝刺(7/16 → 7/28)
 
 > **2026-07-29 結案**:R1(7/28 TPS coding)✅ 過,feedback 正向(clarify 被點名稱讚;洞 = 時間不夠 code 有漏洞)。
-> **R2 onsite(8/1 官方行程確認)**:兩場 coding 併 **8/6(四)同天連跑**(09:15–10:00、10:15–11:00,中間只休 15m);deep dive + recruiter debrief **8/10(一)10:00–11:00**(修正 7/31 記載的 8/11);culture fit 沒有獨立場(散在各場 behavioral 提問 + debrief)。
+> **R2 onsite(8/6 改期版;8/1 原版=兩場 coding 8/6 連跑+debrief 8/10)**:**8/6 只考成 Jason 場(10:15)**——dma_copy over segments,題偏簡單,follow-up 答 retry+backoff+上限+升級,洞清單見 `docs/interviews/2026-08-06-r2-coding-jason-dma-copy.md`;**Jan 場改 8/11(二)09:15–10:00**(面試官臨時有事),recruiter debrief 隨移 **8/11 10:00–10:15**;deep dive 照舊 **8/10(一)10:00–10:45**;culture fit 沒有獨立場(散在各場 behavioral 提問 + debrief)。待辦:Reply All 確認 + NDA 電子簽。
 > 新階段的逐日計畫、題本(sim i–o)、認題卡、句庫、稿件全在 **[docs/interviews/README.md](docs/interviews/README.md)**——本檔保留衝刺歷史,逐日表不再更新。
 > 7/29 = 休息日(輕活):讀 `rehearsals/examples/sol_sim_i_dma.rs` + deep dive / culture fit 英文稿起草。
 > **R2 攝取進度(8/4 傍晚快照)**:i-lite ✅ 7/30|j 全場 ✅ 7/31 錶內|k lite ✅ 8/1|m 全場 ✅ 8/2(65m+20,場後修帳 3/3 綠)|l lite ✅ 8/2 深夜(4/4)|sim o ✅ 8/3(填空 8/8 綠)|n lite ✅ 8/3 晚 = R2 攝取全收|**8/4 背靠背 ×2 上半 ✅**(開機槽默寫改制:概念洞 0、7/27 真洞結案;場一 tokio 皮全收、場二 std 皮骨架收;**場二 Part B ✅ 8/5 凌晨結清**——(b) 796 單租戶 flood 一次站對=主菜;(a) 終裁=結論對、差一個假設聲明;批改+配比終裁在 `scratch/backtoback_0804_p2.rs` 檔尾:**sizing 此後降級配菜(一句「數字+比較+行動」),五行頭表格 Claude 直算或引導、不叫用戶手算**)|認題卡 FR/AG-R/TA 挪 8/5 塞進 taper §A 認題定界輪、不另立時段(AG-T 8/3 已降半複驗;卡 FP/TQ 照砍序最先砍)|8/5 taper(a–n 翻閱 30m)|輕敘事日誌重啟:[journal.md](journal.md)。

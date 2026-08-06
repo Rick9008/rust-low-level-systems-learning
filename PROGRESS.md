@@ -1,12 +1,12 @@
 # 學習進度(手動勾選,git 追蹤)
 
-~~面試日:**2026-07-28**~~ → **R1 ✅ 過(7/28)**;R2 onsite(8/1 官方行程確認):**8/6 兩場 coding 同天連跑(09:15–10:00、10:15–11:00,休 15m)+ 8/10(一)10:00 deep dive + debrief;culture fit 無獨立場(散在各場 behavioral + debrief)**。
+~~面試日:**2026-07-28**~~ → **R1 ✅ 過(7/28)**;R2 onsite(**8/6 改期版**):**8/6 Jason 場 ✅ 考完(dma_copy over segments)**;**8/10(一)10:00 deep dive(Ulysses Kao)**;**8/11(二)09:15 Jan coding + 10:00 debrief(Molly Huang)**——Jan 場自 8/6 改期,culture fit 無獨立場(散在各場 behavioral + debrief)。
 R2 逐日計畫與材料:[docs/interviews/README.md](docs/interviews/README.md);R1 衝刺排程(已結案):[SCHEDULE.md](SCHEDULE.md)。
 三欄語意:讀 = reference 讀懂能講;drill = 填完轉綠;
 challenge = 空白手搓過(★ 才有)。日期一律寫絕對日期。
 SCHEDULE 原則:**有彩排題覆蓋的 module,彩排就是它的 challenge**(ring→a、pool→b、framer→c)。
 
-## R2 onsite(7/29 → 8/10)
+## R2 onsite(7/29 → 8/11)
 
 R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07-28-tps-round1-dma.md)。
 
@@ -24,8 +24,10 @@ R1 紀錄:[docs/interviews/2026-07-28-tps-round1-dma.md](docs/interviews/2026-07
 | 認題卡 ×7 | ☐ 進行中 | SP ✅ 7/30(7/31 重做 19m 錶內)|HW-M ✅ 8/2 當 m 前導|HW-L = l 前導|**復活輪(8/2 晚定,用戶點名收尾):FP+TQ 排 8/3、FR+TA 排 8/4**,白天上班空檔各 15–20m——8/1 的 FP 滑帳與 7/31 改制砍掉的 8/3 槽(FR/TA/TQ)就此全數收回,七卡 8/4 前結清|FR/TA/TQ 原 8/3 槽被 n lite 取代,未再排|**8/4 白天被默寫改制+背靠背吃滿,FR/AG-R/TA/AG-T 滑今晚隨體力(砍序:TQ→FP→AG-T→TA;FR=JD sleeper 最後砍)** |
 | deep dive 英文稿(3 專案) | 稿 ✅(7/29 起草、7/31 口述化) | 口述練習壓 8/7–8/9(8/10 上午上場);`docs/interviews/deep-dive-projects.md` |
 | culture fit 稿 | 稿 ✅(7/31 ★ 五題全英文逐字化;★3 三細節待補真) | 無獨立場——散在各場 behavioral + debrief;唸稿壓 8/7–8/9;`docs/interviews/culture-fit-script.md` |
-| **coding ×2(併場)** | ☐ **8/6(四)09:15–10:00 Jan Lagarden、10:15–11:00 Jason Catlin**(休 15m,07:45 起) | 當晚:紀錄+兩場洞清單入 docs/interviews/ |
-| **deep dive + debrief** | ☐ **8/10(一)10:00–10:45 Ulysses Kao + 10:45–11:00 Molly Huang** | culture fit 散在各場,無獨立場;08:30 起即可 |
+| **coding #2(Jason Catlin)** | ✅ **8/6 10:15 考完** | dma_copy over segments,題偏簡單;follow-up 答 retry+backoff+上限+升級;洞清單三條(idempotency 沒點名為首)→ [紀錄](docs/interviews/2026-08-06-r2-coding-jason-dma-copy.md) |
+| **coding #3(Jan Lagarden,自 8/6 改期)** | ☐ **8/11(二)09:15–10:00**(CoderPad 9FF772PP;07:45 起) | 前晚(8/10)輕 taper ≤1h:taper §E+§B 殘項+8/6 洞清單;當天晨間動線照 recall_checklist §0 |
+| **deep dive** | ☐ **8/10(一)10:00–10:45 Ulysses Kao**(meet kbq-myia-tvk) | 口述練習 8/7–8/9;08:30 起即可 |
+| **recruiter debrief(隨 Jan 場移)** | ☐ **8/11(二)10:00–10:15 Molly Huang** | 備妥想問的 3 個問題 + 結果時程問法 |
 
 ## 模組 × 三層
 
