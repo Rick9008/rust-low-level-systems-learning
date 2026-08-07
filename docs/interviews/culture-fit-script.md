@@ -66,22 +66,27 @@
 兩個天花板互相呼應:第一段我的天花板是 kernel,第二段晶片的天花板由軟體逼近。
 被追問「離職原因」負面細節時,回到第一句重申 toward,不展開任何抱怨。
 
-### 3. ★ Work-life balance(陷阱題:兩個極端都扣分;~135 words ≈ 65s)
+### 3. ★ Work-life balance(陷阱題:兩個極端都扣分;8/7 補真後 ~175 words ≈ 80s)
 
 **逐字稿(直接唸)**
 
 > "Honest answer: I have my own rhythm, and I protect sleep — tired engineers write outages.
 >
-> But when something matters, I can sustain real intensity. Concrete example: my teammate and I were driving our content-moderation feature to a hard demo deadline — a stretch of focused, genuinely high-intensity development. What made it sustainable was scheduling and a hard sleep red-line, not willpower — that's what kept day ten as sharp as day one. And we made the demo.
+> But when something matters, I can sustain real intensity. William and I had two weeks to get our content-moderation feature to a hard demo deadline. We paced most of it deliberately — and then on the last Friday we paired straight through the night and went out for breakfast on Saturday morning. That happened once, at the end, and it was a decision — we could only afford it because the rest of the two weeks wasn't run that way. We made the demo, and that feature has been in production for over a year now.
 >
 > Long-term, I side with something Jon Gjengset — a Rust systems educator I learn a lot from — has argued: consistent, focused hours out-produce heroic hours over anything longer than a sprint. Sprints are fine when they matter, as long as they're sprints and not the steady state.
 >
-> I manage energy the way I manage capacity in a system: leave headroom, or the tail latency gets you."
+> I manage energy the way I manage capacity in a system: leave headroom, and know when to spend it."
 
 **唸法註(不唸)**:結構 = 誠實 → 證據(Moderation 衝刺)→ 論點背書(Gjengset)→ 系統比喻收尾。
-⚠ **證據段三細節待補真(7/31 深夜換稿:原「面試準備」例退役——自我指涉+非工作產出)**:
-① 衝刺時長("a stretch" 換真數字,如 "two weeks");② 結局補一句(demo 之後 feature 上線?);
-③ 是否點名隊友("my teammate William and I" 比匿名更真,加分不是風險——你選)。
+✅ **三細節已補真(8/7)**:① 兩週;② feature 上線已一年多(結局句進稿尾,回答「衝刺值不值得」);
+③ 點名 William(你自己提的,留著=真實感)。
+⚠ **8/7 訊息改寫(必讀,不是潤稿)**:原稿賣「hard sleep red-line + day ten as sharp as day one」,
+與真實情節(最後週五通宵到週六早餐)**直接對撞**——面試官一問就破。改成「兩週只有最後一晚、
+刻意選的、撐得住正因為前面沒那樣操」:強度訊號與節制訊號同時在,且句句是真。
+收尾金句同步改("leave headroom, **and know when to spend it**"),因為新敘事就是「留餘裕→在關鍵處花掉」;
+原本的 "or the tail latency gets you" 與通宵並存會刺耳,已退役。
+**追問防禦**:問「所以你會通宵?」→「兩週衝刺的最後一晚,一次,是決定不是習慣。我不做的是把那個當常態——那才是出事的做法。」
 ⚠ **Gjengset 引用的使用守則(7/31 加)**:上場前自己把那篇 40-hours 文章重讀一遍,確認你轉述的論點正確;
 被追問文章內容就講論點、不掰細節;如果對面的「拼命文化」訊號很強,把人名句縮短成
 "I optimize for sustained throughput, not heroics" ——論點不變,少一個可以被挑戰的引用。
@@ -95,21 +100,30 @@
 
 - 用實例不用形容詞:two-node HA 的衝突規則沒有現成答案 → 自己定義、自己驗證、自己扛結果——"that's startup-shaped work inside a bigger company. I liked that part best."
 
-### 6. ★ Conflict / disagreement(SAR;~160 words ≈ 75s)
+### 6. ★ Conflict / disagreement(SAR;8/7 補真後 ~215 words ≈ 100s,砍兩處可回 ~190 words ≈ 90s)
 
 **逐字稿(直接唸)**
 
-> "Sure — this happened on the two-node H-A project. When we designed the split-brain conflict resolution, the team's first instinct — mine included — was last-write-wins with timestamps. It's the intuitive answer.
+> "Sure — on the two-node H-A project. I'd drawn the architecture for the decision-replication layer and brought it to a review with my manager, our tech lead, and a junior teammate. The tech lead proposed something lighter: put the decision on a mail flag and let dsync — the mail store's own replication — carry it across. No new system to build.
 >
-> I pushed back, but with a concrete failure scenario rather than an opinion. Picture a partition where node A approves a message and the mail actually goes out — and node B later rejects it. You cannot recall a sent email by overwriting a row. And with exactly two nodes, there's no trusted clock to even say which write was 'later'.
+> That's the right question to ask, so I took it seriously, and I tested it against a failure scenario instead of arguing preference. Flags replicate as state, and state replication settles conflicts by whoever wrote last. Partition: node A approves, the mail actually goes out; node B rejects. If the reject lands last, you've un-sent an email that is already in someone's inbox. And with exactly two nodes, there's no trusted clock to even say which one was later.
 >
-> That scenario reframed the discussion. We ended up deriving the rules from operation semantics — irreversible actions win — and that design has now run in production for over six months with zero inconsistency incidents.
+> That reframed the discussion. The gap was never data replication — the platform already had three of those. It was that nobody replicated what the application had *decided*. So we built the operation log, and derived the conflict rules from operation semantics: irreversible actions win. Six-plus months in production, zero inconsistency incidents.
 >
-> We didn't converge because someone argued better — we converged because a failure scenario made the answer obvious. That's how I like to disagree: bring the counterexample, not the volume."
+> We didn't converge because someone argued better — a failure scenario made the answer obvious. That's how I like to disagree: bring the counterexample, not the volume."
 
-**唸法註(不唸)**:SAR 全在裡面(S=LWW 直覺、A=反例場景、R=語意規則+六個月零事故)。
-⚠ **仍待補真**:當時實際的討論對象與場景(誰主張 LWW、在什麼會議)——上場前把人物填進第一段,
-一句就夠:"my tech lead and I both started from..."。
+**唸法註(不唸)**:SAR 全在裡面(S=tech lead 提 dsync 捷徑、A=反例場景、R=語意規則+六個月零事故)。
+✅ **人物與場景已補真(8/7)**:場合 = **你把架構畫完後,自己召集 manager / staff(tech lead)/ junior 的
+架構 review**;提案人 = **staff 同事(tech lead)**,主張「用 mail flag 操作 dsync 幫我們同步,就不必自己
+做一個新系統」。這比原稿的抽象版強:場合、人、提案都講得出來,追問不會空。
+**為什麼原稿的 "last-write-wins with timestamps" 換成 dsync 版**:兩者不衝突——**靠 flag 讓 dsync 同步,
+本質就是狀態複製,而狀態複製的勝負規則就是「誰最後寫」**。原稿講的是這件事的抽象名字,新稿講的是
+當時真正被提出的具體方案。技術結論一字未改(7/29 你回填的理由本來就是「複製決定不了先後順序、
+也不知道誰的操作不可挽回」),只是把它接回真實現場。
+⚠ **追問防禦**:① dsync 一句話定義備著——"Dovecot's mailbox replication tool; it syncs messages and
+their flags between servers."**被追問內部細節就停在這句,不掰**。② 政治安全:全段給 tech lead credit
+("that's the right question to ask")——這題考的是你怎麼不同意,**不是「我糾正了我的 lead」**,語氣一歪就扣分。
+③ 趕時間時可砍兩處:"And with exactly two nodes…later."、"the platform already had three of those"。
 
 ### 7. ★ Failure(✅ authz 故事——真正自己寫出的 bug;~155 words ≈ 75s)
 

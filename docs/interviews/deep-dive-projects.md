@@ -35,7 +35,9 @@
 > 4. CPU-spin 是**前人程式碼的陳年 bug** → 只當 debugging 故事,不當 failure 認領;個人 failure 改用 **authz/authn 缺失**(CVSS 10.0 的起源,culture fit ★7)。
 > 5. logging daemon 實際架構 = **dovecot → syslog → syslog-ng → 自寫 C++ daemon 解析後寫 DB**;慢 sink 策略/吞吐數字不確定 → **不講數字、不掰**,被問吞吐就誠實說沒有量測記憶、講架構瓶頸在 DB 寫入端。
 >
-> **仍待補**:conflict 故事的實際人物與場景(★6)|專案三最難的 bug 與如果重來。
+> **8/7 進度**:✅ ★6 conflict 人物與場景補真(tech lead 提「mail flag + dsync」捷徑,場合=你召集的架構 review)、
+> ✅ ★3 Moderation 三細節補真(兩週/上線一年多/點名 William;訊息同步改寫,通宵與「睡眠紅線」原稿對撞已解)。
+> **唯一殘項**:專案三(content-inspection)第 6「最難的 bug」與第 7「如果重來」。
 
 ### 專案一:Two-node Active-Active HA(Go + Rust,審核決策狀態同步層)
 
