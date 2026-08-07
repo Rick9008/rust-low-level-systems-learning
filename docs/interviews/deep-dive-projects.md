@@ -176,9 +176,40 @@ commit `d9a53de`——**它取代的是 Rayon worker 裡的全域 `blocking_lock
 | 數字 | 能不能講 | 依據 |
 |---|---|---|
 | ~300× max concurrent connections、12.5× average QPS | ✅ 講 | 隔壁團隊那三個 MR,`perf` + load benchmark 驗過(**說清楚是另一個 service**) |
-| **~3,500 msg/s @ 8 cores** | 🟡 **要講就自帶 scope,不能裸講**(8/7 查證後定案) | 出處你自己指認 = 分支 `feat-adaptive-dispatch` 的 harness `src/database/pattern/bench_dispatch.rs`。**它確實印絕對微秒**(`seq (us)` / `par (us)`,`median_ns` 取 31 次中位數),所以當時螢幕上有絕對值——只是 committed 的 results doc **只留了比值,絕對值沒入檔**。反推 3,500/s ⇔ 每封 **286µs**,量級與這個 harness 對得上。🔴 **但它量的是 `dispatch_text_matchers` 單一階段的隔離量測**:檔案自己寫明 **PII 排除在外**(「it is the heaviest matcher」)、**4 核開發機**、**不含** `from_socket` 解析與 `new_moderation` 的 DB 寫入(你自己的文件估 1–10ms 與 5–50ms)。所以 **"the service sustains 3,500 msg/s" 站不住**(被問「這數字包含什麼」會塌);**"the matching stage clocked about 3,500 messages a second in isolation" 站得住**。差別只是一個修飾語,句子自己帶著就安全 |
-| 想把那個數字升級成硬證據 | 選配,一行命令 | `BENCH_DISPATCH=1 cargo test --lib database::pattern::bench_dispatch -- --nocapture --test-threads=1` → 把絕對 µs 那兩欄補進 `docs/adaptive-dispatch-crossover-results.md`。做了就能講「量過、記下來了」;沒做就照上面那行自帶 scope 的講法 |
-| 「sequential vs `par_iter` 交叉點 ~2000 bytes;≥8 個 active matcher 時 1KB 就有 1.6× 平行勝出;heavy profile 最高 3.58×」 | ✅ 講,但要說「沒 merge」 | `docs/adaptive-dispatch-crossover-results.md`(branch `feat-adaptive-dispatch`),**31 次取中位數、4 核開發機、2026-07-13、PII 排除**。**這是 repo 裡唯一的真實量測,而且比吞吐數字更值錢**:結論是**決定要不要平行的是 active matcher 的數量,不是郵件大小**,因此推翻了團隊沿用的「50KB 交叉點」——那個數字是在只有 ExactMatch(≈sparse profile)的負載上校準的,而 sparse 在整張表上根本永遠不該平行(0.99×~1.00×,差異是雜訊)。落地成 `CostClass` 四檔:PII active → Heavy 一律平行、≤1 active → Light 一律序列、≥8 active → Heavy、2–7 active → Adaptive(subject+body ≥ 2000 bytes 才平行)。**分支未 merge,講成「已上線」會被抓** |
+| **~3,500 msg/s @ 8 cores** | 🔴 **8/7 查證定案:從稿子拿掉,被問到才答,且必須說「沒留紀錄」** | 兩個 branch 都查過了。① `feat-adaptive-dispatch` 的 `bench_dispatch.rs` 確實印絕對 µs,但量的是 `dispatch_text_matchers` **單一階段、PII 排除、debug build(unoptimized)**,不含 socket 解析與 DB 寫入(你自己文件估 1–10ms / 5–50ms)——**不可能是「8 核節點撐 3,500」的來源**。② `feat-moderation-metrics` 才是對的儀器:它加 Prometheus 單調計數器 `moderationd_mails_moderated_total`,而 `src/server/metrics.rs` 檔頭明寫「daemon 從不自己算速率,用 `rate(...[1m])` 在查詢端算」。所以 3,500 若真是端到端,就是那次 load 跑的 rate 查詢——**但 repo 裡沒留任何輸出**,你只能憑記憶,不能引用。**講法**:主動不提;被追問就答 "I measured it through a Prometheus counter on a load run — I don't have the artifact in front of me, so treat it as order-of-magnitude." 誠實 + 說得出儀器 = 不失分;硬報一個查不到出處的數字才失分 |
+| **🟢 8/7 現場量出來的新結果(這個講,它比吞吐數字強得多)** | ✅ 主動端出來 | 見下方「平行門檻不可攜」段。這是你 8/7 用自己的 harness 做的控制實驗,結論會推翻你自己那份 results doc 的兩個 shipped threshold |
+| 「決定要不要平行的是 active matcher 的數量,不是郵件大小」 | ✅ 講,但要說「分支沒 merge」 | `docs/adaptive-dispatch-crossover-results.md`(branch `feat-adaptive-dispatch`),31 次取中位數、PII 排除。這條推翻了團隊沿用的「50KB 交叉點」——那數字是在只有 ExactMatch(≈sparse profile)的負載上校準的,而 sparse 在整張表上永遠不該平行(0.99×–1.00×,差異是雜訊)。落地成 `CostClass` 四檔:PII active → Heavy 一律平行、≤1 active → Light 一律序列、≥8 active → Heavy、2–7 active → Adaptive(subject+body ≥ 2000 bytes 才平行) |
+| 「同一台機器、同一個郵件大小,吞吐差一個數量級,只因為 admin 開了幾條 matcher」 | ✅ **這是「為什麼我不給單一吞吐數字」的正面答案** | 8/7 實測 @1KB:sparse 序列 **42µs**(≈23.7k/s)、medium 序列 **76µs**(≈13.1k/s)、heavy 序列 **215µs**(≈4.6k/s)、heavy 平行 **375µs**(≈2.7k/s)。**9 倍差距,同一台同一封信**。所以裸報一個 msg/s 沒有意義——這句話本身就是把「我沒有單一數字」轉成「我知道為什麼不該有單一數字」 |
+
+**🟢 8/7 新發現:平行門檻不可攜(deep dive 主動端出來的料)**
+
+8/7 在 16 核機器上重跑同一支 harness,結果**與 committed 那張表(4 核開發機)在小 payload 上相反**。於是做控制實驗:
+同一台、同一份 build,**只改 `RAYON_NUM_THREADS`**:
+
+| 格子 | committed(4 核機) | 8/7 釘 4 條 | 8/7 預設 16 條 |
+|---|---|---|---|
+| heavy @ 1KB | 1.60× 平行勝 | **1.17× 平行勝** | **0.57×(平行慢 1.75 倍)** |
+| medium @ 2KB(= `ADAPTIVE_CROSSOVER_BYTES` 那一格) | 1.13× 平行勝 | **1.11× 平行勝** | **0.72×(平行慢 39%)** |
+| heavy @ 500KB | 3.58× | 2.63× | **3.31×** |
+
+**結論三句**:①**變因是 Rayon 池的寬度,不是機器雜訊**——釘 4 條就重現了 committed 的表(medium@2KB:1.11× vs 原 1.13×)。
+②**交叉點隨池變寬而右移**:fan-out 的固定成本隨池寬長,每個 job 的工作量不變,所以小 payload 先被吃掉;
+但寬池的天花板更高(500KB 從 2.63× 升到 3.31×)。**池寬換的是「交叉點右移 + 漸近線上升」。**
+③**因此那兩個常數不可攜**:daemon 把 Rayon 執行緒設成 = 核心數(`cores/2` 的餘數再 ×2 = cores),
+所以門檻其實是**部署機核心數的函數**;寫死的 2000 bytes 與「≥8 active 一律平行」在 4 核對、在 16 核**兩條都選錯邊**,
+而且錯的是有害方向(付了排程成本卻沒收益)。
+
+**上場講法(英文,~110 words ≈ 55s)**
+
+> "One more thing I'd flag, because I only found it this week. I'd calibrated a parallel-vs-sequential threshold from a benchmark on a four-core dev box. Re-running the same harness on a sixteen-core machine, two of my thresholds flipped sign — parallel was now 1.75× *slower* at the small end, where I'd measured it winning. I pinned the Rayon pool back to four threads on the same machine and the original numbers came back, so the variable was pool width, not noise: the fan-out's fixed cost scales with the pool, so the crossover moves right as you add cores — while the ceiling at large payloads goes up. Which means a baked byte threshold can't be right on two different boxes. It has to be derived from the pool it's actually running on."
+
+**這段為什麼強**:它是「我量了 → 我的數字被自己推翻 → 我做了控制實驗分離變因 → 我知道正確的修法是什麼」的完整迴圈,
+而且**它推翻的是自己的結論,不是別人的**。⚠ 誠實邊界:分支未 merge,所以**沒有 production bug**——
+講成「線上出事」會被抓。正確說法是 "before that branch merges, the constant has to become pool-aware."
+**修法(被追問才給)**:不要寫死位元組門檻;把判準換成「估計的序列工作量 vs 實測的 fan-out 成本」,
+其中 fan-out 成本在啟動時對**實際的池寬**量一次(工作量 ≈ bytes × active matcher 數,本來就是這題的真正變數)。
+**可重跑的證據**(想在面試前再驗一次):
+`RAYON_NUM_THREADS=4 BENCH_DISPATCH=1 cargo test --lib database::pattern::bench_dispatch -- --nocapture --test-threads=1`
 | PII ~100ms/KB、Rayon 排程 ~100μs、P50<10ms/P99<50ms | 🔴 別當實測講 | 前兩者檔案自己標「估計」,第三個是 **target**(`docs/TECHNICAL_REVIEW.md:420`) |
 | 0 `unsafe`、~16k LOC、67 個 Rust 檔 | ✅ 可講 | `withers_doc/07_code_review.md:305-317` |
 
