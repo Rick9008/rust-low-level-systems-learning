@@ -68,11 +68,21 @@ code 走讀、陷阱清單;**每分頁掛同款防雷門**(i 已開,j–n 各自
 | 8/4 二(大塊) | 開機:~~n lite 補打~~(**8/3 晚已收,槽釋放**)→ **骨架默寫抽查 15m 提前進開機槽,輪替制:async 兩皮第一位**(8/3 晚首默 7 錯,隔夜冷重默=驗收)**+ length-prefix 3 行(7/27 唯一 ✗)+ spsc use 塊(tokio use 塊全忘=衰退訊號);pool 兩條件/TCP std 六行移 8/5**→ **背靠背模擬**:Claude 出全新題 ×2(禁區同 live sim 規:不碰 j–n hidden spec 域;**題池納入 async 象限——tokio 或純 std 皮,盲測**),各 25–30m 只跑到 state 表+骨架,**中間休 15 分鐘照 8/6 真實節奏**——兩場連打的體力與切換先試一次;**每題埋一個 sizing 小題,用量級五行頭(Given/Chain/Cross/Sanity/Verdict)作答**(7/31 reps v5 定案的結帳骨架;評分表含 state 表開場 3 分鐘+英文抄紙/read back/編號逐答);下午空檔認題卡場:**FR → AG-R → TA → AG-T**(砍序照這個順序反過來砍;FR=e2 fd_registry=JD sleeper、AG-R=widest path 認題=algo 系(8/3 已提前吃掉骨,變複驗)、TA=f aggregator、AG-T=聚合樹修復;**卡 FP、TQ 自 8/3 滑入排最尾,砍序最先**;收完卡全結,8/5 翻閱只剩複讀)+ 擠空檔:i–k 洞複掃 + sim o stepper 複讀(8/3 晚滑入;骨架抽查已移開機槽) | **08:30 起(梯度開始;9:15 場只需 07:45 起,比 R1 的 8:45 場輕)** |
 | 8/5 三 | taper:不碰新題、檢查表 + 時間預算 + **六題 30 秒英文定界唸一輪**(sol 檔頭 + spec-cards-answers)+ **async 兩皮定界**(d 題 tokio 三句 + 純 std block_on/poll 合約兩句)+ **tokio/Waker 骨架重默 5m**(骨架默寫=taper 豁免項;**加抽查殘項:pool 兩條件+TCP std 六行**,自 8/4 輪替滑入)+ ~~量級五行頭默寫 30 秒~~(**8/5 配比終裁砍**:sizing=配菜,被問才答「數字+比較+行動」一句;五行頭表格=Claude 直算/引導用,不叫用戶默寫手算)+ **a–n 認題翻閱 30m**(8/2 增:把六題定界輪往 a 端延伸成全題庫過一輪;材料限 spec-cards 複習卡 + sol 檔頭 + 心得卡,**不開實作碼**——一開函式本體就不是 30 分鐘的事;**記洞不修洞**:翻到不穩寫進檢查表帶進場,面試時多問一句 clarify 就能繞,真要補的提前到 8/3–8/4 處理) | 08:00 起、00:30 熄燈 |
 | **8/6 四** | ✅ 實績:**只考 Jason 一場(10:15)**——dma_copy over segments,題偏簡單,follow-up(硬體壞掉怎麼辦)以 retry+exponential backoff+fail 上限+升級通知作答;洞清單三條(idempotency 沒點名/升級詞彙可更貼硬體語境/Jan 場不因今天簡單而降備)→ [紀錄](2026-08-06-r2-coding-jason-dma-copy.md)。**Jan 場改期 8/11 09:15**,debrief 隨移 8/11 10:00 | 收帳入庫 ✅;**Reply All 確認 ✅ + NDA 簽 ✅(當天辦完)**;晚上休整(遊戲夜,計畫內零產出)——稿件三洞(★3 Moderation demo 三細節/conflict 人物場景/專案三最難 bug+如果重來)全數照原排 8/7 起頭,素材倒給 Claude 收成口述稿 |
-| 8/7 五 – 8/9 日 | coding 歸零,全轉 deep dive / culture fit(只有三天,8/10 上午即上場):8/7 稿件補洞(★3 Moderation demo 三細節/conflict 人物場景/專案三最難 bug+如果重來)+ 晚口述 #1(專案二)→ 8/8 口述 #2+#3 + culture fit 全套唸(★1–★7)+ 模擬追問 → 8/9 雙全串 + deep dive taper、早睡 | 整段維持 ≤08:30 起 |
+| 8/7 五 – 8/9 日 | coding 歸零,全轉 deep dive / culture fit(只有三天,8/10 上午即上場)。**✅ 8/7 白天實績**:三個稿件洞全清(★3 Moderation 三細節補真+訊息改寫〔通宵情節與原稿「睡眠紅線」對撞已解〕、★6 conflict 人物場景補真〔tech lead 提 mail flag+dsync 捷徑〕、專案三第 6/7 題以 repo 實證落地〔最難的 bug=`dbg!`→451 tempfail;如果重來=顯式入場控制〕)+ **砍掉一句 7/29 Claude 編的關鍵句**+ 吞吐數字出處結案(load test 已入 MR !65 可引用;3,500 定性為外推,照履歷講但不主動報精確數字)+ **四檔重構**(練習本只留問題/英文/中文,參考資料另立 notes,新增 practice-method)。**逐晚菜單改以 [practice-method.md](practice-method.md) 為準**:8/7 晚 專案二 + 修復包七句 + 打斷練習;8/8 專案一+三 + culture fit ★1★2★3 + 打斷練習 + 三十秒版;8/9 taper=完整串一次 + 只唸首尾句 + **重讀 Gjengset 40-hours 原文**(culture fit 唯一殘項),不碰新東西、早睡 | 整段維持 ≤08:30 起 |
 | **8/10 一** | **deep dive 10:00–10:45(Ulysses Kao,meet kbq-myia-tvk)**;08:30 起即可 | 收帳:全程紀錄入庫。**晚上=Jan 場輕 taper**(量 ≤1h:`scratch/taper_0805.md` §E 掃讀 + §B 殘項默寫 + 兩皮串味複掃 + 8/6 洞清單三條;不碰新題不開 oracle),00:00 前熄燈(9:15 場 07:45 起) |
 | **8/11 二** | **coding 09:15–10:00(Jan Lagarden,CoderPad 9FF772PP)→ recruiter debrief 10:00–10:15(Molly Huang,meet off-xvwe-qek)**;07:45 起,晨間動線照 `scratch/recall_checklist.md` §0、材料 taper §E(8/6 那套原封重跑);debrief 備妥想問的 3 個問題 + 結果時程問法 | 收帳:全程紀錄入庫 + onsite 全輪結案 |
 
-culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict、failure、proudest project、想問他們的 3 個問題;底稿 = 7/26 的三條經驗故事。稿子檔案:`culture-fit-script.md`(寫完放本資料夾)。
+culture fit 英文稿範圍:自我介紹 60–90s、why this company、conflict、failure、proudest project、想問他們的 3 個問題;底稿 = 7/26 的三條經驗故事。
+
+**稿件四檔結構(2026-08-07 重構——原本練習材料與參考資料混在一起,唸稿時要跳過大量註解)**:
+
+| 檔案 | 放什麼 | 什麼時候開 |
+|---|---|---|
+| [deep-dive-projects.md](deep-dive-projects.md) | **練習本**:三專案 × 七題,每題只有「面試官的問題 + 要唸的英文 + 那段英文的中文意思」 | 出聲練習時 |
+| [culture-fit-script.md](culture-fit-script.md) | **練習本**:11 題同上格式 | 出聲練習時 |
+| [deep-dive-notes.md](deep-dive-notes.md) | 參考資料:數字出處與能不能講、file:line 證據、三層成本模型、追問彈藥、備用 bug 故事、**保密紅線** | 被深追想加深度時、或想確認某個數字能不能講時 |
+| [culture-fit-notes.md](culture-fit-notes.md) | 參考資料:各題沿革、為什麼這樣寫、追問防禦、Gjengset 引用守則 | 同上 |
+| [practice-method.md](practice-method.md) | **怎麼練**:不背整段(只背首尾句)、三遍法、打斷練習、修復包七句、數字唸法表、三十秒版、8/7–8/9 逐晚菜單、找 Claude 練的四種指令 | **練習前先讀這個** |
 
 **稿件狀態(7/29 晚,二輪定稿)**:deep dive 三專案 + culture fit 五題 ★ 已起草並按 Withers 回填的五個確認項修正(PG 14/收信不能停/內建不一致偵測計數 0/CPU-spin=前人 bug 只當 debugging 故事/logging daemon 誠實架構 = syslog-ng 尾端寫 DB);個人 failure 改用 **authz/authn 缺失 → CVSS 10.0** 故事。素材 = 履歷 + Holdwin 簡報轉軸,交易對照句已拿掉;唸稿鏡像頁 `html_p/r2-interview-scripts.html`(claude.ai index R2 備戰區有卡)。**仍待補**:conflict 故事的實際人物場景、專案三最難的 bug。
 **7/31 三輪(逐字化)**:culture fit ★1/★2/★3/★6/★7 全數升級為**全英文逐字稿**(骨架版實測唸不出來——句間中文接縫卡嘴;中文降級為「唸法註」不出聲);★3 織入 Jon Gjengset 40-hours 論點(含使用守則:上場前重讀原文、被追問講論點不掰細節、拼命文化訊號強就把人名句縮成 "I optimize for sustained throughput, not heroics")。deep dive 專案二全段口述化(今晚口述 #1 用)、專案一 trade-off/演進段口述化、專案三問題/設計補口述句;唸稿鏡像頁同步重發。
