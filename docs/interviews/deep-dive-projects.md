@@ -176,11 +176,38 @@ commit `d9a53de`——**它取代的是 Rayon worker 裡的全域 `blocking_lock
 | 數字 | 能不能講 | 依據 |
 |---|---|---|
 | ~300× max concurrent connections、12.5× average QPS | ✅ 講 | 隔壁團隊那三個 MR,`perf` + load benchmark 驗過(**說清楚是另一個 service**) |
-| **~3,500 msg/s @ 8 cores** | 🔴 **8/7 查證定案:從稿子拿掉,被問到才答,且必須說「沒留紀錄」** | 兩個 branch 都查過了。① `feat-adaptive-dispatch` 的 `bench_dispatch.rs` 確實印絕對 µs,但量的是 `dispatch_text_matchers` **單一階段、PII 排除、debug build(unoptimized)**,不含 socket 解析與 DB 寫入(你自己文件估 1–10ms / 5–50ms)——**不可能是「8 核節點撐 3,500」的來源**。② `feat-moderation-metrics` 才是對的儀器:它加 Prometheus 單調計數器 `moderationd_mails_moderated_total`,而 `src/server/metrics.rs` 檔頭明寫「daemon 從不自己算速率,用 `rate(...[1m])` 在查詢端算」。所以 3,500 若真是端到端,就是那次 load 跑的 rate 查詢——**但 repo 裡沒留任何輸出**,你只能憑記憶,不能引用。**講法**:主動不提;被追問就答 "I measured it through a Prometheus counter on a load run — I don't have the artifact in front of me, so treat it as order-of-magnitude." 誠實 + 說得出儀器 = 不失分;硬報一個查不到出處的數字才失分 |
+| **端到端吞吐:實測數字(8/7 出處結案)** | ✅ **可引用,而且現在可重現** | 使用者另一 session 已把它入庫:`tools/load_test.py` + `docs/throughput-load-test-results.md`(MR !65 / branch `docs-throughput-load-test`),ground truth = **daemon 自己的 counter delta**(不是 client 自己數),每格 3 次取中位數。**四核 DSM 真機(withers.syno)實測**:K=1 **245**/s(對上 7/17 手量的 248,±1%)、**K=32 ≈ 1,081/s(甜蜜點)**、K=64 掉到 **477**/s(已過膝點)。⚠ 同機變異 **±30–40%**,跨天絕對值不可比。**這是最強的位置**:有 committed 腳本、有結果文件、有變異 caveat、有 counter 當 ground truth——「可重現」本身就是訊號 |
+| **~3,500 msg/s @ 8 cores(履歷那句)** | 🟡 **使用者 8/7 拍板保留。保留可以,但要知道它是外推不是量測** | 實測集裡**最高是 1,081/s @ 4 核**,沒有任何一格到 3,500。要從 1,081 走到 3,500 需要**兩個相乘的假設**:①把壓測 client 移出被測機(那次 client 吃掉 1.5/4 核,daemon 只拿到 2.17 核 → 約 1.7×);②核心數加倍且**線性擴展**(約 2×)。1,081 × 1.7 × 2 ≈ 3,700,落在 3,500 附近。🔴 **但第二個假設有反證**:K=64 在 4 核上吞吐**反而下降**(1,081 → 477),說明天花板是**每封一條 TCP 連線的請求路徑(syscall-bound)**,不是 CPU——syscall-bound 的東西不保證隨核心數線性擴展。**所以講法只有一種安全形式**:被追問「怎麼量的」時**先給實測、再給外推**,例如 "I measured about a thousand a second on a four-core box with the load generator stealing a third of the CPU; the eight-core figure is my extrapolation from that, not a measurement." 誠實地說「這是外推」不失分;把外推講成量測,一被追問就塌 |
 | **🟢 8/7 現場量出來的新結果(這個講,它比吞吐數字強得多)** | ✅ 主動端出來 | 見下方「平行門檻不可攜」段。這是你 8/7 用自己的 harness 做的控制實驗,結論會推翻你自己那份 results doc 的兩個 shipped threshold |
 | 「決定要不要平行的是 active matcher 的數量,不是郵件大小」 | ✅ 講,但要說「分支沒 merge」 | `docs/adaptive-dispatch-crossover-results.md`(branch `feat-adaptive-dispatch`),31 次取中位數、PII 排除。這條推翻了團隊沿用的「50KB 交叉點」——那數字是在只有 ExactMatch(≈sparse profile)的負載上校準的,而 sparse 在整張表上永遠不該平行(0.99×–1.00×,差異是雜訊)。落地成 `CostClass` 四檔:PII active → Heavy 一律平行、≤1 active → Light 一律序列、≥8 active → Heavy、2–7 active → Adaptive(subject+body ≥ 2000 bytes 才平行) |
-| 「文字比對在 release 下是微秒級,根本不是瓶頸——只有 PII 開著時它才主宰」 | ✅ **這是本節最尖的一句,而且它同時解釋了 3,500 為什麼只能是端到端** | 8/7 release 實測 @1KB 序列:sparse **0.82µs**、medium **3.90µs**、heavy **5.36µs**。也就是說文字比對一封信是**個位數微秒**;而你自己文件對 `new_moderation` 的 DB 寫入估 **5–50ms**——**差三到四個數量級**。所以 ①3,500 msg/s(≈286µs/封)**不可能是比對階段**(比對只要 4µs),它只能是端到端、且被 DB 寫入主宰,這與 `feat-moderation-metrics` 的出處說法一致;②`match_rules` 那個「1–100ms」的區間只有在 **PII 開著**時才成立(PII 估 ~100ms/KB),文字 profile 差了三個數量級。⚠ 誠實邊界:DB 那 5–50ms **是估計不是實測**,所以正確說法是「這兩段的相對量級要先量,才知道該優化哪一段」 |
+| 「文字比對在 release 下是微秒級,根本不是瓶頸——只有 PII 開著時它才主宰」 | ✅ **這是本節最尖的一句,而且它同時解釋了 3,500 為什麼只能是端到端** | 8/7 release 實測 @1KB 序列:sparse **0.82µs**、medium **3.90µs**、heavy **5.36µs**。也就是說文字比對一封信是**個位數微秒**;而你自己文件對 `new_moderation` 的 DB 寫入估 **5–50ms**——**差三到四個數量級**。所以 ①3,500 msg/s(≈286µs/封)**不可能是比對階段**(比對只要 4µs),它只能是端到端、且被 DB 寫入主宰,這與 `feat-moderation-metrics` 的出處說法一致;②`match_rules` 那個「1–100ms」的區間只有在 **PII 開著**時才成立(PII 估 ~100ms/KB),文字 profile 差了三個數量級。✅ **8/7 更正**:DB 那 5–50ms **是實測**,使用者在**四核 DSM**(真機)上跑的——我先前照文件的「預期延遲」標籤判成估計,**錯了,沒問就下判斷**。所以這個對比是**實測對實測**,結論更硬,不需要 hedge。(量測 script 待入檔) |
 | 「所以我那套 adaptive dispatch 在優化一段本來就免費的路」 | ✅ 講,但要用「我下次會先量再做」的語氣,不要自我否定過頭 | 由上一格推出來:平行/序列的決策只在 **PII active** 時才真的有影響(那是唯一讓比對主宰的 matcher)——**而那正好是 benchmark 唯一沒涵蓋的一格**。其他三條 CostClass 規則管的是一段只花個位數微秒的工作。這句話的價值:它證明你會回頭問「我優化的這段占總成本多少」,而不是把一個看起來很技術的優化做完就收工。**修法一句**:先量每個 stage 的實際占比(metrics branch 的計數器就是為這件事準備的),再決定要不要有 dispatch policy |
+
+**🟢 三層成本模型(8/7 拼起來的;這是本節的主菜,比任何單一數字強)**
+
+三組**各自獨立**的量測拼出一張完整的成本圖,而且三組全是你自己跑的:
+
+| 層 | 每封成本 | 來源 | 誰是瓶頸 |
+|---|---|---|---|
+| **文字比對**(matcher) | **個位數 µs**(@1KB release 序列:sparse 0.82 / medium 3.90 / heavy 5.36µs) | `bench_dispatch.rs`,8/7 release 實跑 | ❌ 永遠不是——除非 PII 開著(PII 估 ~100ms/KB) |
+| **請求路徑**(每封一條 TCP:connect/accept/read/close) | **~1ms**(1,081/s @ K=32,4 核) | `tools/load_test.py`,四核 DSM 實測 | ✅ **pass-through 路徑的天花板**;K=64 反而退化到 477/s 就是它的證據 |
+| **DB 寫入**(`new_moderation`,只在規則命中時發生) | **5–50ms(實測,四核 DSM)** | 使用者實測 | ✅ **moderation 路徑的天花板**,比請求路徑再貴一到兩個量級 |
+
+**兩件事因此被釘死**:
+① **3,500(≈286µs/封)不可能是比對階段**——比對只要 4µs,差 70 倍;它必然是端到端。
+② 而端到端能跑到千位數/秒,**只有在信不觸發規則、因此沒有 DB 寫入的 pass-through 路徑上**才可能
+(load test 用的正是「1 條 light rule + 100B 信」)。**規則命中的信會慢一到兩個量級**,因為多了那筆 5–50ms 的寫入。
+**這個 scope 不是缺點,它就是生產環境的常見情況**(大多數信不觸發規則)——但被追問「被隔離的信呢」時,
+要答得出「差一到兩個量級,因為那條路上有 DB 寫入」。答得出來 = 你知道成本在哪;答不出來 = 那個數字是背的。
+
+**🟢 而且兩條獨立路徑得到同一個結論(這點很值錢)**:load test 那邊從系統面看出
+「1 條 light rule + 100B 信的比對是微秒級,時間花在 syscall;填滿 CPU 不會讓吞吐變高,要看到 4 核燒滿得開 PII」;
+我 8/7 從 release micro-bench 那邊獨立量到同一件事(比對 4µs、fan-out 地板 40–170µs)。
+**兩個方法、不同工具、同一個結論 = 這個判斷可以放心在面試講**,不是單點量測的運氣。
+
+**🔗 它也直接坐實了第 7 題**:第 7 題答「我會把並發上限做成顯式的」,而 **K=64 吞吐從 1,081 掉到 477 就是實測證據**——
+無上限 accept + 每封一條連線,加更多 client 只是讓大家排隊爭 syscall,不是做更多事。
+上場可以把這句接在第 7 題後面:"and I have the curve for it — throughput peaks at thirty-two concurrent and *drops* by half at sixty-four."
 
 **🟢 8/7 新發現:那個門檻是在 debug build 上校準的(deep dive 主動端出來的料)**
 
