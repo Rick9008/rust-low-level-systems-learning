@@ -179,37 +179,76 @@ commit `d9a53de`——**它取代的是 Rayon worker 裡的全域 `blocking_lock
 | **~3,500 msg/s @ 8 cores** | 🔴 **8/7 查證定案:從稿子拿掉,被問到才答,且必須說「沒留紀錄」** | 兩個 branch 都查過了。① `feat-adaptive-dispatch` 的 `bench_dispatch.rs` 確實印絕對 µs,但量的是 `dispatch_text_matchers` **單一階段、PII 排除、debug build(unoptimized)**,不含 socket 解析與 DB 寫入(你自己文件估 1–10ms / 5–50ms)——**不可能是「8 核節點撐 3,500」的來源**。② `feat-moderation-metrics` 才是對的儀器:它加 Prometheus 單調計數器 `moderationd_mails_moderated_total`,而 `src/server/metrics.rs` 檔頭明寫「daemon 從不自己算速率,用 `rate(...[1m])` 在查詢端算」。所以 3,500 若真是端到端,就是那次 load 跑的 rate 查詢——**但 repo 裡沒留任何輸出**,你只能憑記憶,不能引用。**講法**:主動不提;被追問就答 "I measured it through a Prometheus counter on a load run — I don't have the artifact in front of me, so treat it as order-of-magnitude." 誠實 + 說得出儀器 = 不失分;硬報一個查不到出處的數字才失分 |
 | **🟢 8/7 現場量出來的新結果(這個講,它比吞吐數字強得多)** | ✅ 主動端出來 | 見下方「平行門檻不可攜」段。這是你 8/7 用自己的 harness 做的控制實驗,結論會推翻你自己那份 results doc 的兩個 shipped threshold |
 | 「決定要不要平行的是 active matcher 的數量,不是郵件大小」 | ✅ 講,但要說「分支沒 merge」 | `docs/adaptive-dispatch-crossover-results.md`(branch `feat-adaptive-dispatch`),31 次取中位數、PII 排除。這條推翻了團隊沿用的「50KB 交叉點」——那數字是在只有 ExactMatch(≈sparse profile)的負載上校準的,而 sparse 在整張表上永遠不該平行(0.99×–1.00×,差異是雜訊)。落地成 `CostClass` 四檔:PII active → Heavy 一律平行、≤1 active → Light 一律序列、≥8 active → Heavy、2–7 active → Adaptive(subject+body ≥ 2000 bytes 才平行) |
-| 「同一台機器、同一個郵件大小,吞吐差一個數量級,只因為 admin 開了幾條 matcher」 | ✅ **這是「為什麼我不給單一吞吐數字」的正面答案** | 8/7 實測 @1KB:sparse 序列 **42µs**(≈23.7k/s)、medium 序列 **76µs**(≈13.1k/s)、heavy 序列 **215µs**(≈4.6k/s)、heavy 平行 **375µs**(≈2.7k/s)。**9 倍差距,同一台同一封信**。所以裸報一個 msg/s 沒有意義——這句話本身就是把「我沒有單一數字」轉成「我知道為什麼不該有單一數字」 |
+| 「文字比對在 release 下是微秒級,根本不是瓶頸——只有 PII 開著時它才主宰」 | ✅ **這是本節最尖的一句,而且它同時解釋了 3,500 為什麼只能是端到端** | 8/7 release 實測 @1KB 序列:sparse **0.82µs**、medium **3.90µs**、heavy **5.36µs**。也就是說文字比對一封信是**個位數微秒**;而你自己文件對 `new_moderation` 的 DB 寫入估 **5–50ms**——**差三到四個數量級**。所以 ①3,500 msg/s(≈286µs/封)**不可能是比對階段**(比對只要 4µs),它只能是端到端、且被 DB 寫入主宰,這與 `feat-moderation-metrics` 的出處說法一致;②`match_rules` 那個「1–100ms」的區間只有在 **PII 開著**時才成立(PII 估 ~100ms/KB),文字 profile 差了三個數量級。⚠ 誠實邊界:DB 那 5–50ms **是估計不是實測**,所以正確說法是「這兩段的相對量級要先量,才知道該優化哪一段」 |
+| 「所以我那套 adaptive dispatch 在優化一段本來就免費的路」 | ✅ 講,但要用「我下次會先量再做」的語氣,不要自我否定過頭 | 由上一格推出來:平行/序列的決策只在 **PII active** 時才真的有影響(那是唯一讓比對主宰的 matcher)——**而那正好是 benchmark 唯一沒涵蓋的一格**。其他三條 CostClass 規則管的是一段只花個位數微秒的工作。這句話的價值:它證明你會回頭問「我優化的這段占總成本多少」,而不是把一個看起來很技術的優化做完就收工。**修法一句**:先量每個 stage 的實際占比(metrics branch 的計數器就是為這件事準備的),再決定要不要有 dispatch policy |
 
-**🟢 8/7 新發現:平行門檻不可攜(deep dive 主動端出來的料)**
+**🟢 8/7 新發現:那個門檻是在 debug build 上校準的(deep dive 主動端出來的料)**
 
-8/7 在 16 核機器上重跑同一支 harness,結果**與 committed 那張表(4 核開發機)在小 payload 上相反**。於是做控制實驗:
-同一台、同一份 build,**只改 `RAYON_NUM_THREADS`**:
+> ⚠ **本段自我更正**:8/7 稍早我先寫成「主變因是 Rayon 池寬」——那是只看 debug 數據的結論,**錯了**。
+> 補跑 release 後,主變因是 **build profile**,量級大一級;池寬是同方向的次要效應。留下這行是因為
+> 這正是本節在教的紀律:**先跑完矩陣再下結論**。
 
-| 格子 | committed(4 核機) | 8/7 釘 4 條 | 8/7 預設 16 條 |
-|---|---|---|---|
-| heavy @ 1KB | 1.60× 平行勝 | **1.17× 平行勝** | **0.57×(平行慢 1.75 倍)** |
-| medium @ 2KB(= `ADAPTIVE_CROSSOVER_BYTES` 那一格) | 1.13× 平行勝 | **1.11× 平行勝** | **0.72×(平行慢 39%)** |
-| heavy @ 500KB | 3.58× | 2.63× | **3.31×** |
+8/7 用你自己的 harness 跑滿 2×2 矩陣(debug/release × Rayon 4 條/16 條)。平行**首次**勝出的位置:
 
-**結論三句**:①**變因是 Rayon 池的寬度,不是機器雜訊**——釘 4 條就重現了 committed 的表(medium@2KB:1.11× vs 原 1.13×)。
-②**交叉點隨池變寬而右移**:fan-out 的固定成本隨池寬長,每個 job 的工作量不變,所以小 payload 先被吃掉;
-但寬池的天花板更高(500KB 從 2.63× 升到 3.31×)。**池寬換的是「交叉點右移 + 漸近線上升」。**
-③**因此那兩個常數不可攜**:daemon 把 Rayon 執行緒設成 = 核心數(`cores/2` 的餘數再 ×2 = cores),
-所以門檻其實是**部署機核心數的函數**;寫死的 2000 bytes 與「≥8 active 一律平行」在 4 核對、在 16 核**兩條都選錯邊**,
-而且錯的是有害方向(付了排程成本卻沒收益)。
+| profile | committed(4 核機,debug) | debug/4 條 | debug/16 條 | **release/4 條** | **release/16 條** |
+|---|---|---|---|---|---|
+| medium | 1–2KB | 2KB | 4KB | **50KB** | **50KB** |
+| heavy | 1KB(宣稱一律平行) | 1KB | 2KB | **50KB** | **50KB** |
+| sparse | 永不 | 永不 | 永不 | 永不(0.98–1.00× 全程) | 永不 |
 
-**上場講法(英文,~110 words ≈ 55s)**
+**一個模型解釋全部四次跑**:交叉點 = **序列工作量超過 fan-out 固定成本(平行的地板)的那一點**。地板量得出來:
 
-> "One more thing I'd flag, because I only found it this week. I'd calibrated a parallel-vs-sequential threshold from a benchmark on a four-core dev box. Re-running the same harness on a sixteen-core machine, two of my thresholds flipped sign — parallel was now 1.75× *slower* at the small end, where I'd measured it winning. I pinned the Rayon pool back to four threads on the same machine and the original numbers came back, so the variable was pool width, not noise: the fan-out's fixed cost scales with the pool, so the crossover moves right as you add cores — while the ceiling at large payloads goes up. Which means a baked byte threshold can't be right on two different boxes. It has to be derived from the pool it's actually running on."
+| | fan-out 地板(平行在小 payload 的耗時) | medium @1KB 的序列工作量 |
+|---|---|---|
+| debug / 4 條 | ~120µs | 85.9µs → 兩者相當 ⇒ 交叉點就在 1–2KB |
+| debug / 16 條 | ~150µs | 85.9µs |
+| **release / 4 條** | **~40µs** | **3.44µs** → 差 12 倍 ⇒ 交叉點右移到 10–50KB |
+| **release / 16 條** | **~80–170µs** | **3.90µs** → 差更多 |
 
-**這段為什麼強**:它是「我量了 → 我的數字被自己推翻 → 我做了控制實驗分離變因 → 我知道正確的修法是什麼」的完整迴圈,
-而且**它推翻的是自己的結論,不是別人的**。⚠ 誠實邊界:分支未 merge,所以**沒有 production bug**——
-講成「線上出事」會被抓。正確說法是 "before that branch merges, the constant has to become pool-aware."
-**修法(被追問才給)**:不要寫死位元組門檻;把判準換成「估計的序列工作量 vs 實測的 fan-out 成本」,
-其中 fan-out 成本在啟動時對**實際的池寬**量一次(工作量 ≈ bytes × active matcher 數,本來就是這題的真正變數)。
-**可重跑的證據**(想在面試前再驗一次):
-`RAYON_NUM_THREADS=4 BENCH_DISPATCH=1 cargo test --lib database::pattern::bench_dispatch -- --nocapture --test-threads=1`
+**兩個變因,主次分明**:
+① **build profile 是主變因**。release 讓 matcher 工作便宜 **20–60 倍**(medium@1KB 序列 85.9µs → 3.44µs),
+但 fan-out 成本幾乎沒變——**因為那是同步,不是運算**:喚醒 worker、atomics、工作佇列交棒,不會因為開了最佳化就快 25 倍。
+所以 debug **把「每個 job 的工作量」相對於一個近乎固定的協調成本吹大了 25 倍**,平行在小 payload 就顯得划算。
+② **池寬是次要效應、同方向**:地板從 4 條的 ~40µs 漲到 16 條的 ~80–170µs,所以交叉點再往右一點、
+50KB 那格的勝幅從 1.26–1.58× 掉到 1.02–1.05×;但大 payload 的天花板更高(heavy@500KB:2.68× → 3.25×)。
+**池寬換的是「交叉點右移 + 漸近線上升」。**
+
+**shipped 常數在 release + 池寬=核心數(就是 daemon 的實際設定)下的嚴重度**:
+
+| CostClass 規則 | 判決 | 證據(release / 16 條) |
+|---|---|---|
+| `≤1 active → Light`(一律序列) | ✅ **對** | sparse 全程 0.98–1.00×,平行永遠不該來 |
+| `≥8 active → Heavy`(一律平行) | 🔴 **錯,而且很嚴重** | heavy@1KB:序列 **5.36µs** vs 平行 **161.64µs** = **平行慢 30 倍** |
+| `2–7 active → Adaptive @ 2000 bytes` | 🔴 **門檻差 ~25 倍** | medium@2KB(正好是門檻那格):序列 **6.36µs** vs 平行 **82.27µs** = **平行慢 12.9 倍**。正確的交叉點在 10–50KB |
+| `PII active → Heavy`(一律平行) | 🟡 **未驗證** | benchmark **完全沒含 PII**。它的理由「PII ~100ms/KB 遠大於 ~100µs 排程成本」裡,100ms/KB 本身是估計值;不過 ~100µs 這個排程成本估得很準(release/16 條實測地板 80–170µs),所以推論站得住,只是沒量過 |
+
+**而且它平反了被推翻的那個數字**:branch 的 results doc 寫「**This invalidates the old 50KB crossover**」,
+但那句話是在 debug build 上得到的。**release 下交叉點回到 10–50KB,也就是那個舊的 50KB 啟發式大致是對的**——
+被推翻的一方比推翻它的一方更接近事實。常見郵件本體就是個位數 KB,所以這兩條規則會讓**最常見的情況**變慢一個量級。
+
+**上場講法(英文,~145 words ≈ 70s)**
+
+> "One more, because I only found it this week and it changed my mind about my own work. I'd calibrated a parallel-versus-sequential threshold at two kilobytes, from a benchmark I ran in a debug build. When I re-ran the same harness in release, the matcher work got roughly twenty-five times cheaper — but the fan-out cost barely moved, because that's synchronization, not computation. So the crossover shifted by more than an order of magnitude, out to somewhere between ten and fifty kilobytes. Which means my shipped constant would have picked parallel for every realistic mail size, and at one kilobyte parallel is about thirty times slower than just doing it inline. The number I'd confidently overturned — an old fifty-kilobyte heuristic — turned out closer to right than mine. And the lesson isn't the number: **a threshold that separates computation from coordination can't be calibrated in a build that only speeds up one of them.**"
+
+**追問深度(留手,別主動全倒)**:①**它還會隨池寬移動**——fan-out 地板從 4 條的 ~40µs 到 16 條的 ~80–170µs,
+而 daemon 把 Rayon 執行緒設成 = 核心數,所以門檻是**部署機核心數的函數**,根本不該是常數。
+②**正確修法**:判準換成「估計的序列工作量 vs 實測的 fan-out 地板」,工作量 ≈ bytes × active matcher 數
+(本來就是這題真正的變數),地板在**啟動時對實際池寬量一次**。③`PII → 一律平行`那條要補量,不要留在估計值上。
+⚠ **誠實邊界**:分支**未 merge**,所以**沒有 production bug**。正確說法是
+"before that branch merges, the threshold has to be derived, not baked." 講成「線上出事」會被抓。
+
+**這段為什麼是本節最強的料**:完整迴圈——我量了 → 用另一個 build 推翻自己 → 跑滿矩陣分離主次變因 →
+用一個模型(工作量 vs 協調成本)解釋全部四次跑 → 知道正確修法 → 而且**平反了自己曾否定的舊數字**。
+推翻的是自己,不是別人;而且方法論的教訓可以直接搬到任何 threshold。
+
+**可重跑的證據(四條命令,~10 分鐘)**
+```sh
+cd /synosrc/git_source/libsynomailserver-moderation   # branch: feat-adaptive-dispatch
+BENCH_DISPATCH=1 cargo test --lib  database::pattern::bench_dispatch -- --nocapture --test-threads=1
+RAYON_NUM_THREADS=4 BENCH_DISPATCH=1 cargo test --lib database::pattern::bench_dispatch -- --nocapture --test-threads=1
+BENCH_DISPATCH=1 cargo test --release --lib database::pattern::bench_dispatch -- --nocapture --test-threads=1
+RAYON_NUM_THREADS=4 BENCH_DISPATCH=1 cargo test --release --lib database::pattern::bench_dispatch -- --nocapture --test-threads=1
+```
 | PII ~100ms/KB、Rayon 排程 ~100μs、P50<10ms/P99<50ms | 🔴 別當實測講 | 前兩者檔案自己標「估計」,第三個是 **target**(`docs/TECHNICAL_REVIEW.md:420`) |
 | 0 `unsafe`、~16k LOC、67 個 Rust 檔 | ✅ 可講 | `withers_doc/07_code_review.md:305-317` |
 
