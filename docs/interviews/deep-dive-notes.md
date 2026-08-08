@@ -282,3 +282,7 @@ Q7 **不需要改寫**——它問的是「當初的決定」,不是現況。只
 > "That's not hypothetical, by the way — I went back and put the limit in."
 
 還沒修就**主體一字不動**(「rebuilt, I'd…」本來就是條件式,沒有謊)。🔴 那句加了就必須是真的。
+
+## 「hardest problem you resolved」問法 → moderation AA(8/9 定,源:Heptabase G&L 白板)
+
+四拍:①ambiguity 處境(沒人定義需求、與 master-sync 架構假設衝突;**開場別倒架構**)②先定義未決事項(PM 問意圖/staff 問約束、拍板斷線各自運作+重連最終一致、列 case 寫 spec 跑 review)③irreversible actions win(專案一 Q3 金句直用)④半年零事故+真 failover(專案一 Q1 尾句直用)。新英文只有 ①②,見 8/9 對話;③④ 用練習本現句。用這題開場=把 deep dive 導進專案一主場。
