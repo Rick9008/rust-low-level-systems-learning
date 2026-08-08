@@ -39,6 +39,10 @@ Holdwin 簡報裡的交易對照句(fill/cancel、開盤時間)**全部拿掉**,
    履歷未指名服務——①是 on-call 處理的**平台級中斷**(mail 收發全斷),②只說 "code I inherited"。
    歸屬句已改成 on-call/平台框架,**不講 moderation daemon**(記憶不確定、履歷也沒寫)。
    分開講每一半各自為真;被追問細節記不清就守層級、不編。8/8 內若回憶起確切 component 可再補,8/9 起不改稿。
+   **(8/9 晚追補,記憶源頭結案)**:Withers 的「moderation+狂刷 log+fd 累積」記憶查證後屬於**第三個故事**
+   ——G&L 白板 strace 卡 = `dbg!` 灌爆 /var/log/systemd 400MB → pipe 壞 → panic,**即專案三 Q6 的 451 story**。
+   三個事件三個家:履歷兩條(專案二 Q6,分開講)+ dbg!/451(專案三 Q6)。「EOF→fd 累積→炸」的因果鏈
+   無任何當時紀錄支持,是三事件縫合,**上場不講**;被追 fd 根因 → 照履歷答尖峰+DDoS,更深根因誠實說沒做。
 
 ## 8/7 進度
 
