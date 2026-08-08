@@ -32,10 +32,13 @@ Holdwin 簡報裡的交易對照句(fill/cancel、開盤時間)**全部拿掉**,
 5. logging daemon 實際架構 = **dovecot → syslog → syslog-ng → 自寫 C++ daemon 解析後寫 DB**。
    **別再講「多後端 sink 扇出」那個膨脹版**——sink 就是 DB;多後端 logging library 是**另一件事**
    (各服務發送端的統一介面,−30% 重複碼),兩者分開講。吞吐數字不確定 → **不講數字、不掰**。
-6. (2026-08-08 照唸時 Withers 抓到)專案二 Q6 的兩個 bug 故事(FD 耗盡、CPU 空轉 0-byte read)
-   **實際發生在 moderation daemon,不在 log pipeline**——稿已加開場歸屬句(same platform, different service),
-   一律先講歸屬再進故事;被追問發生在哪個服務就答 moderation daemon。故事仍放專案二 Q6 講
-   (教訓是 payload、位置不動),同時是專案三被深追時的備用彈藥。
+6. (2026-08-08 照唸兩連抓後結案,履歷為準)專案二 Q6 的兩個 bug 故事(FD 耗盡、CPU 空轉 0-byte read):
+   Withers 先記成「moderation 的」、再記成「同一個事件(EOF 空轉→fd 累積→中斷)」,兩次都自承不確定
+   → **裁決:全部照履歷講**(`withers_resume.tex:109-110`,規則同 3,500):**兩條獨立 bullet、
+   兩個獨立事件,分開講、不合併、不斷言因果鏈**;「部署尖峰+DDoS」是履歷原文,非 7/29 起草黏合劑。
+   履歷未指名服務——①是 on-call 處理的**平台級中斷**(mail 收發全斷),②只說 "code I inherited"。
+   歸屬句已改成 on-call/平台框架,**不講 moderation daemon**(記憶不確定、履歷也沒寫)。
+   分開講每一半各自為真;被追問細節記不清就守層級、不編。8/8 內若回憶起確切 component 可再補,8/9 起不改稿。
 
 ## 8/7 進度
 

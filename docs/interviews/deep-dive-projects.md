@@ -82,13 +82,13 @@
 
 ## Q6. Hardest bug — walk me through it.(兩個故事,現場挑一個講)
 
-**開場歸屬句(一律先講,再進故事——兩個 bug 實際發生在 moderation daemon,不在這條 pipeline)**
+**開場歸屬句(一律先講,再進故事——這兩個 bug 是 mail 平台層級的事件,不在這條 pipeline 本身)**
 
-> "The two that taught me the most were actually on the mail-moderation daemon I also operate — same platform, different service. Let me walk you through one."
+> "Both of these are production incidents from the mail platform this pipeline lives on — the first one I handled as on-call. Let me walk you through one."
 
-**中文意思**:教我最多的兩個 bug 其實發生在我同時維運的 mail moderation daemon 上——同一個平台、不同的服務。我挑一個講。
+**中文意思**:這兩個都是這條 pipeline 所在的 mail 平台上的正式環境事故——第一個是我值班(on-call)時處理的。我挑一個講。
 
-> ⚠ 被追問「這發生在哪個服務」就答 moderation daemon,不含糊。歸屬句永遠先講——省掉它換來的十秒,賠的是被追問時整段故事的可信度。
+> ⚠ 8/8 裁決,履歷為準(`withers_resume.tex:109-110`):**兩個是獨立事件,分開講、不合併、不互為因果**——履歷就是兩條分開的 bullet,「部署尖峰+DDoS」是履歷原文。被追問「哪個服務耗盡 fd」而記不清 component 時,守住確定的層級講(整個平台收發中斷、process 還活著),**不指名服務、不編**;②照稿講 "code I inherited",同樣不指名。分開講每一半各自為真;合併需要一條你不百分之百確定的因果鏈,不講。
 
 **① FD 耗盡,全服務中斷,10 分鐘內復原**
 
