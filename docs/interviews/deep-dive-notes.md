@@ -43,6 +43,11 @@ Holdwin 簡報裡的交易對照句(fill/cancel、開盤時間)**全部拿掉**,
    ——G&L 白板 strace 卡 = `dbg!` 灌爆 /var/log/systemd 400MB → pipe 壞 → panic,**即專案三 Q6 的 451 story**。
    三個事件三個家:履歷兩條(專案二 Q6,分開講)+ dbg!/451(專案三 Q6)。「EOF→fd 累積→炸」的因果鏈
    無任何當時紀錄支持,是三事件縫合,**上場不講**;被追 fd 根因 → 照履歷答尖峰+DDoS,更深根因誠實說沒做。
+   **(8/9 晚終版:誠實 hedge 句)**Withers 堅持記得機制(busy-wait 連線不放 fd+洪峰開新連線→撞上限,
+   工程上成立)→ 折衷:可講但標成懷疑,一句上場:*"I've suspected the two were related — a connection
+   stuck in that busy-wait loop never releases its descriptor. But I never verified the link, so I won't
+   claim it. What I verified is: the spike exhausted the descriptors, and the read loop was missing its
+   EOF check."* 任何追問的答案都是 "I didn't — that's why they're two findings",與「不編數字」同品味。
 
 ## 8/7 進度
 
