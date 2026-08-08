@@ -32,6 +32,10 @@ Holdwin 簡報裡的交易對照句(fill/cancel、開盤時間)**全部拿掉**,
 5. logging daemon 實際架構 = **dovecot → syslog → syslog-ng → 自寫 C++ daemon 解析後寫 DB**。
    **別再講「多後端 sink 扇出」那個膨脹版**——sink 就是 DB;多後端 logging library 是**另一件事**
    (各服務發送端的統一介面,−30% 重複碼),兩者分開講。吞吐數字不確定 → **不講數字、不掰**。
+6. (2026-08-08 照唸時 Withers 抓到)專案二 Q6 的兩個 bug 故事(FD 耗盡、CPU 空轉 0-byte read)
+   **實際發生在 moderation daemon,不在 log pipeline**——稿已加開場歸屬句(same platform, different service),
+   一律先講歸屬再進故事;被追問發生在哪個服務就答 moderation daemon。故事仍放專案二 Q6 講
+   (教訓是 payload、位置不動),同時是專案三被深追時的備用彈藥。
 
 ## 8/7 進度
 

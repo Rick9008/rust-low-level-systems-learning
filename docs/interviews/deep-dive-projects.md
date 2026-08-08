@@ -82,6 +82,14 @@
 
 ## Q6. Hardest bug — walk me through it.(兩個故事,現場挑一個講)
 
+**開場歸屬句(一律先講,再進故事——兩個 bug 實際發生在 moderation daemon,不在這條 pipeline)**
+
+> "The two that taught me the most were actually on the mail-moderation daemon I also operate — same platform, different service. Let me walk you through one."
+
+**中文意思**:教我最多的兩個 bug 其實發生在我同時維運的 mail moderation daemon 上——同一個平台、不同的服務。我挑一個講。
+
+> ⚠ 被追問「這發生在哪個服務」就答 moderation daemon,不含糊。歸屬句永遠先講——省掉它換來的十秒,賠的是被追問時整段故事的可信度。
+
 **① FD 耗盡,全服務中斷,10 分鐘內復原**
 
 > "The process was alive, but every new connection failed. First move: split 'the program is wrong' from 'a resource is exhausted' — the two paths need completely different evidence. It turned out a post-deploy load spike stacked on a DDoS, and we ran out of file descriptors. We restored service in about ten minutes.
