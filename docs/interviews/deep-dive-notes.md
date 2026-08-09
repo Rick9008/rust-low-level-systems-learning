@@ -53,7 +53,7 @@ Holdwin 簡報裡的交易對照句(fill/cancel、開盤時間)**全部拿掉**,
 
 ✅ ★6 conflict 人物與場景補真;✅ ★3 Moderation 三細節補真;✅ 專案三第 6/7 題以 repo 實證落地;
 ✅ 兩個練習檔重構成「問題 + 英文 + 中文」。
-**殘項**:8/9 taper 重讀 Gjengset 40-hours 原文確認轉述正確。
+~~殘項:8/9 taper 重讀 Gjengset 40-hours 原文確認轉述正確~~ **✅ 8/9 已驗(Claude 抓原文對表)**:轉述成立;原句 "Crunch time is fine as long as there is a recovery period afterwards" + area-under-the-curve 論證,兩錨點已入上場包 ★3。demo 故事=論點的教科書案例。
 
 ---
 
