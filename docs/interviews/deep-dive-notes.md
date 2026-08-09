@@ -295,3 +295,10 @@ Q7 **不需要改寫**——它問的是「當初的決定」,不是現況。只
 ## 「hardest problem you resolved」問法 → moderation AA(8/9 定,源:Heptabase G&L 白板)
 
 四拍:①ambiguity 處境(沒人定義需求、與 master-sync 架構假設衝突;**開場別倒架構**)②先定義未決事項(PM 問意圖/staff 問約束、拍板斷線各自運作+重連最終一致、列 case 寫 spec 跑 review)③irreversible actions win(專案一 Q3 金句直用)④半年零事故+真 failover(專案一 Q1 尾句直用)。新英文只有 ①②,見 8/9 對話;③④ 用練習本現句。用這題開場=把 deep dive 導進專案一主場。
+
+## 專案一設計補真(2026-08-09,Withers 口述)
+
+健康時**每封信有 home node**(接收它的那台),對該信的操作導回 home——常態單一寫者、無衝突;
+對側只持 replica,**斷網/對台死掉才 promote replica 接管**。敘事升級:衝突只存在於分區窗口,
+irreversible-actions-win 規則就是為那個窗口設計的。上場句在上場包專案一格(8/9 補真版)。
+⚠ 別再講「兩台獨立做所有事、狀態全共享」的簡化版——那會把單寫者設計講丟。
