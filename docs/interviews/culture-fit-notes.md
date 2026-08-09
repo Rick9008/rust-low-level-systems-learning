@@ -110,3 +110,10 @@ debrief 只有 15 分鐘,**挑 2–3 個問,不要全唸**。
 *"Part of the fix was splitting the interface by function: operations that are genuinely node-local became
 localhost-only, and only the cross-node communication and synchronization calls stay exposed at all —
 behind mTLS and per-call authentication and authorization."* 主稿五拍不動,這句是 ③ 的深度層。
+
+## ★7 ①⑤ 事實修正(2026-08-09,Withers 抓到自相矛盾)
+
+原句 "It was internal-only" 與 cross-cluster 打架(介面本來就跨節點走網路)。改為
+"The traffic was node-to-node on a private network — nothing faced the internet — so I treated
+the network perimeter as the security boundary";⑤ 金句同步改 "'It's on a private network' is an
+assumption, not a boundary"。弧線一致:①私網裡混裝沒 auth → ③按功能切分+mTLS+per-call auth → ⑤週界是假設。

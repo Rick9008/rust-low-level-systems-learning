@@ -162,7 +162,7 @@ onsite **沒有獨立的 culture fit 場**,所以這些題會散在 coding 場�
 
 **中文**:講一次你的失敗。(**要有具體損失 + 機制性的改變**,不能只說「我學到要更小心」)
 
-> "The failure that's genuinely mine: I shipped a cross-cluster operations interface without proper authentication and authorization. It was internal-only — so I treated the network boundary as the security boundary.
+> "The failure that's genuinely mine: I shipped a cross-cluster operations interface without proper authentication and authorization. The traffic was node-to-node on a private network — nothing faced the internet — so I treated the network perimeter as the security boundary.
 >
 > It later surfaced as a critical vulnerability — CVSS ten point zero. I can't share the technical details because the CVE is still under embargo, but the design lesson is fully mine to own.
 >
@@ -170,7 +170,7 @@ onsite **沒有獨立的 culture fit 場**,所以這些題會散在 coding 場�
 >
 > Two things changed mechanically after that. Security review moved into the design phase instead of being a bolt-on. And my personal default flipped: every interface gets auth, and 'internal-only' never counts as a boundary again.
 >
-> The lesson wasn't 'be more careful'. The lesson was that internal-only is an assumption, not a boundary. Assumptions rot; boundaries hold."
+> The lesson wasn't 'be more careful'. The lesson was that 'it's on a private network' is an assumption, not a boundary. Assumptions rot; boundaries hold."
 
 **中文意思**
 
