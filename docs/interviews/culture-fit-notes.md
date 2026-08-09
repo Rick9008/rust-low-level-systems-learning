@@ -126,3 +126,7 @@ assumption, not a boundary"。弧線一致:①私網裡混裝沒 auth → ③按
 (修法:「想試一次」→「test myself at that pace and that bar」,去觀光客風險)。
 舊句降級成盾牌:chip-ceiling 句answering「why Etched specifically」;toward/away 句擋「why leave」。
 英文定稿在上場包 ★2 格。
+
+**★2 再修(8/9)**:座位在 Etched 台灣擴點——「想進矽谷新創」改成「早期加入 SV 新創的台灣團隊、
+參與把據點建起來,work at that pace and that bar」;對比改「Taiwanese companies」非地理。
+與 ★11 反問第一題(台灣團隊邊界)互相呼應。
