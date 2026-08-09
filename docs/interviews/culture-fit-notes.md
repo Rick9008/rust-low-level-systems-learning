@@ -117,3 +117,12 @@ behind mTLS and per-call authentication and authorization."* 主稿五拍不動,
 "The traffic was node-to-node on a private network — nothing faced the internet — so I treated
 the network perimeter as the security boundary";⑤ 金句同步改 "'It's on a private network' is an
 assumption, not a boundary"。弧線一致:①私網裡混裝沒 auth → ③按功能切分+mTLS+per-call auth → ⑤週界是假設。
+
+## ★2 改版(2026-08-09,Withers 要求講自己的話)
+
+兩個真理由取代稿:①工作本身=高效能軟體+硬體重互動,是他想花接下來幾年深入的方向
+(修法:不用「幫助我發展」當主詞,改「日常工作和成長是同一件事」——從拿取變投入);
+②人生理由=整個職涯在台灣、沒進過矽谷新創,想測試自己在那種節奏和標準下的能耐
+(修法:「想試一次」→「test myself at that pace and that bar」,去觀光客風險)。
+舊句降級成盾牌:chip-ceiling 句answering「why Etched specifically」;toward/away 句擋「why leave」。
+英文定稿在上場包 ★2 格。
