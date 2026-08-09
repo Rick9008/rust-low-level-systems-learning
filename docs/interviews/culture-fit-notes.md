@@ -102,3 +102,11 @@
 
 debrief 只有 15 分鐘,**挑 2–3 個問,不要全唸**。
 另外**一定要問結果時程**——那是 debrief 的實務目的,不問反而奇怪。
+
+## ★7 追問彈藥補充(2026-08-09,Withers 口述補真)
+
+修法不只是 internal-only 範圍限制,而是**按功能切分 API 面**:真正 node-local 的操作改 localhost 限定,
+只有跨節點通訊/同步呼叫還暴露,且過 mTLS + 逐呼叫 authn/authz。被追 "what did the fix look like?" 用:
+*"Part of the fix was splitting the interface by function: operations that are genuinely node-local became
+localhost-only, and only the cross-node communication and synchronization calls stay exposed at all —
+behind mTLS and per-call authentication and authorization."* 主稿五拍不動,這句是 ③ 的深度層。
