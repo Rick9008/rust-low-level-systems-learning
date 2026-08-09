@@ -149,3 +149,7 @@ R1 clarify 回饋收尾("Ambiguity is a questioning problem, not a knowledge pro
 4. **Q10 技術判斷角度**:「分類任務不需 decoder 生成能力」+每階段數據推提案;
    選用收尾對 Etched 押韻(specialization beats generality)。
 5. **Delivery 三備**:三連問/別「輸了照做」/別烈士。Hypothetical 公式:根因→處理→升級最後,接真實經驗。
+
+**CVE 歸屬確認(8/9 晚,Withers 直答)**:★7 的 authz 缺失與 G&L 卡的 mTLS configured≠enforced
+是**同一個 CVE 的兩個面向**。守線不變:Etched 場只講 authz 面;因為是同一事件,從 authz 被深追時
+mTLS 面只在一步之遙——embargo 句就是煞車("Still under embargo, so I'll stay at the design level.")。
