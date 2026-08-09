@@ -318,7 +318,7 @@
 >
 > That framing was most of the debugging. Nothing in my request path returns 'no answer' — every branch either decides or errors. So we weren't returning a wrong result, we were dying mid-handler. And a panic in a Tokio worker closes the connection exactly like that.
 >
-> The root cause was a `dbg!` left in the code. `dbg!` expands to `eprintln!`, and `eprintln!` **panics** if the write to stderr fails. Our stderr is a pipe into the system logger — so once that logger had restarted, the pipe was gone. And the two `dbg!` calls sat in the else-branches of the From and To header extraction, which is the *normal* path for envelope-only mail. So it needed a conjunction: a Cc-only message arriving while the log pipe was broken. Neither one alone does anything, which is why it looked random.
+> The root cause was a `dbg!` left in the code. `dbg!` expands to `eprintln!`, and `eprintln!` **panics** if the write to stderr fails. Our stderr is a pipe into the system logger — and on those boxes the system log directory is shared by every service, capped at four hundred megabytes. Hit the cap, the logger restarts, and the restart kills the pipe. So any service on the box could arm the trap. And the two `dbg!` calls sat in the else-branches of the From and To header extraction, which is the *normal* path for envelope-only mail. So it needed a conjunction: a Cc-only message arriving while the log pipe was broken. Neither one alone does anything, which is why it looked random.
 >
 > What I shipped was the removal plus a written invariant at that call site — never add a fallback write to stderr on the logging path, we have been bitten here before. Then a week later the same hazard came back from the other direction: an `unwrap` inside a `LazyLock` initializer, so one unavailable log socket poisoned the lock and *every* later log call panicked. That one I fixed properly — in the type. The logger became a `LazyLock<Option<...>>`, so a logger that fails to build makes logging a no-op instead of a landmine."
 
@@ -326,7 +326,7 @@
 
 1. 我會挑這個:真實郵件開始被暫時退回、回 451,而**唯一的線索在 Perl 那一側**——milter 記了一筆讀取失敗,「沒收到資料」。從它的角度看,我們接了連線然後就人不見了、沒有回答。
 2. **那個框架就是這次 debug 的大半。** 我的請求路徑裡沒有任何分支會回「不回答」——每個分支要嘛做出決定、要嘛回錯誤。所以我們不是回錯結果,**我們是在 handler 中途死掉**。而 Tokio worker 裡的一個 panic,關連線的樣子就正是這樣。
-3. 根因是留在程式裡的一個 `dbg!`。`dbg!` 會展開成 `eprintln!`,而 `eprintln!` 在**寫 stderr 失敗時會 panic**。我們的 stderr 是一條通往系統 logger 的 pipe——所以那個 logger 一重啟過,pipe 就沒了。而那兩個 `dbg!` 剛好在 From 和 To 標頭抽取的 else 分支裡,**那是只有信封資訊的信會走的「正常」路徑**。所以它需要兩件事同時發生:一封只有 Cc 的信,碰上 log pipe 斷掉。**單獨任一個都不會出事,這就是它看起來很隨機的原因。**
+3. 根因是留在程式裡的一個 `dbg!`。`dbg!` 會展開成 `eprintln!`,而 `eprintln!` 在**寫 stderr 失敗時會 panic**。我們的 stderr 是一條通往系統 logger 的 pipe——而那台機器的系統 log 資料夾是**所有服務共用**的、上限 400MB;一撞上限 logger 就重啟,重啟就弄斷 pipe。**所以任何一個服務都可能把陷阱上膛,我的 `dbg!` 只是踩到它的那隻腳。**而那兩個 `dbg!` 剛好在 From 和 To 標頭抽取的 else 分支裡,**那是只有信封資訊的信會走的「正常」路徑**。所以它需要兩件事同時發生:一封只有 Cc 的信,碰上 log pipe 斷掉。**單獨任一個都不會出事,這就是它看起來很隨機的原因。**
 4. 我當時交出去的是「移掉它」加上在那個位置寫下一條不變量——**這條 logging 路徑上永遠不要加 stderr 的備援寫入,我們在這裡被咬過**。然後一個星期後同一個危險從另一邊回來:一個 `LazyLock` 初始化裡的 `unwrap`,於是一個連不上的 log socket 就讓那把鎖中毒,**後面每一次 log 呼叫都 panic**。那次我修得對了——**修在型別上**。logger 變成 `LazyLock<Option<...>>`,所以一個建不起來的 logger 只會讓 logging 變成 no-op,而不是變成地雷。
 
 > **收尾要不要加「lint 還沒加」那段**,看你到時候真的加了沒有 —— 兩種收尾在 [deep-dive-notes.md](deep-dive-notes.md)。鐵律:**只講真的做了的那個版本。**
