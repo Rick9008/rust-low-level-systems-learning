@@ -140,7 +140,7 @@ onsite **沒有獨立的 culture fit 場**,所以這些題會散在 coding 場�
 >
 > That's the right question to ask, so I took it seriously, and I tested it against a failure scenario instead of arguing preference. Flags replicate as state, and state replication settles conflicts by whoever wrote last. Partition: node A approves, the mail actually goes out; node B rejects. If the reject lands last, you've un-sent an email that is already in someone's inbox. And with exactly two nodes, there's no trusted clock to even say which one was later.
 >
-> That reframed the discussion. The gap was never data replication — the platform already had three of those. It was that nobody replicated what the application had *decided*. So we built the operation log, and derived the conflict rules from operation semantics: irreversible actions win. Six-plus months in production, zero inconsistency incidents.
+> That reframed the discussion. The gap was never data replication — we already had that. It was that nobody replicated what the application had *decided*. So we built the operation log, and derived the conflict rules from operation semantics: irreversible actions win. Six-plus months in production, zero inconsistency incidents.
 >
 > We didn't converge because someone argued better — a failure scenario made the answer obvious. That's how I like to disagree: bring the counterexample, not the volume."
 
@@ -148,7 +148,7 @@ onsite **沒有獨立的 culture fit 場**,所以這些題會散在 coding 場�
 
 1. 有的——在那個雙節點 HA 專案上。**我把決策複製層的架構畫完之後,召集了我的主管、我們的 tech lead、還有一位資淺同事來 review。** tech lead 提了一個比較輕的做法:**把決定放在郵件的 flag 上,讓 dsync(郵件儲存本身的複製機制)幫我們帶過去。這樣就不必自己做一個新系統。**
 2. **那是一個該問的問題,所以我認真看待它**,而且我不是去爭辯偏好,而是**拿一個失效情境去測它**。flag 是以「狀態」的形式被複製的,而狀態複製解決衝突的方式就是「誰最後寫」。分區的情況:節點 A 核准,信真的寄出去了;節點 B 退回。**如果那個退回最後才落地,你就「取消寄出」了一封已經在別人收件匣裡的信。** 而且就只有兩個節點,**根本沒有可信的時鐘可以說誰比較晚。**
-3. **那個情境把討論重新框了一次。** 缺口從來不是資料複製——這個平台已經有三套了。**缺的是沒有人複製「應用程式決定了什麼」。** 所以我們做了那份操作日誌,並且**從操作語意推出衝突規則:不可逆的操作贏。** 上線六個多月,零不一致事故。
+3. **那個情境把討論重新框了一次。** 缺口從來不是資料複製——我們本來就有(dsync、Redis replica)。**缺的是沒有人複製「應用程式決定了什麼」。** 所以我們做了那份操作日誌,並且**從操作語意推出衝突規則:不可逆的操作贏。** 上線六個多月,零不一致事故。
 4. **我們收斂,不是因為誰比較會辯——是因為一個失效情境讓答案變得顯而易見。** 那就是我喜歡的不同意方式:**帶反例,不要帶音量。**
 
 > **dsync 被追問就停在這一句,不要往下掰**:

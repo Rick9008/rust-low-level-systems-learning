@@ -312,3 +312,10 @@ irreversible-actions-win 規則就是為那個窗口設計的。上場句在上�
    按 user 的 approve/reject 執行(寄出或刪除)→ 每次接管寫一筆 ownership-take(target_uuid)紀錄
    → peer 回來**必須 challenge ownership** 才能再動作。無人工介入。
 4. **專案一 10× 無實測容量數據**:講「信量 ×10、兩節點是產品形態」+「不編數字」句接結構分析。
+
+## 專案一再補真(8/9 晚,Withers 抓「三套」不實)
+
+「replicated data three ways」是 7/29 起草膨脹——**實際只有 dsync(信箱)+ Redis replica cluster(共享狀態)兩套**,
+且兩者都無法在斷線時繼續對對面的信 approve/reject。稿與上場包已改成點名兩套(比報數字穩)。
+**新補真:moderation 是多層鏈**——好幾層 rule、不同 moderators 照順序核准 → 要複製的是「每封信推進中的
+核准狀態」,不是一個 flag。此細節同時強化 ★6 dsync 反例(flag 搬不動多層鏈)與 Q1 定位句。

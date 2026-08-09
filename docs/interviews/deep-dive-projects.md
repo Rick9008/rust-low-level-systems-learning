@@ -128,14 +128,14 @@
 
 > "I built the **application-state replication layer** for a two-node Active-Active mail-security platform — the layer that keeps **human approval decisions** consistent across two nodes, when the network between them can **drop, stall, or duplicate messages**.
 >
-> The platform already replicated *data* three ways; **nobody replicated what the application had *decided***. That was the gap I filled.
+> The platform already replicated *data* — dsync for the mailboxes, a Redis replica for shared state. But neither keeps approvals working through a partition; **nobody replicated what the application had *decided***. That was the gap I filled.
 >
 > In production **six-plus months, zero reported data-inconsistency incidents**, and it survived **one real node failover** with no mail delay."
 
 **中文意思**
 
 1. 我做的是一個雙節點 Active-Active 郵件安全平台的**應用狀態複製層**——負責讓**人工審核的決定**在兩個節點之間保持一致,而它們之間的網路**會掉包、會卡住、會重複投遞**。
-2. 這個平台原本已經有三套**資料**複製了,但**沒有人複製「應用程式決定了什麼」**。那就是我填上的缺口。
+2. 這個平台原本就有**資料**複製——dsync 搬信箱、Redis replica 搬共享狀態——但它們都沒辦法讓你在斷線時繼續對對面的信做 approve/reject;**沒有人複製「應用程式決定了什麼」**。那就是我填上的缺口。
 3. 上線**六個多月、零件資料不一致事故回報**,而且**撐過一次真實的節點 failover**,郵件收發沒有延遲。
 
 ## Q2. What made it hard?
