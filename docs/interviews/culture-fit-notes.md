@@ -130,3 +130,7 @@ assumption, not a boundary"。弧線一致:①私網裡混裝沒 auth → ③按
 **★2 再修(8/9)**:座位在 Etched 台灣擴點——「想進矽谷新創」改成「早期加入 SV 新創的台灣團隊、
 參與把據點建起來,work at that pace and that bar」;對比改「Taiwanese companies」非地理。
 與 ★11 反問第一題(台灣團隊邊界)互相呼應。
+
+**Q9 動態分配(8/9)**:moderation AA=最強 ambiguity 故事,但已排 hardest problem 王牌 →
+同場不重打(G&L「同 loop 別兩用」)。規則:AA 未出 → Q9 直接打 AA;AA 已出 → 回指一句+
+R1 clarify 回饋收尾("Ambiguity is a questioning problem, not a knowledge problem")。誰先被問誰拿 AA。
