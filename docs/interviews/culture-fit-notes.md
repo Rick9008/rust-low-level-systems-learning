@@ -134,3 +134,18 @@ assumption, not a boundary"。弧線一致:①私網裡混裝沒 auth → ③按
 **Q9 動態分配(8/9)**:moderation AA=最強 ambiguity 故事,但已排 hardest problem 王牌 →
 同場不重打(G&L「同 loop 別兩用」)。規則:AA 未出 → Q9 直接打 AA;AA 已出 → 回指一句+
 R1 clarify 回饋收尾("Ambiguity is a questioning problem, not a knowledge problem")。誰先被問誰拿 AA。
+
+## G&L 白板全面對表(2026-08-09 傍晚,上場包已同步)
+
+1. 🔴 **★7 追問陷阱**:G&L failure 卡 = mTLS configured≠enforced/fail-open——在 Etched 場屬保密紅線 #1
+   射程。被深追守 authz 層;安全深度彈藥=發現角度(外部研究員 responsible disclosure、
+   「外部發現=內部測試缺口→修流程不只修 code」);教訓句可用不點名機制版
+   ("I test that the bad connection gets rejected; I don't read the config and believe it")。
+   備援 failure=milter 大重構 regression(integration test+checklist=安全網)。
+2. **★6 補第二把**:gRPC vs JSON(被說服方向,"I weighted the priorities wrong"+commit 後抽象化 trait);
+   dsync=說服人方向。兩向都備。
+3. **新增三 chip**:Leadership=讀書會(降門檻+psychological safety→self-sustaining)、
+   Mentoring=3 MR aftermath(成 Rust go-to)、Feedback=術語密度→講使用者面問題(寄信例)。
+4. **Q10 技術判斷角度**:「分類任務不需 decoder 生成能力」+每階段數據推提案;
+   選用收尾對 Etched 押韻(specialization beats generality)。
+5. **Delivery 三備**:三連問/別「輸了照做」/別烈士。Hypothetical 公式:根因→處理→升級最後,接真實經驗。
