@@ -302,3 +302,13 @@ Q7 **不需要改寫**——它問的是「當初的決定」,不是現況。只
 對側只持 replica,**斷網/對台死掉才 promote replica 接管**。敘事升級:衝突只存在於分區窗口,
 irreversible-actions-win 規則就是為那個窗口設計的。上場句在上場包專案一格(8/9 補真版)。
 ⚠ 別再講「兩台獨立做所有事、狀態全共享」的簡化版——那會把單寫者設計講丟。
+
+## 8/9 四題補真結案(Withers 逐條口述,上場包已同步)
+
+1. **FD 止血 = 先調大 ulimit**(可講);當時靠哪個訊號看到 fd 滿的**已不記得**——被問守形狀
+   ("process alive, every new accept failing"),不指名工具。
+2. **home-node 路由親和 = HAProxy 規則**實作。
+3. **failover 全自動**:對 peer 連線失敗三次 → 判定斷線 → 從 moderation_replica tables 撈資料、
+   按 user 的 approve/reject 執行(寄出或刪除)→ 每次接管寫一筆 ownership-take(target_uuid)紀錄
+   → peer 回來**必須 challenge ownership** 才能再動作。無人工介入。
+4. **專案一 10× 無實測容量數據**:講「信量 ×10、兩節點是產品形態」+「不編數字」句接結構分析。
