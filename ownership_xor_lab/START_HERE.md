@@ -2165,6 +2165,9 @@ pub fn consume_and_sum(numbers: Vec<i32>) -> i32 {
 <summary><strong>C4. 進入 DSU 前的確認</strong></summary>
 
 
+完成下面的基礎確認後，依序閱讀 [`DSU_START_HERE.md`](DSU_START_HERE.md)。那份教材會從 `struct`、`impl`、`Self`、`&mut self` 和 `Vec<usize>` 開始，使用陣列與記憶體圖解說明 DSU，不會直接提供完整答案。
+
+
 能回答以下問題後，再開始 [`src/dsu.rs`](src/dsu.rs)：
 
 - `let` 與 `let mut` 有什麼差別？
@@ -2216,5 +2219,7 @@ pub fn consume_and_sum(numbers: Vec<i32>) -> i32 {
 3. 執行 `cargo test ownership_xor`。
 
 第六次再完成 `largest`、`swap_positions`。第 0 關全部通過後才開始 DSU；Tree 和 LRU 暫時不要打開。
+
+第七次先完整閱讀 [`DSU_START_HERE.md`](DSU_START_HERE.md) 的 D1 至 D7，只實作 `find`。確認 path compression 測試通過後，再閱讀 D8 至 D12 並實作 `union`。
 
 </details>

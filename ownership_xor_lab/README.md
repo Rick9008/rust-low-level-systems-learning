@@ -56,7 +56,9 @@ cargo test ownership_xor
 
 ### 1. DSU
 
-開啟 [`src/dsu.rs`](src/dsu.rs)，依序完成 `find`、`union`。
+先閱讀 [`DSU_START_HERE.md`](DSU_START_HERE.md)。這份先備教材會從 `struct`、`impl`、`Self`、`&mut self`、索引式森林、path compression 與 union by rank 開始圖解，再帶你閱讀測試。
+
+讀完後開啟 [`src/dsu.rs`](src/dsu.rs)，依序完成 `find`、`union`。
 
 ```powershell
 cargo test dsu

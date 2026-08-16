@@ -25,16 +25,16 @@ pub fn append_number(numbers: &mut Vec<i32>, value: i32) {
 /// 注意：回傳的是 `&i32`，不是複製一份 `i32`。
 pub fn largest(numbers: &[i32]) -> Option<&i32> {
     //todo!("走訪 numbers 並保留最大值的引用")
-    if numbers.is_empty(){
+    if numbers.is_empty() {
         return None;
     }
-    let mut max_index = &numbers[0];
-    for number in &numbers[1..]{
-        if *max_index < *number{
-            max_index = number;
+    let mut max = &numbers[0];
+    for number in &numbers[1..] {
+        if *max < *number {
+            max = number;
         }
     }
-    Some(max_index)
+    Some(max)
 }
 
 /// 同時修改 slice 中兩個不同的位置。
@@ -42,7 +42,7 @@ pub fn largest(numbers: &[i32]) -> Option<&i32> {
 /// 提示：`slice.swap(a, b)` 已經替你封裝好不重疊的 mutable borrow。
 pub fn swap_positions(numbers: &mut [i32], a: usize, b: usize) {
     //todo!("交換索引 a 與 b 的值")
-    numbers.swap(a,b);
+    numbers.swap(a, b);
 }
 
 #[cfg(test)]
@@ -77,4 +77,3 @@ mod tests {
         assert_eq!(numbers, vec![30, 20, 10]);
     }
 }
-
