@@ -1,4 +1,5 @@
 /target
+**/target/
 
 # 面試材料 / 第三方參考書 —— 不進 git(私有 repo 也不放)
 /interview_prep.md

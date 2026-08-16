@@ -1,0 +1,9 @@
+[package]
+name = "ownership_xor_lab"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Keep this beginner lab independent from the repository's main workspace.
+[workspace]
+
